@@ -195,25 +195,18 @@ public partial class App : System.Windows.Application
         var hostStartMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
 
-        // Materialize the device token and spawn the API child on a worker thread
-        // so the main UI thread can simultaneously resolve MainWindow + run its
-        // InitializeComponent. The API process spawn (Process.Start + Job-Object
-        // assignment + port probe) is real disk/process work; running it in
-        // parallel with the heaviest UI-thread phase shaves wall time.
-        // GetOrCreateToken MUST run before Supervisor.Start: the API child reads
-        // the token file on its own startup, so we keep them paired and ordered.
-        var apiSpawnTask = Task.Run(() =>
-        {
-            var spawnTimer = Stopwatch.StartNew();
-            _host.Services.GetRequiredService<DeviceTokenProvider>().GetOrCreateToken();
-            var deviceTokenMs = spawnTimer.ElapsedMilliseconds;
-            spawnTimer.Restart();
-            // Spawn the API as a child inside a Windows Job Object.
-            // KillOnJobClose guarantees it dies when this process exits (even on crash).
-            _host.Services.GetRequiredService<ChildProcessSupervisor>().Start();
-            var supervisorMs = spawnTimer.ElapsedMilliseconds;
-            return (deviceTokenMs, supervisorMs);
-        });
+        // Materialize the device token and spawn the API child before resolving
+        // MainWindow. Several viewmodels begin their first refresh during window
+        // construction/loaded flow, so the child process must already be on its
+        // way to binding 5107 before any HTTP clients are used.
+        var spawnTimer = Stopwatch.StartNew();
+        _host.Services.GetRequiredService<DeviceTokenProvider>().GetOrCreateToken();
+        var deviceTokenMs = spawnTimer.ElapsedMilliseconds;
+        spawnTimer.Restart();
+        // Spawn the API as a child inside a Windows Job Object.
+        // KillOnJobClose guarantees it dies when this process exits (even on crash).
+        _host.Services.GetRequiredService<ChildProcessSupervisor>().Start();
+        var supervisorMs = spawnTimer.ElapsedMilliseconds;
 
         var window = _host.Services.GetRequiredService<MainWindow>();
         var resolveWindowMs = phaseTimer.ElapsedMilliseconds;
@@ -221,29 +214,17 @@ public partial class App : System.Windows.Application
         window.Show();
         var showWindowMs = phaseTimer.ElapsedMilliseconds;
 
-        // Make sure any exception from the API-spawn task surfaces (it bubbles
-        // through the host logger). We don't await it — the Window is already
-        // visible and MainWindow.OnLoaded TCP-probes for API readiness anyway.
-        _ = apiSpawnTask.ContinueWith(t =>
-        {
-            var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-            if (t.IsFaulted)
-            {
-                startupLogger.LogError(t.Exception, "API spawn task failed during startup.");
-                return;
-            }
-            var (deviceTokenMs, supervisorMs) = t.Result;
-            startupLogger.LogInformation(
-                "[startup-timing] embeddedExtract={EmbeddedExtractMs}ms hostBuild={HostBuildMs}ms hostStart={HostStartMs}ms resolveWindow={ResolveWindowMs}ms showWindow={ShowWindowMs}ms deviceToken={DeviceTokenMs}ms supervisor={SupervisorMs}ms windowVisibleAt={WindowVisibleMs}ms",
-                embeddedExtractMs,
-                hostBuildMs,
-                hostStartMs,
-                resolveWindowMs,
-                showWindowMs,
-                deviceTokenMs,
-                supervisorMs,
-                totalTimer.ElapsedMilliseconds);
-        }, TaskScheduler.Default);
+        var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+        startupLogger.LogInformation(
+            "[startup-timing] embeddedExtract={EmbeddedExtractMs}ms hostBuild={HostBuildMs}ms hostStart={HostStartMs}ms resolveWindow={ResolveWindowMs}ms showWindow={ShowWindowMs}ms deviceToken={DeviceTokenMs}ms supervisor={SupervisorMs}ms windowVisibleAt={WindowVisibleMs}ms",
+            embeddedExtractMs,
+            hostBuildMs,
+            hostStartMs,
+            resolveWindowMs,
+            showWindowMs,
+            deviceTokenMs,
+            supervisorMs,
+            totalTimer.ElapsedMilliseconds);
     }
 
     protected override void OnExit(ExitEventArgs e)

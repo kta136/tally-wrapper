@@ -31,12 +31,17 @@ namespace ShowroomBilling.Infrastructure;
 
 public static class DependencyInjection
 {
+    private const string DefaultLocalPostgresConnectionString =
+        "Host=localhost;Port=5432;Database=showroom_billing_v2;Username=postgres;Password=postgres";
+
     public static IServiceCollection AddInfrastructureLayer(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<DatabaseOptions>(configuration.GetSection(DatabaseOptions.SectionName));
 
-        var connectionString = configuration.GetConnectionString("Postgres")
-            ?? "Host=localhost;Port=5432;Database=showroom_billing_v2;Username=postgres;Password=postgres";
+        var configuredConnectionString = configuration.GetConnectionString("Postgres");
+        var connectionString = string.IsNullOrWhiteSpace(configuredConnectionString)
+            ? DefaultLocalPostgresConnectionString
+            : configuredConnectionString;
 
         var connectionBuilder = new NpgsqlConnectionStringBuilder(connectionString)
         {
