@@ -1,0 +1,21 @@
+<Application x:Class="ShowroomBilling.Desktop.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:ShowroomBilling.Desktop.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/DesignTokens.xaml" />
+                <ResourceDictionary Source="Resources/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+            <conv:NavTabToBoolConverter x:Key="NavTabToBoolConverter" />
+            <conv:DotToBrushConverter x:Key="DotToBrushConverter" />
+            <conv:DialogVisibilityConverter x:Key="DialogVisConverter" />
+            <conv:BillDateGroupHeaderConverter x:Key="BillDateGroupHeader" />
+            <conv:GroupAmountSumConverter x:Key="GroupAmountSum" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

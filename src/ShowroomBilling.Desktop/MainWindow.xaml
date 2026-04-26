@@ -1,0 +1,143 @@
+<Window x:Class="ShowroomBilling.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
+        xmlns:views="clr-namespace:ShowroomBilling.Desktop.Views"
+        xmlns:invoiceViews="clr-namespace:ShowroomBilling.Desktop.Views.Invoice"
+        xmlns:billsViews="clr-namespace:ShowroomBilling.Desktop.Views.Bills"
+        xmlns:printingViews="clr-namespace:ShowroomBilling.Desktop.Views.Printing"
+        xmlns:settingsViews="clr-namespace:ShowroomBilling.Desktop.Views.Settings"
+        xmlns:adminViews="clr-namespace:ShowroomBilling.Desktop.Views.Admin"
+        xmlns:syntheticViews="clr-namespace:ShowroomBilling.Desktop.Views.SyntheticBatch"
+        mc:Ignorable="d"
+        Title="Showroom Billing"
+        Height="720"
+        Width="1180"
+        MinHeight="600"
+        MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Background="{DynamicResource BgBrush}"
+        FontFamily="{DynamicResource UiFontFamily}"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        UseLayoutRounding="True">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="32"
+                      ResizeBorderThickness="6"
+                      CornerRadius="0"
+                      GlassFrameThickness="0"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Window.InputBindings>
+        <KeyBinding Key="D1" Modifiers="Ctrl" Command="{Binding SwitchTabCommand}">
+            <KeyBinding.CommandParameter>
+                <shell:NavTab>Invoice</shell:NavTab>
+            </KeyBinding.CommandParameter>
+        </KeyBinding>
+        <KeyBinding Key="D2" Modifiers="Ctrl" Command="{Binding SwitchTabCommand}">
+            <KeyBinding.CommandParameter>
+                <shell:NavTab>Bills</shell:NavTab>
+            </KeyBinding.CommandParameter>
+        </KeyBinding>
+        <KeyBinding Key="D3" Modifiers="Ctrl" Command="{Binding SwitchTabCommand}">
+            <KeyBinding.CommandParameter>
+                <shell:NavTab>Settings</shell:NavTab>
+            </KeyBinding.CommandParameter>
+        </KeyBinding>
+        <KeyBinding Key="OemQuestion" Modifiers="Shift" Command="{Binding OpenShortcutsCommand}" />
+        <KeyBinding Key="OemTilde" Command="{Binding OpenAdminUnlockCommand}" />
+        <KeyBinding Key="Escape" Command="{Binding CloseDialogCommand}" />
+        <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding Invoice.AddRowCommand}" />
+        <KeyBinding Key="Delete" Modifiers="Ctrl" Command="{Binding Invoice.RemoveFocusedRowCommand}" />
+        <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding Invoice.SaveDraftCommand}" />
+        <KeyBinding Key="F9" Command="{Binding OpenInvoicePreviewCommand}" />
+    </Window.InputBindings>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  Row 0: Title bar  -->
+        <views:TitleBarView Grid.Row="0" DataContext="{Binding TitleBar}" />
+
+        <!--  Row 1: banners  -->
+        <Border Grid.Row="1"
+                Style="{StaticResource BannerWarn}"
+                Visibility="{Binding IsDegradedBannerVisible, Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse Width="8" Height="8" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center" />
+                <TextBlock Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource WarnInkBrush}"
+                           Text="{Binding BannerText}" />
+            </StackPanel>
+        </Border>
+        <Border Grid.Row="1"
+                Style="{StaticResource BannerErr}"
+                Visibility="{Binding IsLimitedBannerVisible, Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="8" Height="8" Fill="{DynamicResource ErrBrush}" VerticalAlignment="Center" />
+                <TextBlock Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource ErrInkBrush}"
+                           Text="{Binding BannerText}" />
+            </StackPanel>
+        </Border>
+
+        <!--  Row 2: NavBar  -->
+        <views:NavBarView Grid.Row="2" />
+
+        <!--  Row 3: Screen region  -->
+        <Grid Grid.Row="3">
+            <views:LimitedModeView Visibility="{Binding IsLimitedVisible, Converter={StaticResource BoolToVis}}" />
+            <invoiceViews:InvoiceView DataContext="{Binding Invoice}"
+                                      Visibility="{Binding DataContext.IsInvoiceVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
+            <billsViews:BillsView DataContext="{Binding Bills}"
+                                  Visibility="{Binding DataContext.IsBillsVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
+            <settingsViews:SettingsView DataContext="{Binding Settings}"
+                                        Visibility="{Binding DataContext.IsSettingsVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
+        </Grid>
+
+        <!--  Row 4: F-key strip  -->
+        <views:FKeyStripView Grid.Row="4" DataContext="{Binding FKeys}" />
+
+        <!--  Row 5: Status bar  -->
+        <views:StatusBarView Grid.Row="5" DataContext="{Binding StatusBar}" />
+
+        <!--  Dialog overlays (span all rows)  -->
+        <views:ShortcutsDialog Grid.RowSpan="6"
+                               Panel.ZIndex="100"
+                               Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=shortcuts}" />
+        <views:SystemHealthDialog Grid.RowSpan="6"
+                                  Panel.ZIndex="100"
+                                  Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=health}" />
+        <billsViews:BillDetailsDialog Grid.RowSpan="6"
+                                      Panel.ZIndex="100"
+                                      Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=billDetails}" />
+        <printingViews:PrintPreviewDialog Grid.RowSpan="6"
+                                          Panel.ZIndex="100"
+                                          Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=printPreview}" />
+        <adminViews:AdminUnlockDialog Grid.RowSpan="6"
+                                      Panel.ZIndex="100"
+                                      Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=admin}" />
+        <syntheticViews:SyntheticBatchDialog Grid.RowSpan="6"
+                                             Panel.ZIndex="100"
+                                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=syntheticBatch}" />
+        <billsViews:ChangeNumberDialog Grid.RowSpan="6"
+                                       Panel.ZIndex="100"
+                                       Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=changeNumber}" />
+        <billsViews:ReasonPromptDialog Grid.RowSpan="6"
+                                       Panel.ZIndex="100"
+                                       Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=reasonPrompt}" />
+    </Grid>
+</Window>

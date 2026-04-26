@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: showroom-billing-v2-postgres
+    environment:
+      POSTGRES_DB: showroom_billing_v2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d showroom_billing_v2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:

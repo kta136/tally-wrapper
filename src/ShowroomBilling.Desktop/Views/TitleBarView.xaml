@@ -1,0 +1,91 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.TitleBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Height="32"
+             Background="{DynamicResource BgPanelBrush}">
+    <Border BorderBrush="{DynamicResource BorderBrushTok}" BorderThickness="0,0,0,1">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!--  Brand  -->
+            <StackPanel Grid.Column="0"
+                        Margin="10,0,0,0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Border Width="16"
+                        Height="16"
+                        Background="{DynamicResource AccentBrush}"
+                        CornerRadius="2">
+                    <TextBlock Text="S"
+                               Foreground="{DynamicResource InkInverseBrush}"
+                               FontFamily="{DynamicResource MonoFontFamily}"
+                               FontWeight="Bold"
+                               FontSize="10"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Margin="8,0,0,0"
+                           Text="{Binding AppName}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+                <TextBlock Margin="6,0,0,0"
+                           Text="{Binding Version}"
+                           Foreground="{DynamicResource InkSoftBrush}"
+                           FontSize="10"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!--  Context strip (centered)  -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <TextBlock Foreground="{DynamicResource InkMutedBrush}" FontSize="11.5">
+                    <Run Text="Company " /><Run Text="{Binding Company}" FontWeight="SemiBold" Foreground="{DynamicResource InkBrush}" />
+                </TextBlock>
+                <Rectangle Width="1"
+                           Height="10"
+                           Margin="8,0"
+                           Fill="{DynamicResource DividerBrush}" />
+                <TextBlock Foreground="{DynamicResource InkMutedBrush}" FontSize="11.5">
+                    <Run Text="Operator " /><Run Text="{Binding OperatorName}" FontWeight="SemiBold" Foreground="{DynamicResource InkBrush}" />
+                </TextBlock>
+            </StackPanel>
+
+            <!--  Window buttons  -->
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button Style="{StaticResource WinChromeBtn}"
+                        Click="OnMinimizeClick"
+                        ToolTip="Minimize">
+                    <Path Stroke="{DynamicResource InkMutedBrush}"
+                          StrokeThickness="1"
+                          Data="M 0,5 L 10,5" />
+                </Button>
+                <Button x:Name="MaxBtn"
+                        Style="{StaticResource WinChromeBtn}"
+                        Click="OnMaximizeClick"
+                        ToolTip="Maximize">
+                    <Path Stroke="{DynamicResource InkMutedBrush}"
+                          StrokeThickness="1"
+                          Data="M 0.5,0.5 L 9.5,0.5 L 9.5,9.5 L 0.5,9.5 Z" />
+                </Button>
+                <Button Style="{StaticResource WinChromeBtnClose}"
+                        Click="OnCloseClick"
+                        ToolTip="Close">
+                    <Path Stroke="{DynamicResource InkMutedBrush}"
+                          StrokeThickness="1"
+                          Data="M 0,0 L 10,10 M 10,0 L 0,10" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

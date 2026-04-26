@@ -1,0 +1,80 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!--  Accent (indigo-600 — matches design bundle thumbnail; visually equivalent to oklch(45% 0.14 258))  -->
+    <Color x:Key="AccentColor">#FF4F46E5</Color>
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#FF4338CA" />
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="#FF3730A3" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFEEF2FF" />
+    <SolidColorBrush x:Key="AccentRingBrush" Color="#FF818CF8" Opacity="0.45" />
+
+    <!--  Neutrals (cool slate)  -->
+    <SolidColorBrush x:Key="BgBrush" Color="#FFF8F9FB" />
+    <SolidColorBrush x:Key="BgPanelBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="BgSunkenBrush" Color="#FFF2F4F7" />
+    <SolidColorBrush x:Key="BgRowAltBrush" Color="#FFF8F9FB" />
+    <SolidColorBrush x:Key="BgHoverBrush" Color="#FFEAEDF4" />
+    <SolidColorBrush x:Key="BgSelectedBrush" Color="#FFDFE3F4" />
+
+    <SolidColorBrush x:Key="BorderBrushTok" Color="#FFDADDE5" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#FFBCC0CD" />
+    <SolidColorBrush x:Key="BorderInputBrush" Color="#FFCACDD8" />
+    <SolidColorBrush x:Key="DividerBrush" Color="#FFE8EAEF" />
+
+    <SolidColorBrush x:Key="InkBrush" Color="#FF232731" />
+    <SolidColorBrush x:Key="InkMutedBrush" Color="#FF5F6573" />
+    <SolidColorBrush x:Key="InkSoftBrush" Color="#FF7F8491" />
+    <SolidColorBrush x:Key="InkDisabledBrush" Color="#FFB2B6C0" />
+    <SolidColorBrush x:Key="InkInverseBrush" Color="#FFFDFDFD" />
+
+    <!--  Status (matched chroma)  -->
+    <SolidColorBrush x:Key="OkBrush" Color="#FF3E8E54" />
+    <SolidColorBrush x:Key="OkSoftBrush" Color="#FFE3F1E7" />
+    <SolidColorBrush x:Key="OkInkBrush" Color="#FF255534" />
+
+    <SolidColorBrush x:Key="WarnBrush" Color="#FFC07D2B" />
+    <SolidColorBrush x:Key="WarnSoftBrush" Color="#FFFBEFDC" />
+    <SolidColorBrush x:Key="WarnInkBrush" Color="#FF6E4213" />
+
+    <SolidColorBrush x:Key="ErrBrush" Color="#FFC53333" />
+    <SolidColorBrush x:Key="ErrSoftBrush" Color="#FFFBE3DF" />
+    <SolidColorBrush x:Key="ErrInkBrush" Color="#FF6E1616" />
+
+    <SolidColorBrush x:Key="InfoBrush" Color="#FF3A7AB5" />
+    <SolidColorBrush x:Key="InfoSoftBrush" Color="#FFE0EBF5" />
+    <SolidColorBrush x:Key="InfoInkBrush" Color="#FF1C4976" />
+
+    <SolidColorBrush x:Key="NeutralChipBrush" Color="#FFE4E6EC" />
+
+    <!--  Edit banner — used on the Invoice screen when reopening a previously-posted bill.
+          Distinct from the WarnSoft palette so we can tune banner saturation independently
+          of inline status chips. Mirrors the design bundle's #FEF3C7 / #F0C674 / #7A4F01.  -->
+    <SolidColorBrush x:Key="EditBannerSoftBrush" Color="#FFFEF3C7" />
+    <SolidColorBrush x:Key="EditBannerBorderBrush" Color="#FFF0C674" />
+    <SolidColorBrush x:Key="EditBannerInkBrush" Color="#FF7A4F01" />
+
+    <!--  Density — compact default (density swap for Phase 7+ is a merged-dictionary change)  -->
+    <sys:Double x:Key="RowHeight">28</sys:Double>
+    <sys:Double x:Key="InputHeight">28</sys:Double>
+    <sys:Double x:Key="ButtonHeight">28</sys:Double>
+    <sys:Double x:Key="CellPadding">10</sys:Double>
+    <sys:Double x:Key="FontSizeUi">12.5</sys:Double>
+    <sys:Double x:Key="FontSizeLabel">11.5</sys:Double>
+    <sys:Double x:Key="FontSizeSm">11</sys:Double>
+    <sys:Double x:Key="FontSizeXs">10.5</sys:Double>
+    <sys:Double x:Key="FontSizeSectionTitle">10.5</sys:Double>
+    <sys:Double x:Key="FontSizeMono">12</sys:Double>
+    <CornerRadius x:Key="Radius">3</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">5</CornerRadius>
+
+    <!--  Typography — Windows-native stack (Segoe UI Variable + Cascadia Mono ship with Win 11).  -->
+    <!--  The design's Inter/JetBrains Mono aren't bundled on Windows, so earlier config fell through to these anyway; making it explicit.  -->
+    <FontFamily x:Key="UiFontFamily">Segoe UI Variable Display, Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="MonoFontFamily">Cascadia Mono, Consolas</FontFamily>
+
+    <!--  Focus-ring thicknesses  -->
+    <Thickness x:Key="FocusOutlineThickness">2</Thickness>
+
+</ResourceDictionary>

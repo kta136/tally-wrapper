@@ -1,0 +1,267 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
+using Npgsql;
+using ShowroomBilling.Api.Configuration;
+using ShowroomBilling.Api.Options;
+using ShowroomBilling.Api.Security;
+using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts.Runtime;
+using ShowroomBilling.Infrastructure.Persistence;
+
+namespace ShowroomBilling.Api.Controllers;
+
+[ApiController]
+[Route("api/runtime")]
+public sealed class RuntimeController(
+    IConfiguration configuration,
+    ICloudSettingsService cloudSettingsService,
+    ShowroomBillingDbContext dbContext,
+    HealthCheckService healthCheckService,
+    AppliedDatabaseConfiguration appliedDatabaseConfiguration,
+    IHostEnvironment hostEnvironment,
+    IOptions<ApiRuntimeOptions> runtimeOptions) : ControllerBase
+{
+    [HttpGet("bootstrap")]
+    public async Task<ActionResult<RuntimeBootstrapResponse>> GetBootstrap(CancellationToken cancellationToken)
+    {
+        var options = runtimeOptions.Value;
+        var databaseIdentity = await TryGetDatabaseIdentityAsync(cancellationToken);
+        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
+        var databaseIdentityMatches = DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity);
+        var notes = new List<string>
+        {
+            "Desktop bootstrap is local-only. Shared settings are loaded from the API.",
+            "Posting to Tally is synchronous and manual — no queue, no background workers."
+        };
+        notes.Add(databaseIdentityMatches == true
+            ? $"Database identity: {databaseIdentity}."
+            : $"Database identity mismatch: database says {databaseIdentity ?? "unavailable"}, API expects {expectedDatabaseIdentity}.");
+
+        try
+        {
+            var effectiveSettings = await cloudSettingsService.GetEffectiveSettingsAsync(cancellationToken);
+            notes.Insert(1, $"Active company: {effectiveSettings.Settings.Connection.ActiveCompanyName}. Tally endpoint: {effectiveSettings.Settings.Connection.Host}:{effectiveSettings.Settings.Connection.Port}.");
+        }
+        catch
+        {
+            notes.Insert(1, "Cloud settings are currently unavailable because PostgreSQL is not ready. Desktop should stay in degraded bootstrap mode.");
+        }
+
+        var response = new RuntimeBootstrapResponse(
+            options.ProductName,
+            HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().EnvironmentName,
+            options.ApiVersion,
+            "cloud",
+            options.DefaultShowroomName,
+            null,
+            notes,
+            databaseIdentity,
+            expectedDatabaseIdentity,
+            databaseIdentityMatches);
+
+        return Ok(response);
+    }
+
+    [HttpGet("database")]
+    public ActionResult<DatabaseConfigurationResponse> GetDatabaseConfiguration()
+    {
+        var connectionString = configuration.GetConnectionString("Postgres") ?? string.Empty;
+        return Ok(BuildDatabaseConfigurationResponse(
+            connectionString,
+            requiresRestart: !IsAppliedConnectionString(connectionString)));
+    }
+
+    [HttpPut("database")]
+    [Authorize(Policy = AdminPolicy.PolicyName)]
+    public async Task<ActionResult<DatabaseConfigurationResponse>> UpdateDatabaseConfiguration(
+        [FromBody] UpdateDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
+        {
+            return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
+        }
+
+        try
+        {
+            _ = new NpgsqlConnectionStringBuilder(request.ConnectionString);
+        }
+        catch (ArgumentException ex)
+        {
+            return ControllerProblemDetails.BadRequest(ex.Message);
+        }
+
+        var connectionString = request.ConnectionString.Trim();
+        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
+            connectionString,
+            hostEnvironment.EnvironmentName,
+            cancellationToken);
+
+        return Ok(BuildDatabaseConfigurationResponse(connectionString, requiresRestart: true));
+    }
+
+    [HttpPost("database/test")]
+    public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfiguration(
+        [FromBody] TestDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
+        {
+            return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
+        }
+
+        NpgsqlConnectionStringBuilder builder;
+        try
+        {
+            builder = new NpgsqlConnectionStringBuilder(request.ConnectionString);
+            builder.Timeout = Math.Min(Math.Max(builder.Timeout, 1), 5);
+            builder.CommandTimeout = 5;
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new DatabaseConfigurationTestResponse(false, ex.Message));
+        }
+
+        try
+        {
+            await using var connection = new NpgsqlConnection(builder.ConnectionString);
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new NpgsqlCommand("select 1", connection);
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return Ok(new DatabaseConfigurationTestResponse(
+                Equals(result, 1) || Equals(result, 1L),
+                "Connection succeeded."));
+        }
+        catch (Exception ex) when (ex is NpgsqlException or TimeoutException or InvalidOperationException)
+        {
+            return Ok(new DatabaseConfigurationTestResponse(false, $"Connection failed: {ex.Message}"));
+        }
+    }
+
+    [HttpGet("health")]
+    public async Task<ActionResult<RuntimeHealthResponse>> GetHealth(CancellationToken cancellationToken)
+    {
+        var healthReport = await healthCheckService.CheckHealthAsync(_ => true, cancellationToken);
+        var postgresReachable = healthReport.Entries.TryGetValue("postgres", out var databaseEntry)
+            && databaseEntry.Status == HealthStatus.Healthy;
+        var databaseIdentity = postgresReachable
+            ? await TryGetDatabaseIdentityAsync(cancellationToken)
+            : null;
+        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
+        bool? databaseIdentityMatches = postgresReachable
+            ? DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity)
+            : null;
+        var databaseReachable = postgresReachable;
+
+        var message = databaseIdentityMatches == false
+            ? $"Database identity mismatch: PostgreSQL is reachable, but database identity is {databaseIdentity ?? "unavailable"}; expected {expectedDatabaseIdentity} for {hostEnvironment.EnvironmentName}."
+            : databaseReachable
+                ? $"API foundation is online and PostgreSQL is reachable ({databaseIdentity})."
+                : "API foundation is online. PostgreSQL must be configured and reachable for readiness.";
+
+        var response = new RuntimeHealthResponse(
+            healthReport.Status.ToString(),
+            ApiAvailable: true,
+            DatabaseConfigured: !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Postgres")),
+            DatabaseReachable: databaseReachable,
+            SettingsLoadedFromApi: true,
+            Message: message,
+            DatabaseIdentity: databaseIdentity,
+            ExpectedDatabaseIdentity: expectedDatabaseIdentity,
+            DatabaseIdentityMatches: databaseIdentityMatches);
+
+        return Ok(response);
+    }
+
+    private DatabaseConfigurationResponse BuildDatabaseConfigurationResponse(
+        string connectionString,
+        bool requiresRestart)
+    {
+        return new DatabaseConfigurationResponse(
+            Provider: "PostgreSQL",
+            ConnectionString: string.Empty,
+            MaskedConnectionString: MaskConnectionString(connectionString),
+            ConfigPath: DatabaseConfigurationStore.ConfigPathForEnvironment(hostEnvironment.EnvironmentName),
+            IsLocalOverridePresent: DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName),
+            RequiresApiRestart: requiresRestart,
+            EnvironmentName: hostEnvironment.EnvironmentName,
+            IsEnvironmentOverridePresent: !string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString()),
+            StorageProtection: "Windows DPAPI CurrentUser");
+    }
+
+    private static string MaskConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connectionString);
+            if (!string.IsNullOrEmpty(builder.Password))
+            {
+                builder.Password = "***";
+            }
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return "<invalid connection string>";
+        }
+    }
+
+    private bool IsAppliedConnectionString(string connectionString) =>
+        string.Equals(
+            NormalizeConnectionString(connectionString),
+            NormalizeConnectionString(appliedDatabaseConfiguration.PostgresConnectionString),
+            StringComparison.Ordinal);
+
+    private async Task<string?> TryGetDatabaseIdentityAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.DatabaseIdentity
+                .AsNoTracking()
+                .Where(x => x.Key == "environment")
+                .Select(x => x.Value)
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string ExpectedDatabaseIdentity(string environmentName) =>
+        environmentName.Trim().Equals("Development", StringComparison.OrdinalIgnoreCase)
+            ? "DEV"
+            : environmentName.Trim().Equals("Production", StringComparison.OrdinalIgnoreCase)
+                ? "PROD"
+                : environmentName.Trim().ToUpperInvariant();
+
+    private static bool DatabaseIdentityMatches(string? databaseIdentity, string expectedDatabaseIdentity) =>
+        !string.IsNullOrWhiteSpace(databaseIdentity)
+        && !databaseIdentity.Trim().Equals("UNSET", StringComparison.OrdinalIgnoreCase)
+        && databaseIdentity.Trim().Equals(expectedDatabaseIdentity, StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return new NpgsqlConnectionStringBuilder(connectionString).ConnectionString;
+        }
+        catch
+        {
+            return connectionString.Trim();
+        }
+    }
+}

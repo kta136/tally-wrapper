@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Showroom Billing — Desktop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="app/styles.css" />
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+      <rect width="400" height="400" fill="#eef2ff"/>
+      <rect x="60" y="60" width="280" height="280" fill="#fff" stroke="#4f46e5" stroke-width="6" rx="8"/>
+      <rect x="60" y="60" width="280" height="38" fill="#4f46e5" rx="8"/>
+      <rect x="60" y="90" width="280" height="1" fill="#4f46e5"/>
+      <text x="200" y="220" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="54" font-weight="700" fill="#1e1b4b">SR</text>
+      <text x="200" y="270" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="#4f46e5">Showroom Billing</text>
+    </svg>
+  </template>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="app/data.js"></script>
+  <script type="text/babel" src="app/shell.jsx"></script>
+  <script type="text/babel" src="app/invoice.jsx"></script>
+  <script type="text/babel" src="app/screens.jsx"></script>
+  <script type="text/babel" src="app/dialogs.jsx"></script>
+  <script type="text/babel" src="app/app.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,213 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Printing.PrintPreviewDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Printing"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:PrintPreviewViewModel, IsDesignTimeCreatable=False}">
+    <Grid Background="#61152238">
+        <Border Style="{StaticResource Panel}"
+                Width="{Binding DataContext.PrintPreview.DialogWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                Height="{Binding DataContext.PrintPreview.DialogHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                MinWidth="760"
+                MinHeight="520"
+                MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
+            </Border.Effect>
+            <Grid DataContext="{Binding PrintPreview}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!--  Header  -->
+                <Border Grid.Row="0"
+                        Padding="14,10"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Text="Print Preview" />
+                                <TextBlock Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{DynamicResource MonoFontFamily}"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource InkMutedBrush}"
+                                           Text="{Binding InvoiceNumber, TargetNullValue='(pending)'}" />
+                            </StackPanel>
+                            <TextBlock Margin="0,3,0,0"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Text="{Binding StatusMessage}" />
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
+                                Style="{StaticResource BtnGhost}"
+                                Width="28"
+                                Height="24"
+                                Padding="0"
+                                ToolTip="Close (Esc)"
+                                Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                Content="✕" />
+                    </Grid>
+                </Border>
+
+                <!--  Body: preview + sidebar  -->
+                <Grid Grid.Row="1" Margin="16,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="260" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Background="{DynamicResource BgSunkenBrush}"
+                            BorderBrush="{DynamicResource BorderBrushTok}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="12"
+                            MinHeight="480">
+                        <ListBox ItemsSource="{Binding PreviewPages}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.VirtualizationMode="Recycling">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Focusable" Value="False" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                    <Setter Property="BorderThickness" Value="0" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,10"
+                                                Background="White"
+                                                BorderBrush="{DynamicResource BorderBrushTok}"
+                                                BorderThickness="1">
+                                            <Border.LayoutTransform>
+                                                <ScaleTransform ScaleX="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                                ScaleY="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                                            </Border.LayoutTransform>
+                                            <Image Source="{Binding}"
+                                                   Stretch="Uniform" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+                        <TextBlock Style="{StaticResource TxtSectionTitle}" Text="COPIES" />
+                        <StackPanel Margin="0,6,0,14">
+                            <CheckBox Margin="0,3" IsChecked="{Binding CopyOriginal}" Content="Original (for customer)" />
+                            <CheckBox Margin="0,3" IsChecked="{Binding CopyDuplicate}" Content="Duplicate (for showroom)" />
+                            <CheckBox Margin="0,3" IsChecked="{Binding CopyTriplicate}" Content="Triplicate (for transport)" />
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINTER" />
+                        <ComboBox Margin="0,6,0,14"
+                                  ItemsSource="{Binding Printers}"
+                                  SelectedItem="{Binding SelectedPrinter}" />
+
+                        <CheckBox Margin="0,0,0,14"
+                                  IsChecked="{Binding DirectPrintAfterSave}"
+                                  Content="Direct print after save (skip preview)" />
+
+                        <Border Background="{DynamicResource BgSunkenBrush}"
+                                BorderBrush="{DynamicResource BorderBrushTok}"
+                                BorderThickness="1"
+                                CornerRadius="3"
+                                Padding="8">
+                            <TextBlock FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Text="The invoice is saved and pending. Pushing to Tally happens only when you hit Push on the Bills tab." />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!--  Footer  -->
+                <Border Grid.Row="2"
+                        Background="{DynamicResource BgSunkenBrush}"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="0,1,0,0"
+                        Padding="14,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
+                            <Button Style="{StaticResource BtnGhost}"
+                                    Width="28"
+                                    Padding="0"
+                                    Command="{Binding ZoomOutCommand}"
+                                    Content="-"
+                                    ToolTip="Zoom out" />
+                            <Button Style="{StaticResource BtnGhost}"
+                                    MinWidth="48"
+                                    Margin="4,0"
+                                    Padding="8,0"
+                                    Command="{Binding ResetZoomCommand}"
+                                    Content="{Binding PreviewZoomDisplay}"
+                                    ToolTip="Reset zoom" />
+                            <Button Style="{StaticResource BtnGhost}"
+                                    Width="28"
+                                    Padding="0"
+                                    Command="{Binding ZoomInCommand}"
+                                    Content="+"
+                                    ToolTip="Zoom in" />
+                            <Button Margin="12,0,0,0"
+                                    Style="{StaticResource BtnBase}"
+                                    Command="{Binding SavePdfCommand}"
+                                    Content="Save as PDF (Ctrl+Shift+S)" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Style="{StaticResource BtnBase}"
+                                    Margin="0,0,6,0"
+                                    Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="Close (Esc)" />
+                            <Button x:Name="PrintButton"
+                                    Style="{StaticResource BtnPrimary}"
+                                    Command="{Binding PrintCommand}"
+                                    Content="Print (Enter)"
+                                    IsDefault="True" />
+                        </StackPanel>
+                        <Thumb Grid.Column="1"
+                               Width="16"
+                               Height="16"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Bottom"
+                               Cursor="SizeNWSE"
+                               DragDelta="OnResizeThumbDragDelta"
+                               ToolTip="Resize preview">
+                            <Thumb.Template>
+                                <ControlTemplate TargetType="Thumb">
+                                    <Grid Width="16" Height="16" Background="Transparent">
+                                        <Path Stroke="{DynamicResource InkMutedBrush}"
+                                              StrokeThickness="1"
+                                              Data="M 4,14 L 14,4 M 8,14 L 14,8 M 12,14 L 14,12" />
+                                    </Grid>
+                                </ControlTemplate>
+                            </Thumb.Template>
+                        </Thumb>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

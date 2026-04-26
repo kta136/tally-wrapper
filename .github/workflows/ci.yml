@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same ref when a new commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    # WPF (net10.0-windows) needs a Windows runner for the Desktop + Desktop.Tests
+    # projects. Don't downgrade to ubuntu-latest without first excluding those.
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          # Honours global.json for the exact 10.0.x version; setup-dotnet
+          # falls back to its installed SDK list if global.json's version
+          # isn't yet published.
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore ShowroomBilling.sln
+
+      - name: Build
+        run: dotnet build ShowroomBilling.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ShowroomBilling.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore

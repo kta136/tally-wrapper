@@ -1,0 +1,17 @@
+{
+  "ConnectionStrings": {
+    "Postgres": "Host=<DB_HOST>;Port=5432;Database=<DB_NAME>;Username=<DB_USER>;Password=<DB_PASSWORD>;SSL Mode=Require;Channel Binding=Require"
+  },
+  "Database": {
+    "AutoMigrateOnStartup": true
+  },
+  "Runtime": {
+    "DefaultShowroomName": "Development Showroom"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}

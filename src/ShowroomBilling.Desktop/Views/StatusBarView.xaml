@@ -1,0 +1,78 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.StatusBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Height="22">
+    <UserControl.Resources>
+        <Style x:Key="StatusText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+        </Style>
+        <Style x:Key="StatusMono" BasedOn="{StaticResource StatusText}" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+        </Style>
+        <Style x:Key="StatusSep" TargetType="Rectangle">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Margin" Value="10,0" />
+            <Setter Property="Fill" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource BgPanelBrush}"
+            BorderBrush="{DynamicResource BorderBrushTok}"
+            BorderThickness="0,1,0,0">
+        <Grid Margin="10,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Style="{StaticResource StatusMono}"
+                           Text="{Binding StatusText}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource InkBrush}" />
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusText}">
+                    <Run Text="24kt ₹" /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding Rate24Kt}" /><Run Text="/g" />
+                </TextBlock>
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusText}">
+                    <Run Text="22kt ₹" /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding Rate22Kt}" /><Run Text="/g" />
+                </TextBlock>
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusText}">
+                    <Run Text="18kt ₹" /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding Rate18Kt}" /><Run Text="/g" />
+                </TextBlock>
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusText}">
+                    <Run Text="LINES " /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding LineCount, StringFormat={}{0:D2}}" />
+                </TextBlock>
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusText}">
+                    <Run Text="LAST SAVE " /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding LastSaved}" />
+                </TextBlock>
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusMono}"
+                           Text="{Binding DatabaseEnvironment}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource InkBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <TextBlock Style="{StaticResource StatusText}" Text="{Binding FiscalYear}" />
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusText}" Text="{Binding Workstation}" />
+                <Rectangle Style="{StaticResource StatusSep}" />
+                <TextBlock Style="{StaticResource StatusMono}">
+                    <Run Text="{Binding Time}" /><Run Text=" IST" />
+                </TextBlock>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

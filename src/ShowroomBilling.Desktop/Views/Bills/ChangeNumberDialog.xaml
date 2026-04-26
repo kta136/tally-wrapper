@@ -1,0 +1,98 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Bills.ChangeNumberDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+        </Style>
+    </UserControl.Resources>
+
+    <!--  Scrim matches AdminUnlockDialog — rgba(15,23,42,0.38)  -->
+    <Grid Background="#61152238">
+        <Border Style="{StaticResource Panel}"
+                Width="460"
+                MaxHeight="520"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                DataContext="{Binding ChangeNumberDialog}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!--  dialog-head  -->
+                <Border Grid.Row="0"
+                        Padding="16,12"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="0,0,0,1">
+                    <TextBlock Text="Change Invoice Number"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource InkBrush}" />
+                </Border>
+
+                <!--  dialog-body  -->
+                <Border Grid.Row="1" Padding="16,14">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="CURRENT NUMBER" />
+                        <TextBox Text="{Binding CurrentNumberDisplay, Mode=OneWay}"
+                                 Margin="0,0,0,12"
+                                 IsReadOnly="True"
+                                 FontFamily="{DynamicResource MonoFontFamily}" />
+
+                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="NEW NUMBER" />
+                        <TextBox x:Name="NewNumberBox"
+                                 Text="{Binding NewNumberRaw, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,4"
+                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                        <TextBlock Margin="0,0,0,12"
+                                   FontSize="11"
+                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   Foreground="{DynamicResource InkMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding PreviewText}" />
+
+                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="REASON (OPTIONAL)" />
+                        <TextBox Text="{Binding Reason, UpdateSourceTrigger=PropertyChanged}"
+                                 MinHeight="52"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalContentAlignment="Top"
+                                 Padding="8,6" />
+                    </StackPanel>
+                </Border>
+
+                <!--  dialog-foot  -->
+                <Border Grid.Row="2"
+                        Background="{DynamicResource BgSunkenBrush}"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="0,1,0,0"
+                        Padding="14,10">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Cancel"
+                                Style="{StaticResource BtnBase}"
+                                Margin="0,0,8,0"
+                                Command="{Binding CancelCommand}" />
+                        <Button Content="Change"
+                                Style="{StaticResource BtnPrimary}"
+                                IsDefault="True"
+                                Command="{Binding OkCommand}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,290 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.SyntheticBatch.SyntheticBatchDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+        </Style>
+
+        <Style x:Key="DlgSectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+
+        <Style x:Key="DlgCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource BgPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTok}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource RadiusLg}" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <Style x:Key="DlgBannerErr" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource ErrSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <Style x:Key="DlgBannerWarn" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WarnBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+    </UserControl.Resources>
+
+    <!--  Scrim  -->
+    <Grid Background="#61152238" DataContext="{Binding SyntheticBatch}">
+        <Border Style="{StaticResource Panel}"
+                Width="560"
+                MaxHeight="700"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!--  dialog-head  -->
+                <Border Grid.Row="0"
+                        Padding="14,10"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Batch Data Scheduler"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Margin="10,0,0,0"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       VerticalAlignment="Center"
+                                       Text="V1-ported synthetic bill generator" />
+                        </StackPanel>
+                        <Button HorizontalAlignment="Right"
+                                Style="{StaticResource BtnGhost}"
+                                Width="28"
+                                Height="24"
+                                Padding="0"
+                                ToolTip="Close (Esc)"
+                                Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                Content="✕" />
+                    </Grid>
+                </Border>
+
+                <!--  dialog-body  -->
+                <ScrollViewer Grid.Row="1" Padding="14,14" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap"
+                                   Margin="0,0,0,14"
+                                   Foreground="{DynamicResource InkMutedBrush}"
+                                   FontSize="12"
+                                   Text="Creates a cluster of pending bills whose content is realistic but whose audit timestamps are backfilled inside the selected time window. No Tally traffic. Requires admin unlock." />
+
+                        <!--  Error banner  -->
+                        <Border Style="{StaticResource DlgBannerErr}"
+                                Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚠"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource ErrBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding ErrorMessage}"
+                                           Foreground="{DynamicResource ErrInkBrush}"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Generation bounds  -->
+                        <Border Style="{StaticResource DlgCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource DlgSectionTitle}" Text="GENERATION BOUNDS" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="TOTAL TARGET AMOUNT (₹)" />
+                                        <TextBox Text="{Binding TotalAmount, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="24KT RATE (₹/G)" />
+                                        <TextBox Text="{Binding Rate24Kt, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="MIN ITEMS / BILL" />
+                                        <TextBox Text="{Binding MinItemsPerBill, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="MAX BILL AMOUNT (₹ ≤ 1,99,000)" />
+                                        <TextBox Text="{Binding MaxBillAmount, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="PAYMENT MODE" />
+                                        <ComboBox ItemsSource="{Binding PaymentOptions}"
+                                                  SelectedItem="{Binding PaymentMode}" />
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="MAX ITEMS / BILL" />
+                                        <TextBox Text="{Binding MaxItemsPerBill, UpdateSourceTrigger=PropertyChanged}"
+                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Time window  -->
+                        <Border Style="{StaticResource DlgCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource DlgSectionTitle}" Text="TIME WINDOW (LOCAL)" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="START (YYYY-MM-DD HH:MM)" />
+                                        <TextBox x:Name="StartAtBox"
+                                                 FontFamily="{DynamicResource MonoFontFamily}"
+                                                 LostFocus="OnStartAtLostFocus" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="END (YYYY-MM-DD HH:MM)" />
+                                        <TextBox x:Name="EndAtBox"
+                                                 FontFamily="{DynamicResource MonoFontFamily}"
+                                                 LostFocus="OnEndAtLostFocus" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Karats  -->
+                        <Border Style="{StaticResource DlgCard}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Style="{StaticResource DlgSectionTitle}" Margin="0" Text="TALLY-MAPPED KARATS" />
+                                    <StackPanel HorizontalAlignment="Right"
+                                                Orientation="Horizontal"
+                                                Visibility="{Binding HasKaratOptions, Converter={StaticResource BoolToVis}}">
+                                        <Button Style="{StaticResource BtnSm}"
+                                                Margin="0,0,6,0"
+                                                Command="{Binding SelectAllKaratsCommand}"
+                                                Content="Select all" />
+                                        <Button Style="{StaticResource BtnSm}"
+                                                Command="{Binding ClearAllKaratsCommand}"
+                                                Content="Clear all" />
+                                    </StackPanel>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding KaratOptions}" MaxHeight="140">
+                                    <ItemsControl.Template>
+                                        <ControlTemplate TargetType="ItemsControl">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                <ItemsPresenter />
+                                            </ScrollViewer>
+                                        </ControlTemplate>
+                                    </ItemsControl.Template>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <CheckBox Margin="0,2"
+                                                      IsChecked="{Binding IsSelected}"
+                                                      Content="{Binding Label}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Validation banner  -->
+                        <Border Style="{StaticResource DlgBannerWarn}"
+                                Visibility="{Binding HasValidation, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{DynamicResource WarnBrush}" />
+                                <TextBlock Text="{Binding ValidationMessage}"
+                                           Foreground="{DynamicResource WarnInkBrush}"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Runtime status  -->
+                        <Border Style="{StaticResource DlgCard}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource DlgSectionTitle}" Text="RUNTIME" />
+                                <TextBlock FontSize="11.5"
+                                           Foreground="{DynamicResource InkMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding StatusMessage, TargetNullValue='Ready.', FallbackValue='Ready.'}" />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ProgressBar Grid.Column="0"
+                                                 Height="8"
+                                                 Minimum="0"
+                                                 Maximum="{Binding TotalCount, FallbackValue=1, TargetNullValue=1}"
+                                                 Value="{Binding CreatedCount, Mode=OneWay}" />
+                                    <TextBlock Grid.Column="1"
+                                               Margin="10,0,0,0"
+                                               FontFamily="{DynamicResource MonoFontFamily}"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource InkMutedBrush}"
+                                               VerticalAlignment="Center">
+                                        <Run Text="{Binding CreatedCount, Mode=OneWay}" /><Run Text=" / " /><Run Text="{Binding TotalCount, Mode=OneWay}" />
+                                    </TextBlock>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!--  dialog-foot  -->
+                <Border Grid.Row="2"
+                        Background="{DynamicResource BgSunkenBrush}"
+                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderThickness="0,1,0,0"
+                        Padding="14,10">
+                    <Grid>
+                        <Button HorizontalAlignment="Left"
+                                Style="{StaticResource BtnBase}"
+                                Command="{Binding CancelCommand}"
+                                Content="Cancel"
+                                Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}" />
+                        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                            <Button Style="{StaticResource BtnBase}"
+                                    Margin="0,0,6,0"
+                                    Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Close" />
+                            <Button Style="{StaticResource BtnPrimary}"
+                                    MinWidth="140"
+                                    Command="{Binding StartCommand}"
+                                    Content="Start Schedule" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

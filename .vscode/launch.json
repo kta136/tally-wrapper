@@ -1,0 +1,55 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/ShowroomBilling.Api/bin/Debug/net10.0/ShowroomBilling.Api.dll",
+      "cwd": "${workspaceFolder}/src/ShowroomBilling.Api",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://127.0.0.1:5108"
+      },
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "Desktop",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows/Billing.exe",
+      "cwd": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows",
+      "env": {
+        "DOTNET_ENVIRONMENT": "Development"
+      },
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "Desktop (API already launched)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows/Billing.exe",
+      "cwd": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows",
+      "env": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "SHOWROOM_DESKTOP_ChildProcesses__Api__Enabled": "false"
+      },
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Desktop + API",
+      "configurations": [
+        "API",
+        "Desktop (API already launched)"
+      ],
+      "preLaunchTask": "build-solution",
+      "stopAll": true
+    }
+  ]
+}

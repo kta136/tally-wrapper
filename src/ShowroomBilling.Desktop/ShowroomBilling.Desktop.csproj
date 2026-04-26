@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Billing</AssemblyName>
+    <Version>1.0</Version>
+    <ApplicationIcon>Resources\Billing.ico</ApplicationIcon>
+    <UserSecretsId>ShowroomBilling-Desktop-Foundation</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ShowroomBilling.Application\ShowroomBilling.Application.csproj" />
+    <ProjectReference Include="..\ShowroomBilling.Contracts\ShowroomBilling.Contracts.csproj" />
+    <ProjectReference Include="..\ShowroomBilling.Printing\ShowroomBilling.Printing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      appsettings.json is embedded as a manifest resource (LogicalName="appsettings.json")
+      and loaded via AddJsonStream in App.OnStartup. The on-disk copy used to ship in
+      publish/prod/ next to Billing.exe; we want the prod folder to contain only the exe
+      and the .NET runtime artifacts (.deps.json, .runtimeconfig.json), so the base config
+      is baked into the exe itself. appsettings.{Environment}.json overrides still load
+      from disk so dev can override without rebuilding.
+    -->
+    <EmbeddedResource Include="appsettings.json" LogicalName="appsettings.json" />
+    <None Update="appsettings.Development.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Properties\launchSettings.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!--
+    publish-prod.ps1 drops the published API as a zip into Resources/Embedded/api.zip
+    immediately before publishing the Desktop. When present we embed it as a manifest
+    resource named EmbeddedApi.zip so EmbeddedApiExtractor can spool it out to
+    %LOCALAPPDATA% on launch. Dev builds (no zip on disk) build cleanly.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Embedded\api.zip" Condition="Exists('Resources\Embedded\api.zip')" LogicalName="EmbeddedApi.zip" />
+  </ItemGroup>
+
+  <!--
+    QuestPDF's build/QuestPDF.targets unconditionally copies its bundled LatoFont folder
+    (~12 MB across 18 TTFs) next to the output. The invoice template uses Fonts.Calibri
+    explicitly (a Windows-native font) so Lato is only theoretical fallback weight.
+    Strip the folder from the publish output to keep the deployed footprint smaller.
+    Removed only on Publish (not regular Build) so dev/test builds keep the fallback.
+  -->
+  <Target Name="RemoveLatoFontFromPublish" AfterTargets="Publish">
+    <RemoveDir Directories="$(PublishDir)LatoFont" Condition="Exists('$(PublishDir)LatoFont')" />
+  </Target>
+</Project>
