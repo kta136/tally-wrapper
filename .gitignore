@@ -2,13 +2,18 @@ bin/
 obj/
 .vs/
 .idea/
+.vscode/*.user
 TestResults/
 artifacts/
+coverage/
+coveragereport/
 
 *.user
 *.suo
 *.userosscache
 *.rsuser
+*.tmp
+*.temp
 
 *.db
 *.db-shm
@@ -20,6 +25,17 @@ artifacts/
 logs/
 backups/
 
+.env
+.env.*
+*.secret.json
+*.secrets.json
+secrets/
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+
 appsettings.Local.json
 appsettings.*.local.json
 appsettings.Development.json
@@ -30,8 +46,20 @@ desktop-secrets.json
 .tmp-*/
 tmp/
 publish/
-src/ShowroomBilling.Desktop/Resources/Embedded/
+*.nupkg
+*.snupkg
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.rar
+*.exe
+*.msi
+*.msix
+*.pdb
+src/ShowroomBilling.Desktop/Resources/Embedded/**
 
 .DS_Store
+Thumbs.db
 
 .claude/
