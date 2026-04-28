@@ -58,12 +58,14 @@ public partial class SettingsViewModel : ObservableObject,
         IPrintDispatcher? printDispatcher,
         IPrintPreferencesStore? printPreferences,
         IRuntimeApiClient? runtimeApi = null,
+        IHealthApiClient? healthApi = null,
         AdminTokenStore? adminTokenStore = null,
-        ChildProcessSupervisor? childProcessSupervisor = null)
+        IChildProcessSupervisor? childProcessSupervisor = null)
         : this(settingsApi, mastersApi, printAssetApi,
             (draft, layout, host) =>
                 new SettingsPreviewViewModel(draft, layout, host, printDispatcher, printAssetApi, printPreferences),
             runtimeApi,
+            healthApi,
             adminTokenStore,
             childProcessSupervisor)
     { }
@@ -78,13 +80,14 @@ public partial class SettingsViewModel : ObservableObject,
         IPrintAssetApiClient? printAssetApi,
         Func<SettingsDraft, PrintLayoutViewModel, SettingsViewModel, SettingsPreviewViewModel> previewFactory,
         IRuntimeApiClient? runtimeApi = null,
+        IHealthApiClient? healthApi = null,
         AdminTokenStore? adminTokenStore = null,
-        ChildProcessSupervisor? childProcessSupervisor = null)
+        IChildProcessSupervisor? childProcessSupervisor = null)
     {
         ArgumentNullException.ThrowIfNull(previewFactory);
         _settingsApi = settingsApi;
         _mastersApi = mastersApi;
-        _databaseWorkflow = new DatabaseConfigurationWorkflow(runtimeApi, adminTokenStore, childProcessSupervisor, this);
+        _databaseWorkflow = new DatabaseConfigurationWorkflow(runtimeApi, healthApi, adminTokenStore, childProcessSupervisor, this);
         _masterWorkflow = new SettingsMasterSnapshotWorkflow(_settingsApi, _mastersApi, this, LoadAsync);
         _editWorkflow = new SettingsEditWorkflow(_settingsApi, this);
         _sectionCoordinator = new SettingsSectionCoordinator(this);
@@ -273,6 +276,7 @@ public partial class SettingsViewModel : ObservableObject,
     [ObservableProperty] private bool isRestartingApi;
     [ObservableProperty] private bool isLocalDatabaseOverridePresent;
     [ObservableProperty] private bool databaseConfigRequiresRestart;
+    [ObservableProperty] private bool canBootstrapDatabaseWithoutAdmin;
 
     [ObservableProperty] private CompanySnapshotItem? selectedCompany;
     [ObservableProperty] private bool isFetchingCompanies;
@@ -304,6 +308,13 @@ public partial class SettingsViewModel : ObservableObject,
     public bool IsAdvancedVisible => _sectionCoordinator.IsAdvancedVisible;
     public bool IsAdminVisible => _sectionCoordinator.IsAdminVisible;
     public bool CanRestartApi => _databaseWorkflow.CanRestartApi;
+    public string DatabaseSetupModeText => CanBootstrapDatabaseWithoutAdmin
+        ? "First-run setup is open. Paste the PostgreSQL connection string; it will be encrypted for this Windows user."
+        : "Database changes are admin-protected after setup.";
+
+    public string SaveDatabaseConfigButtonText => CanBootstrapDatabaseWithoutAdmin
+        ? "Save and restart"
+        : "Save override";
 
     /// <summary>Show the live preview pane only for Invoice and Print Layout sections.</summary>
     public bool IsPreviewVisible => _sectionCoordinator.IsPreviewVisible;
@@ -327,6 +338,12 @@ public partial class SettingsViewModel : ObservableObject,
     {
         OnPropertyChanged(nameof(CanRestartApi));
         RestartApiCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnCanBootstrapDatabaseWithoutAdminChanged(bool value)
+    {
+        OnPropertyChanged(nameof(DatabaseSetupModeText));
+        OnPropertyChanged(nameof(SaveDatabaseConfigButtonText));
     }
 
     partial void OnIsFetchingCompaniesChanged(bool value) => NotifyCompanyCommandsChanged();

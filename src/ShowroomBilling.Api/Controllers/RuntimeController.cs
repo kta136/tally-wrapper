@@ -20,6 +20,7 @@ public sealed class RuntimeController(
     ICloudSettingsService cloudSettingsService,
     ShowroomBillingDbContext dbContext,
     HealthCheckService healthCheckService,
+    IDatabaseConnectionVerifier databaseConnectionVerifier,
     AppliedDatabaseConfiguration appliedDatabaseConfiguration,
     IHostEnvironment hostEnvironment,
     IOptions<ApiRuntimeOptions> runtimeOptions) : ControllerBase
@@ -80,27 +81,66 @@ public sealed class RuntimeController(
         [FromBody] UpdateDatabaseConfigurationRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
+        var connectionString = ParseConnectionStringOrProblem(request);
+        if (connectionString.Result is not null)
         {
-            return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
+            return connectionString.Result;
         }
 
-        try
+        var verification = await databaseConnectionVerifier.VerifyAsync(
+            connectionString.Value!,
+            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            cancellationToken);
+        if (!verification.Success)
         {
-            _ = new NpgsqlConnectionStringBuilder(request.ConnectionString);
-        }
-        catch (ArgumentException ex)
-        {
-            return ControllerProblemDetails.BadRequest(ex.Message);
+            return ControllerProblemDetails.BadRequest(verification.Message);
         }
 
-        var connectionString = request.ConnectionString.Trim();
         await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
-            connectionString,
+            connectionString.Value!,
             hostEnvironment.EnvironmentName,
             cancellationToken);
 
-        return Ok(BuildDatabaseConfigurationResponse(connectionString, requiresRestart: true));
+        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
+    }
+
+    [HttpPut("database/bootstrap")]
+    [AllowAnonymous]
+    public async Task<ActionResult<DatabaseConfigurationResponse>> BootstrapDatabaseConfiguration(
+        [FromBody] UpdateDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!CanBootstrapDatabaseConfiguration())
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Database bootstrap is closed.",
+                Detail = "A local or environment database override is already configured. Use the admin-protected database update flow.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
+        var connectionString = ParseConnectionStringOrProblem(request);
+        if (connectionString.Result is not null)
+        {
+            return connectionString.Result;
+        }
+
+        var verification = await databaseConnectionVerifier.VerifyAsync(
+            connectionString.Value!,
+            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            cancellationToken);
+        if (!verification.Success)
+        {
+            return ControllerProblemDetails.BadRequest(verification.Message);
+        }
+
+        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
+            connectionString.Value!,
+            hostEnvironment.EnvironmentName,
+            cancellationToken);
+
+        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
     }
 
     [HttpPost("database/test")]
@@ -113,32 +153,19 @@ public sealed class RuntimeController(
             return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
         }
 
-        NpgsqlConnectionStringBuilder builder;
-        try
+        if (!PostgresConnectionStringNormalizer.TryNormalize(
+            request.ConnectionString,
+            out var connectionString,
+            out var error))
         {
-            builder = new NpgsqlConnectionStringBuilder(request.ConnectionString);
-            builder.Timeout = Math.Min(Math.Max(builder.Timeout, 1), 5);
-            builder.CommandTimeout = 5;
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new DatabaseConfigurationTestResponse(false, ex.Message));
+            return BadRequest(new DatabaseConfigurationTestResponse(false, error));
         }
 
-        try
-        {
-            await using var connection = new NpgsqlConnection(builder.ConnectionString);
-            await connection.OpenAsync(cancellationToken);
-            await using var command = new NpgsqlCommand("select 1", connection);
-            var result = await command.ExecuteScalarAsync(cancellationToken);
-            return Ok(new DatabaseConfigurationTestResponse(
-                Equals(result, 1) || Equals(result, 1L),
-                "Connection succeeded."));
-        }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException or InvalidOperationException)
-        {
-            return Ok(new DatabaseConfigurationTestResponse(false, $"Connection failed: {ex.Message}"));
-        }
+        var verification = await databaseConnectionVerifier.VerifyAsync(
+            connectionString,
+            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            cancellationToken);
+        return Ok(new DatabaseConfigurationTestResponse(verification.Success, verification.Message));
     }
 
     [HttpGet("health")]
@@ -189,8 +216,31 @@ public sealed class RuntimeController(
             RequiresApiRestart: requiresRestart,
             EnvironmentName: hostEnvironment.EnvironmentName,
             IsEnvironmentOverridePresent: !string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString()),
-            StorageProtection: "Windows DPAPI CurrentUser");
+            StorageProtection: "Windows DPAPI CurrentUser",
+            CanBootstrapWithoutAdmin: CanBootstrapDatabaseConfiguration());
     }
+
+    private ActionResult<string> ParseConnectionStringOrProblem(UpdateDatabaseConfigurationRequest? request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
+        {
+            return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
+        }
+
+        if (!PostgresConnectionStringNormalizer.TryNormalize(
+            request.ConnectionString,
+            out var connectionString,
+            out var error))
+        {
+            return ControllerProblemDetails.BadRequest(error);
+        }
+
+        return connectionString;
+    }
+
+    private bool CanBootstrapDatabaseConfiguration() =>
+        !DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName)
+        && string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString());
 
     private static string MaskConnectionString(string connectionString)
     {

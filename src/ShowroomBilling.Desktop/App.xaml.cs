@@ -18,6 +18,7 @@ using ShowroomBilling.Desktop.ViewModels.Bills;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
+using ShowroomBilling.Desktop.ViewModels.Setup;
 using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop;
@@ -86,6 +87,8 @@ public partial class App : System.Windows.Application
         builder.Services.Configure<DesktopLocalPreferencesOptions>(builder.Configuration.GetSection(DesktopLocalPreferencesOptions.SectionName));
         builder.Services.Configure<ChildProcessOptions>(builder.Configuration.GetSection(ChildProcessOptions.SectionName));
         builder.Services.AddSingleton<ChildProcessSupervisor>();
+        builder.Services.AddSingleton<IChildProcessSupervisor>(sp => sp.GetRequiredService<ChildProcessSupervisor>());
+        builder.Services.AddSingleton<ISetupWizardCompletionStore, SetupWizardCompletionStore>();
         builder.Services.AddSingleton<DeviceTokenProvider>();
         builder.Services.AddTransient<CorrelationIdHandler>();
         builder.Services.AddTransient<DeviceTokenHandler>();
@@ -174,13 +177,20 @@ public partial class App : System.Windows.Application
             sp.GetService<IPrintDispatcher>(),
             sp.GetService<IPrintPreferencesStore>(),
             sp.GetService<IRuntimeApiClient>(),
+            sp.GetService<IHealthApiClient>(),
             sp.GetService<AdminTokenStore>(),
-            sp.GetService<ChildProcessSupervisor>()));
+            sp.GetService<IChildProcessSupervisor>()));
         builder.Services.AddSingleton<AdminUnlockViewModel>();
         builder.Services.AddSingleton(sp => new ViewModels.SyntheticBatch.SyntheticBatchViewModel(
             sp.GetService<IBillsApiClient>(),
             sp.GetService<AdminTokenStore>(),
             sp.GetService<SettingsViewModel>()));
+        builder.Services.AddSingleton(sp => new SetupWizardViewModel(
+            sp.GetRequiredService<IRuntimeApiClient>(),
+            sp.GetRequiredService<IHealthApiClient>(),
+            sp.GetRequiredService<ISettingsApiClient>(),
+            sp.GetService<IChildProcessSupervisor>(),
+            sp.GetRequiredService<ISetupWizardCompletionStore>()));
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddSingleton<MainWindow>();
 

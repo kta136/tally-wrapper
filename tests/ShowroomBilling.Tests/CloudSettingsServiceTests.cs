@@ -19,6 +19,7 @@ public sealed class CloudSettingsServiceTests
         Assert.Equal("Development Company", response.Settings.Connection.ActiveCompanyName);
         Assert.Equal("127.0.0.1", response.Settings.Connection.Host);
         Assert.Equal("DEV-", response.Settings.Numbering.InvoicePrefix);
+        Assert.True(response.RequiresInitialSetup);
     }
 
     [Fact]
@@ -59,6 +60,49 @@ public sealed class CloudSettingsServiceTests
         Assert.Equal("Showroom Alpha", effectiveResponse.Settings.Connection.ActiveCompanyName);
         Assert.Equal("Alpha Jewellers", effectiveResponse.Settings.Print.CompanyName);
         Assert.Equal("[{\"code\":\"ITEM1\"}]", effectiveResponse.Settings.Masters.ItemMasterDataJson);
+    }
+
+    [Fact]
+    public async Task GetEffectiveSettingsAsync_ReportsInitialSetupFalse_WhenRealSettingsAreSaved()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+
+        await service.SaveEffectiveSettingsAsync(new UpdateEffectiveSettingsRequest(
+            new EffectiveCloudSettingsDto(
+                new ConnectionSettingsDto("192.168.1.20", 9100, 45, "Showroom Alpha"),
+                new NumberingSettingsDto("SB-", "/26", 4),
+                new PrintSettingsDto(
+                    "Alpha Jewellers",
+                    "GSTIN123",
+                    "9999999999",
+                    "Market Road",
+                    "Tamil Nadu",
+                    "India",
+                    "HDFC",
+                    "1234567890",
+                    "HDFC0001",
+                    "upi@bank",
+                    "No returns after 7 days.",
+                    true,
+                    true,
+                    false,
+                    12,
+                    10),
+                new LedgerMappingsDto(
+                    "Alpha Sales",
+                    "Alpha Cash",
+                    "Alpha Card",
+                    "Alpha CGST",
+                    "Alpha SGST",
+                    "Alpha Round Off",
+                    "Alpha Discount",
+                    "Alpha Sales Voucher"),
+                new MasterDataSettingsDto("[{\"name\":\"Gold\"}]", "[{\"label\":\"22K\"}]" ))));
+
+        var response = await service.GetEffectiveSettingsAsync();
+
+        Assert.False(response.RequiresInitialSetup);
     }
 
     [Fact]

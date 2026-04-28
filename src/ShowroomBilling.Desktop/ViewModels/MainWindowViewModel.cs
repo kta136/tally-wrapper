@@ -13,10 +13,12 @@ using ShowroomBilling.Desktop.ViewModels.Bills;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
+using ShowroomBilling.Desktop.ViewModels.Setup;
 using ShowroomBilling.Desktop.ViewModels.SyntheticBatch;
 using ShowroomBilling.Desktop.Views.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Masters;
+using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels;
 
@@ -63,6 +65,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         PrintPreviewViewModel printPreview,
         SettingsViewModel settings,
         AdminUnlockViewModel admin,
+        SetupWizardViewModel setupWizard,
         SyntheticBatchViewModel syntheticBatch)
     {
         _runtimeApiClient = runtimeApiClient;
@@ -78,6 +81,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         PrintPreview = printPreview;
         Settings = settings;
         Admin = admin;
+        SetupWizard = setupWizard;
         SyntheticBatch = syntheticBatch;
         ChangeNumberDialog = new ChangeNumberDialogViewModel();
         ReasonPromptDialog = new ReasonPromptDialogViewModel();
@@ -179,6 +183,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Bills.AdminUnlockHandler = RequestAdminUnlockAsync;
         Settings.AdminUnlockHandler = RequestAdminUnlockAsync;
         Settings.AdminVm = Admin;
+        SetupWizard.Completed += OnSetupWizardCompleted;
         SyntheticBatch.AdminUnlockHandler = RequestAdminUnlockAsync;
         SyntheticBatch.BatchCompleted += (_, _) => _ = Bills.LoadAsync();
         Bills.EditBillHandler = LoadBillForEditInInvoiceTabAsync;
@@ -284,6 +289,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public PrintPreviewViewModel PrintPreview { get; }
     public SettingsViewModel Settings { get; }
     public AdminUnlockViewModel Admin { get; }
+    public SetupWizardViewModel SetupWizard { get; }
     public SyntheticBatchViewModel SyntheticBatch { get; }
     public ChangeNumberDialogViewModel ChangeNumberDialog { get; }
     public ReasonPromptDialogViewModel ReasonPromptDialog { get; }
@@ -417,6 +423,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         var healthTask = RefreshHealthAsync(forceTallyCompany: true);
 
         await Task.WhenAll(bootstrapTask, settingsTask, healthTask);
+        var settingsResponse = await settingsTask;
 
         _ = _printCoordinator.WarmUpPrintPipelineAsync();
         // Invoice is the default tab and OnActiveTabChanged does NOT fire for
@@ -426,7 +433,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         // the connection pool while the user is still settling into the form.
         if (ActiveTab == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync(waitForApi: true);
 
-        if (_databaseConfigurationAttentionRequired && LastHealthSnapshot?.ApiReachable == true)
+        if (LastHealthSnapshot?.ApiReachable == true
+            && await SetupWizard.PrepareForStartupAsync(LastHealthSnapshot, settingsResponse))
+        {
+            ActiveDialog = "setupWizard";
+        }
+        else if (_databaseConfigurationAttentionRequired && LastHealthSnapshot?.ApiReachable == true)
         {
             OpenDatabaseSettings();
         }
@@ -447,7 +459,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
     }
 
-    private async Task ApplySettingsAsync()
+    private async Task<EffectiveSettingsResponse?> ApplySettingsAsync()
     {
         try
         {
@@ -468,11 +480,21 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             await _printCoordinator.RefreshPrintLayoutAsync();
 
             _ = Invoice.RefreshNextNumberAsync();
+            return response;
         }
         catch
         {
             _databaseConfigurationAttentionRequired = true;
+            return null;
         }
+    }
+
+    private async void OnSetupWizardCompleted(object? sender, EventArgs e)
+    {
+        ActiveDialog = null;
+        _databaseConfigurationAttentionRequired = false;
+        await ApplySettingsAsync();
+        await RefreshHealthAsync(forceTallyCompany: true);
     }
 
     private void OpenDatabaseSettings()

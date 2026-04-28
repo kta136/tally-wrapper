@@ -16,4 +16,8 @@ public interface IRuntimeApiClient
         UpdateDatabaseConfigurationRequest request,
         string adminToken,
         CancellationToken cancellationToken = default);
+
+    Task<DatabaseConfigurationResponse> BootstrapDatabaseConfigurationAsync(
+        UpdateDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken = default);
 }

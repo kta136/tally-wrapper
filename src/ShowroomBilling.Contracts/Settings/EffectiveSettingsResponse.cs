@@ -56,4 +56,5 @@ public sealed record EffectiveSettingsResponse(
     EffectiveCloudSettingsDto Settings,
     IReadOnlyList<string> CloudOwnedCategories,
     IReadOnlyList<string> LocalOnlyCategories,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    bool RequiresInitialSetup = false);

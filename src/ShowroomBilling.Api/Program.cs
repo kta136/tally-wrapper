@@ -40,6 +40,7 @@ builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "api");
 builder.Services.AddSingleton(new AppliedDatabaseConfiguration(
     builder.Configuration.GetConnectionString("Postgres") ?? string.Empty));
 builder.Services.Configure<ApiRuntimeOptions>(builder.Configuration.GetSection(ApiRuntimeOptions.SectionName));
+builder.Services.AddSingleton<IDatabaseConnectionVerifier, DatabaseConnectionVerifier>();
 
 builder.Services.AddApplicationLayer();
 builder.Services.AddInfrastructureLayer(builder.Configuration);

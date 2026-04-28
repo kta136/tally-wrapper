@@ -245,7 +245,29 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
                 "Logs",
                 "Workstation-local UX preferences"
             ],
-            UpdatedAtUtc: entity.UpdatedAtUtc);
+            UpdatedAtUtc: entity.UpdatedAtUtc,
+            RequiresInitialSetup: RequiresInitialSetup(entity));
+    }
+
+    private static bool RequiresInitialSetup(CloudSettingsEntity entity) =>
+        string.Equals(entity.ActiveCompanyName, "Development Company", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(entity.PrintCompanyName, "Showroom Billing V2", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(entity.InvoicePrefix, "DEV-", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(entity.SalesLedger, "Sales", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(entity.CashLedger, "Cash", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(entity.CreditDebitLedger, "Card / UPI", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(entity.SalesVoucherType, "Sales", StringComparison.OrdinalIgnoreCase)
+        || IsEmptyJsonArray(entity.ItemMasterDataJson)
+        || IsEmptyJsonArray(entity.KaratMappingDataJson);
+
+    private static bool IsEmptyJsonArray(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        return string.Equals(value.Trim(), "[]", StringComparison.Ordinal);
     }
 
     private async Task WriteAuditEventAsync(string eventType, string entityId, CancellationToken cancellationToken)

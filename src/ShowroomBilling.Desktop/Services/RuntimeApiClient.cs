@@ -44,4 +44,14 @@ public sealed class RuntimeApiClient(HttpClient httpClient) : IRuntimeApiClient
         var response = await http.Content.ReadFromJsonAsync<DatabaseConfigurationResponse>(cancellationToken: cancellationToken);
         return response ?? throw new InvalidOperationException("API returned an empty database configuration update payload.");
     }
+
+    public async Task<DatabaseConfigurationResponse> BootstrapDatabaseConfigurationAsync(
+        UpdateDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var http = await httpClient.PutAsJsonAsync("/api/runtime/database/bootstrap", request, cancellationToken);
+        await ApiResponseReader.EnsureSuccessOrThrowAsync(http, cancellationToken);
+        var response = await http.Content.ReadFromJsonAsync<DatabaseConfigurationResponse>(cancellationToken: cancellationToken);
+        return response ?? throw new InvalidOperationException("API returned an empty database bootstrap payload.");
+    }
 }

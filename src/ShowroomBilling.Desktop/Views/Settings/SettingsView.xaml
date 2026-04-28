@@ -990,6 +990,19 @@
                                    Margin="0,0,0,22"
                                    Text="PostgreSQL connection used by the local API. Saving writes a local machine override; restart the API or desktop app to apply it." />
 
+                        <Border Margin="0,0,0,16"
+                                Padding="10,8"
+                                Background="{DynamicResource WarnSoftBrush}"
+                                BorderBrush="{DynamicResource WarnBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource Radius}"
+                                Visibility="{Binding CanBootstrapDatabaseWithoutAdmin, Converter={StaticResource BoolToVis}}">
+                            <TextBlock FontSize="11.5"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource WarnInkBrush}"
+                                       Text="{Binding DatabaseSetupModeText}" />
+                        </Border>
+
                         <!--  Connection string editor  -->
                         <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource InkBrush}" Text="Connection String" Margin="0,0,0,8" />
                         <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
@@ -1004,7 +1017,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button Style="{StaticResource BtnSm}" Command="{Binding LoadDatabaseConfigCommand}" Content="Load" Margin="0,0,6,0" />
                             <Button Style="{StaticResource BtnSm}" Command="{Binding TestDatabaseConnectionCommand}" Content="Test connection" Margin="0,0,6,0" />
-                            <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Content="Save override" Margin="0,0,6,0" />
+                            <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Content="{Binding SaveDatabaseConfigButtonText}" Margin="0,0,6,0" />
                             <Rectangle Width="1" Margin="4,0" Fill="{DynamicResource DividerBrush}" />
                             <Button Style="{StaticResource BtnSm}" Command="{Binding RestartApiCommand}" Content="Restart API" Margin="6,0,0,0" />
                         </StackPanel>

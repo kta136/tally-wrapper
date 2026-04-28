@@ -18,15 +18,20 @@ internal interface IDatabaseConfigurationWorkflowHost
     bool IsRestartingApi { get; set; }
     bool IsLocalDatabaseOverridePresent { get; set; }
     bool DatabaseConfigRequiresRestart { get; set; }
+    bool CanBootstrapDatabaseWithoutAdmin { get; set; }
     Func<CancellationToken, Task>? AdminUnlockHandler { get; }
 }
 
 internal sealed class DatabaseConfigurationWorkflow(
     IRuntimeApiClient? runtimeApi,
+    IHealthApiClient? healthApi,
     AdminTokenStore? adminTokenStore,
-    ChildProcessSupervisor? childProcessSupervisor,
+    IChildProcessSupervisor? childProcessSupervisor,
     IDatabaseConfigurationWorkflowHost host)
 {
+    private static readonly TimeSpan DatabaseReadyTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DatabaseReadyPollInterval = TimeSpan.FromMilliseconds(500);
+
     public bool CanUseCommands() =>
         runtimeApi is not null
         && !host.IsDatabaseConfigBusy
@@ -99,32 +104,54 @@ internal sealed class DatabaseConfigurationWorkflow(
     {
         if (runtimeApi is null) return;
 
-        var token = adminTokenStore?.Current?.Token;
-        if (string.IsNullOrWhiteSpace(token) && host.AdminUnlockHandler is not null)
-        {
-            host.DatabaseConfigStatus = string.Empty;
-            await host.AdminUnlockHandler(cancellationToken);
-            token = adminTokenStore?.Current?.Token;
-        }
-
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            host.DatabaseConfigStatus = "Save cancelled.";
-            return;
-        }
-
         host.IsSavingDatabaseConfig = true;
-        host.DatabaseConfigStatus = "Saving database configuration…";
+        host.DatabaseConfigStatus = host.CanBootstrapDatabaseWithoutAdmin
+            ? "Saving first-run database configuration…"
+            : "Saving database configuration…";
         try
         {
-            var response = await runtimeApi.UpdateDatabaseConfigurationAsync(
-                new UpdateDatabaseConfigurationRequest(host.DatabaseConnectionString),
-                token,
-                cancellationToken);
+            DatabaseConfigurationResponse response;
+            if (host.CanBootstrapDatabaseWithoutAdmin)
+            {
+                response = await runtimeApi.BootstrapDatabaseConfigurationAsync(
+                    new UpdateDatabaseConfigurationRequest(host.DatabaseConnectionString),
+                    cancellationToken);
+            }
+            else
+            {
+                var token = adminTokenStore?.Current?.Token;
+                if (string.IsNullOrWhiteSpace(token) && host.AdminUnlockHandler is not null)
+                {
+                    host.DatabaseConfigStatus = string.Empty;
+                    host.IsSavingDatabaseConfig = false;
+                    await host.AdminUnlockHandler(cancellationToken);
+                    host.IsSavingDatabaseConfig = true;
+                    token = adminTokenStore?.Current?.Token;
+                    host.DatabaseConfigStatus = "Saving database configuration…";
+                }
+
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    host.DatabaseConfigStatus = "Save cancelled.";
+                    return;
+                }
+
+                response = await runtimeApi.UpdateDatabaseConfigurationAsync(
+                    new UpdateDatabaseConfigurationRequest(host.DatabaseConnectionString),
+                    token,
+                    cancellationToken);
+            }
+
             Apply(response);
+            if (response.RequiresApiRestart && childProcessSupervisor?.CanRestartApi == true)
+            {
+                await RestartApiCoreAsync(waitForDatabaseReady: true, cancellationToken);
+                return;
+            }
+
             host.DatabaseConfigStatus = response.RequiresApiRestart
                 ? "Saved. Restart the API or desktop app for the new database to be used."
-                : "Saved.";
+                : "Saved. Database is ready.";
         }
         catch (HttpRequestException ex)
         {
@@ -141,6 +168,9 @@ internal sealed class DatabaseConfigurationWorkflow(
     }
 
     public async Task RestartApiAsync(CancellationToken cancellationToken)
+        => await RestartApiCoreAsync(waitForDatabaseReady: false, cancellationToken);
+
+    private async Task RestartApiCoreAsync(bool waitForDatabaseReady, CancellationToken cancellationToken)
     {
         if (childProcessSupervisor?.CanRestartApi != true)
         {
@@ -156,8 +186,20 @@ internal sealed class DatabaseConfigurationWorkflow(
             host.DatabaseConfigStatus = restarted
                 ? "API restarted. Rechecking database configuration…"
                 : "API restart was requested but no managed API child started.";
-            await Task.Delay(1000, cancellationToken);
+
+            var databaseReady = false;
+            if (restarted && waitForDatabaseReady)
+            {
+                databaseReady = await WaitForDatabaseReadyAsync(cancellationToken);
+            }
+
             await LoadAsync(cancellationToken);
+            if (restarted && waitForDatabaseReady)
+            {
+                host.DatabaseConfigStatus = databaseReady
+                    ? "Saved. API restarted and database is ready."
+                    : "Saved and API restarted, but database is not ready yet. Check the connection string and runtime health.";
+            }
         }
         catch (OperationCanceledException)
         {
@@ -173,6 +215,30 @@ internal sealed class DatabaseConfigurationWorkflow(
         }
     }
 
+    private async Task<bool> WaitForDatabaseReadyAsync(CancellationToken cancellationToken)
+    {
+        if (healthApi is null)
+        {
+            return false;
+        }
+
+        var deadline = DateTimeOffset.UtcNow + DatabaseReadyTimeout;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var snapshot = await healthApi.GetSnapshotAsync(includeTallyCompany: false, cancellationToken);
+            if (snapshot.ApiReachable
+                && snapshot.Runtime is { DatabaseConfigured: true, DatabaseReachable: true }
+                && snapshot.Runtime.DatabaseIdentityMatches != false)
+            {
+                return true;
+            }
+
+            await Task.Delay(DatabaseReadyPollInterval, cancellationToken);
+        }
+
+        return false;
+    }
+
     private void Apply(DatabaseConfigurationResponse response)
     {
         host.DatabaseConnectionString = response.ConnectionString;
@@ -182,5 +248,6 @@ internal sealed class DatabaseConfigurationWorkflow(
         host.DatabaseConfigPath = response.ConfigPath;
         host.IsLocalDatabaseOverridePresent = response.IsLocalOverridePresent;
         host.DatabaseConfigRequiresRestart = response.RequiresApiRestart;
+        host.CanBootstrapDatabaseWithoutAdmin = response.CanBootstrapWithoutAdmin;
     }
 }

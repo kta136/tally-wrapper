@@ -10,19 +10,18 @@
 #      env vars or the DPAPI local override.
 #   2. Zip the sanitized API into the Desktop embedded resource.
 #   3. Publish Desktop self-contained, single-file, win-x64.
-#   4. Emit publish/prod/appsettings.Production.json with only non-secret Desktop
-#      settings: ApiBaseUrl and child-process mode.
-#   5. Output: publish/prod/Billing.exe + appsettings.Production.json.
+#   4. Remove loose appsettings files from the Desktop output. The Desktop base
+#      config is embedded in Billing.exe, and database setup is done through UI.
+#   5. Output: publish/prod/Billing.exe plus required .NET runtime metadata.
 #
 # Examples:
 #   .\tools\publish-prod.ps1
-#   .\tools\publish-prod.ps1 -NoEmbeddedApi -DesktopApiBaseUrl http://showroom-server:5107
+#   .\tools\publish-prod.ps1 -NoEmbeddedApi
 
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
     [string]$Runtime = 'win-x64',
-    [string]$DesktopApiBaseUrl = 'http://127.0.0.1:5107',
     [switch]$NoEmbeddedApi,
     [switch]$KeepStaging
 )
@@ -115,27 +114,9 @@ $desktopPublishArgs = @(
 & dotnet publish $desktopProj @desktopPublishArgs -o $desktopOut
 if ($LASTEXITCODE -ne 0) { throw "Desktop publish failed." }
 
-# --- 4. Write non-secret runtime Desktop override -------------------------------
-$desktopProdSettings = [ordered]@{
-    DesktopBootstrap = [ordered]@{
-        ApiBaseUrl = $DesktopApiBaseUrl
-        StartupMode = 'OnlineOnly'
-    }
-    ChildProcesses = [ordered]@{
-        Enabled = $embedApi
-        Api = [ordered]@{
-            Enabled = $embedApi
-        }
-    }
-}
-$desktopProdSettingsPath = Join-Path $desktopOut 'appsettings.Production.json'
-$desktopProdSettings | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 $desktopProdSettingsPath
-Write-Host "Wrote non-secret Desktop production config: $desktopProdSettingsPath" -ForegroundColor Green
-
-# --- 5. Tidy up ----------------------------------------------------------------
+# --- 4. Tidy up ----------------------------------------------------------------
 # Final layout in publish/prod/:
 #   Billing.exe                  — the single-file Desktop exe
-#   appsettings.Production.json  — non-secret API URL + child-process mode
 #   Billing.deps.json            — .NET runtime: assembly resolution manifest, required
 #   Billing.runtimeconfig.json   — .NET runtime: framework/runtime options, required
 # The Desktop's baseline appsettings.json is an EmbeddedResource and is loaded via
@@ -156,6 +137,8 @@ $publishedLato = Join-Path $desktopOut 'LatoFont'
 if (Test-Path $publishedLato) { Remove-Item -Recurse -Force $publishedLato }
 $publishedDevAppSettings = Join-Path $desktopOut 'appsettings.Development.json'
 if (Test-Path $publishedDevAppSettings) { Remove-Item -Force $publishedDevAppSettings }
+$publishedProdAppSettings = Join-Path $desktopOut 'appsettings.Production.json'
+if (Test-Path $publishedProdAppSettings) { Remove-Item -Force $publishedProdAppSettings }
 # appsettings.json is now an EmbeddedResource (loaded via AddJsonStream), so dotnet
 # publish should not emit it. Defensive cleanup in case a future SDK change or a
 # stale incremental copy puts one back next to the exe — we always want the prod
@@ -170,10 +153,9 @@ $desktopMb = [math]::Round((Get-Item $desktopExe).Length / 1MB, 1)
 
 Write-Host "`nBuild complete." -ForegroundColor Green
 Write-Host "  Single-exe : $desktopExe ($desktopMb MB)"
-Write-Host "  API URL    : $DesktopApiBaseUrl"
 if ($embedApi) {
     Write-Host "  Embedded API is sanitized and contains no Postgres connection string."
 } else {
-    Write-Host "  Embedded API: disabled."
+    Write-Host "  Embedded API: disabled. Override SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl if the API is not on the default localhost URL."
 }
 Write-Host "`nDouble-click the Desktop exe to run."

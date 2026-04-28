@@ -9,7 +9,14 @@ using ShowroomBilling.Desktop.Configuration;
 
 namespace ShowroomBilling.Desktop.Services.ProcessSupervision;
 
-public sealed class ChildProcessSupervisor : IDisposable
+public interface IChildProcessSupervisor
+{
+    bool CanRestartApi { get; }
+
+    bool RestartApi();
+}
+
+public sealed class ChildProcessSupervisor : IChildProcessSupervisor, IDisposable
 {
     private readonly ILogger<ChildProcessSupervisor> _logger;
     private readonly ChildProcessOptions _options;

@@ -9,6 +9,7 @@
         xmlns:billsViews="clr-namespace:ShowroomBilling.Desktop.Views.Bills"
         xmlns:printingViews="clr-namespace:ShowroomBilling.Desktop.Views.Printing"
         xmlns:settingsViews="clr-namespace:ShowroomBilling.Desktop.Views.Settings"
+        xmlns:setupViews="clr-namespace:ShowroomBilling.Desktop.Views.Setup"
         xmlns:adminViews="clr-namespace:ShowroomBilling.Desktop.Views.Admin"
         xmlns:syntheticViews="clr-namespace:ShowroomBilling.Desktop.Views.SyntheticBatch"
         mc:Ignorable="d"
@@ -130,6 +131,9 @@
         <adminViews:AdminUnlockDialog Grid.RowSpan="6"
                                       Panel.ZIndex="100"
                                       Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=admin}" />
+        <setupViews:SetupWizardDialog Grid.RowSpan="6"
+                                      Panel.ZIndex="100"
+                                      Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=setupWizard}" />
         <syntheticViews:SyntheticBatchDialog Grid.RowSpan="6"
                                              Panel.ZIndex="100"
                                              Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=syntheticBatch}" />
