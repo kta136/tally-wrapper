@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,8 @@ namespace ShowroomBilling.Desktop.ViewModels.SyntheticBatch;
 
 public partial class SyntheticBatchViewModel : ObservableObject
 {
+    private static readonly CultureInfo AmountCulture = CultureInfo.GetCultureInfo("en-IN");
+
     private readonly IBillsApiClient? _billsApi;
     private readonly AdminTokenStore? _adminTokens;
     private readonly SettingsViewModel? _settings;
@@ -176,7 +179,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
         if (TotalAmount <= 0)
             msg = "Total target amount must be greater than zero.";
         else if (MaxBillAmount <= 0 || MaxBillAmount > SyntheticBatchPlanLimits.HardMaxBillAmount)
-            msg = $"Max bill amount must be between ₹1 and ₹{SyntheticBatchPlanLimits.HardMaxBillAmount:N0}.";
+            msg = $"Max bill amount must be between ₹1 and ₹{SyntheticBatchPlanLimits.HardMaxBillAmount.ToString("N0", AmountCulture)}.";
         else if (Rate24Kt <= 0m)
             msg = "24kt rate must be greater than zero.";
         else if (MinItemsPerBill <= 0 || MaxItemsPerBill < MinItemsPerBill)
