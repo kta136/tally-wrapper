@@ -494,7 +494,6 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -512,24 +511,12 @@
                         <TextBlock Grid.Row="2" Grid.Column="1" Margin="16,4,0,0" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right">
                             <Run Text="₹" /><Run Text="{Binding Sgst, StringFormat=N2, Mode=OneWay}" />
                         </TextBlock>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4,0,0" Text="Discount" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
-                        <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,4,0,0" Orientation="Horizontal">
-                            <TextBlock Text="− ₹" Foreground="{DynamicResource ErrBrush}" />
-                            <TextBox Width="80"
-                                     Padding="4,0"
-                                     Height="20"
-                                     TextAlignment="Right"
-                                     FontFamily="{DynamicResource MonoFontFamily}"
-                                     Foreground="{DynamicResource ErrBrush}"
-                                     BorderThickness="0,0,0,1"
-                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=LostFocus}" />
-                        </StackPanel>
-                        <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,4,0,0" Text="Round Off" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="4" Grid.Column="1" Margin="16,4,0,0" Foreground="{DynamicResource InkMutedBrush}" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right"
+                        <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4,0,0" Text="Round Off" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="16,4,0,0" Foreground="{DynamicResource InkMutedBrush}" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right"
                                    Text="{Binding RoundOff, StringFormat=N2, Mode=OneWay}" />
-                        <Rectangle Grid.Row="5" Grid.ColumnSpan="2" Height="1" Margin="0,8,0,8" Fill="{DynamicResource DividerBrush}" />
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Grand Total" FontSize="18" FontWeight="Bold" TextAlignment="Right" />
-                        <TextBlock Grid.Row="6" Grid.Column="1"
+                        <Rectangle Grid.Row="4" Grid.ColumnSpan="2" Height="1" Margin="0,8,0,8" Fill="{DynamicResource DividerBrush}" />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Grand Total" FontSize="18" FontWeight="Bold" TextAlignment="Right" />
+                        <TextBlock Grid.Row="5" Grid.Column="1"
                                    Margin="16,0,0,0"
                                    FontFamily="{DynamicResource MonoFontFamily}"
                                    FontSize="18"
@@ -565,7 +552,37 @@
                                 </Border>
                             </StackPanel>
                         </Button>
-                        <TextBlock Margin="12,0,0,0"
+                        <Border Margin="14,0,0,0" Width="1" Background="{DynamicResource DividerBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
+                            <CheckBox VerticalAlignment="Center"
+                                      IsChecked="{Binding DiscountEnabled}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="6,0,0,0" Text="DISC" />
+                            </CheckBox>
+                            <TextBlock Margin="8,0,6,0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="{DynamicResource MonoFontFamily}"
+                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Text="=" />
+                            <TextBlock VerticalAlignment="Center"
+                                       Margin="0,0,2,0"
+                                       Foreground="{DynamicResource ErrBrush}"
+                                       Text="− ₹" />
+                            <TextBox Width="80"
+                                     Padding="4,0"
+                                     Height="22"
+                                     VerticalContentAlignment="Center"
+                                     TextAlignment="Right"
+                                     FontFamily="{DynamicResource MonoFontFamily}"
+                                     Foreground="{DynamicResource ErrBrush}"
+                                     IsEnabled="{Binding DiscountEnabled}"
+                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Text="{Binding DiscountPercentHint}" />
+                        </StackPanel>
+                        <TextBlock Margin="14,0,0,0"
                                    VerticalAlignment="Center"
                                    FontSize="11"
                                    Foreground="{DynamicResource InkMutedBrush}"

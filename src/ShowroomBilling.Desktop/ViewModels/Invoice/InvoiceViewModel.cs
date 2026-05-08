@@ -137,6 +137,8 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private string payment = "Cash";
     [ObservableProperty] private decimal? rate24Kt;
     [ObservableProperty] private decimal discount;
+    [ObservableProperty] private bool discountEnabled;
+    [ObservableProperty] private string discountPercentHint = string.Empty;
     [ObservableProperty] private string narration = string.Empty;
 
     [ObservableProperty] private decimal subtotal;
@@ -155,6 +157,10 @@ public partial class InvoiceViewModel : ObservableObject
         Recompute();
     }
     partial void OnDiscountChanged(decimal value) => Recompute();
+    partial void OnDiscountEnabledChanged(bool value)
+    {
+        if (!value) Discount = 0m;
+    }
 
     private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -267,6 +273,9 @@ public partial class InvoiceViewModel : ObservableObject
         GrandTotal = totals.GrandTotal;
         ItemCount = count;
         TotalWeight = weight;
+        DiscountPercentHint = (Discount > 0m && Subtotal > 0m)
+            ? $"≈ {(double)(Discount / Subtotal) * 100.0:0.0}%"
+            : string.Empty;
     }
 
     private decimal ResolvePurityPercent(BillLineViewModel line)
@@ -367,6 +376,7 @@ public partial class InvoiceViewModel : ObservableObject
         PartyName = string.Empty;
         Narration = string.Empty;
         Discount = 0m;
+        DiscountEnabled = false;
         SaveStatus = string.Empty;
         RateMissing = false;
         IsEditingExistingBill = false;
@@ -454,6 +464,7 @@ public partial class InvoiceViewModel : ObservableObject
             BillDate = new DateTimeOffset(payload.BillDate.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset);
             Narration = payload.Notes ?? string.Empty;
             Discount = payload.Totals.DiscountTotal;
+            DiscountEnabled = payload.Totals.DiscountTotal > 0m;
             Rate24Kt = payload.Rate24Kt;
 
             _draftBillId = bill.Id;
