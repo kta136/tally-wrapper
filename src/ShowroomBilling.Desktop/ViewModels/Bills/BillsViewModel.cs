@@ -98,6 +98,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         PrevPageCommand = new AsyncRelayCommand(PrevPageAsync, CanPrevPage);
         ClearFiltersCommand = new RelayCommand(ClearFilters);
         PushSelectedCommand = new AsyncRelayCommand(PushSelectedAsync, CanPushSelected);
+        PushAllPendingCommand = new AsyncRelayCommand(PushAllPendingAsync, CanPushAllPending);
         RetrySelectedCommand = new AsyncRelayCommand(RetrySelectedAsync, CanRetrySelected);
         VoidSelectedCommand = new AsyncRelayCommand(VoidSelectedAsync, CanVoidSelected);
         ReviseSelectedCommand = new AsyncRelayCommand(ReviseSelectedAsync, CanReviseSelected);
@@ -135,6 +136,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public IAsyncRelayCommand PrevPageCommand { get; }
     public IRelayCommand ClearFiltersCommand { get; }
     public IAsyncRelayCommand PushSelectedCommand { get; }
+    public IAsyncRelayCommand PushAllPendingCommand { get; }
 
     public bool IsAdminUnlocked => _adminTokens?.IsUnlocked == true;
     public IAsyncRelayCommand RetrySelectedCommand { get; }
@@ -429,6 +431,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         RefreshCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
         PrevPageCommand.NotifyCanExecuteChanged();
+        PushAllPendingCommand.NotifyCanExecuteChanged();
     }
 
     private void RefreshSelectionState()
@@ -478,6 +481,14 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private bool CanRefresh() => _billsApi is not null && !IsLoading && !IsActing;
     private bool CanNextPage() => HasNext && !IsLoading && !IsActing;
     private bool CanPrevPage() => Skip > 0 && !IsLoading && !IsActing;
+
+    private bool CanPushAllPending() =>
+        _billsApi is not null
+        && !IsLoading
+        && !IsActing;
+
+    private async Task PushAllPendingAsync(CancellationToken cancellationToken)
+        => await _actionWorkflow.PushAllPendingAsync(cancellationToken);
 
     private bool CanPushSelected() =>
         _billsApi is not null

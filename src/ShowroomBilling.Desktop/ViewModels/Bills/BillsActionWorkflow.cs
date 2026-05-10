@@ -30,6 +30,11 @@ internal sealed class BillsActionWorkflow(
         await _batchActions.PushSelectedAsync(cancellationToken);
     }
 
+    public async Task PushAllPendingAsync(CancellationToken cancellationToken)
+    {
+        await _batchActions.PushAllPendingAsync(cancellationToken);
+    }
+
     public async Task RetrySelectedAsync(CancellationToken cancellationToken)
     {
         await _batchActions.RetrySelectedAsync(cancellationToken);

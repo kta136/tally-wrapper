@@ -63,3 +63,4 @@ src/ShowroomBilling.Desktop/Resources/Embedded/**
 Thumbs.db
 
 .claude/
+graphify-out/

@@ -32,6 +32,41 @@ internal sealed class BillsBatchActionWorkflow(
         await host.LoadAsync(cancellationToken);
     }
 
+    internal async Task PushAllPendingAsync(CancellationToken cancellationToken)
+    {
+        if (billsApi is null) return;
+
+        var confirm = MessageBox.Show(
+            "Push every pending/draft bill to Tally? Bills are pushed oldest-first; the run stops on the first failure.",
+            "Confirm Push All Pending",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Question,
+            MessageBoxResult.Cancel);
+        if (confirm != MessageBoxResult.OK) return;
+
+        host.IsPushingSelected = true;
+        try
+        {
+            host.StatusMessage = "Pushing all pending bills (oldest first)…";
+            var response = await billsApi.PushPendingAsync(
+                new PushPendingBillsRequest(null, "Push all pending from Bills tab", null),
+                cancellationToken);
+            host.StatusMessage = response.Matched == 0
+                ? "No pending bills to push."
+                : BillsStatusFormatter.FormatBatchPushStatus(response);
+        }
+        catch (Exception ex)
+        {
+            host.StatusMessage = $"Push all pending failed: {ex.Message}";
+        }
+        finally
+        {
+            host.IsPushingSelected = false;
+        }
+
+        await host.LoadAsync(cancellationToken);
+    }
+
     internal async Task RetrySelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;

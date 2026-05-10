@@ -201,6 +201,11 @@
                             </Border>
                         </StackPanel>
                     </Button>
+                    <Button Style="{StaticResource BtnSm}"
+                            Margin="0,0,6,0"
+                            Command="{Binding PushAllPendingCommand}"
+                            Content="Push All Pending"
+                            ToolTip="Push every pending/draft bill to Tally, oldest first. Stops on the first failure." />
                     <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RepostSelectedCommand}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Repost" />
