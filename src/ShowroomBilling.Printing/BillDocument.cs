@@ -240,14 +240,14 @@ public sealed class BillDocument : IDocument
                     cd.ConstantColumn(44); // Less Wt
                 }
                 cd.ConstantColumn(50); // Net Wt
-                cd.ConstantColumn(46); // Purity — values are 3 chars (e.g. 22K) but 40pt wraps the header at SemiBold
+                cd.ConstantColumn(46); // Purity — 3-char values; 40pt wraps the header
                 cd.ConstantColumn(48); // Making
                 if (hasExtra)
                 {
                     cd.ConstantColumn(52); // Extra Charges
                 }
-                cd.ConstantColumn(62); // Rate/g — fits ₹X,XXX.XX without wrap
-                cd.ConstantColumn(76); // Amount — fits up to ₹XX,XX,XX,XXX (Indian crore format) without wrap; Description absorbs the delta via its RelativeColumn
+                cd.ConstantColumn(62); // Rate/g
+                cd.ConstantColumn(76); // Amount — Description's RelativeColumn absorbs the delta from earlier baseline
             });
 
             table.Header(header =>
@@ -278,9 +278,13 @@ public sealed class BillDocument : IDocument
             int idx = 1;
             foreach (var line in lines)
             {
+                // Items-table cells use the header's _smallFont (body − 1) so 12-char
+                // values like "₹1,46,359.75" don't wrap inside fixed-width Rate/g and
+                // Amount columns at the default 11pt body. Headers were already on
+                // _smallFont, so the table now reads at one consistent size.
                 IContainer Cell(IContainer c) => c.Border(1f).BorderColor(Colors.Black)
                     .PaddingVertical(2).PaddingHorizontal(6)
-                    .DefaultTextStyle(ts => ts.FontSize(_bodyFont));
+                    .DefaultTextStyle(ts => ts.FontSize(_smallFont));
 
                 var unit = string.IsNullOrWhiteSpace(line.Unit) ? "g" : line.Unit!.Trim();
                 var grossWt = line.GrossWeight ?? 0m;
