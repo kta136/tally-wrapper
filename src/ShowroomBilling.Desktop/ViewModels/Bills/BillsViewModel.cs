@@ -74,12 +74,19 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             Filter = FilterRow,
         };
         // Primary: BillDate desc — most recent date group on top.
-        // Secondary: CreatedAtUtc desc — within the same day, newest bill first.
+        // Secondary: InvoiceNumberSortKey desc — within the same day, highest
+        // invoice number first. Parsing the trailing core (not the formatted
+        // string) keeps natural order across legacy mixed formats and avoids
+        // the "renamed bill bubbles up by CreatedAt" surprise.
+        // Tertiary: CreatedAtUtc desc — tiebreak for bills without a number
+        // (pure drafts) or any rare duplicate sort key.
         GroupedItems.SortDescriptions.Add(new SortDescription(nameof(BillListRowViewModel.BillDate), ListSortDirection.Descending));
+        GroupedItems.SortDescriptions.Add(new SortDescription(nameof(BillListRowViewModel.InvoiceNumberSortKey), ListSortDirection.Descending));
         GroupedItems.SortDescriptions.Add(new SortDescription(nameof(BillListRowViewModel.CreatedAtUtc), ListSortDirection.Descending));
         GroupedItems.GroupDescriptions.Add(new PropertyGroupDescription(nameof(BillListRowViewModel.BillDate)));
         GroupedItems.LiveGroupingProperties.Add(nameof(BillListRowViewModel.BillDate));
         GroupedItems.LiveSortingProperties.Add(nameof(BillListRowViewModel.BillDate));
+        GroupedItems.LiveSortingProperties.Add(nameof(BillListRowViewModel.InvoiceNumberSortKey));
         GroupedItems.LiveSortingProperties.Add(nameof(BillListRowViewModel.CreatedAtUtc));
         StateFilterOptions =
         [

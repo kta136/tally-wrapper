@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Numbering;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
@@ -19,6 +20,13 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
     public DateTimeOffset CreatedAtUtc => Item.CreatedAtUtc;
     public DateTimeOffset UpdatedAtUtc => Item.UpdatedAtUtc;
     public bool EditedAfterPush => Item.EditedAfterPush;
+
+    // Numeric sort key parsed from the trailing digits of InvoiceNumber so the
+    // Bills list orders bills naturally (93 above 92) instead of by CreatedAt
+    // (which floats a just-edited bill above peers with a higher number). Bills
+    // without an invoice number yet (pure drafts) sort to 0 so they fall below
+    // numbered peers within the same day.
+    public long InvoiceNumberSortKey => InvoiceNumberFormatter.TryParseTrailingCore(Item.InvoiceNumber) ?? 0L;
 
     public bool IsPendingLike => State is "pending" or "draft";
     public bool IsRetryable => State == "failed";

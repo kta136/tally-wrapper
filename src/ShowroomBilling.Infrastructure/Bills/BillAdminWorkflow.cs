@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Numbering;
@@ -165,7 +164,8 @@ internal sealed class BillAdminWorkflow(
 
         if (bill.FiscalYear is not null)
         {
-            await RollbackTrailingSequenceAsync(showroomId, bill.FiscalYear, bill.Id, cancellationToken);
+            await NumberingSequenceReclaimer.ReclaimAsync(
+                dbContext, showroomId, bill.FiscalYear, $"rename:{bill.Id:N}", cancellationToken);
         }
 
         if (transaction is not null)
@@ -331,7 +331,8 @@ internal sealed class BillAdminWorkflow(
 
         if (fiscalYear is not null)
         {
-            await RollbackTrailingSequenceAsync(showroomId, fiscalYear, billId, cancellationToken);
+            await NumberingSequenceReclaimer.ReclaimAsync(
+                dbContext, showroomId, fiscalYear, $"delete:{billId:N}", cancellationToken);
         }
 
         if (transaction is not null)
@@ -428,108 +429,4 @@ internal sealed class BillAdminWorkflow(
 
     private bool UsesInMemoryProvider() =>
         string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
-
-    /// <summary>
-    /// After a delete, set <c>InvoiceSequences.NextValue</c> to
-    /// <c>min(currentNextValue, max(parsed-trailing-digits across remaining bills in scope) + 1)</c>.
-    /// Reclaims trailing freed cores so the next reservation reuses them.
-    /// Gaps in the middle are still preserved (deleting bill 25 while bill 49
-    /// exists keeps NextValue anchored at 50, not 26).
-    ///
-    /// Why parse the trailing digits instead of comparing formatted strings:
-    /// historical bills can carry an InvoiceNumber whose format differs from
-    /// what <see cref="InvoiceNumberFormatter"/> currently produces (e.g.
-    /// non-zero-padded "/49" coexisting with new "/0049"). A formatted-EXISTS
-    /// check would miss those bills and walk NextValue past genuinely
-    /// occupied cores. Parsing trailing digits of <c>InvoiceNumber</c>
-    /// equates "/49" and "/0049" to the same core (49), so the sequence
-    /// stays consistent across format changes.
-    ///
-    /// Locks the sequence row (FOR UPDATE on Postgres) so the rollback is
-    /// atomic against a concurrent reservation. Bills with no trailing
-    /// digits (legacy custom strings) are ignored — they don't anchor the
-    /// sequence.
-    /// </summary>
-    private async Task RollbackTrailingSequenceAsync(
-        Guid showroomId,
-        string fiscalYear,
-        Guid deletedBillId,
-        CancellationToken cancellationToken)
-    {
-        const string documentType = INumberingService.DocumentTypeSalesInvoice;
-
-        InvoiceSequenceEntity? sequence;
-        if (UsesInMemoryProvider())
-        {
-            sequence = await dbContext.InvoiceSequences.FirstOrDefaultAsync(
-                x => x.ShowroomId == showroomId
-                     && x.FiscalYear == fiscalYear
-                     && x.DocumentType == documentType,
-                cancellationToken);
-        }
-        else
-        {
-            var locked = await dbContext.InvoiceSequences
-                .FromSqlInterpolated($@"
-SELECT * FROM public.invoice_sequences
-WHERE ""ShowroomId"" = {showroomId}
-  AND ""FiscalYear"" = {fiscalYear}
-  AND ""DocumentType"" = {documentType}
-FOR UPDATE")
-                .ToListAsync(cancellationToken);
-            sequence = locked.FirstOrDefault();
-        }
-
-        if (sequence is null || sequence.NextValue <= 1L)
-        {
-            return;
-        }
-
-        var remainingNumbers = await dbContext.Bills
-            .AsNoTracking()
-            .Where(b => b.ShowroomId == showroomId
-                        && b.FiscalYear == fiscalYear
-                        && b.InvoiceNumber != null)
-            .Select(b => b.InvoiceNumber!)
-            .ToListAsync(cancellationToken);
-
-        long maxOccupiedCore = 0L;
-        foreach (var number in remainingNumbers)
-        {
-            if (BillNumberChangeRules.ExtractTrailingDigits(number) is { } core && core > maxOccupiedCore)
-            {
-                maxOccupiedCore = core;
-            }
-        }
-
-        var startedAt = sequence.NextValue;
-        var target = Math.Max(1L, maxOccupiedCore + 1L);
-        if (target >= startedAt)
-        {
-            return;
-        }
-
-        sequence.NextValue = target;
-        sequence.UpdatedAtUtc = DateTimeOffset.UtcNow;
-
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.NewGuid(),
-            EntityType = "numbering",
-            EntityId = $"{showroomId}|{fiscalYear}|{documentType}",
-            EventType = $"numbering.{documentType}.rolled_back",
-            ActorType = "system",
-            PayloadJson = JsonSerializer.Serialize(new
-            {
-                fiscalYear,
-                from = startedAt,
-                to = sequence.NextValue,
-                maxOccupiedCore,
-                triggeredByBillId = deletedBillId
-            }),
-            CreatedAtUtc = sequence.UpdatedAtUtc
-        });
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
 }
