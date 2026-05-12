@@ -246,8 +246,8 @@ public sealed class BillDocument : IDocument
                 {
                     cd.ConstantColumn(52); // Extra Charges
                 }
-                cd.ConstantColumn(54); // Rate/g
-                cd.ConstantColumn(60); // Amount
+                cd.ConstantColumn(62); // Rate/g — fits ₹X,XXX.XX without wrap
+                cd.ConstantColumn(76); // Amount — fits up to ₹XX,XX,XX,XXX (Indian crore format) without wrap; Description absorbs the delta via its RelativeColumn
             });
 
             table.Header(header =>
