@@ -78,9 +78,10 @@ That is acceptable because preview is not reservation.
 - **Accepts digit-only input.** `NewInvoiceNumber` must be pure ASCII digits parseable as a positive `long`; the server auto-formats via `InvoiceNumberFormatter.Format(prefix, suffix, core, bill.FiscalYear)` using the same cloud-settings prefix/suffix a fresh reservation would use. The Desktop's Change-Number dialog previews the formatted result live.
 - Enforces the existing `(ShowroomId, FiscalYear, InvoiceNumber)` unique index — 409 on collision.
 - Returns three informational flags:
-  - **`LeavesGap`** — chosen number is higher than the sequence's `NextValue`, so a gap will appear in local history. Sequence `NextValue` is **not** advanced on change-number.
+  - **`LeavesGap`** — chosen number is higher than the sequence's `NextValue`, so a gap will appear in local history. Sequence `NextValue` is **not** advanced on change-number; the forward-skip in `ReserveAsync` (§2.5) handles the new occupied core on the next allocation.
   - **`TallyDiverges`** — bill already touched Tally (`posted` or `failed`) — the Tally voucher (if any) still carries the old number. Admin attests to reconcile in Tally manually.
   - **`ReservationOrphaned`** — the original draft reservation (idempotency key `draft:{billId}`) is kept in place so retried drafts can't accidentally collide. The reservation's `FormattedNumber` now differs from the live bill.
+- **Trailing rename rolls `NextValue` back.** When the change moves the trailing bill *down* (e.g. `94 → 92` when `94` was the most recent reservation), the commit branch calls the same `RollbackTrailingSequenceAsync` the delete path uses, inside an explicit transaction shared with the save. `NextValue` becomes `min(currentNextValue, max(parsed-trailing-digits across remaining bills in scope) + 1)` — see §2.6. Moving the number *up* is a no-op for the rollback (no trailing core was freed); the forward-skip handles it on next allocation. The response's `SequenceNextValue` is re-read after rollback so callers see the post-state value.
 - Supports `DryRun=true` for a validate-only round-trip; the Desktop uses this to surface warnings before the real commit.
 - Writes `bill.number.changed` audit event with old/new/flags/reason.
 
@@ -98,9 +99,9 @@ Properties preserved:
 `GetPreviewAsync` applies the same skip so the preview matches what a real reservation would allocate.
 
 ---
-### 2.6 Sequence rollback on trailing delete
+### 2.6 Sequence rollback on trailing delete or rename
 
-When a bill is deleted (`BillAdminWorkflow.DeleteAsync`), the allocator recomputes `NextValue` as `min(currentNextValue, max(parsed-trailing-digits across remaining bills in scope) + 1)`. So if `NextValue = 47` and bill `0046` is deleted while bill `0045` still exists, `NextValue` becomes `46`. If both `0045` and `0046` are deleted in the same selection, the second iteration recomputes the max across what remains and `NextValue` settles at `45`. The next reservation then reuses `0045`.
+When a bill is deleted (`BillAdminWorkflow.DeleteAsync`) **or its number is moved down via change-number** (`BillAdminWorkflow.ChangeInvoiceNumberAsync`, §2.4), the allocator recomputes `NextValue` as `min(currentNextValue, max(parsed-trailing-digits across remaining bills in scope) + 1)`. So if `NextValue = 47` and bill `0046` is deleted while bill `0045` still exists, `NextValue` becomes `46`. If both `0045` and `0046` are deleted in the same selection, the second iteration recomputes the max across what remains and `NextValue` settles at `45`. The next reservation then reuses `0045`. The same logic fires when an operator renames `0046 → 0042`: the rename's reads-after-save include the bill at its new core (`0042`), `max(remaining) = 0045`, and `NextValue` rolls back to `0046` so the freed core is reclaimed.
 
 Properties:
 

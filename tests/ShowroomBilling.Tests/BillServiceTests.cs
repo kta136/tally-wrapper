@@ -414,8 +414,11 @@ public sealed class BillServiceTests
 
         var response = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
 
+        // legacyDraft has /0002, pending has /0001 — workflow sort puts the
+        // higher invoice number on top within the pending/draft group. The
+        // posted group follows, also by invoice number desc.
         Assert.Equal(
-            new[] { pending.Id, legacyDraft.Id, postedLater.Id, postedEarlier.Id },
+            new[] { legacyDraft.Id, pending.Id, postedLater.Id, postedEarlier.Id },
             response.Items.Select(x => x.Id).ToArray());
     }
 
@@ -550,6 +553,60 @@ public sealed class BillServiceTests
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
             service.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("1", null, DryRun: false)));
+    }
+
+    [Fact]
+    public async Task ChangeInvoiceNumber_MovesTrailingDown_RollsBackSequence()
+    {
+        // Repro: create three bills (1, 2, 3) so NextValue lands at 4. Rename
+        // the trailing bill from /0003 to /0001-vacancy (any number strictly
+        // below the max-of-remaining). The freed trailing core should be
+        // reclaimed by the rollback so NextValue points back at 3, and the
+        // next reservation reuses 3 instead of skipping to 4.
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+
+        // Delete the original /0001 so /0001 becomes a free core; then rename
+        // bill #3 (currently /0003) to /0001. After the rename, occupied cores
+        // are {1, 2}; max = 2; NextValue should roll back to 3.
+        await service.DeleteAsync(first.Id, new DeleteBillRequest(null, DryRun: false));
+
+        var response = await service.ChangeInvoiceNumberAsync(third.Id,
+            new ChangeBillNumberRequest("1", "reclaim trailing", DryRun: false));
+
+        Assert.True(response.Committed);
+        Assert.Equal(3L, response.SequenceNextValue);
+
+        // The next reservation should now pick up the freed trailing core (3),
+        // not skip ahead to 4.
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("D", 100m)));
+        Assert.EndsWith("/0003", next.InvoiceNumber);
+    }
+
+    [Fact]
+    public async Task ChangeInvoiceNumber_MovesNumberForward_DoesNotRegressSequence()
+    {
+        // Renaming a non-trailing bill upward (creating a forward gap) must not
+        // touch NextValue. The forward-skip in ReserveAsync handles the new
+        // occupied core when the allocator eventually reaches it.
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        // After two reservations NextValue == 3.
+
+        var response = await service.ChangeInvoiceNumberAsync(first.Id,
+            new ChangeBillNumberRequest("50", null, DryRun: false));
+
+        Assert.True(response.Committed);
+        Assert.True(response.LeavesGap);
+        // currentNext (3) <= max(remaining)+1 (= 51); rollback's min() keeps
+        // NextValue at 3, so the next bill picks up /0003 (and forward-skips
+        // past /0050 only when the allocator eventually reaches it).
+        Assert.Equal(3L, response.SequenceNextValue);
     }
 
     // ---------- Mark Posted / Pending ----------

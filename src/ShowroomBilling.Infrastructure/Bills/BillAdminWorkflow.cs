@@ -151,7 +151,37 @@ internal sealed class BillAdminWorkflow(
                 reservationOrphaned,
                 reason = request.Reason ?? string.Empty
             });
+
+        // Save + sequence-rollback share one transaction so a moved-down number
+        // that vacates the trailing core (e.g. 94 -> 92 when 94 was the most
+        // recent reservation) immediately reclaims the freed slot for the next
+        // ReserveAsync. Without the rollback, NextValue would stay anchored past
+        // the now-empty core and the next bill would skip 94 forever.
+        await using var transaction = UsesInMemoryProvider()
+            ? null
+            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (bill.FiscalYear is not null)
+        {
+            await RollbackTrailingSequenceAsync(showroomId, bill.FiscalYear, bill.Id, cancellationToken);
+        }
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        // Re-read the sequence so the response reflects the post-rollback value
+        // when the rename freed the trailing core.
+        var postSeqNext = await dbContext.InvoiceSequences
+            .AsNoTracking()
+            .Where(s => s.ShowroomId == showroomId
+                        && s.FiscalYear == fiscalYear
+                        && s.DocumentType == INumberingService.DocumentTypeSalesInvoice)
+            .Select(s => (long?)s.NextValue)
+            .FirstOrDefaultAsync(cancellationToken);
 
         return new ChangeBillNumberResponse(
             BillId: bill.Id,
@@ -161,7 +191,7 @@ internal sealed class BillAdminWorkflow(
             LeavesGap: leavesGap,
             TallyDiverges: tallyDiverges,
             ReservationOrphaned: reservationOrphaned,
-            SequenceNextValue: seqNext,
+            SequenceNextValue: postSeqNext ?? seqNext,
             WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges, reservationOrphaned));
     }
 

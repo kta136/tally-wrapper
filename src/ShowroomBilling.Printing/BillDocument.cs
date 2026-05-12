@@ -240,7 +240,7 @@ public sealed class BillDocument : IDocument
                     cd.ConstantColumn(44); // Less Wt
                 }
                 cd.ConstantColumn(50); // Net Wt
-                cd.ConstantColumn(40); // Purity (values always 3 chars e.g. 22K)
+                cd.ConstantColumn(46); // Purity — values are 3 chars (e.g. 22K) but 40pt wraps the header at SemiBold
                 cd.ConstantColumn(48); // Making
                 if (hasExtra)
                 {

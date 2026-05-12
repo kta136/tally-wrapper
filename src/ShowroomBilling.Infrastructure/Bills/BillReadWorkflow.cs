@@ -116,6 +116,19 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
 
         var includeTotal = filter.IncludeTotal ?? true;
         var total = includeTotal ? await query.CountAsync(cancellationToken) : 0;
+        // Workflow sort:
+        //   1. Pending/Draft above everything else (operator's work queue).
+        //   2. Within each state group: highest invoice number first.
+        //      Tied invoice length first puts unpadded /48 above /9 (natural
+        //      numeric order); the string compare on InvoiceNumber then
+        //      orders within a length bucket.
+        //   3. CreatedAtUtc desc is only a last-resort tiebreak for bills
+        //      that share fiscal year + invoice number (effectively only
+        //      bills with no InvoiceNumber yet).
+        // The old "ASC CreatedAtUtc within pending" rule was removed because
+        // it produced surprising orderings after change-number — a bill
+        // renamed down (e.g. 94 -> 92) would sit above a higher-numbered
+        // peer simply because it was created earlier.
         var ordered = sort == SortCreatedDesc
             ? query.OrderByDescending(x => x.bill.CreatedAtUtc)
             : query
@@ -123,10 +136,6 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
                     x.bill.State == IBillService.StatePending || x.bill.State == BillStates.Draft
                         ? 0
                         : 1)
-                .ThenBy(x =>
-                    x.bill.State == IBillService.StatePending || x.bill.State == BillStates.Draft
-                        ? x.bill.CreatedAtUtc
-                        : DateTimeOffset.MaxValue)
                 .ThenByDescending(x => x.bill.FiscalYear)
                 .ThenByDescending(x => x.bill.InvoiceNumber == null ? 0 : x.bill.InvoiceNumber.Length)
                 .ThenByDescending(x => x.bill.InvoiceNumber)
