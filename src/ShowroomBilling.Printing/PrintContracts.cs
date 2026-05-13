@@ -53,7 +53,7 @@ public static class PrintLayoutLimits
     public const float LogoSlotWidthMm = 240f * PxToMm;   // ≈63.5
     public const float LogoSlotHeightMm = 84f * PxToMm;   // ≈22.2
     public const float SignatureSlotWidthMm = 260f * PxToMm; // ≈69mm — must fit 40% footer col (~203pt = ~271px)
-    public const float SignatureSlotHeightMm = 56f * PxToMm; // ≈14.8 (reduced from 74px)
+    public const float SignatureSlotHeightMm = 104f * PxToMm; // ≈27.5mm — taller slot widens gap between "For …" and "Authorised Signatory" and allows larger signature image
 
     public const float LogoMinWidthMm = 40f * PxToMm;     // ≈10.6
     public const float LogoMinHeightMm = 24f * PxToMm;    // ≈6.4
@@ -66,7 +66,7 @@ public static class PrintLayoutLimits
     public const float DefaultLogoOffsetYMm = 16f * PxToMm; // ≈4.2
 
     public const float DefaultSignatureWidthMm = 130f * PxToMm;  // ≈34.4 (reduced from 160px)
-    public const float DefaultSignatureHeightMm = 36f * PxToMm;  // ≈9.5 (reduced from 48px)
+    public const float DefaultSignatureHeightMm = 80f * PxToMm;  // ≈21.2 — taller default to match enlarged slot
     public const float DefaultSignatureOffsetXMm = 30f * PxToMm; // ≈7.9
     public const float DefaultSignatureOffsetYMm = 8f * PxToMm;  // ≈2.1 (reduced from 13px)
 
