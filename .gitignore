@@ -63,4 +63,6 @@ src/ShowroomBilling.Desktop/Resources/Embedded/**
 Thumbs.db
 
 .claude/
+.codex/
+AGENTS.md
 graphify-out/
