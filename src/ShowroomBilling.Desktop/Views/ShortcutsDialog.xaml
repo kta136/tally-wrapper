@@ -9,7 +9,7 @@
             <Setter Property="Margin" Value="0,4" />
         </Style>
         <Style x:Key="KbdGroupHeader" TargetType="Border">
-            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="0,0,0,4" />
             <Setter Property="Margin" Value="0,0,0,4" />
@@ -35,7 +35,7 @@
                 <!--  Header  -->
                 <Border Grid.Row="0"
                         Padding="14,10"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid>
                         <TextBlock Text="Keyboard Shortcuts" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
@@ -72,7 +72,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Go to Invoice" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+1" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+1" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -80,7 +80,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Go to Bills" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+2" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+2" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -88,7 +88,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Go to Settings" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+3" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+3" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -96,7 +96,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Open Shortcuts" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="?" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="?" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -104,7 +104,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Close dialog / cancel" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Esc" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Esc" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                         </StackPanel>
 
@@ -119,7 +119,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Edit rate" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F2" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F2" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -127,7 +127,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Item picker" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F3" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F3" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -135,7 +135,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Pick party" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F4" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F4" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -143,7 +143,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Print invoice" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F9" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F9" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -151,7 +151,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Save &amp; post" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+S" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+S" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -159,7 +159,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="New row" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+N" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+N" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
                                 <Grid.ColumnDefinitions>
@@ -167,7 +167,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Remove row" />
-                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+Del" FontFamily="{DynamicResource MonoFontFamily}" FontSize="10" /></Border>
+                                <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+Del" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                         </StackPanel>
                     </Grid>
@@ -175,8 +175,8 @@
 
                 <!--  Footer  -->
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

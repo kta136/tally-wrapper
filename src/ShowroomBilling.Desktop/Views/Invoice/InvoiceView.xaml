@@ -6,15 +6,15 @@
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Invoice"
              xmlns:conv="clr-namespace:ShowroomBilling.Desktop.Converters"
              mc:Ignorable="d"
-             Background="{DynamicResource BgPanelBrush}"
+             Background="{StaticResource BgPanelBrush}"
              d:DataContext="{d:DesignInstance Type=vm:InvoiceViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
         <conv:OneBasedIndexConverter x:Key="OneBasedIndex" />
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />
         <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="Margin" Value="0,0,0,3" />
         </Style>
         <Style x:Key="FieldPanel" TargetType="StackPanel">
@@ -25,47 +25,48 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="10,0" />
-            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
+            <Setter Property="Height" Value="{StaticResource RowHeight}" />
             <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
         <Style x:Key="CellNumBox" TargetType="TextBox" BasedOn="{StaticResource CellTextBox}">
             <Setter Property="TextAlignment" Value="Right" />
-            <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="Padding" Value="6,0" />
             <EventSetter Event="PreviewMouseDoubleClick" Handler="OnNumericBoxDoubleClick" />
         </Style>
         <Style x:Key="CellCombo" TargetType="ComboBox">
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
+            <Setter Property="Height" Value="{StaticResource RowHeight}" />
             <Setter Property="Padding" Value="8,0" />
-            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style x:Key="HeaderCell" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BgSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTok}" />
+            <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="10,4" />
         </Style>
         <Style x:Key="HeaderText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         </Style>
         <Style x:Key="BodyCell" TargetType="Border">
-            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="MinHeight" Value="{DynamicResource RowHeight}" />
+            <Setter Property="MinHeight" Value="{StaticResource RowHeight}" />
         </Style>
         <Style x:Key="EntryRowGrid" TargetType="Grid">
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource BgHoverBrush}" />
+                    <Setter Property="Background" Value="{StaticResource BgHoverBrush}" />
                 </Trigger>
                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+                    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -79,19 +80,35 @@
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="bd"
                                 Background="Transparent"
-                                BorderBrush="{DynamicResource DividerBrush}"
+                                BorderBrush="{StaticResource DividerBrush}"
                                 BorderThickness="0,0,0,1">
                             <ContentPresenter />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgHoverBrush}" />
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BgHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentSoftBrush}" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentSoftBrush}" />
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentSoftBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        </Style>
+        <Style x:Key="LineRowItem" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -101,12 +118,12 @@
     <DockPanel LastChildFill="True">
         <Border DockPanel.Dock="Top"
                 Padding="14,8"
-                Background="{DynamicResource EditBannerSoftBrush}"
-                BorderBrush="{DynamicResource EditBannerBorderBrush}"
+                Background="{StaticResource EditBannerSoftBrush}"
+                BorderBrush="{StaticResource EditBannerBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Visibility="{Binding IsEditingPosted, Converter={StaticResource BoolToVis}}">
             <TextBlock FontSize="11.5"
-                       Foreground="{DynamicResource EditBannerInkBrush}"
+                       Foreground="{StaticResource EditBannerInkBrush}"
                        TextWrapping="Wrap"
                        Text="Editing a previously-posted bill. Saving moves it back to pending and re-queues the new revision to Tally." />
         </Border>
@@ -129,8 +146,8 @@
             <!--  Header fields  -->
             <Border Grid.Row="0"
                     Padding="14,10"
-                    Background="{DynamicResource BgPanelBrush}"
-                    BorderBrush="{DynamicResource BorderBrushTok}"
+                    Background="{StaticResource BgPanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushTok}"
                     BorderThickness="0,0,0,1">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -145,11 +162,11 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                             <TextBlock Style="{StaticResource FieldLabel}" Margin="0" Text="INVOICE #" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="auto" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="auto" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                         <TextBox IsReadOnly="True"
-                                 FontFamily="{DynamicResource MonoFontFamily}"
+                                 FontFamily="{StaticResource MonoFontFamily}"
                                  Text="{Binding InvoiceNumber}" />
                     </StackPanel>
 
@@ -168,11 +185,11 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                             <TextBlock Style="{StaticResource FieldLabel}" Margin="0" Text="24KT RATE (₹/G)" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="F2" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="F2" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                         <TextBox x:Name="Rate24KtBox"
-                                 FontFamily="{DynamicResource MonoFontFamily}"
+                                 FontFamily="{StaticResource MonoFontFamily}"
                                  PreviewMouseDoubleClick="OnNumericBoxDoubleClick"
                                  PreviewKeyDown="OnRate24KtPreviewKeyDown"
                                  Text="{Binding Rate24Kt, StringFormat=N0, TargetNullValue='', UpdateSourceTrigger=LostFocus}">
@@ -180,7 +197,7 @@
                                 <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding RateMissing}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource ErrBrush}" />
+                                            <Setter Property="BorderBrush" Value="{StaticResource ErrBrush}" />
                                             <Setter Property="BorderThickness" Value="2" />
                                             <Setter Property="Background" Value="#1FE53935" />
                                         </DataTrigger>
@@ -193,10 +210,10 @@
                     <StackPanel Grid.Column="4">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
                             <TextBlock Style="{StaticResource FieldLabel}" Margin="0">
-                                <Run Text="PARTY " /><Run Text="*" Foreground="{DynamicResource ErrBrush}" />
+                                <Run Text="PARTY " /><Run Text="*" Foreground="{StaticResource ErrBrush}" />
                             </TextBlock>
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="F4" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="F4" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                         <TextBox x:Name="PartyBox"
@@ -209,8 +226,8 @@
             <!--  Toolbar  -->
             <Border Grid.Row="1"
                     Padding="14,6"
-                    Background="{DynamicResource BgSunkenBrush}"
-                    BorderBrush="{DynamicResource BorderBrushTok}"
+                    Background="{StaticResource BgSunkenBrush}"
+                    BorderBrush="{StaticResource BorderBrushTok}"
                     BorderThickness="0,0,0,1">
                 <Grid>
                     <StackPanel Orientation="Horizontal">
@@ -221,7 +238,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="+ Add Row" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                    <TextBlock Text="Ctrl+N" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                    <TextBlock Text="Ctrl+N" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                                 </Border>
                             </StackPanel>
                         </Button>
@@ -232,26 +249,26 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="− Remove" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                    <TextBlock Text="Ctrl+Del" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                    <TextBlock Text="Ctrl+Del" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                                 </Border>
                             </StackPanel>
                         </Button>
                         <Rectangle Width="1"
                                    Height="18"
                                    Margin="10,0"
-                                   Fill="{DynamicResource DividerBrush}" />
+                                   Fill="{StaticResource DividerBrush}" />
                         <TextBlock VerticalAlignment="Center"
-                                   FontSize="{DynamicResource FontSizeXs}"
-                                   Foreground="{DynamicResource InkSoftBrush}"
+                                   FontSize="{StaticResource FontSizeXs}"
+                                   Foreground="{StaticResource InkSoftBrush}"
                                    Text="Tab next field · Enter next row · ↑↓ move" />
                     </StackPanel>
                 </Grid>
             </Border>
 
             <!--  Line-item table  -->
-            <Border Grid.Row="2" Background="{DynamicResource BgPanelBrush}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                    <Grid>
+            <Border Grid.Row="2" Background="{StaticResource BgPanelBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto">
+                    <Grid MinWidth="1378">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -261,17 +278,17 @@
                         <Grid Grid.Row="0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="32" />
-                                <ColumnDefinition Width="*" MinWidth="200" />
-                                <ColumnDefinition Width="80" />
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="60" />
-                                <ColumnDefinition Width="68" />
+                                <ColumnDefinition Width="*" MinWidth="240" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="96" />
                                 <ColumnDefinition Width="78" />
-                                <ColumnDefinition Width="85" />
-                                <ColumnDefinition Width="85" />
-                                <ColumnDefinition Width="78" />
-                                <ColumnDefinition Width="95" />
-                                <ColumnDefinition Width="115" />
+                                <ColumnDefinition Width="82" />
+                                <ColumnDefinition Width="102" />
+                                <ColumnDefinition Width="112" />
+                                <ColumnDefinition Width="128" />
+                                <ColumnDefinition Width="104" />
+                                <ColumnDefinition Width="122" />
+                                <ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="32" />
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="#" /></Border>
@@ -290,36 +307,46 @@
                         </Grid>
 
                         <!--  Body  -->
-                        <ItemsControl Grid.Row="1"
-                                      x:Name="LinesItems"
-                                      ItemsSource="{Binding Lines}"
-                                      AlternationCount="1000"
-                                      Focusable="False">
-                            <ItemsControl.ItemTemplate>
+                        <ListBox Grid.Row="1"
+                                 x:Name="LinesItems"
+                                 ItemsSource="{Binding Lines}"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Focusable="False"
+                                 ItemContainerStyle="{StaticResource LineRowItem}"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.CanContentScroll="True"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.VirtualizationMode="Recycling"
+                                 VirtualizingPanel.ScrollUnit="Pixel"
+                                 VirtualizingPanel.CacheLength="2"
+                                 VirtualizingPanel.CacheLengthUnit="Page">
+                            <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Style="{StaticResource EntryRowGrid}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="32" />
-                                            <ColumnDefinition Width="*" MinWidth="200" />
-                                            <ColumnDefinition Width="80" />
-                                            <ColumnDefinition Width="70" />
-                                            <ColumnDefinition Width="60" />
-                                            <ColumnDefinition Width="68" />
+                                            <ColumnDefinition Width="*" MinWidth="240" />
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="96" />
                                             <ColumnDefinition Width="78" />
-                                            <ColumnDefinition Width="85" />
-                                            <ColumnDefinition Width="85" />
-                                            <ColumnDefinition Width="78" />
-                                            <ColumnDefinition Width="95" />
-                                            <ColumnDefinition Width="115" />
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="102" />
+                                            <ColumnDefinition Width="112" />
+                                            <ColumnDefinition Width="128" />
+                                            <ColumnDefinition Width="104" />
+                                            <ColumnDefinition Width="122" />
+                                            <ColumnDefinition Width="150" />
                                             <ColumnDefinition Width="32" />
                                         </Grid.ColumnDefinitions>
 
                                         <Border Grid.Column="0" Style="{StaticResource BodyCell}">
                                             <TextBlock Margin="10,0,0,0"
                                                        VerticalAlignment="Center"
-                                                       FontFamily="{DynamicResource MonoFontFamily}"
-                                                       Foreground="{DynamicResource InkMutedBrush}"
-                                                       Text="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter}, Path=(ItemsControl.AlternationIndex), Converter={StaticResource OneBasedIndex}}" />
+                                                       FontFamily="{StaticResource MonoFontFamily}"
+                                                       Foreground="{StaticResource InkMutedBrush}"
+                                                       Text="{Binding RowNumber}" />
                                         </Border>
                                         <Border Grid.Column="1" Style="{StaticResource BodyCell}">
                                             <ComboBox Style="{StaticResource CellCombo}"
@@ -346,7 +373,7 @@
                                                         <Style.Triggers>
                                                             <!--  Active deduction renders in amber (design's warn-colour cue).  -->
                                                             <DataTrigger Binding="{Binding LessWeight, Converter={StaticResource DecimalIsPositive}}" Value="True">
-                                                                <Setter Property="Foreground" Value="{DynamicResource WarnBrush}" />
+                                                                <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -388,7 +415,7 @@
                                                         <Style.Triggers>
                                                             <!--  Active diamond rate renders in indigo (design's accent-colour cue).  -->
                                                             <DataTrigger Binding="{Binding DiamondRate, Converter={StaticResource DecimalIsPositive}}" Value="True">
-                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -404,14 +431,14 @@
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Right">
                                                 <TextBlock TextAlignment="Right"
-                                                           FontFamily="{DynamicResource MonoFontFamily}"
-                                                           Foreground="{DynamicResource InkMutedBrush}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
+                                                           Foreground="{StaticResource InkMutedBrush}"
                                                            Text="{Binding EffectiveRate, StringFormat=N0, TargetNullValue=''}" />
                                                 <!--  Net-weight subtitle (only shown when net wt > 0); matches design's two-line eff-rate cell.  -->
                                                 <TextBlock TextAlignment="Right"
-                                                           FontFamily="{DynamicResource MonoFontFamily}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
                                                            FontSize="9.5"
-                                                           Foreground="{DynamicResource InkSoftBrush}"
+                                                           Foreground="{StaticResource InkSoftBrush}"
                                                            Visibility="{Binding NetWeight, Converter={StaticResource DecimalIsPositive}}">
                                                     <Run Text="{Binding NetWeight, StringFormat=N3, Mode=OneWay}" /><Run Text="g" />
                                                 </TextBlock>
@@ -422,7 +449,7 @@
                                                        VerticalAlignment="Center"
                                                        HorizontalAlignment="Right"
                                                        TextAlignment="Right"
-                                                       FontFamily="{DynamicResource MonoFontFamily}"
+                                                       FontFamily="{StaticResource MonoFontFamily}"
                                                        FontWeight="SemiBold"
                                                        Text="{Binding LineTotal, StringFormat=N2, TargetNullValue=''}" />
                                         </Border>
@@ -443,21 +470,21 @@
                                         </Border>
                                     </Grid>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                            <ItemsControl.ItemsPanel>
+                            </ListBox.ItemTemplate>
+                            <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <StackPanel IsItemsHost="True" />
+                                    <VirtualizingStackPanel IsItemsHost="True" />
                                 </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
+                            </ListBox.ItemsPanel>
+                        </ListBox>
                     </Grid>
                 </ScrollViewer>
             </Border>
 
             <!--  Footer: narration + totals  -->
             <Border Grid.Row="3"
-                    Background="{DynamicResource BgPanelBrush}"
-                    BorderBrush="{DynamicResource BorderBrushTok}"
+                    Background="{StaticResource BgPanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushTok}"
                     BorderThickness="0,1,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -466,7 +493,7 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0"
                             Padding="14,10"
-                            BorderBrush="{DynamicResource BorderBrushTok}"
+                            BorderBrush="{StaticResource BorderBrushTok}"
                             BorderThickness="0,0,1,0">
                         <StackPanel>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="NARRATION / NOTES" />
@@ -477,11 +504,11 @@
                                      Padding="8,6"
                                      Text="{Binding Narration, UpdateSourceTrigger=PropertyChanged}" />
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Foreground="{DynamicResource InkMutedBrush}" FontSize="14" FontWeight="Medium">
-                                    <Run Text="Items: " /><Run FontFamily="{DynamicResource MonoFontFamily}" FontWeight="SemiBold" Foreground="{DynamicResource InkBrush}" Text="{Binding ItemCount}" />
+                                <TextBlock Foreground="{StaticResource InkMutedBrush}" FontSize="14" FontWeight="Medium">
+                                    <Run Text="Items: " /><Run FontFamily="{StaticResource MonoFontFamily}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding ItemCount}" />
                                 </TextBlock>
-                                <TextBlock Margin="20,0,0,0" Foreground="{DynamicResource InkMutedBrush}" FontSize="14" FontWeight="Medium">
-                                    <Run Text="Total Wt: " /><Run FontFamily="{DynamicResource MonoFontFamily}" FontWeight="SemiBold" Foreground="{DynamicResource InkBrush}" Text="{Binding TotalWeight, StringFormat=N3}" /><Run Text="g" />
+                                <TextBlock Margin="20,0,0,0" Foreground="{StaticResource InkMutedBrush}" FontSize="14" FontWeight="Medium">
+                                    <Run Text="Total Wt: " /><Run FontFamily="{StaticResource MonoFontFamily}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding TotalWeight, StringFormat=N3}" /><Run Text="g" />
                                 </TextBlock>
                             </StackPanel>
                         </StackPanel>
@@ -499,26 +526,26 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Subtotal" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Margin="16,0,0,0" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Subtotal" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Margin="16,0,0,0" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right">
                             <Run Text="₹" /><Run Text="{Binding Subtotal, StringFormat=N2, Mode=OneWay}" />
                         </TextBlock>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4,0,0" Text="CGST @ 1.5%" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="16,4,0,0" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right">
+                        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4,0,0" Text="CGST @ 1.5%" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="16,4,0,0" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right">
                             <Run Text="₹" /><Run Text="{Binding Cgst, StringFormat=N2, Mode=OneWay}" />
                         </TextBlock>
-                        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4,0,0" Text="SGST @ 1.5%" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="16,4,0,0" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right">
+                        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4,0,0" Text="SGST @ 1.5%" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="16,4,0,0" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right">
                             <Run Text="₹" /><Run Text="{Binding Sgst, StringFormat=N2, Mode=OneWay}" />
                         </TextBlock>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4,0,0" Text="Round Off" Foreground="{DynamicResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="16,4,0,0" Foreground="{DynamicResource InkMutedBrush}" FontFamily="{DynamicResource MonoFontFamily}" TextAlignment="Right"
+                        <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4,0,0" Text="Round Off" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="16,4,0,0" Foreground="{StaticResource InkMutedBrush}" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right"
                                    Text="{Binding RoundOff, StringFormat=N2, Mode=OneWay}" />
-                        <Rectangle Grid.Row="4" Grid.ColumnSpan="2" Height="1" Margin="0,8,0,8" Fill="{DynamicResource DividerBrush}" />
+                        <Rectangle Grid.Row="4" Grid.ColumnSpan="2" Height="1" Margin="0,8,0,8" Fill="{StaticResource DividerBrush}" />
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Grand Total" FontSize="18" FontWeight="Bold" TextAlignment="Right" />
                         <TextBlock Grid.Row="5" Grid.Column="1"
                                    Margin="16,0,0,0"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="18"
                                    FontWeight="Bold"
                                    TextAlignment="Right">
@@ -531,8 +558,8 @@
             <!--  Actions  -->
             <Border Grid.Row="4"
                     Padding="14,8"
-                    Background="{DynamicResource BgSunkenBrush}"
-                    BorderBrush="{DynamicResource BorderBrushTok}"
+                    Background="{StaticResource BgSunkenBrush}"
+                    BorderBrush="{StaticResource BorderBrushTok}"
                     BorderThickness="0,1,0,0">
                 <Grid>
                     <StackPanel Orientation="Horizontal">
@@ -540,7 +567,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Print Estimate" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                    <TextBlock Text="F9" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                    <TextBlock Text="F9" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                                 </Border>
                             </StackPanel>
                         </Button>
@@ -548,11 +575,11 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Clear / Cancel" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                    <TextBlock Text="Esc Esc" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                    <TextBlock Text="Esc Esc" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                                 </Border>
                             </StackPanel>
                         </Button>
-                        <Border Margin="14,0,0,0" Width="1" Background="{DynamicResource DividerBrush}" />
+                        <Border Margin="14,0,0,0" Width="1" Background="{StaticResource DividerBrush}" />
                         <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
                             <CheckBox VerticalAlignment="Center"
                                       IsChecked="{Binding DiscountEnabled}">
@@ -560,40 +587,40 @@
                             </CheckBox>
                             <TextBlock Margin="8,0,6,0"
                                        VerticalAlignment="Center"
-                                       FontFamily="{DynamicResource MonoFontFamily}"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       FontFamily="{StaticResource MonoFontFamily}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        Text="=" />
                             <TextBlock VerticalAlignment="Center"
                                        Margin="0,0,2,0"
-                                       Foreground="{DynamicResource ErrBrush}"
+                                       Foreground="{StaticResource ErrBrush}"
                                        Text="− ₹" />
                             <TextBox Width="80"
                                      Padding="4,0"
                                      Height="22"
                                      VerticalContentAlignment="Center"
                                      TextAlignment="Right"
-                                     FontFamily="{DynamicResource MonoFontFamily}"
-                                     Foreground="{DynamicResource ErrBrush}"
+                                     FontFamily="{StaticResource MonoFontFamily}"
+                                     Foreground="{StaticResource ErrBrush}"
                                      IsEnabled="{Binding DiscountEnabled}"
                                      Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=LostFocus}" />
                             <TextBlock Margin="8,0,0,0"
                                        VerticalAlignment="Center"
                                        FontSize="11"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        Text="{Binding DiscountPercentHint}" />
                         </StackPanel>
                         <TextBlock Margin="14,0,0,0"
                                    VerticalAlignment="Center"
                                    FontSize="11"
-                                   Foreground="{DynamicResource InkMutedBrush}"
+                                   Foreground="{StaticResource InkMutedBrush}"
                                    Text="{Binding SaveStatus}" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
-                            <TextBlock Text="Grand " Foreground="{DynamicResource InkMutedBrush}" />
-                            <TextBlock FontFamily="{DynamicResource MonoFontFamily}"
+                            <TextBlock Text="Grand " Foreground="{StaticResource InkMutedBrush}" />
+                            <TextBlock FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="13"
-                                       Foreground="{DynamicResource InkBrush}"
+                                       Foreground="{StaticResource InkBrush}"
                                        Text="{Binding GrandTotal, StringFormat=₹{0:N0}, Mode=OneWay}" />
                         </StackPanel>
                         <Button x:Name="SaveButton"
@@ -603,7 +630,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Save" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource KbdHintOnPrimary}" Margin="8,0,0,0">
-                                    <TextBlock Text="Ctrl+S" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                    <TextBlock Text="Ctrl+S" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                                 </Border>
                             </StackPanel>
                         </Button>
@@ -614,8 +641,8 @@
 
         <!--  Side picker (stub for next pass)  -->
         <Border Grid.Column="1"
-                Background="{DynamicResource BgSunkenBrush}"
-                BorderBrush="{DynamicResource BorderBrushTok}"
+                Background="{StaticResource BgSunkenBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
                 BorderThickness="1,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
@@ -627,7 +654,7 @@
                     <Grid>
                         <TextBlock Text="QUICK ADD" Style="{StaticResource TxtSectionTitle}" />
                         <Border Style="{StaticResource KbdHint}" HorizontalAlignment="Right">
-                            <TextBlock Text="F3" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                            <TextBlock Text="F3" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                         </Border>
                     </Grid>
                     <TextBox x:Name="QuickAddBox"
@@ -650,7 +677,7 @@
                         <DataTemplate>
                             <Grid Margin="10,6">
                                 <TextBlock Text="{Binding Name}"
-                                           FontSize="{DynamicResource FontSizeUi}"
+                                           FontSize="{StaticResource FontSizeUi}"
                                            FontWeight="Medium" />
                             </Grid>
                         </DataTemplate>
@@ -658,10 +685,10 @@
                 </ListBox>
                 <Border Grid.Row="2"
                         Padding="10,8"
-                        Background="{DynamicResource BgPanelBrush}"
-                        BorderBrush="{DynamicResource BorderBrushTok}"
+                        Background="{StaticResource BgPanelBrush}"
+                        BorderBrush="{StaticResource BorderBrushTok}"
                         BorderThickness="0,1,0,0">
-                    <TextBlock Foreground="{DynamicResource InkMutedBrush}" FontSize="10.5" Text="Click to add · F3 focus" />
+                    <TextBlock Foreground="{StaticResource InkMutedBrush}" FontSize="10.5" Text="Click to add · F3 focus" />
                 </Border>
             </Grid>
         </Border>

@@ -13,8 +13,8 @@
             <Setter Property="Padding" Value="14,0" />
             <Setter Property="Height" Value="36" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
-            <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
             <Setter Property="FontSize" Value="12.5" />
             <Setter Property="Cursor" Value="Arrow" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -29,15 +29,15 @@
                             <Border x:Name="accent"
                                     VerticalAlignment="Bottom"
                                     Height="2"
-                                    Background="{DynamicResource AccentBrush}"
+                                    Background="{StaticResource AccentBrush}"
                                     Visibility="Collapsed" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
                                 <Setter TargetName="accent" Property="Visibility" Value="Visible" />
                             </Trigger>
@@ -50,12 +50,12 @@
         <Style x:Key="HealthBtn" BasedOn="{StaticResource BtnGhost}" TargetType="Button">
             <Setter Property="Height" Value="24" />
             <Setter Property="Padding" Value="8,0" />
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeSm}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
         </Style>
     </UserControl.Resources>
 
-    <Border Background="{DynamicResource BgPanelBrush}"
-            BorderBrush="{DynamicResource BorderBrushTok}"
+    <Border Background="{StaticResource BgPanelBrush}"
+            BorderBrush="{StaticResource BorderBrushTok}"
             BorderThickness="0,0,0,1">
         <Grid>
             <Grid.ColumnDefinitions>
@@ -81,7 +81,7 @@
                               Data="M 1.5,1 L 11.5,1 L 11.5,12 L 1.5,12 Z M 3.5,4 L 9.5,4 M 3.5,6.5 L 9.5,6.5 M 3.5,9 L 7,9" />
                         <TextBlock Margin="6,0,0,0" Text="Invoice" />
                         <Border Style="{StaticResource KbdHint}" Margin="8,0,0,0">
-                            <TextBlock Text="Ctrl+1" FontSize="9.5" FontFamily="{DynamicResource MonoFontFamily}" />
+                            <TextBlock Text="Ctrl+1" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
                         </Border>
                     </StackPanel>
                 </RadioButton>
@@ -100,7 +100,7 @@
                               Data="M 2,4 L 11,4 L 11,11.5 L 2,11.5 Z M 4,4 L 4,2.5 L 9,2.5 L 9,4 M 4.5,6.5 L 8.5,6.5 M 4.5,8.5 L 7,8.5" />
                         <TextBlock Margin="6,0,0,0" Text="Bills" />
                         <Border Style="{StaticResource KbdHint}" Margin="8,0,0,0">
-                            <TextBlock Text="Ctrl+2" FontSize="9.5" FontFamily="{DynamicResource MonoFontFamily}" />
+                            <TextBlock Text="Ctrl+2" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
                         </Border>
                     </StackPanel>
                 </RadioButton>
@@ -114,7 +114,7 @@
                         <Ellipse Width="4" Height="4" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" StrokeThickness="1.25" />
                         <TextBlock Margin="6,0,0,0" Text="Settings" />
                         <Border Style="{StaticResource KbdHint}" Margin="8,0,0,0">
-                            <TextBlock Text="Ctrl+3" FontSize="9.5" FontFamily="{DynamicResource MonoFontFamily}" />
+                            <TextBlock Text="Ctrl+3" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
                         </Border>
                     </StackPanel>
                 </RadioButton>
@@ -135,7 +135,7 @@
                                  Fill="{Binding Health.CloudDot, Converter={StaticResource DotToBrushConverter}}" />
                         <TextBlock Margin="6,0,0,0"
                                    Text="CLOUD"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="10.5" />
                     </StackPanel>
                 </Button>
@@ -149,7 +149,7 @@
                                  Fill="{Binding Health.DatabaseDot, Converter={StaticResource DotToBrushConverter}}" />
                         <TextBlock Margin="6,0,0,0"
                                    Text="{Binding Health.DatabaseLabel}"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="10.5" />
                     </StackPanel>
                 </Button>
@@ -163,7 +163,7 @@
                                  Fill="{Binding Health.TallyDot, Converter={StaticResource DotToBrushConverter}}" />
                         <TextBlock Margin="6,0,0,0"
                                    Text="TALLY"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="10.5" />
                     </StackPanel>
                 </Button>
@@ -178,10 +178,10 @@
                         <Ellipse Width="7"
                                  Height="7"
                                  VerticalAlignment="Center"
-                                 Fill="{DynamicResource OkBrush}" />
+                                 Fill="{StaticResource OkBrush}" />
                         <TextBlock Margin="6,0,0,0"
                                    Text="ADMIN"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="10.5" />
                     </StackPanel>
                 </Button>
@@ -189,14 +189,14 @@
                 <Rectangle Width="1"
                            Height="18"
                            Margin="4,0"
-                           Fill="{DynamicResource DividerBrush}" />
+                           Fill="{StaticResource DividerBrush}" />
                 <Button Style="{StaticResource HealthBtn}"
                         Command="{Binding OpenShortcutsCommand}"
                         ToolTip="Keyboard shortcuts (?)">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Shortcuts" VerticalAlignment="Center" />
                         <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                            <TextBlock Text="?" FontSize="9.5" FontFamily="{DynamicResource MonoFontFamily}" />
+                            <TextBlock Text="?" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
                         </Border>
                     </StackPanel>
                 </Button>

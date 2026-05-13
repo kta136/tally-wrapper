@@ -9,22 +9,22 @@
         <Style x:Key="StatusText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
         </Style>
         <Style x:Key="StatusMono" BasedOn="{StaticResource StatusText}" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
         <Style x:Key="StatusSep" TargetType="Rectangle">
             <Setter Property="Width" Value="1" />
             <Setter Property="Height" Value="12" />
             <Setter Property="Margin" Value="10,0" />
-            <Setter Property="Fill" Value="{DynamicResource DividerBrush}" />
+            <Setter Property="Fill" Value="{StaticResource DividerBrush}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </UserControl.Resources>
 
-    <Border Background="{DynamicResource BgPanelBrush}"
-            BorderBrush="{DynamicResource BorderBrushTok}"
+    <Border Background="{StaticResource BgPanelBrush}"
+            BorderBrush="{StaticResource BorderBrushTok}"
             BorderThickness="0,1,0,0">
         <Grid Margin="10,0">
             <Grid.ColumnDefinitions>
@@ -36,32 +36,32 @@
                 <TextBlock Style="{StaticResource StatusMono}"
                            Text="{Binding StatusText}"
                            FontWeight="SemiBold"
-                           Foreground="{DynamicResource InkBrush}" />
+                           Foreground="{StaticResource InkBrush}" />
                 <Rectangle Style="{StaticResource StatusSep}" />
                 <TextBlock Style="{StaticResource StatusText}">
-                    <Run Text="24kt ₹" /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding Rate24Kt}" /><Run Text="/g" />
+                    <Run Text="24kt ₹" /><Run FontFamily="{StaticResource MonoFontFamily}" Text="{Binding Rate24Kt}" /><Run Text="/g" />
                 </TextBlock>
                 <Rectangle Style="{StaticResource StatusSep}" />
                 <TextBlock Style="{StaticResource StatusText}">
-                    <Run Text="22kt ₹" /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding Rate22Kt}" /><Run Text="/g" />
+                    <Run Text="22kt ₹" /><Run FontFamily="{StaticResource MonoFontFamily}" Text="{Binding Rate22Kt}" /><Run Text="/g" />
                 </TextBlock>
                 <Rectangle Style="{StaticResource StatusSep}" />
                 <TextBlock Style="{StaticResource StatusText}">
-                    <Run Text="18kt ₹" /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding Rate18Kt}" /><Run Text="/g" />
+                    <Run Text="18kt ₹" /><Run FontFamily="{StaticResource MonoFontFamily}" Text="{Binding Rate18Kt}" /><Run Text="/g" />
                 </TextBlock>
                 <Rectangle Style="{StaticResource StatusSep}" />
                 <TextBlock Style="{StaticResource StatusText}">
-                    <Run Text="LINES " /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding LineCount, StringFormat={}{0:D2}}" />
+                    <Run Text="LINES " /><Run FontFamily="{StaticResource MonoFontFamily}" Text="{Binding LineCount, StringFormat={}{0:D2}}" />
                 </TextBlock>
                 <Rectangle Style="{StaticResource StatusSep}" />
                 <TextBlock Style="{StaticResource StatusText}">
-                    <Run Text="LAST SAVE " /><Run FontFamily="{DynamicResource MonoFontFamily}" Text="{Binding LastSaved}" />
+                    <Run Text="LAST SAVE " /><Run FontFamily="{StaticResource MonoFontFamily}" Text="{Binding LastSaved}" />
                 </TextBlock>
                 <Rectangle Style="{StaticResource StatusSep}" />
                 <TextBlock Style="{StaticResource StatusMono}"
                            Text="{Binding DatabaseEnvironment}"
                            FontWeight="SemiBold"
-                           Foreground="{DynamicResource InkBrush}" />
+                           Foreground="{StaticResource InkBrush}" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal">

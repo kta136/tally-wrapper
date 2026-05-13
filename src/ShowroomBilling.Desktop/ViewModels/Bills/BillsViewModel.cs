@@ -474,15 +474,51 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     private void RecountSummary()
     {
+        var pendingCount = 0;
+        var postingCount = 0;
+        var postedCount = 0;
+        var failedCount = 0;
+        var totalAmount = 0m;
+        var pendingAmount = 0m;
+        var postedAmount = 0m;
+        var failedAmount = 0m;
+
+        foreach (var item in Items)
+        {
+            totalAmount += item.GrandTotal;
+
+            switch (item.State)
+            {
+                case BillStates.Pending:
+                case BillStates.Draft:
+                    pendingCount++;
+                    pendingAmount += item.GrandTotal;
+                    break;
+                case BillStates.Posting:
+                    pendingCount++;
+                    postingCount++;
+                    pendingAmount += item.GrandTotal;
+                    break;
+                case BillStates.Posted:
+                    postedCount++;
+                    postedAmount += item.GrandTotal;
+                    break;
+                case BillStates.Failed:
+                    failedCount++;
+                    failedAmount += item.GrandTotal;
+                    break;
+            }
+        }
+
         CountTotal = Total > 0 ? Total : Items.Count;
-        CountPending = Items.Count(x => x.State is BillStates.Pending or BillStates.Draft or BillStates.Posting);
-        CountPosting = Items.Count(x => x.State == BillStates.Posting);
-        CountPosted = Items.Count(x => x.State == BillStates.Posted);
-        CountFailed = Items.Count(x => x.State == BillStates.Failed);
-        AmountTotal = Items.Sum(x => x.GrandTotal);
-        AmountPending = Items.Where(x => x.State is BillStates.Pending or BillStates.Draft or BillStates.Posting).Sum(x => x.GrandTotal);
-        AmountPosted = Items.Where(x => x.State == BillStates.Posted).Sum(x => x.GrandTotal);
-        AmountFailed = Items.Where(x => x.State == BillStates.Failed).Sum(x => x.GrandTotal);
+        CountPending = pendingCount;
+        CountPosting = postingCount;
+        CountPosted = postedCount;
+        CountFailed = failedCount;
+        AmountTotal = totalAmount;
+        AmountPending = pendingAmount;
+        AmountPosted = postedAmount;
+        AmountFailed = failedAmount;
     }
 
     private bool CanRefresh() => _billsApi is not null && !IsLoading && !IsActing;

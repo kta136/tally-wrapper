@@ -4,7 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="{DynamicResource BgBrush}">
+             Background="{StaticResource BgBrush}">
     <UserControl.Resources>
         <Style x:Key="BulletRow" TargetType="StackPanel">
             <Setter Property="Orientation" Value="Horizontal" />
@@ -16,7 +16,7 @@
         <StackPanel MaxWidth="820" HorizontalAlignment="Center">
 
             <Border Style="{StaticResource Panel}"
-                    Background="{DynamicResource BgPanelBrush}"
+                    Background="{StaticResource BgPanelBrush}"
                     Padding="0"
                     Margin="0,0,0,16">
                 <Grid>
@@ -37,14 +37,14 @@
                                  Width="7"
                                  Height="7"
                                  VerticalAlignment="Center"
-                                 Fill="{DynamicResource ErrBrush}" />
+                                 Fill="{StaticResource ErrBrush}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <TextBlock Text="Working without cloud &amp; Tally"
                                        FontSize="15"
                                        FontWeight="SemiBold" />
                             <TextBlock Margin="0,2,0,0"
                                        Text="Last successful sync: —"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        FontSize="12" />
                         </StackPanel>
                         <Button Grid.Column="2"
@@ -59,7 +59,7 @@
                     <Rectangle Grid.Row="0"
                                VerticalAlignment="Bottom"
                                Height="1"
-                               Fill="{DynamicResource DividerBrush}" />
+                               Fill="{StaticResource DividerBrush}" />
 
                     <!--  Body: 2-column split  -->
                     <Grid Grid.Row="1" Margin="16,12">
@@ -72,22 +72,22 @@
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="✓ STILL WORKS"
                                        Style="{StaticResource TxtSectionTitle}"
-                                       Foreground="{DynamicResource OkBrush}"
+                                       Foreground="{StaticResource OkBrush}"
                                        Margin="0,0,0,6" />
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource OkBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Creating new bills &amp; estimates (in memory)" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource OkBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Printing estimates from unsaved work" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource OkBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Quick-add picker using last synced masters" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource OkBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Viewing bills loaded before disconnect" />
                             </StackPanel>
                         </StackPanel>
@@ -95,22 +95,22 @@
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="✕ BLOCKED UNTIL RECOVERY"
                                        Style="{StaticResource TxtSectionTitle}"
-                                       Foreground="{DynamicResource ErrBrush}"
+                                       Foreground="{StaticResource ErrBrush}"
                                        Margin="0,0,0,6" />
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource ErrBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Posting to Tally" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource ErrBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Final tax invoice numbers (cloud-allocated)" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource ErrBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Master-data changes (ledgers, items, karat)" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
-                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{DynamicResource ErrBrush}" />
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
                                 <TextBlock Margin="8,0,0,0" Text="Voiding, reposting, deletion of older bills" />
                             </StackPanel>
                         </StackPanel>
@@ -118,8 +118,8 @@
 
                     <!--  Footer  -->
                     <Border Grid.Row="2"
-                            Background="{DynamicResource BgSunkenBrush}"
-                            BorderBrush="{DynamicResource DividerBrush}"
+                            Background="{StaticResource BgSunkenBrush}"
+                            BorderBrush="{StaticResource DividerBrush}"
                             BorderThickness="0,1,0,0"
                             Padding="14,10">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -146,17 +146,17 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0" Fill="{DynamicResource ErrBrush}" />
+                        <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0" Fill="{StaticResource ErrBrush}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <TextBlock Text="Cloud API unreachable" FontWeight="SemiBold" />
                             <TextBlock Text="DNS resolves · TCP connect fails · verify firewall / VPN"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        FontSize="11.5" />
                         </StackPanel>
                         <TextBlock Grid.Column="2"
                                    Text="—"
-                                   Foreground="{DynamicResource InkSoftBrush}"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   Foreground="{StaticResource InkSoftBrush}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    VerticalAlignment="Center" />
                     </Grid>
                     <Grid Margin="0,6">
@@ -165,17 +165,17 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0" Fill="{DynamicResource ErrBrush}" />
+                        <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0" Fill="{StaticResource ErrBrush}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <TextBlock Text="Tally — no response" FontWeight="SemiBold" />
                             <TextBlock Text="Check that TallyPrime is running and the XML endpoint is reachable"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        FontSize="11.5" />
                         </StackPanel>
                         <TextBlock Grid.Column="2"
                                    Text="—"
-                                   Foreground="{DynamicResource InkSoftBrush}"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   Foreground="{StaticResource InkSoftBrush}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    VerticalAlignment="Center" />
                     </Grid>
                     <Grid Margin="0,2">
@@ -184,11 +184,11 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0" Stroke="{DynamicResource BorderStrongBrush}" StrokeThickness="2" Fill="{DynamicResource BgPanelBrush}" />
+                        <Ellipse Grid.Column="0" Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0" Stroke="{StaticResource BorderStrongBrush}" StrokeThickness="2" Fill="{StaticResource BgPanelBrush}" />
                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
                             <TextBlock Text="Unsaved bills held in memory" FontWeight="SemiBold" />
                             <TextBlock Text="Retry Save once the cloud is back to persist them"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        FontSize="11.5" />
                         </StackPanel>
                     </Grid>

@@ -8,9 +8,9 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="Margin" Value="0,0,0,3" />
         </Style>
     </UserControl.Resources>
@@ -36,12 +36,12 @@
                 <!--  dialog-head  -->
                 <Border Grid.Row="0"
                         Padding="16,12"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <TextBlock Text="Change Invoice Number"
                                FontSize="14"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource InkBrush}" />
+                               Foreground="{StaticResource InkBrush}" />
                 </Border>
 
                 <!--  dialog-body  -->
@@ -51,17 +51,17 @@
                         <TextBox Text="{Binding CurrentNumberDisplay, Mode=OneWay}"
                                  Margin="0,0,0,12"
                                  IsReadOnly="True"
-                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                 FontFamily="{StaticResource MonoFontFamily}" />
 
                         <TextBlock Style="{StaticResource DlgFieldLabel}" Text="NEW NUMBER" />
                         <TextBox x:Name="NewNumberBox"
                                  Text="{Binding NewNumberRaw, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,0,0,4"
-                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                 FontFamily="{StaticResource MonoFontFamily}" />
                         <TextBlock Margin="0,0,0,12"
                                    FontSize="11"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
-                                   Foreground="{DynamicResource InkMutedBrush}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
+                                   Foreground="{StaticResource InkMutedBrush}"
                                    TextWrapping="Wrap"
                                    Text="{Binding PreviewText}" />
 
@@ -77,8 +77,8 @@
 
                 <!--  dialog-foot  -->
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

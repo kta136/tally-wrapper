@@ -5,7 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Bills"
              mc:Ignorable="d"
-             Background="{DynamicResource BgPanelBrush}"
+             Background="{StaticResource BgPanelBrush}"
              d:DataContext="{d:DesignInstance Type=vm:BillsViewModel, IsDesignTimeCreatable=False}">
     <UserControl.InputBindings>
         <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
@@ -31,49 +31,49 @@
         <Style x:Key="PageTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         </Style>
 
         <Style x:Key="TileBorder" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BgPanelBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTok}" />
+            <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="{DynamicResource Radius}" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius}" />
             <Setter Property="Padding" Value="12,8" />
         </Style>
 
         <Style x:Key="TileLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         </Style>
 
         <Style x:Key="TileCount" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="18" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         </Style>
 
         <Style x:Key="TileAmount" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Bottom" />
         </Style>
 
         <Style x:Key="TableHeaderBorder" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BgSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTok}" />
+            <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="10,6" />
         </Style>
 
         <Style x:Key="TableHeaderText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         </Style>
 
         <Style x:Key="StateChipBorder" TargetType="Border">
@@ -82,46 +82,46 @@
             <Setter Property="Height" Value="18" />
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Background" Value="{DynamicResource NeutralChipBrush}" />
+            <Setter Property="Background" Value="{StaticResource NeutralChipBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding State}" Value="pending">
-                    <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
+                    <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="draft">
-                    <Setter Property="Background" Value="{DynamicResource InfoSoftBrush}" />
+                    <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="posting">
-                    <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
+                    <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="posted">
-                    <Setter Property="Background" Value="{DynamicResource OkSoftBrush}" />
+                    <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="failed">
-                    <Setter Property="Background" Value="{DynamicResource ErrSoftBrush}" />
+                    <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="StateChipText" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="10.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding State}" Value="pending">
-                    <Setter Property="Foreground" Value="{DynamicResource WarnInkBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="draft">
-                    <Setter Property="Foreground" Value="{DynamicResource InfoInkBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="posting">
-                    <Setter Property="Foreground" Value="{DynamicResource WarnInkBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="posted">
-                    <Setter Property="Foreground" Value="{DynamicResource OkInkBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding State}" Value="failed">
-                    <Setter Property="Foreground" Value="{DynamicResource ErrInkBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -139,10 +139,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgHoverBrush}" />
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BgHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BgSelectedBrush}" />
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BgSelectedBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -163,8 +163,8 @@
 
         <Border Grid.Row="0"
                 Padding="14,10"
-                Background="{DynamicResource BgPanelBrush}"
-                BorderBrush="{DynamicResource BorderBrushTok}"
+                Background="{StaticResource BgPanelBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
                 BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -181,7 +181,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Open Details" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Enter" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Enter" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -189,7 +189,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Retry Sync" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="R" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="R" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -197,7 +197,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Post to Tally" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="P" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="P" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -210,7 +210,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Repost" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Shift+P" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Shift+P" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -221,7 +221,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Edit" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="E" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="E" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -230,7 +230,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Print" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Ctrl+P" FontFamily="{DynamicResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Ctrl+P" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -243,7 +243,7 @@
                      Margin="14,10,14,0">
             <Border Style="{StaticResource TileBorder}" Margin="0,0,8,0">
                 <Grid>
-                    <Rectangle Width="3" Fill="{DynamicResource InfoBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
+                    <Rectangle Width="3" Fill="{StaticResource InfoBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
                     <Grid Margin="0,0,0,0">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -264,7 +264,7 @@
 
             <Border Style="{StaticResource TileBorder}" Margin="0,0,8,0">
                 <Grid>
-                    <Rectangle Width="3" Fill="{DynamicResource OkBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
+                    <Rectangle Width="3" Fill="{StaticResource OkBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -275,7 +275,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.ColumnSpan="2" Style="{StaticResource TileLabel}" Text="POSTED TO TALLY" />
-                        <TextBlock Grid.Row="1" Style="{StaticResource TileCount}" Foreground="{DynamicResource OkBrush}" Text="{Binding CountPosted}" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource TileCount}" Foreground="{StaticResource OkBrush}" Text="{Binding CountPosted}" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource TileAmount}">
                             <Run Text="₹" /><Run Text="{Binding AmountPosted, StringFormat=N0}" />
                         </TextBlock>
@@ -285,7 +285,7 @@
 
             <Border Style="{StaticResource TileBorder}" Margin="0,0,8,0">
                 <Grid>
-                    <Rectangle Width="3" Fill="{DynamicResource WarnBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
+                    <Rectangle Width="3" Fill="{StaticResource WarnBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -296,7 +296,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.ColumnSpan="2" Style="{StaticResource TileLabel}" Text="PENDING SYNC" />
-                        <TextBlock Grid.Row="1" Style="{StaticResource TileCount}" Foreground="{DynamicResource WarnBrush}" Text="{Binding CountPending}" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource TileCount}" Foreground="{StaticResource WarnBrush}" Text="{Binding CountPending}" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource TileAmount}">
                             <Run Text="₹" /><Run Text="{Binding AmountPending, StringFormat=N0}" />
                         </TextBlock>
@@ -306,7 +306,7 @@
 
             <Border Style="{StaticResource TileBorder}">
                 <Grid>
-                    <Rectangle Width="3" Fill="{DynamicResource ErrBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
+                    <Rectangle Width="3" Fill="{StaticResource ErrBrush}" HorizontalAlignment="Left" Margin="-12,-8,0,-8" />
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -317,7 +317,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.ColumnSpan="2" Style="{StaticResource TileLabel}" Text="FAILED" />
-                        <TextBlock Grid.Row="1" Style="{StaticResource TileCount}" Foreground="{DynamicResource ErrBrush}" Text="{Binding CountFailed}" />
+                        <TextBlock Grid.Row="1" Style="{StaticResource TileCount}" Foreground="{StaticResource ErrBrush}" Text="{Binding CountFailed}" />
                         <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource TileAmount}">
                             <Run Text="₹" /><Run Text="{Binding AmountFailed, StringFormat=N0}" />
                         </TextBlock>
@@ -328,8 +328,8 @@
 
         <Border Grid.Row="2"
                 Padding="14,10"
-                Background="{DynamicResource BgPanelBrush}"
-                BorderBrush="{DynamicResource BorderBrushTok}"
+                Background="{StaticResource BgPanelBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
                 BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -343,7 +343,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource InkMutedBrush}" Text="State" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="State" />
                     <ComboBox Width="150"
                               Height="26"
                               FontSize="11.5"
@@ -351,12 +351,12 @@
                               SelectedItem="{Binding StateFilter}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource InkMutedBrush}" Text="From" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="From" />
                     <DatePicker Width="124" Height="26" SelectedDate="{Binding FromDate}" />
                 </StackPanel>
-                <TextBlock Grid.Column="2" Margin="10,0" VerticalAlignment="Center" Foreground="{DynamicResource InkMutedBrush}" Text="→" />
+                <TextBlock Grid.Column="2" Margin="10,0" VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" Text="→" />
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{DynamicResource InkMutedBrush}" Text="To" />
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="To" />
                     <DatePicker Width="124" Height="26" SelectedDate="{Binding ToDate}" />
                 </StackPanel>
                 <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="10,0,0,0">
@@ -368,18 +368,18 @@
                           VerticalAlignment="Center"
                           HorizontalAlignment="Left"
                           IsChecked="{Binding HideFullyPostedDays, Mode=TwoWay}"
-                          Foreground="{DynamicResource InkMutedBrush}"
+                          Foreground="{StaticResource InkMutedBrush}"
                           ToolTip="Hide date groups in which every bill is already posted to Tally. Leaves only days that still have unposted work.">
-                    <TextBlock Text="Hide fully posted days" Foreground="{DynamicResource InkMutedBrush}" />
+                    <TextBlock Text="Hide fully posted days" Foreground="{StaticResource InkMutedBrush}" />
                 </CheckBox>
                 <TextBlock Grid.Column="6"
                            VerticalAlignment="Center"
-                           FontSize="{DynamicResource FontSizeXs}"
-                           Foreground="{DynamicResource InkSoftBrush}">
+                           FontSize="{StaticResource FontSizeXs}"
+                           Foreground="{StaticResource InkSoftBrush}">
                     <Run Text="Showing " />
-                    <Run FontFamily="{DynamicResource MonoFontFamily}" Foreground="{DynamicResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
                     <Run Text=" of " />
-                    <Run FontFamily="{DynamicResource MonoFontFamily}" Foreground="{DynamicResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
                     <Run Text=" bills" />
                 </TextBlock>
             </Grid>
@@ -387,20 +387,20 @@
 
         <Border Grid.Row="3"
                 Padding="14,6"
-                Background="{DynamicResource AccentSoftBrush}"
-                BorderBrush="{DynamicResource BorderBrushTok}"
+                Background="{StaticResource AccentSoftBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
                 BorderThickness="0,0,0,1"
                 Visibility="{Binding IsSelectionBarVisible, Converter={StaticResource BoolToVis}}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Border Style="{StaticResource Chip}">
                     <TextBlock Text="{Binding SelectionSummaryText}"
-                               FontFamily="{DynamicResource MonoFontFamily}"
+                               FontFamily="{StaticResource MonoFontFamily}"
                                FontSize="10.5"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentBrush}" />
+                               Foreground="{StaticResource AccentBrush}" />
                 </Border>
                 <Button Style="{StaticResource BtnSm}" Margin="8,0,0,0" Command="{Binding ClearSelectionCommand}" Content="Clear" />
-                <Rectangle Width="1" Height="18" Margin="10,0" Fill="{DynamicResource DividerBrush}" />
+                <Rectangle Width="1" Height="18" Margin="10,0" Fill="{StaticResource DividerBrush}" />
                 <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry All" />
                 <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}" Content="{Binding TallyPushButtonLabel}" />
                 <Button Style="{StaticResource BtnSm}"
@@ -415,14 +415,14 @@
             </StackPanel>
         </Border>
 
-        <Border Grid.Row="4" Background="{DynamicResource BgPanelBrush}">
+        <Border Grid.Row="4" Background="{StaticResource BgPanelBrush}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Background="{DynamicResource BgSunkenBrush}">
+                <Grid Grid.Row="0" Background="{StaticResource BgSunkenBrush}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="34" />
                         <ColumnDefinition Width="150" />
@@ -476,8 +476,8 @@
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource BgSunkenBrush}"
-                                            BorderBrush="{DynamicResource BorderBrushTok}"
+                                    <Border Background="{StaticResource BgSunkenBrush}"
+                                            BorderBrush="{StaticResource BorderBrushTok}"
                                             BorderThickness="0,0,0,1"
                                             Padding="14,4">
                                         <Grid>
@@ -486,22 +486,22 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock FontSize="{DynamicResource FontSizeLabel}"
+                                                <TextBlock FontSize="{StaticResource FontSizeLabel}"
                                                            FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource InkSoftBrush}"
+                                                           Foreground="{StaticResource InkSoftBrush}"
                                                            Text="{Binding Name, Converter={StaticResource BillDateGroupHeader}}" />
                                                 <TextBlock Margin="10,0,0,0"
-                                                           FontFamily="{DynamicResource MonoFontFamily}"
-                                                           FontSize="{DynamicResource FontSizeXs}"
-                                                           Foreground="{DynamicResource InkMutedBrush}">
+                                                           FontFamily="{StaticResource MonoFontFamily}"
+                                                           FontSize="{StaticResource FontSizeXs}"
+                                                           Foreground="{StaticResource InkMutedBrush}">
                                                     <Run Text="(" /><Run Text="{Binding ItemCount, Mode=OneWay}" /><Run Text=")" />
                                                 </TextBlock>
                                             </StackPanel>
                                             <TextBlock Grid.Column="1"
-                                                       FontFamily="{DynamicResource MonoFontFamily}"
-                                                       FontSize="{DynamicResource FontSizeLabel}"
+                                                       FontFamily="{StaticResource MonoFontFamily}"
+                                                       FontSize="{StaticResource FontSizeLabel}"
                                                        FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource InkBrush}"
+                                                       Foreground="{StaticResource InkBrush}"
                                                        Text="{Binding Items, Converter={StaticResource GroupAmountSum}}" />
                                         </Grid>
                                     </Border>
@@ -511,9 +511,9 @@
                     </ListBox.GroupStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Border BorderBrush="{DynamicResource DividerBrush}"
+                            <Border BorderBrush="{StaticResource DividerBrush}"
                                     BorderThickness="0,0,0,1"
-                                    MinHeight="{DynamicResource RowHeight}"
+                                    MinHeight="{StaticResource RowHeight}"
                                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     MouseLeftButtonUp="OnBillRowClick"
                                     MouseLeftButtonDown="OnBillRowMouseLeftButtonDown"
@@ -523,7 +523,7 @@
                                         <Setter Property="Background" Value="Transparent" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource BgSelectedBrush}" />
+                                                <Setter Property="Background" Value="{StaticResource BgSelectedBrush}" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -592,7 +592,7 @@
                                                Width="3"
                                                HorizontalAlignment="Left"
                                                VerticalAlignment="Stretch"
-                                               Fill="{DynamicResource AccentBrush}"
+                                               Fill="{StaticResource AccentBrush}"
                                                Visibility="{Binding IsSelected, Converter={StaticResource BoolToVis}}" />
 
                                     <CheckBox Grid.Column="0"
@@ -603,7 +603,7 @@
                                     <TextBlock Grid.Column="1"
                                                Margin="10,0"
                                                VerticalAlignment="Center"
-                                               FontFamily="{DynamicResource MonoFontFamily}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
                                                FontWeight="SemiBold"
                                                Text="{Binding InvoiceNumberDisplay}" />
 
@@ -621,7 +621,7 @@
                                                Margin="10,0"
                                                VerticalAlignment="Center"
                                                TextAlignment="Right"
-                                               FontFamily="{DynamicResource MonoFontFamily}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
                                                FontWeight="SemiBold">
                                         <Run Text="₹" />
                                         <Run Text="{Binding GrandTotal, StringFormat=N0, Mode=OneWay}" />
@@ -630,23 +630,23 @@
                                     <TextBlock Grid.Column="5"
                                                Margin="10,0"
                                                VerticalAlignment="Center"
-                                               FontFamily="{DynamicResource MonoFontFamily}"
-                                               Foreground="{DynamicResource InkMutedBrush}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
+                                               Foreground="{StaticResource InkMutedBrush}"
                                                Text="{Binding BillDate, StringFormat='yyyy-MM-dd', TargetNullValue='—'}" />
 
                                     <TextBlock Grid.Column="6"
                                                Margin="10,0"
                                                VerticalAlignment="Center"
-                                               FontFamily="{DynamicResource MonoFontFamily}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
                                                FontSize="10.5"
-                                               Foreground="{DynamicResource InkMutedBrush}"
+                                               Foreground="{StaticResource InkMutedBrush}"
                                                Text="{Binding UpdatedAtUtc, StringFormat='yyyy-MM-dd HH:mm'}" />
 
                                     <TextBlock Grid.Column="7"
                                                Margin="10,0"
                                                VerticalAlignment="Center"
                                                FontSize="11.5"
-                                               Foreground="{DynamicResource InkMutedBrush}"
+                                               Foreground="{StaticResource InkMutedBrush}"
                                                Text="{Binding RowNote}" />
                                 </Grid>
                             </Border>
@@ -658,8 +658,8 @@
 
         <Border Grid.Row="5"
                 Padding="14,6"
-                Background="{DynamicResource BgSunkenBrush}"
-                BorderBrush="{DynamicResource BorderBrushTok}"
+                Background="{StaticResource BgSunkenBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
                 BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -667,12 +667,12 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock VerticalAlignment="Center"
-                           FontSize="{DynamicResource FontSizeXs}"
-                           Foreground="{DynamicResource InkSoftBrush}">
+                           FontSize="{StaticResource FontSizeXs}"
+                           Foreground="{StaticResource InkSoftBrush}">
                     <Run Text="Showing " />
-                    <Run FontFamily="{DynamicResource MonoFontFamily}" Foreground="{DynamicResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
                     <Run Text=" of " />
-                    <Run FontFamily="{DynamicResource MonoFontFamily}" Foreground="{DynamicResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
                     <Run Text=" bills · Right-click row for actions" />
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">

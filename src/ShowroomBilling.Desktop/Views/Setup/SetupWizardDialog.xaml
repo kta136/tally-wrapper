@@ -27,7 +27,7 @@
 
                 <Border Grid.Row="0"
                         Padding="16,12"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -38,25 +38,25 @@
                             <TextBlock Text="First Launch Setup"
                                        FontSize="15"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource InkBrush}" />
+                                       Foreground="{StaticResource InkBrush}" />
                             <TextBlock Margin="0,3,0,0"
                                        Text="{Binding StepLabel}"
-                                       FontFamily="{DynamicResource MonoFontFamily}"
+                                       FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="10.5"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource AccentBrush}" />
+                                       Foreground="{StaticResource AccentBrush}" />
                         </StackPanel>
                         <Border Grid.Column="1"
                                 Padding="8,2"
                                 Height="22"
                                 VerticalAlignment="Center"
-                                Background="{DynamicResource AccentSoftBrush}"
+                                Background="{StaticResource AccentSoftBrush}"
                                 CornerRadius="2">
                             <TextBlock Text="SETUP REQUIRED"
-                                       FontFamily="{DynamicResource MonoFontFamily}"
+                                       FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="10"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource AccentBrush}"
+                                       Foreground="{StaticResource AccentBrush}"
                                        VerticalAlignment="Center" />
                         </Border>
                     </Grid>
@@ -68,14 +68,14 @@
                                 Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="{Binding ErrorMessage}"
                                        TextWrapping="Wrap"
-                                       Foreground="{DynamicResource ErrInkBrush}" />
+                                       Foreground="{StaticResource ErrInkBrush}" />
                         </Border>
 
                         <Border Style="{StaticResource AdminBannerInfo}"
                                 Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
                             <TextBlock Text="{Binding StatusMessage}"
                                        TextWrapping="Wrap"
-                                       Foreground="{DynamicResource InfoInkBrush}" />
+                                       Foreground="{StaticResource InfoInkBrush}" />
                         </Border>
 
                         <Border Style="{StaticResource AdminSectionPanel}"
@@ -84,7 +84,7 @@
                                 <TextBlock Style="{StaticResource AdminSectionTitle}" Text="DATABASE" />
                                 <TextBlock Margin="0,0,0,10"
                                            FontSize="11.5"
-                                           Foreground="{DynamicResource InkSoftBrush}"
+                                           Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="Paste the PostgreSQL connection string for this installation. It will be encrypted for this Windows user and will not be written into the EXE or repo." />
                                 <TextBlock Style="{StaticResource AdminFieldLabel}" Text="POSTGRESQL CONNECTION STRING" />
@@ -95,7 +95,7 @@
                                          VerticalScrollBarVisibility="Auto"
                                          VerticalContentAlignment="Top"
                                          Padding="10,8"
-                                         FontFamily="{DynamicResource MonoFontFamily}"
+                                         FontFamily="{StaticResource MonoFontFamily}"
                                          FontSize="11.5" />
                             </StackPanel>
                         </Border>
@@ -106,7 +106,7 @@
                                 <TextBlock Style="{StaticResource AdminSectionTitle}" Text="SHOWROOM BASICS" />
                                 <TextBlock Margin="0,0,0,10"
                                            FontSize="11.5"
-                                           Foreground="{DynamicResource InkSoftBrush}"
+                                           Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="Set the minimum shared settings needed before billing starts. Item masters, karats, print layout, and advanced setup remain in Settings." />
 
@@ -210,8 +210,8 @@
                 </ScrollViewer>
 
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

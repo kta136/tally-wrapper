@@ -8,6 +8,8 @@ namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 
 public partial class BillLineViewModel : ObservableObject
 {
+    private int rowNumber;
+
     [ObservableProperty] private string itemName = string.Empty;
     [ObservableProperty] private decimal? grossWeight;
     [ObservableProperty] private decimal? lessWeight;
@@ -26,6 +28,12 @@ public partial class BillLineViewModel : ObservableObject
 
     [ObservableProperty] private decimal effectiveRate;
     [ObservableProperty] private decimal lineTotal;
+
+    public int RowNumber
+    {
+        get => rowNumber;
+        set => SetProperty(ref rowNumber, value);
+    }
 
     public decimal NetWeight => IsDiamond
         ? GrossWeight ?? 0m

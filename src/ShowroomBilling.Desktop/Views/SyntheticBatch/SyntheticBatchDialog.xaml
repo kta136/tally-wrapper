@@ -8,31 +8,31 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="Margin" Value="0,0,0,3" />
         </Style>
 
         <Style x:Key="DlgSectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10.5" />
             <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
             <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
 
         <Style x:Key="DlgCard" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BgPanelBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTok}" />
+            <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="{DynamicResource RadiusLg}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="14,12" />
             <Setter Property="Margin" Value="0,0,0,12" />
         </Style>
 
         <Style x:Key="DlgBannerErr" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource ErrSoftBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource ErrBrush}" />
+            <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource ErrBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="3" />
             <Setter Property="Padding" Value="10,8" />
@@ -40,8 +40,8 @@
         </Style>
 
         <Style x:Key="DlgBannerWarn" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource WarnSoftBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource WarnBrush}" />
+            <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="3" />
             <Setter Property="Padding" Value="10,8" />
@@ -69,7 +69,7 @@
                 <!--  dialog-head  -->
                 <Border Grid.Row="0"
                         Padding="14,10"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -79,7 +79,7 @@
                                        VerticalAlignment="Center" />
                             <TextBlock Margin="10,0,0,0"
                                        FontSize="11"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        VerticalAlignment="Center"
                                        Text="V1-ported synthetic bill generator" />
                         </StackPanel>
@@ -99,7 +99,7 @@
                     <StackPanel>
                         <TextBlock TextWrapping="Wrap"
                                    Margin="0,0,0,14"
-                                   Foreground="{DynamicResource InkMutedBrush}"
+                                   Foreground="{StaticResource InkMutedBrush}"
                                    FontSize="12"
                                    Text="Creates a cluster of pending bills whose content is realistic but whose audit timestamps are backfilled inside the selected time window. No Tally traffic. Requires admin unlock." />
 
@@ -109,10 +109,10 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⚠"
                                            FontSize="13"
-                                           Foreground="{DynamicResource ErrBrush}"
+                                           Foreground="{StaticResource ErrBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Text="{Binding ErrorMessage}"
-                                           Foreground="{DynamicResource ErrInkBrush}"
+                                           Foreground="{StaticResource ErrInkBrush}"
                                            TextWrapping="Wrap"
                                            VerticalAlignment="Center" />
                             </StackPanel>
@@ -131,24 +131,24 @@
                                     <StackPanel Grid.Column="0">
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Text="TOTAL TARGET AMOUNT (₹)" />
                                         <TextBox Text="{Binding TotalAmount, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                                 FontFamily="{StaticResource MonoFontFamily}" />
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="24KT RATE (₹/G)" />
                                         <TextBox Text="{Binding Rate24Kt, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                                 FontFamily="{StaticResource MonoFontFamily}" />
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="MIN ITEMS / BILL" />
                                         <TextBox Text="{Binding MinItemsPerBill, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                                 FontFamily="{StaticResource MonoFontFamily}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Text="MAX BILL AMOUNT (₹ ≤ 1,99,000)" />
                                         <TextBox Text="{Binding MaxBillAmount, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                                 FontFamily="{StaticResource MonoFontFamily}" />
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="PAYMENT MODE" />
                                         <ComboBox ItemsSource="{Binding PaymentOptions}"
                                                   SelectedItem="{Binding PaymentMode}" />
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="MAX ITEMS / BILL" />
                                         <TextBox Text="{Binding MaxItemsPerBill, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontFamily="{DynamicResource MonoFontFamily}" />
+                                                 FontFamily="{StaticResource MonoFontFamily}" />
                                     </StackPanel>
                                 </Grid>
                             </StackPanel>
@@ -167,13 +167,13 @@
                                     <StackPanel Grid.Column="0">
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Text="START (YYYY-MM-DD HH:MM)" />
                                         <TextBox x:Name="StartAtBox"
-                                                 FontFamily="{DynamicResource MonoFontFamily}"
+                                                 FontFamily="{StaticResource MonoFontFamily}"
                                                  LostFocus="OnStartAtLostFocus" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
                                         <TextBlock Style="{StaticResource DlgFieldLabel}" Text="END (YYYY-MM-DD HH:MM)" />
                                         <TextBox x:Name="EndAtBox"
-                                                 FontFamily="{DynamicResource MonoFontFamily}"
+                                                 FontFamily="{StaticResource MonoFontFamily}"
                                                  LostFocus="OnEndAtLostFocus" />
                                     </StackPanel>
                                 </Grid>
@@ -220,9 +220,9 @@
                         <Border Style="{StaticResource DlgBannerWarn}"
                                 Visibility="{Binding HasValidation, Converter={StaticResource BoolToVis}}">
                             <StackPanel Orientation="Horizontal">
-                                <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{DynamicResource WarnBrush}" />
+                                <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{StaticResource WarnBrush}" />
                                 <TextBlock Text="{Binding ValidationMessage}"
-                                           Foreground="{DynamicResource WarnInkBrush}"
+                                           Foreground="{StaticResource WarnInkBrush}"
                                            TextWrapping="Wrap"
                                            VerticalAlignment="Center" />
                             </StackPanel>
@@ -233,7 +233,7 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource DlgSectionTitle}" Text="RUNTIME" />
                                 <TextBlock FontSize="11.5"
-                                           Foreground="{DynamicResource InkMutedBrush}"
+                                           Foreground="{StaticResource InkMutedBrush}"
                                            TextWrapping="Wrap"
                                            Text="{Binding StatusMessage, TargetNullValue='Ready.', FallbackValue='Ready.'}" />
                                 <Grid Margin="0,10,0,0">
@@ -248,9 +248,9 @@
                                                  Value="{Binding CreatedCount, Mode=OneWay}" />
                                     <TextBlock Grid.Column="1"
                                                Margin="10,0,0,0"
-                                               FontFamily="{DynamicResource MonoFontFamily}"
+                                               FontFamily="{StaticResource MonoFontFamily}"
                                                FontSize="11"
-                                               Foreground="{DynamicResource InkMutedBrush}"
+                                               Foreground="{StaticResource InkMutedBrush}"
                                                VerticalAlignment="Center">
                                         <Run Text="{Binding CreatedCount, Mode=OneWay}" /><Run Text=" / " /><Run Text="{Binding TotalCount, Mode=OneWay}" />
                                     </TextBlock>
@@ -262,8 +262,8 @@
 
                 <!--  dialog-foot  -->
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <Grid>

@@ -29,7 +29,7 @@
                 <!--  Header  -->
                 <Border Grid.Row="0"
                         Padding="14,10"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid>
                         <StackPanel>
@@ -40,14 +40,14 @@
                                            Text="Print Preview" />
                                 <TextBlock Margin="10,0,0,0"
                                            VerticalAlignment="Center"
-                                           FontFamily="{DynamicResource MonoFontFamily}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
                                            FontSize="11"
-                                           Foreground="{DynamicResource InkMutedBrush}"
+                                           Foreground="{StaticResource InkMutedBrush}"
                                            Text="{Binding InvoiceNumber, TargetNullValue='(pending)'}" />
                             </StackPanel>
                             <TextBlock Margin="0,3,0,0"
                                        FontSize="11"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        Text="{Binding StatusMessage}" />
                         </StackPanel>
                         <Button HorizontalAlignment="Right"
@@ -70,8 +70,8 @@
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0"
-                            Background="{DynamicResource BgSunkenBrush}"
-                            BorderBrush="{DynamicResource BorderBrushTok}"
+                            Background="{StaticResource BgSunkenBrush}"
+                            BorderBrush="{StaticResource BorderBrushTok}"
                             BorderThickness="1"
                             CornerRadius="4"
                             Padding="12"
@@ -96,7 +96,7 @@
                                     <DataTemplate>
                                         <Border Margin="0,0,0,10"
                                                 Background="White"
-                                                BorderBrush="{DynamicResource BorderBrushTok}"
+                                                BorderBrush="{StaticResource BorderBrushTok}"
                                                 BorderThickness="1">
                                             <Border.LayoutTransform>
                                                 <ScaleTransform ScaleX="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -127,14 +127,14 @@
                                   IsChecked="{Binding DirectPrintAfterSave}"
                                   Content="Direct print after save (skip preview)" />
 
-                        <Border Background="{DynamicResource BgSunkenBrush}"
-                                BorderBrush="{DynamicResource BorderBrushTok}"
+                        <Border Background="{StaticResource BgSunkenBrush}"
+                                BorderBrush="{StaticResource BorderBrushTok}"
                                 BorderThickness="1"
                                 CornerRadius="3"
                                 Padding="8">
                             <TextBlock FontSize="11"
                                        TextWrapping="Wrap"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        Text="The invoice is saved and pending. Pushing to Tally happens only when you hit Push on the Bills tab." />
                         </Border>
                     </StackPanel>
@@ -142,8 +142,8 @@
 
                 <!--  Footer  -->
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <Grid>
@@ -198,7 +198,7 @@
                             <Thumb.Template>
                                 <ControlTemplate TargetType="Thumb">
                                     <Grid Width="16" Height="16" Background="Transparent">
-                                        <Path Stroke="{DynamicResource InkMutedBrush}"
+                                        <Path Stroke="{StaticResource InkMutedBrush}"
                                               StrokeThickness="1"
                                               Data="M 4,14 L 14,4 M 8,14 L 14,8 M 12,14 L 14,12" />
                                     </Grid>

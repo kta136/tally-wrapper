@@ -21,8 +21,8 @@
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
-        Background="{DynamicResource BgBrush}"
-        FontFamily="{DynamicResource UiFontFamily}"
+        Background="{StaticResource BgBrush}"
+        FontFamily="{StaticResource UiFontFamily}"
         TextOptions.TextFormattingMode="Ideal"
         TextOptions.TextRenderingMode="ClearType"
         UseLayoutRounding="True">
@@ -76,10 +76,10 @@
                 Style="{StaticResource BannerWarn}"
                 Visibility="{Binding IsDegradedBannerVisible, Converter={StaticResource BoolToVis}}">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Ellipse Width="8" Height="8" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center" />
+                <Ellipse Width="8" Height="8" Fill="{StaticResource WarnBrush}" VerticalAlignment="Center" />
                 <TextBlock Margin="10,0,0,0"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource WarnInkBrush}"
+                           Foreground="{StaticResource WarnInkBrush}"
                            Text="{Binding BannerText}" />
             </StackPanel>
         </Border>
@@ -87,10 +87,10 @@
                 Style="{StaticResource BannerErr}"
                 Visibility="{Binding IsLimitedBannerVisible, Converter={StaticResource BoolToVis}}">
             <StackPanel Orientation="Horizontal">
-                <Ellipse Width="8" Height="8" Fill="{DynamicResource ErrBrush}" VerticalAlignment="Center" />
+                <Ellipse Width="8" Height="8" Fill="{StaticResource ErrBrush}" VerticalAlignment="Center" />
                 <TextBlock Margin="10,0,0,0"
                            VerticalAlignment="Center"
-                           Foreground="{DynamicResource ErrInkBrush}"
+                           Foreground="{StaticResource ErrInkBrush}"
                            Text="{Binding BannerText}" />
             </StackPanel>
         </Border>
@@ -100,13 +100,17 @@
 
         <!--  Row 3: Screen region  -->
         <Grid Grid.Row="3">
-            <views:LimitedModeView Visibility="{Binding IsLimitedVisible, Converter={StaticResource BoolToVis}}" />
-            <invoiceViews:InvoiceView DataContext="{Binding Invoice}"
-                                      Visibility="{Binding DataContext.IsInvoiceVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
-            <billsViews:BillsView DataContext="{Binding Bills}"
-                                  Visibility="{Binding DataContext.IsBillsVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
-            <settingsViews:SettingsView DataContext="{Binding Settings}"
-                                        Visibility="{Binding DataContext.IsSettingsVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
+            <shell:LazyViewHost ViewType="{x:Type views:LimitedModeView}"
+                                Visibility="{Binding IsLimitedVisible, Converter={StaticResource BoolToVis}}" />
+            <shell:LazyViewHost ViewType="{x:Type invoiceViews:InvoiceView}"
+                                ContentDataContext="{Binding Invoice}"
+                                Visibility="{Binding IsInvoiceVisible, Converter={StaticResource BoolToVis}}" />
+            <shell:LazyViewHost ViewType="{x:Type billsViews:BillsView}"
+                                ContentDataContext="{Binding Bills}"
+                                Visibility="{Binding IsBillsVisible, Converter={StaticResource BoolToVis}}" />
+            <shell:LazyViewHost ViewType="{x:Type settingsViews:SettingsView}"
+                                ContentDataContext="{Binding Settings}"
+                                Visibility="{Binding IsSettingsVisible, Converter={StaticResource BoolToVis}}" />
         </Grid>
 
         <!--  Row 4: F-key strip  -->
@@ -116,32 +120,41 @@
         <views:StatusBarView Grid.Row="5" DataContext="{Binding StatusBar}" />
 
         <!--  Dialog overlays (span all rows)  -->
-        <views:ShortcutsDialog Grid.RowSpan="6"
-                               Panel.ZIndex="100"
-                               Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=shortcuts}" />
-        <views:SystemHealthDialog Grid.RowSpan="6"
-                                  Panel.ZIndex="100"
-                                  Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=health}" />
-        <billsViews:BillDetailsDialog Grid.RowSpan="6"
-                                      Panel.ZIndex="100"
-                                      Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=billDetails}" />
-        <printingViews:PrintPreviewDialog Grid.RowSpan="6"
-                                          Panel.ZIndex="100"
-                                          Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=printPreview}" />
-        <adminViews:AdminUnlockDialog Grid.RowSpan="6"
-                                      Panel.ZIndex="100"
-                                      Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=admin}" />
-        <setupViews:SetupWizardDialog Grid.RowSpan="6"
-                                      Panel.ZIndex="100"
-                                      Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=setupWizard}" />
-        <syntheticViews:SyntheticBatchDialog Grid.RowSpan="6"
-                                             Panel.ZIndex="100"
-                                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=syntheticBatch}" />
-        <billsViews:ChangeNumberDialog Grid.RowSpan="6"
-                                       Panel.ZIndex="100"
-                                       Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=changeNumber}" />
-        <billsViews:ReasonPromptDialog Grid.RowSpan="6"
-                                       Panel.ZIndex="100"
-                                       Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=reasonPrompt}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type views:ShortcutsDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=shortcuts}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type views:SystemHealthDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=health}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type billsViews:BillDetailsDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=billDetails}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type printingViews:PrintPreviewDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=printPreview}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type adminViews:AdminUnlockDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=admin}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type setupViews:SetupWizardDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=setupWizard}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type syntheticViews:SyntheticBatchDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=syntheticBatch}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type billsViews:ChangeNumberDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=changeNumber}" />
+        <shell:LazyViewHost Grid.RowSpan="6"
+                            Panel.ZIndex="100"
+                            ViewType="{x:Type billsViews:ReasonPromptDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=reasonPrompt}" />
     </Grid>
 </Window>

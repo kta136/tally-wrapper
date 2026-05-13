@@ -68,7 +68,12 @@ public static class BillCalculator
         var subIncl = 0m;
         foreach (var t in lineInclusiveTotals) subIncl += t;
 
-        var subBase = Math.Round(subIncl / GstFactor, 2, MidpointRounding.AwayFromZero);
+        return BuildTotals(subIncl, discount);
+    }
+
+    public static BillTotals BuildTotals(decimal lineInclusiveTotal, decimal discount)
+    {
+        var subBase = Math.Round(lineInclusiveTotal / GstFactor, 2, MidpointRounding.AwayFromZero);
         var cgst = Math.Round(subBase * CgstRate, 2, MidpointRounding.AwayFromZero);
         var sgst = Math.Round(subBase * SgstRate, 2, MidpointRounding.AwayFromZero);
         var preRound = subBase + cgst + sgst - discount;

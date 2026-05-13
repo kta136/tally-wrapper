@@ -23,12 +23,12 @@
 
                 <Border Grid.Row="0"
                         Padding="16,12"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <TextBlock Text="{Binding TitleText}"
                                FontSize="14"
                                FontWeight="SemiBold"
-                               Foreground="{DynamicResource InkBrush}" />
+                               Foreground="{StaticResource InkBrush}" />
                 </Border>
 
                 <Border Grid.Row="1" Padding="16,14">
@@ -36,7 +36,7 @@
                         <TextBlock Text="{Binding MessageText}"
                                    FontSize="12.5"
                                    TextWrapping="Wrap"
-                                   Foreground="{DynamicResource InkBrush}" />
+                                   Foreground="{StaticResource InkBrush}" />
                         <TextBox x:Name="ReasonBox"
                                  Text="{Binding ReasonText, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,10,0,0"
@@ -47,14 +47,14 @@
                                  Padding="8,6" />
                         <TextBlock Margin="0,6,0,0"
                                    FontSize="10.5"
-                                   Foreground="{DynamicResource InkSoftBrush}"
+                                   Foreground="{StaticResource InkSoftBrush}"
                                    Text="{Binding HintText, Mode=OneWay}" />
                     </StackPanel>
                 </Border>
 
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

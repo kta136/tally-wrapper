@@ -39,12 +39,7 @@ public partial class InvoiceView : UserControl
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            var container = LinesItems.ItemContainerGenerator.ContainerFromIndex(index) as DependencyObject;
-            if (container is null)
-            {
-                LinesItems.UpdateLayout();
-                container = LinesItems.ItemContainerGenerator.ContainerFromIndex(index) as DependencyObject;
-            }
+            var container = GetLineContainer(index);
             if (container is null) return;
             var grossBox = FindGrossWeightTextBox(container);
             if (grossBox is null) return;
@@ -116,15 +111,22 @@ public partial class InvoiceView : UserControl
     private bool FocusFirstRowItemCell()
     {
         if (LinesItems.Items.Count == 0) return false;
-        var container = LinesItems.ItemContainerGenerator.ContainerFromIndex(0) as DependencyObject;
-        if (container is null)
-        {
-            LinesItems.UpdateLayout();
-            container = LinesItems.ItemContainerGenerator.ContainerFromIndex(0) as DependencyObject;
-        }
+        var container = GetLineContainer(0);
         if (container is null) return false;
         var combo = FindItemCellComboBox(container);
         return combo?.Focus() == true;
+    }
+
+    private DependencyObject? GetLineContainer(int index)
+    {
+        if (index < 0 || index >= LinesItems.Items.Count) return null;
+
+        var container = LinesItems.ItemContainerGenerator.ContainerFromIndex(index) as DependencyObject;
+        if (container is not null) return container;
+
+        LinesItems.ScrollIntoView(LinesItems.Items[index]);
+        LinesItems.UpdateLayout();
+        return LinesItems.ItemContainerGenerator.ContainerFromIndex(index) as DependencyObject;
     }
 
     private static ComboBox? FindItemCellComboBox(DependencyObject root)
@@ -254,10 +256,9 @@ public partial class InvoiceView : UserControl
     private void OnLinesGotFocus(object sender, RoutedEventArgs e)
     {
         if (DataContext is not InvoiceViewModel vm) return;
-        var container = FindAncestor<ContentPresenter>(e.OriginalSource as DependencyObject);
+        var container = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
         if (container is null) return;
-        var index = ItemsControl.ItemsControlFromItemContainer(container)?.ItemContainerGenerator
-            .IndexFromContainer(container) ?? -1;
+        var index = LinesItems.ItemContainerGenerator.IndexFromContainer(container);
         if (index >= 0) vm.FocusedRowIndex = index;
     }
 

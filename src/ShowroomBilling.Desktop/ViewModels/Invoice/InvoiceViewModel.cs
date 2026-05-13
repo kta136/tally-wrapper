@@ -25,6 +25,9 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly SettingsViewModel? _settings;
     private readonly IApiReadinessSignal? _apiReadiness;
     private readonly InvoiceQuickAddWorkflow _quickAdd;
+    private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
+    private Dictionary<string, ItemMasterRowVm>? _itemMasterByName;
+    private bool _deferLineCollectionRecompute;
     private Guid? _draftBillId;
     private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
     private const decimal CgstRate = BillCalculator.CgstRate;
@@ -56,8 +59,9 @@ public partial class InvoiceViewModel : ObservableObject
         Lines.CollectionChanged += OnLinesChanged;
         foreach (var line in Lines)
             AttachLine(line);
+        RefreshLineRowNumbers();
 
-        AddRowCommand = new RelayCommand(() => Lines.Add(CreateBlankRow()));
+        AddRowCommand = new RelayCommand(() => AddTrailingBlankRow(deferCollectionRecompute: true));
         RemoveFocusedRowCommand = new RelayCommand(RemoveFocusedRow, () => Lines.Count > 1);
         RemoveLineCommand = new RelayCommand<BillLineViewModel?>(RemoveLine, line => line is not null && Lines.Count > 1);
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, CanSaveDraft);
@@ -74,11 +78,7 @@ public partial class InvoiceViewModel : ObservableObject
             () => QuickAddSelection,
             value => QuickAddSelection = value);
         QuickAddCommitCommand = new RelayCommand<ItemMasterRowVm?>(CommitQuickAdd);
-        if (ItemMasters is INotifyCollectionChanged itemMasterCollection)
-            itemMasterCollection.CollectionChanged += (_, _) =>
-            {
-                _quickAdd.InvalidateIndex();
-            };
+        AttachItemMasterObservers();
         RefreshQuickAddResults();
 
         Recompute();
@@ -156,7 +156,7 @@ public partial class InvoiceViewModel : ObservableObject
         if (value is > 0m) RateMissing = false;
         Recompute();
     }
-    partial void OnDiscountChanged(decimal value) => Recompute();
+    partial void OnDiscountChanged(decimal value) => RecomputeTotalsFromCurrentLines();
     partial void OnDiscountEnabledChanged(bool value)
     {
         if (!value) Discount = 0m;
@@ -172,52 +172,186 @@ public partial class InvoiceViewModel : ObservableObject
             foreach (BillLineViewModel line in e.OldItems)
                 DetachLine(line);
 
+        RefreshLineRowNumbers();
         RemoveFocusedRowCommand.NotifyCanExecuteChanged();
         RemoveLineCommand.NotifyCanExecuteChanged();
         SaveDraftCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasMultipleRows));
-        Recompute();
+        if (!_deferLineCollectionRecompute)
+            Recompute();
     }
 
     private void AttachLine(BillLineViewModel line) => line.MutationOccurred += OnLineMutated;
 
     private void DetachLine(BillLineViewModel line) => line.MutationOccurred -= OnLineMutated;
 
+    private void RefreshLineRowNumbers()
+    {
+        for (var i = 0; i < Lines.Count; i++)
+            Lines[i].RowNumber = i + 1;
+    }
+
     private void OnLineMutated(object? sender, EventArgs e)
     {
-        if (sender is BillLineViewModel line)
+        if (sender is not BillLineViewModel line)
         {
-            TryAttachMasterByName(line);
+            SaveDraftCommand.NotifyCanExecuteChanged();
+            Recompute();
+            return;
+        }
 
-            var index = Lines.IndexOf(line);
-            if (index == Lines.Count - 1 && !line.IsEmpty)
-                AddTrailingBlankRow();
+        TryAttachMasterByName(line);
+        RecomputeLine(line);
+
+        var index = Lines.IndexOf(line);
+        if (index == Lines.Count - 1 && !line.IsEmpty)
+        {
+            AddTrailingBlankRow(deferCollectionRecompute: true);
         }
 
         SaveDraftCommand.NotifyCanExecuteChanged();
-        Recompute();
+        RecomputeTotalsFromCurrentLines();
     }
 
     private void TryAttachMasterByName(BillLineViewModel line)
     {
         if (line.ItemMaster is not null) return;
         if (string.IsNullOrWhiteSpace(line.ItemName)) return;
-        if (ItemMasters is null) return;
 
         var typed = line.ItemName.Trim();
-        foreach (var master in ItemMasters)
+        if (GetItemMasterNameIndex().TryGetValue(typed, out var master))
         {
-            if (string.Equals(master.Name?.Trim(), typed, StringComparison.OrdinalIgnoreCase))
-            {
-                line.ItemMaster = master;
-                return;
-            }
+            line.ItemMaster = master;
         }
     }
 
-    private void AddTrailingBlankRow() => Lines.Add(CreateBlankRow());
+    private IReadOnlyDictionary<string, ItemMasterRowVm> GetItemMasterNameIndex()
+    {
+        if (_itemMasterByName is not null)
+        {
+            return _itemMasterByName;
+        }
+
+        var index = new Dictionary<string, ItemMasterRowVm>(StringComparer.OrdinalIgnoreCase);
+        if (ItemMasters is not null)
+        {
+            foreach (var master in ItemMasters)
+            {
+                var name = master.Name?.Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    index.TryAdd(name, master);
+                }
+            }
+        }
+
+        _itemMasterByName = index;
+        return _itemMasterByName;
+    }
+
+    private void AttachItemMasterObservers()
+    {
+        if (ItemMasters is not { } masters) return;
+
+        if (masters is INotifyCollectionChanged itemMasterCollection)
+            itemMasterCollection.CollectionChanged += OnItemMastersCollectionChanged;
+
+        foreach (var master in masters)
+            AttachItemMaster(master);
+    }
+
+    private void OnItemMastersCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var master in _observedItemMasters.ToArray())
+                DetachItemMaster(master);
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (ItemMasterRowVm master in e.OldItems)
+                DetachItemMaster(master);
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (ItemMasterRowVm master in e.NewItems)
+                AttachItemMaster(master);
+        }
+
+        if (ItemMasters is not null)
+        {
+            foreach (var master in ItemMasters)
+                AttachItemMaster(master);
+        }
+
+        InvalidateItemMasterIndexes();
+    }
+
+    private void AttachItemMaster(ItemMasterRowVm master)
+    {
+        if (_observedItemMasters.Add(master))
+            master.PropertyChanged += OnItemMasterPropertyChanged;
+    }
+
+    private void DetachItemMaster(ItemMasterRowVm master)
+    {
+        if (_observedItemMasters.Remove(master))
+            master.PropertyChanged -= OnItemMasterPropertyChanged;
+    }
+
+    private void OnItemMasterPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(ItemMasterRowVm.Name))
+            InvalidateItemMasterIndexes();
+    }
+
+    private void InvalidateItemMasterIndexes()
+    {
+        _itemMasterByName = null;
+        _quickAdd.InvalidateIndex();
+    }
+
+    private void AddTrailingBlankRow(bool deferCollectionRecompute = false)
+    {
+        if (!deferCollectionRecompute)
+        {
+            Lines.Add(CreateBlankRow());
+            return;
+        }
+
+        _deferLineCollectionRecompute = true;
+        try
+        {
+            Lines.Add(CreateBlankRow());
+        }
+        finally
+        {
+            _deferLineCollectionRecompute = false;
+        }
+    }
 
     private BillLineViewModel CreateBlankRow() => new();
+
+    private void ReplaceLines(IEnumerable<BillLineViewModel> rows)
+    {
+        _deferLineCollectionRecompute = true;
+        try
+        {
+            Lines.Clear();
+            foreach (var row in rows)
+                Lines.Add(row);
+            AddTrailingBlankRow();
+        }
+        finally
+        {
+            _deferLineCollectionRecompute = false;
+        }
+
+        RefreshLineRowNumbers();
+        Recompute();
+    }
 
     private void RemoveFocusedRow()
     {
@@ -240,32 +374,45 @@ public partial class InvoiceViewModel : ObservableObject
 
     private void Recompute()
     {
+        foreach (var line in Lines)
+            RecomputeLine(line);
+
+        RecomputeTotalsFromCurrentLines();
+    }
+
+    private void RecomputeLine(BillLineViewModel line)
+    {
+        if (line.IsEmpty)
+        {
+            line.EffectiveRate = 0m;
+            line.LineTotal = 0m;
+            return;
+        }
+
+        var result = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(
+            line,
+            Rate24Kt ?? 0m,
+            ResolvePurityPercent(line)));
+        line.EffectiveRate = result.EffectiveRate;
+        line.LineTotal = result.LineTotalInclusive;
+    }
+
+    private void RecomputeTotalsFromCurrentLines()
+    {
         decimal weight = 0m;
+        decimal inclusiveTotal = 0m;
         int count = 0;
-        var inclTotals = new List<decimal>(Lines.Count);
 
         foreach (var line in Lines)
         {
-            if (line.IsEmpty)
-            {
-                line.EffectiveRate = 0m;
-                line.LineTotal = 0m;
-                continue;
-            }
+            if (line.IsEmpty) continue;
 
-            var result = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(
-                line,
-                Rate24Kt ?? 0m,
-                ResolvePurityPercent(line)));
-            line.EffectiveRate = result.EffectiveRate;
-            line.LineTotal = result.LineTotalInclusive;
-            inclTotals.Add(result.LineTotalInclusive);
-
+            inclusiveTotal += line.LineTotal;
             weight += line.NetWeight;
             count++;
         }
 
-        var totals = BillCalculator.BuildTotals(inclTotals, Discount);
+        var totals = BillCalculator.BuildTotals(inclusiveTotal, Discount);
         Subtotal = totals.SubtotalBase;
         Cgst = totals.Cgst;
         Sgst = totals.Sgst;
@@ -381,9 +528,7 @@ public partial class InvoiceViewModel : ObservableObject
         RateMissing = false;
         IsEditingExistingBill = false;
         IsEditingPosted = false;
-        Lines.Clear();
-        AddTrailingBlankRow();
-        Recompute();
+        ReplaceLines([]);
         _ = RefreshNextNumberAsync();
     }
 
@@ -454,11 +599,6 @@ public partial class InvoiceViewModel : ObservableObject
             }
             var payload = bill.CurrentRevision.Payload;
 
-            Lines.Clear();
-            foreach (var row in InvoiceEditMapper.CreateRows(payload, ItemMasters, KaratMasters))
-                Lines.Add(row);
-            AddTrailingBlankRow();
-
             PartyName = payload.PartyName ?? string.Empty;
             Payment = InvoiceEditMapper.ResolvePayment(payload.Payment, PaymentOptions, Payment);
             BillDate = new DateTimeOffset(payload.BillDate.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset);
@@ -466,6 +606,7 @@ public partial class InvoiceViewModel : ObservableObject
             Discount = payload.Totals.DiscountTotal;
             DiscountEnabled = payload.Totals.DiscountTotal > 0m;
             Rate24Kt = payload.Rate24Kt;
+            ReplaceLines(InvoiceEditMapper.CreateRows(payload, ItemMasters, KaratMasters));
 
             _draftBillId = bill.Id;
             CurrentBillState = bill.State;
@@ -475,7 +616,6 @@ public partial class InvoiceViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
                 InvoiceNumber = bill.InvoiceNumber!;
             OnPropertyChanged(nameof(IsDraftSaved));
-            Recompute();
             SaveStatus = IsEditingPosted
                 ? $"Editing {bill.InvoiceNumber} (was {bill.State}). Save re-queues to Tally."
                 : $"Editing {bill.InvoiceNumber ?? "(pending)"}";

@@ -493,12 +493,16 @@ public partial class SettingsViewModel : ObservableObject,
             // "Refresh from Tally" button now re-pulls and re-fetches in one go.
             if (_mastersApi is not null)
             {
+                var snapshotLoads = new List<Task>(capacity: 3);
                 if (Companies.Count == 0)
-                    await FetchCompaniesAsync(cancellationToken);
+                    snapshotLoads.Add(FetchCompaniesAsync(cancellationToken));
                 if (LedgerOptions.Count == 0)
-                    await FetchLedgersAndVoucherTypesAsync(cancellationToken);
+                    snapshotLoads.Add(FetchLedgersAndVoucherTypesAsync(cancellationToken));
                 if (StockItems.Count == 0)
-                    await FetchStockItemsAsync(cancellationToken);
+                    snapshotLoads.Add(FetchStockItemsAsync(cancellationToken));
+
+                if (snapshotLoads.Count > 0)
+                    await Task.WhenAll(snapshotLoads);
             }
         }
         catch (HttpRequestException ex)

@@ -8,19 +8,19 @@
         <Style x:Key="HealthSectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="10.5" />
             <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
             <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
         <Style x:Key="HealthCard" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BgPanelBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushTok}" />
+            <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="{DynamicResource RadiusLg}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="14,12" />
             <Setter Property="Margin" Value="0,0,0,12" />
         </Style>
         <Style x:Key="RowMuted" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource InkMutedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="FontSize" Value="11.5" />
         </Style>
     </UserControl.Resources>
@@ -43,14 +43,14 @@
                 <!--  Header  -->
                 <Border Grid.Row="0"
                         Padding="14,10"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="System Health" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                             <TextBlock Margin="12,0,0,0"
                                        VerticalAlignment="Center"
-                                       Foreground="{DynamicResource InkMutedBrush}"
+                                       Foreground="{StaticResource InkMutedBrush}"
                                        FontSize="11">
                                 <Run Text="Checked " /><Run Text="{Binding LastHealthCheckedDisplay, Mode=OneWay}" />
                             </TextBlock>
@@ -153,8 +153,8 @@
 
                 <!--  Footer  -->
                 <Border Grid.Row="2"
-                        Background="{DynamicResource BgSunkenBrush}"
-                        BorderBrush="{DynamicResource DividerBrush}"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,1,0,0"
                         Padding="14,10">
                     <Grid>

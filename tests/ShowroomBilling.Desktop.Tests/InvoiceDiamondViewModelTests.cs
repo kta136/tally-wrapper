@@ -103,6 +103,26 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public void Typed_item_name_attaches_matching_master_after_master_name_changes()
+    {
+        var settings = new SettingsViewModel();
+        var master = GoldMaster();
+        settings.Draft.ItemMasterRows.Add(master);
+        var vm = new InvoiceViewModel(null, null, settings);
+
+        vm.Lines[0].ItemName = " 22k ring ";
+
+        Assert.Same(master, vm.Lines[0].ItemMaster);
+
+        master.Name = "Renamed Gold Ring";
+        var nextLine = vm.Lines.Single(l => l.IsEmpty);
+
+        nextLine.ItemName = "renamed gold ring";
+
+        Assert.Same(master, nextLine.ItemMaster);
+    }
+
+    [Fact]
     public async Task LoadBillForEdit_preserves_stored_item_category_and_pricing_mode()
     {
         var billId = Guid.NewGuid();

@@ -205,37 +205,60 @@ public partial class App : System.Windows.Application
         var hostStartMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
 
-        // Materialize the device token and spawn the API child before resolving
-        // MainWindow. Several viewmodels begin their first refresh during window
-        // construction/loaded flow, so the child process must already be on its
-        // way to binding 5107 before any HTTP clients are used.
-        var spawnTimer = Stopwatch.StartNew();
-        _host.Services.GetRequiredService<DeviceTokenProvider>().GetOrCreateToken();
-        var deviceTokenMs = spawnTimer.ElapsedMilliseconds;
-        spawnTimer.Restart();
-        // Spawn the API as a child inside a Windows Job Object.
-        // KillOnJobClose guarantees it dies when this process exits (even on crash).
-        _host.Services.GetRequiredService<ChildProcessSupervisor>().Start();
-        var supervisorMs = spawnTimer.ElapsedMilliseconds;
+        // Materialize the device token and spawn the API child while WPF resolves
+        // MainWindow. The order inside the worker is still important: the API
+        // child reads the token file during its own startup.
+        var apiChildStartupTask = StartApiChildAsync(_host.Services);
 
         var window = _host.Services.GetRequiredService<MainWindow>();
         var resolveWindowMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
         window.Show();
         var showWindowMs = phaseTimer.ElapsedMilliseconds;
+        var windowVisibleMs = totalTimer.ElapsedMilliseconds;
+
+        var apiChildStartup = await apiChildStartupTask;
 
         var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
         startupLogger.LogInformation(
-            "[startup-timing] embeddedExtract={EmbeddedExtractMs}ms hostBuild={HostBuildMs}ms hostStart={HostStartMs}ms resolveWindow={ResolveWindowMs}ms showWindow={ShowWindowMs}ms deviceToken={DeviceTokenMs}ms supervisor={SupervisorMs}ms windowVisibleAt={WindowVisibleMs}ms",
+            "[startup-timing] embeddedExtract={EmbeddedExtractMs}ms hostBuild={HostBuildMs}ms hostStart={HostStartMs}ms resolveWindow={ResolveWindowMs}ms showWindow={ShowWindowMs}ms deviceToken={DeviceTokenMs}ms supervisor={SupervisorMs}ms apiChildStarted={ApiChildStarted} windowVisibleAt={WindowVisibleMs}ms",
             embeddedExtractMs,
             hostBuildMs,
             hostStartMs,
             resolveWindowMs,
             showWindowMs,
-            deviceTokenMs,
-            supervisorMs,
-            totalTimer.ElapsedMilliseconds);
+            apiChildStartup.DeviceTokenMs,
+            apiChildStartup.SupervisorMs,
+            apiChildStartup.Succeeded,
+            windowVisibleMs);
     }
+
+    private static Task<ApiChildStartupTiming> StartApiChildAsync(IServiceProvider services)
+        => Task.Run(() =>
+        {
+            var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+            var spawnTimer = Stopwatch.StartNew();
+            long deviceTokenMs = 0;
+
+            try
+            {
+                services.GetRequiredService<DeviceTokenProvider>().GetOrCreateToken();
+                deviceTokenMs = spawnTimer.ElapsedMilliseconds;
+                spawnTimer.Restart();
+
+                // Spawn the API as a child inside a Windows Job Object.
+                // KillOnJobClose guarantees it dies when this process exits (even on crash).
+                services.GetRequiredService<ChildProcessSupervisor>().Start();
+                return new ApiChildStartupTiming(deviceTokenMs, spawnTimer.ElapsedMilliseconds, Succeeded: true);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed while preparing the device token or starting the API child process.");
+                return new ApiChildStartupTiming(deviceTokenMs, spawnTimer.ElapsedMilliseconds, Succeeded: false);
+            }
+        });
+
+    private readonly record struct ApiChildStartupTiming(long DeviceTokenMs, long SupervisorMs, bool Succeeded);
 
     protected override void OnExit(ExitEventArgs e)
     {

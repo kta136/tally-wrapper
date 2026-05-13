@@ -5,8 +5,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              Height="22">
-    <Border Background="{DynamicResource BgSunkenBrush}"
-            BorderBrush="{DynamicResource DividerBrush}"
+    <Border Background="{StaticResource BgSunkenBrush}"
+            BorderBrush="{StaticResource DividerBrush}"
             BorderThickness="0,1,0,0">
         <ItemsControl ItemsSource="{Binding Items}" Padding="8,0">
             <ItemsControl.ItemsPanel>
@@ -17,8 +17,8 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Border Background="{DynamicResource BgPanelBrush}"
-                                BorderBrush="{DynamicResource BorderStrongBrush}"
+                        <Border Background="{StaticResource BgPanelBrush}"
+                                BorderBrush="{StaticResource BorderStrongBrush}"
                                 BorderThickness="1,1,1,2"
                                 CornerRadius="2"
                                 Padding="5,0"
@@ -26,23 +26,23 @@
                                 Height="15"
                                 VerticalAlignment="Center">
                             <TextBlock Text="{Binding Key}"
-                                       FontFamily="{DynamicResource MonoFontFamily}"
+                                       FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="9.5"
                                        FontWeight="Bold"
-                                       Foreground="{DynamicResource InkBrush}"
+                                       Foreground="{StaticResource InkBrush}"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                         </Border>
                         <TextBlock Margin="4,0,0,0"
                                    Text="{Binding Label}"
-                                   FontFamily="{DynamicResource MonoFontFamily}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="10.5"
-                                   Foreground="{DynamicResource InkMutedBrush}"
+                                   Foreground="{StaticResource InkMutedBrush}"
                                    VerticalAlignment="Center" />
                         <Rectangle Width="1"
                                    Height="12"
                                    Margin="8,0"
-                                   Fill="{DynamicResource DividerBrush}" />
+                                   Fill="{StaticResource DividerBrush}" />
                     </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
