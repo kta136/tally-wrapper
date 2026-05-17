@@ -164,6 +164,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 OpenFinalPrintPreviewCommand.NotifyCanExecuteChanged();
         };
         Invoice.SaveCompletedReadyForPrint += OnInvoiceSaveCompletedReadyForPrint;
+        Invoice.PropertyChanged += OnInvoicePropertyChangedForStatusBar;
+        StatusBar.ApplyRate24Kt(Invoice.Rate24Kt, Invoice.KaratMasters);
+        StatusBar.ApplyLineCount(Invoice.ItemCount);
+        StatusBar.ApplyLastSaved(Invoice.LastSavedAtUtc);
         Settings.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SettingsViewModel.Settings) && Settings.Settings is { } saved)
@@ -171,6 +175,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 _printCoordinator.ApplyPrintSettings(saved.Print, saved.Masters);
                 if (!_suppressSettingsRefresh)
                     _ = _printCoordinator.RefreshPrintLayoutAsync();
+                // Karat-master purity rows may have shifted — re-derive the
+                // 22/18kt status-bar displays against the live 24kt rate.
+                StatusBar.ApplyRate24Kt(Invoice.Rate24Kt, Invoice.KaratMasters);
             }
         };
         Settings.PrintLayout.PropertyChanged += (_, e) =>
@@ -281,6 +288,22 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     private async void OnInvoiceSaveCompletedReadyForPrint(object? sender, Guid billId)
     {
         await _printCoordinator.HandleInvoiceSaveCompletedAsync();
+    }
+
+    private void OnInvoicePropertyChangedForStatusBar(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(InvoiceViewModel.Rate24Kt):
+                StatusBar.ApplyRate24Kt(Invoice.Rate24Kt, Invoice.KaratMasters);
+                break;
+            case nameof(InvoiceViewModel.ItemCount):
+                StatusBar.ApplyLineCount(Invoice.ItemCount);
+                break;
+            case nameof(InvoiceViewModel.LastSavedAtUtc):
+                StatusBar.ApplyLastSaved(Invoice.LastSavedAtUtc);
+                break;
+        }
     }
 
     public InvoiceViewModel Invoice { get; }

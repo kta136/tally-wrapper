@@ -103,6 +103,7 @@ public partial class InvoiceViewModel : ObservableObject
     partial void OnQuickAddQueryChanged(string value) => _quickAdd.RefreshResults();
 
     [ObservableProperty] private string saveStatus = string.Empty;
+    [ObservableProperty] private DateTimeOffset? lastSavedAtUtc;
     [ObservableProperty] private bool isSaving;
     [ObservableProperty] private string? currentBillState;
     [ObservableProperty] private bool rateMissing;
@@ -470,6 +471,7 @@ public partial class InvoiceViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
                 InvoiceNumber = bill.InvoiceNumber!;
             SaveStatus = $"Saved · {bill.State} · {InvoiceNumber}";
+            LastSavedAtUtc = DateTimeOffset.UtcNow;
             savedBillId = bill.Id;
         }
         catch (HttpRequestException ex)
@@ -525,6 +527,7 @@ public partial class InvoiceViewModel : ObservableObject
         Discount = 0m;
         DiscountEnabled = false;
         SaveStatus = string.Empty;
+        LastSavedAtUtc = null;
         RateMissing = false;
         IsEditingExistingBill = false;
         IsEditingPosted = false;
