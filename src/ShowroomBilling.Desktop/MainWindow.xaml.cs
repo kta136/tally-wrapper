@@ -27,6 +27,35 @@ public partial class MainWindow : Window
         _apiReadiness = apiReadiness;
         DataContext = _viewModel;
         Loaded += OnLoaded;
+        StateChanged += OnWindowStateChanged;
+        ApplyMaximizeChromeCompensation();
+    }
+
+    // WindowStyle=None + WindowChrome makes Windows position a maximized
+    // window so each edge sits SystemParameters.WindowResizeBorder px past the
+    // work-area. Without compensation, the bottom status bar gets clipped.
+    private void OnWindowStateChanged(object? sender, EventArgs e) => ApplyMaximizeChromeCompensation();
+
+    private void ApplyMaximizeChromeCompensation()
+    {
+        if (RootChrome is null) return;
+        if (WindowState == WindowState.Maximized)
+        {
+            var border = SystemParameters.WindowResizeBorderThickness;
+            // Add the WindowChrome.ResizeBorderThickness (6) on top of the OS
+            // resize-border. Together these match how much the maximized window
+            // overshoots the work-area on every edge.
+            const double chromeResize = 6d;
+            RootChrome.Padding = new Thickness(
+                border.Left + chromeResize,
+                border.Top + chromeResize,
+                border.Right + chromeResize,
+                border.Bottom + chromeResize);
+        }
+        else
+        {
+            RootChrome.Padding = new Thickness(0);
+        }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

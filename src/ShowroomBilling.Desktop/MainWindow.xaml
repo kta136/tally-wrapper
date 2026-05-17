@@ -58,6 +58,15 @@
         <KeyBinding Key="F9" Command="{Binding OpenInvoicePreviewCommand}" />
     </Window.InputBindings>
 
+    <!--
+      Root grid is wrapped in an outer Border so we can apply a maximize-state
+      margin without disturbing the inner row layout. With WindowStyle=None +
+      WindowChrome, Windows positions a maximized window so each edge sits
+      ~SystemParameters.WindowResizeBorder px past the work-area, clipping the
+      bottom status bar. MainWindow.xaml.cs flips RootChrome.Padding on
+      WindowState changes to compensate.
+    -->
+    <Border x:Name="RootChrome">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -157,4 +166,5 @@
                             ViewType="{x:Type billsViews:ReasonPromptDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=reasonPrompt}" />
     </Grid>
+    </Border>
 </Window>
