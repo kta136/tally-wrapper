@@ -11,6 +11,8 @@ namespace ShowroomBilling.Desktop.Views.Invoice;
 
 public partial class InvoiceView : UserControl
 {
+    private static readonly int[] EditableLineColumns = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
     public InvoiceView()
     {
         InitializeComponent();
@@ -228,30 +230,174 @@ public partial class InvoiceView : UserControl
         if (e.Key != Key.Enter) return;
         if (e.OriginalSource is not UIElement source) return;
 
+        // Let an open ComboBox consume Enter for selection first.
+        var combo = FindAncestor<ComboBox>(source as DependencyObject);
+        if (combo is { IsDropDownOpen: true }) return;
+
+        var reverse = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+        if (TryMoveLineFocus(source, reverse))
+            e.Handled = true;
+    }
+
+    private bool TryMoveLineFocus(UIElement source, bool reverse)
+    {
+        var sourceNode = source as DependencyObject;
+        var cellBorder = FindLineCellBorder(sourceNode);
+        if (cellBorder is null) return false;
+
+        var combo = FindAncestor<ComboBox>(sourceNode);
+        if (combo is not null)
+            combo.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+
         // If Enter lands on the Item cell of an empty row, jump to Save.
-        var cellBorder = FindAncestor<Border>(source as DependencyObject);
-        if (cellBorder is not null && Grid.GetColumn(cellBorder) == 1)
+        if (!reverse && Grid.GetColumn(cellBorder) == 1)
         {
-            var combo = FindAncestor<ComboBox>(source as DependencyObject);
-            if (combo is { IsDropDownOpen: false })
+            if (cellBorder.DataContext is BillLineViewModel row && row.IsEmpty)
             {
-                combo.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
-                if (cellBorder.DataContext is BillLineViewModel row && row.IsEmpty)
-                {
-                    SaveButton.Focus();
-                    e.Handled = true;
-                    return;
-                }
+                SaveButton.Focus();
+                return true;
             }
         }
 
-        var direction = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift
-            ? FocusNavigationDirection.Previous
-            : FocusNavigationDirection.Next;
+        var rowContainer = FindAncestor<ListBoxItem>(sourceNode);
+        if (rowContainer is null) return false;
 
-        source.MoveFocus(new TraversalRequest(direction));
-        e.Handled = true;
+        var rowIndex = LinesItems.ItemContainerGenerator.IndexFromContainer(rowContainer);
+        if (rowIndex < 0) return false;
+
+        var currentColumn = Grid.GetColumn(cellBorder);
+        if (FocusLineCellWithinRow(rowContainer, currentColumn, reverse))
+            return true;
+
+        var targetRowIndex = reverse ? rowIndex - 1 : rowIndex + 1;
+        if (FocusLineRowEndpoint(targetRowIndex, reverse))
+            return true;
+
+        if (!reverse)
+        {
+            SaveButton.Focus();
+            return true;
+        }
+
+        return source.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous));
     }
+
+    private bool FocusLineCellWithinRow(DependencyObject rowContainer, int currentColumn, bool reverse)
+    {
+        if (reverse)
+        {
+            for (var i = EditableLineColumns.Length - 1; i >= 0; i--)
+            {
+                var column = EditableLineColumns[i];
+                if (column >= currentColumn) continue;
+                if (FocusLineCell(rowContainer, column)) return true;
+            }
+
+            return false;
+        }
+
+        foreach (var column in EditableLineColumns)
+        {
+            if (column <= currentColumn) continue;
+            if (FocusLineCell(rowContainer, column)) return true;
+        }
+
+        return false;
+    }
+
+    private bool FocusLineRowEndpoint(int rowIndex, bool reverse)
+    {
+        var container = GetLineContainer(rowIndex);
+        if (container is null) return false;
+
+        if (reverse)
+        {
+            for (var i = EditableLineColumns.Length - 1; i >= 0; i--)
+            {
+                if (FocusLineCell(container, EditableLineColumns[i])) return true;
+            }
+
+            return false;
+        }
+
+        foreach (var column in EditableLineColumns)
+        {
+            if (FocusLineCell(container, column)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool FocusLineCell(DependencyObject rowContainer, int column)
+    {
+        var cell = FindLineCellBorderByColumn(rowContainer, column);
+        if (cell is null) return false;
+
+        var combo = FindDescendant<ComboBox>(cell);
+        if (combo is not null && combo.IsVisible && combo.IsEnabled && combo.Focusable)
+        {
+            combo.Focus();
+            if (combo.IsEditable)
+            {
+                combo.ApplyTemplate();
+                if (combo.Template.FindName("PART_EditableTextBox", combo) is TextBox editableTextBox)
+                {
+                    editableTextBox.Focus();
+                    editableTextBox.SelectAll();
+                }
+            }
+            return true;
+        }
+
+        var textBox = FindDescendant<TextBox>(cell);
+        if (textBox is not null && textBox.IsVisible && textBox.IsEnabled && textBox.Focusable)
+        {
+            textBox.Focus();
+            textBox.SelectAll();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static Border? FindLineCellBorder(DependencyObject? node)
+    {
+        while (node is not null)
+        {
+            if (node is Border border && IsLineCellBorder(border))
+                return border;
+            if (node is ListBoxItem)
+                return null;
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return null;
+    }
+
+    private static Border? FindLineCellBorderByColumn(DependencyObject root, int column)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is Border border
+                && Grid.GetColumn(border) == column
+                && IsLineCellBorder(border))
+            {
+                return border;
+            }
+
+            var nested = FindLineCellBorderByColumn(child, column);
+            if (nested is not null) return nested;
+        }
+
+        return null;
+    }
+
+    private static bool IsLineCellBorder(Border border)
+        => border.DataContext is BillLineViewModel
+           && VisualTreeHelper.GetParent(border) is Grid grid
+           && grid.ColumnDefinitions.Count == 13
+           && ReferenceEquals(border.DataContext, grid.DataContext);
 
     private void OnLinesGotFocus(object sender, RoutedEventArgs e)
     {
