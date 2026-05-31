@@ -14,7 +14,16 @@ public sealed record TallyPostRequest(
     string InvoiceNumber,
     string FiscalYear,
     string IdempotencyKey,
-    BillPayloadDto Payload);
+    BillPayloadDto Payload,
+    TallyPostOperation Operation = TallyPostOperation.Create,
+    string? TargetTagName = null,
+    string? TargetTagValue = null);
+
+public enum TallyPostOperation
+{
+    Create,
+    Alter,
+}
 
 public enum TallyPostOutcome
 {
@@ -29,4 +38,5 @@ public sealed record TallyPostResponse(
     string? ErrorMessage,
     string? XmlShape,
     string? RequestExcerpt,
-    string? ResponseExcerpt);
+    string? ResponseExcerpt,
+    string? TallyMasterId = null);

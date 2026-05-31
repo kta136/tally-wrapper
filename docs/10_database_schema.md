@@ -106,11 +106,11 @@ Constraints / indexes:
 
 ### 1.4 ~~`tally_posting_jobs`~~ (removed — dropped by the `DropPostingJobsAndBridgeSession` migration)
 
-V2 posting is synchronous and inline inside `BillService.PushAsync`. There is no queue, no outbox, no lease, no claim loop. Post outcomes are recorded as `tally.posted` / `tally.failed` audit events on the bill itself. Retry and repost simply re-run the same synchronous push path.
+V2 posting is synchronous and inline inside `BillService.PushAsync`. There is no queue, no outbox, no lease, no claim loop. Post outcomes are recorded as `tally.posted` / `tally.failed` audit events on the bill itself. Retry and repost re-run the same synchronous push path; edited-after-push bills alter the prior Tally voucher using the pre-edit `tally.posted.details.tallyMasterId` (or numeric legacy `remoteId`) instead of creating a new voucher.
 
 ### 1.5 ~~`tally_posting_attempts`~~ (removed — dropped alongside `tally_posting_jobs`)
 
-Per-attempt forensics now live in the audit trail. `BillPostingStatusResponse` reconstructs the fields the desktop needs (`LastErrorCode`, `LastErrorMessage`, `LastRemoteId`) by reading the most recent `tally.failed` / `tally.posted` audit events for the bill.
+Per-attempt forensics now live in the audit trail. `BillPostingStatusResponse` reconstructs the fields the desktop needs (`LastErrorCode`, `LastErrorMessage`, `LastRemoteId`) by reading the most recent `tally.failed` / `tally.posted` audit events for the bill. New successful Tally posts include `details.tallyAction` (`Create` or `Alter`) and `details.tallyMasterId` when available so future edit pushes can target the old voucher safely.
 
 ### 1.6 `audit_events`
 

@@ -388,13 +388,13 @@ Section 7 documents the **read** path (masters). This section documents the **wr
 Synchronous, in-process, driven by an operator click on Push / Retry / Repost:
 
 1. `BillService.PushInternalAsync` transitions the bill to `posting` and saves (so a crash is recoverable).
-2. Builds a `TallyPostRequest` carrying the bill header + `BillPayloadDto` from the current revision's snapshot.
+2. Builds a `TallyPostRequest` carrying the bill header + `BillPayloadDto` from the current revision's snapshot. `Operation=Create` is the default; `Operation=Alter` is used only for `EditedAfterPush=true` bills after resolving the old Tally `MASTER ID` from pre-edit audit.
 3. Calls `ITallyPoster.PostAsync` which:
    - reads ledger mappings + active company from cloud settings via `ICloudSettingsService`
    - builds an Import Data envelope via `TallyXmlVoucherBuilder.Build`
    - sends it through `ITallyXmlClient.SendAsync` (one HTTP POST to Tally's localhost XML endpoint)
    - classifies the response
-4. `BillService` records `tally.posted` or `tally.failed` audit, transitions the bill to `posted` or `failed`, saves, and returns the updated `BillResponse` to the desktop.
+4. `BillService` records `tally.posted` or `tally.failed` audit, transitions the bill to `posted` or `failed`, saves, and returns the updated `BillResponse` to the desktop. Successful alter clears `EditedAfterPush` and stores the target `tallyMasterId`; failed alter keeps the old audit target for retry.
 
 The desktop's Push button stays busy for the full duration of one Tally round-trip (typically 1–10 seconds).
 
@@ -486,6 +486,20 @@ This is the *Accounting Invoice* layout, live-verified against the `dummy` compa
 </ENVELOPE>
 ```
 
+For an edited-after-push bill, the same voucher body is emitted with alter attributes instead of a create `REMOTEID`:
+
+```xml
+<VOUCHER VCHTYPE="{SalesVoucherType}" ACTION="Alter" TAGNAME="MASTER ID" TAGVALUE="{oldTallyMasterId}">
+  <DATE>{yyyyMMdd}</DATE>
+  <EFFECTIVEDATE>{yyyyMMdd}</EFFECTIVEDATE>
+  <VOUCHERTYPENAME>{SalesVoucherType}</VOUCHERTYPENAME>
+  <VOUCHERNUMBER>{InvoiceNumber}</VOUCHERNUMBER>
+  ...
+</VOUCHER>
+```
+
+The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.posted` audit, preferring `details.tallyMasterId` and falling back to numeric legacy `details.remoteId`. If that target is missing, it records `TALLY_ALTER_TARGET_MISSING` and does not call Tally or create a replacement voucher.
+
 **Sign convention (Accounting Invoice view).** Tally's voucher import interprets the `AMOUNT` sign as the net change from the company's Cr-side perspective, not directly as Dr/Cr:
 
 - **Dr legs** (Cash/party receiving, Discount expense) → **negative** `AMOUNT`
@@ -508,7 +522,9 @@ These are all bugs that caused real failed pushes during V2 bring-up — each on
 
 ### 8.4 `REMOTEID` idempotency
 
-`REMOTEID` on the `<VOUCHER>` element is `post:{billId:N}:{revisionId:N}`. Tally enforces uniqueness on this field per company, so if a push happens twice against the same bill revision (e.g. network glitch, retry), Tally rejects the second import with `ERRORS > 0` — classified as `TALLY_ERRORS`, landing the bill in `failed`. The operator then decides: click Retry (same REMOTEID; Tally will reject again until the first post is manually voided or superseded), or Mark as Pushed (local-only attestation), or Revise (creates a new bill with a fresh REMOTEID).
+`REMOTEID` on create imports is `post:{billId:N}:{revisionId:N}`. Tally enforces uniqueness on this field per company, so if a push happens twice against the same bill revision (e.g. network glitch, retry), Tally rejects the second import with `ERRORS > 0` — classified as `TALLY_ERRORS`, landing the bill in `failed`. The operator then decides: click Retry (same REMOTEID; Tally will reject again until the first post is manually voided or superseded), or Mark as Pushed (local-only attestation), or Revise (creates a new bill with a fresh REMOTEID).
+
+Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"`.
 
 ### 8.5 Response classification
 
@@ -518,10 +534,14 @@ These are all bugs that caused real failed pushes during V2 bring-up — each on
 |---|---|---|
 | any `<LINEERROR>` descendant | `Failed` | `TALLY_LINEERROR` |
 | `<ERRORS>` > 0 or `<EXCEPTIONS>` > 0 | `Failed` | `TALLY_ERRORS` |
-| `CREATED + ALTERED <= 0` | `Failed` | `TALLY_NO_EFFECT` |
+| alter request and `CREATED > 0` | `Failed` | `TALLY_UNEXPECTED_CREATE_ON_ALTER` |
+| create request and `CREATED + ALTERED <= 0` | `Failed` | `TALLY_NO_EFFECT` |
+| alter request and `ALTERED <= 0` | `Failed` | `TALLY_NO_EFFECT` |
 | otherwise | `Posted` | — |
 
-`RemoteId` on success: `LASTVCHID ?? LASTMID ?? request.IdempotencyKey`.
+`RemoteId` on create success: `LASTVCHID ?? LASTMID ?? request.IdempotencyKey`. `tallyMasterId` is captured from positive numeric `LASTVCHID`.
+
+`RemoteId` on alter success: `LASTVCHID ?? LASTMID ?? request.TargetTagValue`; `tallyMasterId` is `LASTVCHID` when positive numeric, otherwise the alter target.
 
 Transport failures (`HttpRequestException`, `TaskCanceledException` outside the caller token, `InvalidOperationException` from missing config) are classified as `Failed` with error codes `TALLY_HTTP` / `TALLY_TIMEOUT` / `TALLY_NOT_CONFIGURED`. The `BillPostingStatusResponse` returns the last audit event's `errorCode` + `errorMessage` so the operator sees what happened without digging through logs.
 

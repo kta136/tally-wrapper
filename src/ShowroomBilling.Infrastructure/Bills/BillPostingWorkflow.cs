@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application.Bills;
@@ -18,6 +20,7 @@ internal sealed class BillPostingWorkflow(
     ILogger<BillPostingWorkflow> logger)
 {
     private const string DefaultShowroomCode = "default";
+    private const string TallyAlterTargetTagName = "MASTER ID";
 
     internal Task<BillResponse> PushAsync(
         Guid billId,
@@ -185,14 +188,12 @@ internal sealed class BillPostingWorkflow(
         currentRevision.SubmittedAtUtc ??= now;
         currentRevision.FinalizedAtUtc = now;
 
-        // When the bill was edited after a prior post, wipe the pre-edit audit history
-        // so the timeline shows only the recent edit + this push. The most recent
-        // `bill.edit.reopened` event is the cutoff and is itself preserved; everything
-        // older is dropped. No-op if the bill hasn't been reopened (plain repost or
-        // first push).
+        var operation = bill.EditedAfterPush ? TallyPostOperation.Alter : TallyPostOperation.Create;
+        var targetTagName = operation == TallyPostOperation.Alter ? TallyAlterTargetTagName : null;
+        string? targetTagValue = null;
         if (bill.EditedAfterPush)
         {
-            await PurgePreEditAuditAsync(bill.Id, cancellationToken);
+            targetTagValue = await ResolveAlterTargetMasterIdAsync(bill.Id, cancellationToken);
         }
 
         var trimmedReason = string.IsNullOrWhiteSpace(reason) ? "manual-push" : reason.Trim();
@@ -205,45 +206,69 @@ internal sealed class BillPostingWorkflow(
             {
                 invoiceNumber = bill.InvoiceNumber,
                 fiscalYear = bill.FiscalYear,
-                reason = trimmedReason
+                reason = trimmedReason,
+                tallyAction = operation.ToString()
             });
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Call Tally synchronously. No queue, no retry.
         var payload = BillSerialization.DeserializePayload(currentRevision);
         var idempotencyKey = $"post:{bill.Id:N}:{currentRevision.Id:N}";
-        var postRequest = new TallyPostRequest(
-            BillId: bill.Id,
-            RevisionId: currentRevision.Id,
-            RevisionNo: currentRevision.RevisionNo,
-            BillType: bill.BillType,
-            InvoiceNumber: bill.InvoiceNumber!,
-            FiscalYear: bill.FiscalYear!,
-            IdempotencyKey: idempotencyKey,
-            Payload: payload);
+        TallyPostRequest? postRequest = null;
 
         TallyPostResponse tallyResult;
-        try
+        if (operation == TallyPostOperation.Alter && targetTagValue is null)
         {
-            tallyResult = await tallyPoster.PostAsync(postRequest, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // Treat anything that leaks out as a failed post; the bill settles on `failed`.
             tallyResult = new TallyPostResponse(
                 Outcome: TallyPostOutcome.Failed,
                 RemoteId: null,
-                ErrorCode: "TALLY_UNEXPECTED",
-                ErrorMessage: ex.Message,
+                ErrorCode: "TALLY_ALTER_TARGET_MISSING",
+                ErrorMessage: "Edited bill cannot be pushed because the original Tally voucher master id is unavailable.",
                 XmlShape: "voucher-import-v1",
                 RequestExcerpt: null,
                 ResponseExcerpt: null);
+        }
+        else
+        {
+            postRequest = new TallyPostRequest(
+                BillId: bill.Id,
+                RevisionId: currentRevision.Id,
+                RevisionNo: currentRevision.RevisionNo,
+                BillType: bill.BillType,
+                InvoiceNumber: bill.InvoiceNumber!,
+                FiscalYear: bill.FiscalYear!,
+                IdempotencyKey: idempotencyKey,
+                Payload: payload,
+                Operation: operation,
+                TargetTagName: targetTagName,
+                TargetTagValue: targetTagValue);
+
+            try
+            {
+                tallyResult = await tallyPoster.PostAsync(postRequest, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Treat anything that leaks out as a failed post; the bill settles on `failed`.
+                tallyResult = new TallyPostResponse(
+                    Outcome: TallyPostOutcome.Failed,
+                    RemoteId: null,
+                    ErrorCode: "TALLY_UNEXPECTED",
+                    ErrorMessage: ex.Message,
+                    XmlShape: "voucher-import-v1",
+                    RequestExcerpt: null,
+                    ResponseExcerpt: null);
+            }
         }
 
         var settleAt = DateTimeOffset.UtcNow;
         if (tallyResult.Outcome == TallyPostOutcome.Posted)
         {
             bill.State = IBillService.StatePosted;
+            if (operation == TallyPostOperation.Alter)
+            {
+                bill.EditedAfterPush = false;
+            }
             bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,
@@ -253,6 +278,10 @@ internal sealed class BillPostingWorkflow(
                 new
                 {
                     remoteId = tallyResult.RemoteId,
+                    tallyMasterId = tallyResult.TallyMasterId ?? targetTagValue,
+                    tallyAction = operation.ToString(),
+                    targetTagName,
+                    targetTagValue,
                     invoiceNumber = bill.InvoiceNumber
                 });
             logger.LogInformation(
@@ -272,6 +301,9 @@ internal sealed class BillPostingWorkflow(
                 {
                     errorCode = tallyResult.ErrorCode,
                     errorMessage = tallyResult.ErrorMessage,
+                    tallyAction = operation.ToString(),
+                    targetTagName,
+                    targetTagValue,
                     requestExcerpt = tallyResult.RequestExcerpt,
                     responseExcerpt = tallyResult.ResponseExcerpt
                 });
@@ -285,6 +317,12 @@ internal sealed class BillPostingWorkflow(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (tallyResult.Outcome == TallyPostOutcome.Posted && operation == TallyPostOperation.Alter)
+        {
+            await PurgePreEditAuditAsync(bill.Id, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         return BillSerialization.MapResponse(bill, currentRevision);
     }
 
@@ -347,6 +385,40 @@ internal sealed class BillPostingWorkflow(
             items);
     }
 
+    private async Task<string?> ResolveAlterTargetMasterIdAsync(Guid billId, CancellationToken cancellationToken)
+    {
+        var billIdText = billId.ToString();
+        var lastReopen = await dbContext.AuditEvents.AsNoTracking()
+            .Where(e => e.EntityType == "bill"
+                && e.EntityId == billIdText
+                && e.EventType == "bill.edit.reopened")
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ThenByDescending(e => e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (lastReopen is null)
+        {
+            return null;
+        }
+
+        var lastPreEditSuccess = await dbContext.AuditEvents.AsNoTracking()
+            .Where(e => e.EntityType == "bill"
+                && e.EntityId == billIdText
+                && e.EventType == "tally.posted"
+                && e.CreatedAtUtc < lastReopen.CreatedAtUtc)
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ThenByDescending(e => e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (lastPreEditSuccess is null)
+        {
+            return null;
+        }
+
+        return NormalizePositiveInteger(ReadDetailsString(lastPreEditSuccess.PayloadJson, "tallyMasterId"))
+            ?? NormalizePositiveInteger(ReadDetailsString(lastPreEditSuccess.PayloadJson, "remoteId"));
+    }
+
     private async Task PurgePreEditAuditAsync(Guid billId, CancellationToken cancellationToken)
     {
         var billIdText = billId.ToString();
@@ -407,6 +479,33 @@ internal sealed class BillPostingWorkflow(
 
     private bool UsesInMemoryProvider() =>
         string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
+
+    private static string? ReadDetailsString(string? payloadJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (doc.RootElement.TryGetProperty("details", out var details)
+                && details.ValueKind == JsonValueKind.Object
+                && details.TryGetProperty(propertyName, out var v)
+                && v.ValueKind == JsonValueKind.String)
+            {
+                return v.GetString();
+            }
+        }
+        catch (JsonException) { }
+        return null;
+    }
+
+    private static string? NormalizePositiveInteger(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+        return long.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0
+            ? trimmed
+            : null;
+    }
 
     private static IReadOnlyList<Guid> NormalizeOrderedIds(IReadOnlyList<Guid>? billIds)
     {

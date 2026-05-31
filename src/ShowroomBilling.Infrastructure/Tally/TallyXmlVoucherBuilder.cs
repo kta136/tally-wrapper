@@ -91,10 +91,31 @@ public static class TallyXmlVoucherBuilder
 
         var voucherType = string.IsNullOrWhiteSpace(ledgers.SalesVoucherType) ? "Sales" : ledgers.SalesVoucherType;
 
+        var voucherAttributes = new List<XAttribute>();
+        if (request.Operation == TallyPostOperation.Alter)
+        {
+            if (string.IsNullOrWhiteSpace(request.TargetTagName) || string.IsNullOrWhiteSpace(request.TargetTagValue))
+            {
+                throw new VoucherBuildException(
+                    "TALLY_ALTER_TARGET_MISSING",
+                    "Edited bill cannot alter Tally because the original voucher identifier is missing.",
+                    terminal: true);
+            }
+
+            voucherAttributes.Add(new XAttribute("VCHTYPE", voucherType));
+            voucherAttributes.Add(new XAttribute("ACTION", "Alter"));
+            voucherAttributes.Add(new XAttribute("TAGNAME", request.TargetTagName.Trim()));
+            voucherAttributes.Add(new XAttribute("TAGVALUE", request.TargetTagValue.Trim()));
+        }
+        else
+        {
+            voucherAttributes.Add(new XAttribute("REMOTEID", request.IdempotencyKey));
+            voucherAttributes.Add(new XAttribute("VCHTYPE", voucherType));
+            voucherAttributes.Add(new XAttribute("ACTION", "Create"));
+        }
+
         var voucherElement = new XElement("VOUCHER",
-            new XAttribute("REMOTEID", request.IdempotencyKey),
-            new XAttribute("VCHTYPE", voucherType),
-            new XAttribute("ACTION", "Create"),
+            voucherAttributes,
             new XElement("DATE", FormatTallyDate(bill.BillDate)),
             new XElement("EFFECTIVEDATE", FormatTallyDate(bill.BillDate)),
             new XElement("VOUCHERTYPENAME", voucherType));

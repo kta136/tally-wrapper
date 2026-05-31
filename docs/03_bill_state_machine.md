@@ -119,9 +119,9 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 | Event | From | To | Notes |
 |---|---|---|---|
 | Save bill | new / `revised` lineage | `pending` | Mutable working state; invoice number reserved at creation |
-| **Manual push** (operator click) | `pending`, `draft`, `failed` | `posting` → `posted` \| `failed` | API calls Tally XML synchronously via `ITallyPoster`; returns once Tally answers. |
+| **Manual push** (operator click) | `pending`, `draft`, `failed` | `posting` → `posted` \| `failed` | API calls Tally XML synchronously via `ITallyPoster`; first pushes create a voucher, edited-after-push bills alter the prior Tally voucher. |
 | Manual retry | `failed` | `posting` → `posted` \| `failed` | Same sync path as push. |
-| Manual repost | `posted`, `failed` | `posting` → `posted` \| `failed` | Same sync path; targets bills already in Tally to overwrite or re-submit. |
+| Manual repost | `posted`, `failed` | `posting` → `posted` \| `failed` | Same sync path; plain reposts keep the create/import behavior unless the bill was reopened with `EditedAfterPush=true`. |
 | Revise bill content | `pending` only in normal flow | `revised` + new `pending` | Old pending bill becomes superseded |
 | **Edit in place** (admin-gated) | `pending`, `draft`, `failed`, `posted` | `pending` (with `EditedAfterPush=true` if reopened from non-pending) | Appends revision; invoice number unchanged. Blocked on `posting`. |
 | **Mark as Pushed** (admin-gated) | `pending`, `draft`, `failed` | `posted` | Local-only attestation — does not call Tally. Requires reason ≥ 4 chars. |
@@ -146,8 +146,9 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 There is no `tally_posting_jobs` table or queue. On push/retry/repost, `BillService.PushInternalAsync`:
 
 1. Transitions the bill to `posting` and saves.
-2. Calls `ITallyPoster.PostAsync` synchronously (builds XML, sends via HTTP to Tally, parses response).
-3. Writes `tally.posted` or `tally.failed` audit event and transitions the bill to `posted` or `failed`.
+2. If `EditedAfterPush=true`, resolves the previous Tally `MASTER ID` from the pre-edit `tally.posted` audit. If it cannot, the push fails with `TALLY_ALTER_TARGET_MISSING` without creating a fallback voucher.
+3. Calls `ITallyPoster.PostAsync` synchronously (builds create XML, or alter XML for edited-after-push, sends via HTTP to Tally, parses response).
+4. Writes `tally.posted` or `tally.failed` audit event and transitions the bill to `posted` or `failed`. Successful alter clears `EditedAfterPush` and only then purges pre-edit audit rows.
 
 If the API crashes mid-post, `StuckPostingRecoveryHostedService` runs on startup and flips any stranded `posting` bill back to `pending` with a `bill.posting.recovered` audit event for operator retry.
 

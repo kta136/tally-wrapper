@@ -166,6 +166,118 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task Push_FirstPushUsesTallyCreate()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+
+        Assert.Equal(TallyPostOperation.Create, poster.LastRequest!.Operation);
+        Assert.Null(poster.LastRequest.TargetTagName);
+        Assert.Null(poster.LastRequest.TargetTagValue);
+    }
+
+    [Fact]
+    public async Task Push_EditedPostedBillAltersPreviousTallyVoucher()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest(null, "repush-edited"));
+
+        Assert.Equal(2, poster.CallCount);
+        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.False(pushed.EditedAfterPush);
+        Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
+        Assert.Equal("MASTER ID", poster.LastRequest.TargetTagName);
+        Assert.Equal("101", poster.LastRequest.TargetTagValue);
+    }
+
+    [Fact]
+    public async Task Repost_UneditedPostedBillStillUsesTallyCreate()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+
+        await service.RepostAsync(bill.Id, new RepostBillRequest("repost-1", "plain-repost"));
+
+        Assert.Equal(2, poster.CallCount);
+        Assert.Equal(TallyPostOperation.Create, poster.LastRequest!.Operation);
+    }
+
+    [Fact]
+    public async Task Push_EditedPostedBillWithMissingTallyTargetFailsWithoutCallingTallyAgain()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(remoteId: "FAKE-VCH-1", tallyMasterId: null);
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest(null, "repush-edited"));
+
+        Assert.Equal(1, poster.CallCount);
+        Assert.Equal(IBillService.StateFailed, pushed.State);
+        Assert.True(pushed.EditedAfterPush);
+        var status = await service.GetPostingStatusAsync(bill.Id);
+        Assert.Equal("TALLY_ALTER_TARGET_MISSING", status!.LastErrorCode);
+    }
+
+    [Fact]
+    public async Task Push_FailedAlterKeepsEditFlagAndPreEditAudit()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(new[]
+        {
+            PostedResponse(remoteId: "101", tallyMasterId: "101"),
+            FailedResponse("TALLY_NO_EFFECT", "No alteration.")
+        });
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest(null, "repush-edited"));
+
+        Assert.Equal(IBillService.StateFailed, pushed.State);
+        Assert.True(pushed.EditedAfterPush);
+        Assert.Equal(1, await db.AuditEvents.CountAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == "tally.posted"));
+        Assert.Contains(await db.AuditEvents.ToListAsync(), a => a.EventType == "tally.failed" && a.PayloadJson.Contains("TALLY_NO_EFFECT"));
+    }
+
+    [Fact]
+    public async Task Push_SuccessfulAlterClearsEditFlagAndPurgesPreEditAudit()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest(null, "repush-edited"));
+
+        Assert.False(pushed.EditedAfterPush);
+        var postedAudits = await db.AuditEvents
+            .Where(a => a.EntityId == bill.Id.ToString() && a.EventType == "tally.posted")
+            .ToListAsync();
+        Assert.Single(postedAudits);
+        Assert.Contains("\"tallyAction\":\"Alter\"", postedAudits[0].PayloadJson);
+        Assert.Contains("\"tallyMasterId\":\"101\"", postedAudits[0].PayloadJson);
+    }
+
+    [Fact]
     public async Task Push_CarriesDraftReservedNumberAndTransitionsToPosted()
     {
         await using var db = CreateDbContext();
@@ -781,18 +893,53 @@ public sealed class BillServiceTests
         return new ShowroomBillingDbContext(options);
     }
 
-    internal sealed class FakeTallyPoster(TallyPostOutcome outcome = TallyPostOutcome.Posted) : ITallyPoster
+    private static TallyPostResponse PostedResponse(string? remoteId = "FAKE-VCH-1", string? tallyMasterId = null) =>
+        new(TallyPostOutcome.Posted, remoteId, null, null, "voucher-import-v1", null, null, tallyMasterId);
+
+    private static TallyPostResponse FailedResponse(string errorCode, string errorMessage) =>
+        new(TallyPostOutcome.Failed, null, errorCode, errorMessage, "voucher-import-v1", null, null);
+
+    internal sealed class FakeTallyPoster : ITallyPoster
     {
+        private readonly TallyPostOutcome outcome;
+        private readonly string? remoteId;
+        private readonly string? tallyMasterId;
+        private readonly Queue<TallyPostResponse> responses = new();
+        private readonly List<TallyPostRequest> requests = [];
+
+        public FakeTallyPoster(
+            TallyPostOutcome outcome = TallyPostOutcome.Posted,
+            string? remoteId = "FAKE-VCH-1",
+            string? tallyMasterId = null)
+        {
+            this.outcome = outcome;
+            this.remoteId = remoteId;
+            this.tallyMasterId = tallyMasterId;
+        }
+
+        public FakeTallyPoster(IEnumerable<TallyPostResponse> responses)
+            : this()
+        {
+            foreach (var response in responses)
+            {
+                this.responses.Enqueue(response);
+            }
+        }
+
         public int CallCount { get; private set; }
         public TallyPostRequest? LastRequest { get; private set; }
+        public IReadOnlyList<TallyPostRequest> Requests => requests;
 
         public Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default)
         {
             CallCount++;
             LastRequest = request;
-            var response = outcome == TallyPostOutcome.Posted
-                ? new TallyPostResponse(TallyPostOutcome.Posted, "FAKE-VCH-1", null, null, "voucher-import-v1", null, null)
-                : new TallyPostResponse(TallyPostOutcome.Failed, null, "FAKE_ERROR", "fake failure", "voucher-import-v1", null, null);
+            requests.Add(request);
+            var response = responses.Count > 0
+                ? responses.Dequeue()
+                : outcome == TallyPostOutcome.Posted
+                    ? PostedResponse(remoteId, tallyMasterId)
+                    : FailedResponse("FAKE_ERROR", "fake failure");
             return Task.FromResult(response);
         }
     }

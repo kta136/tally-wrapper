@@ -250,9 +250,10 @@ The XML golden path must be preserved:
 
 Implemented V2 `REMOTEID` content:
 
-- exactly the posting job's idempotency key
-- stable for the lifetime of that queued posting job
-- different for reposts because repost creates a new posting job
+- create/import requests use the posting idempotency key: `post:{billId:N}:{revisionId:N}`
+- stable for the lifetime of that bill revision post attempt
+- edited-after-push alter requests do not send `REMOTEID`; they use `TAGNAME="MASTER ID"` + the old Tally master id from pre-edit `tally.posted` audit
+- if that old master id is unavailable, the edited push fails safely with `TALLY_ALTER_TARGET_MISSING` and does not create a fallback voucher
 
 ### 7.3 Why not use invoice number alone
 

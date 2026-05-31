@@ -121,9 +121,12 @@ The single shared helper is [`PaymentMode`](../src/ShowroomBilling.Contracts/Bil
 When the operator clicks Push on the Bills tab, the desktop calls `POST /api/bills/{billId}/push`. Inside that HTTP request, `BillService.PushInternalAsync`:
 
 1. Atomically transitions the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If 0 rows are affected — another concurrent push already won the flip, or the state drifted — the request short-circuits and returns the current bill without a second Tally call. Closes a double-click / duplicate-request race that would otherwise produce two vouchers.
-2. Calls `ITallyPoster.PostAsync` — this builds voucher XML, sends it to Tally via HTTP, parses the response, and returns an outcome.
-3. Writes `tally.posted` or `tally.failed` audit and transitions the bill to `posted` or `failed`.
-4. Returns the resulting `BillResponse` to the desktop.
+2. Chooses Tally operation: normal pushes/retries/reposts use create XML; bills reopened after a prior successful push (`EditedAfterPush=true`) use alter XML against the old Tally voucher `MASTER ID`.
+3. Calls `ITallyPoster.PostAsync` — this builds voucher XML, sends it to Tally via HTTP, parses the response, and returns an outcome.
+4. Writes `tally.posted` or `tally.failed` audit and transitions the bill to `posted` or `failed`.
+5. Returns the resulting `BillResponse` to the desktop.
+
+If an edited-after-push bill cannot resolve the prior Tally `MASTER ID` from its pre-edit `tally.posted` audit, the API settles the attempt as `failed` with `TALLY_ALTER_TARGET_MISSING` and does not call Tally. It never falls back to creating a second voucher for that edited bill.
 
 The conditional flip and the Tally call are deliberately **not** wrapped in a single transaction: `posting` must be durably visible in the DB before the Tally round-trip, so `StuckPostingRecoveryHostedService` can heal the row if the API crashes mid-call.
 
@@ -229,6 +232,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 
 - `ITallyPoster` + `TallyXmlClient` live in `ShowroomBilling.Infrastructure.Tally`. They're in-process services, not hosted workers.
 - `ITallyMasterRefresher` follows the same pattern for master data.
+- Edited-after-push bills alter the existing Tally voucher by `MASTER ID`; plain first push, retry, and unedited repost keep create/import semantics.
 - **No business-level retry loop.** Every bill-level retry is an explicit operator click — `/retry`, `/repost`, re-pushing after fixing config. The state machine is not "eventually consistent".
 - The HTTP client under `ITallyXmlClient` has a **transport-layer** Polly pipeline (2 retries, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx) to absorb single transient blips. This does not re-run Tally body errors (`LINEERROR`, `EXCEPTIONS > 0`) — those flow straight to `failed` and wait for the operator. Treat this as a connect-fail smoother, not a retry strategy.
 - Do not re-introduce a queue, polling loop, or second process as an "optimization." The architecture was explicitly collapsed from two-process to single-process; reversing it would re-open the whole class of bugs we removed.

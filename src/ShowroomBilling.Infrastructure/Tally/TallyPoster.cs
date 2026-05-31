@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
@@ -117,6 +118,8 @@ public sealed class TallyPoster(
         var exceptions = ParseInt(FindFirst(response, "EXCEPTIONS"));
         var created = ParseInt(FindFirst(response, "CREATED"));
         var altered = ParseInt(FindFirst(response, "ALTERED"));
+        var createdCount = created ?? 0;
+        var alteredCount = altered ?? 0;
 
         if ((errors ?? 0) > 0 || (exceptions ?? 0) > 0)
         {
@@ -130,7 +133,31 @@ public sealed class TallyPoster(
                 ResponseExcerpt: responseExcerpt);
         }
 
-        if ((created ?? 0) + (altered ?? 0) <= 0)
+        if (request.Operation == TallyPostOperation.Alter && createdCount > 0)
+        {
+            return new TallyPostResponse(
+                Outcome: TallyPostOutcome.Failed,
+                RemoteId: null,
+                ErrorCode: "TALLY_UNEXPECTED_CREATE_ON_ALTER",
+                ErrorMessage: "Tally created a voucher while processing an alter request.",
+                XmlShape: "voucher-import-v1",
+                RequestExcerpt: requestExcerpt,
+                ResponseExcerpt: responseExcerpt);
+        }
+
+        if (request.Operation == TallyPostOperation.Alter && alteredCount <= 0)
+        {
+            return new TallyPostResponse(
+                Outcome: TallyPostOutcome.Failed,
+                RemoteId: null,
+                ErrorCode: "TALLY_NO_EFFECT",
+                ErrorMessage: "Tally response reported no altered records for the voucher update.",
+                XmlShape: "voucher-import-v1",
+                RequestExcerpt: requestExcerpt,
+                ResponseExcerpt: responseExcerpt);
+        }
+
+        if (request.Operation == TallyPostOperation.Create && createdCount + alteredCount <= 0)
         {
             return new TallyPostResponse(
                 Outcome: TallyPostOutcome.Failed,
@@ -142,9 +169,15 @@ public sealed class TallyPoster(
                 ResponseExcerpt: responseExcerpt);
         }
 
-        var remoteId = FindFirst(response, "LASTVCHID")
-            ?? FindFirst(response, "LASTMID")
-            ?? request.IdempotencyKey;
+        var lastVoucherId = FindFirst(response, "LASTVCHID");
+        var lastMasterId = FindFirst(response, "LASTMID");
+        var tallyMasterId = NormalizePositiveInteger(lastVoucherId)
+            ?? (request.Operation == TallyPostOperation.Alter
+                ? NormalizePositiveInteger(request.TargetTagValue)
+                : null);
+        var remoteId = lastVoucherId
+            ?? lastMasterId
+            ?? (request.Operation == TallyPostOperation.Alter ? request.TargetTagValue : request.IdempotencyKey);
 
         return new TallyPostResponse(
             Outcome: TallyPostOutcome.Posted,
@@ -153,7 +186,8 @@ public sealed class TallyPoster(
             ErrorMessage: null,
             XmlShape: "voucher-import-v1",
             RequestExcerpt: requestExcerpt,
-            ResponseExcerpt: responseExcerpt);
+            ResponseExcerpt: responseExcerpt,
+            TallyMasterId: tallyMasterId);
     }
 
     private static string? FindFirst(XElement response, string localName)
@@ -166,6 +200,15 @@ public sealed class TallyPoster(
 
     private static int? ParseInt(string? value) =>
         int.TryParse(value, out var n) ? n : null;
+
+    private static string? NormalizePositiveInteger(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+        return long.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0
+            ? trimmed
+            : null;
+    }
 
     private static string Truncate(string value, int max) =>
         string.IsNullOrEmpty(value) || value.Length <= max ? value : value[..max];

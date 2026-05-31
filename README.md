@@ -11,7 +11,7 @@ Two processes:
 
 All Tally interaction is **synchronous and operator-initiated**:
 
-- Clicking **Push** on a bill → API builds voucher XML, POSTs it to Tally, and returns the posted-or-failed result in one HTTP round-trip. No queue, no background worker. The HTTP client has a short retry pipeline (2 attempts, ~200 ms jittered backoff) for transient network blips; the total timeout stays bounded by the cloud-settings `Connection.TimeoutSeconds`.
+- Clicking **Push** on a bill → API builds voucher XML, POSTs it to Tally, and returns the posted-or-failed result in one HTTP round-trip. First pushes create vouchers; edited-after-push bills alter the old Tally voucher by `MASTER ID`. No queue, no background worker. The HTTP client has a short retry pipeline (2 attempts, ~200 ms jittered backoff) for transient network blips; the total timeout stays bounded by the cloud-settings `Connection.TimeoutSeconds`.
 - Clicking **Refresh from Tally** in Settings → API fetches the master snapshot from Tally and writes it inline. No timer.
 
 PostgreSQL is the system of record for bills, revisions, numbering, audit events, master snapshots, leases, print assets, and cloud settings. Bills round-trip through EF Core migrations; `StuckPostingRecoveryHostedService` reconciles any bill stranded in `posting` after a crash on the next API boot.
