@@ -64,11 +64,38 @@ public sealed class TallyPosterTests
         Assert.Equal("TALLY_UNEXPECTED_CREATE_ON_ALTER", response.ErrorCode);
     }
 
+    [Fact]
+    public async Task PostAsync_SendsCompanyStateAndCountryFromSettings()
+    {
+        var (poster, client) = BuildPosterWithClient(
+            Response(created: 1, altered: 0, lastVoucherId: "101"),
+            companyState: " Uttar Pradesh ",
+            companyCountry: " India ");
+
+        await poster.PostAsync(Request());
+
+        var voucher = client.LastRequest!.Descendants("VOUCHER").Single();
+        Assert.Equal("Uttar Pradesh", voucher.Element("STATENAME")?.Value);
+        Assert.Equal("Uttar Pradesh", voucher.Element("PLACEOFSUPPLY")?.Value);
+        Assert.Equal("India", voucher.Element("COUNTRYNAME")?.Value);
+    }
+
     private static TallyPoster BuildPoster(XElement response) =>
-        new(
-            new FakeXmlClient(response),
-            new FakeCloudSettingsService(),
-            NullLogger<TallyPoster>.Instance);
+        BuildPosterWithClient(response).Poster;
+
+    private static (TallyPoster Poster, FakeXmlClient Client) BuildPosterWithClient(
+        XElement response,
+        string? companyState = null,
+        string? companyCountry = null)
+    {
+        var client = new FakeXmlClient(response);
+        return (
+            new TallyPoster(
+                client,
+                new FakeCloudSettingsService(companyState, companyCountry),
+                NullLogger<TallyPoster>.Instance),
+            client);
+    }
 
     private static XElement Response(int created, int altered, string? lastVoucherId = null) =>
         new("ENVELOPE",
@@ -117,11 +144,16 @@ public sealed class TallyPosterTests
     {
         public string EndpointDescription => "fake";
 
-        public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
-            Task.FromResult(response);
+        public XElement? LastRequest { get; private set; }
+
+        public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            return Task.FromResult(response);
+        }
     }
 
-    private sealed class FakeCloudSettingsService : ICloudSettingsService
+    private sealed class FakeCloudSettingsService(string? companyState = null, string? companyCountry = null) : ICloudSettingsService
     {
         public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new EffectiveSettingsResponse(
@@ -130,7 +162,7 @@ public sealed class TallyPosterTests
                 Settings: new EffectiveCloudSettingsDto(
                     new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Acme Jewellers"),
                     new NumberingSettingsDto("DEV-", "", 4),
-                    new PrintSettingsDto("Acme", null, null, null, null, null, null, null, null, null, null, true, false, false, 11, 9),
+                    new PrintSettingsDto("Acme", null, null, null, companyState, companyCountry, null, null, null, null, null, true, false, false, 11, 9),
                     new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales"),
                     new MasterDataSettingsDto("[]", "[]")),
                 CloudOwnedCategories: [],

@@ -20,11 +20,12 @@ public sealed class TallyPoster(
         var settings = await cloudSettings.GetEffectiveSettingsAsync(cancellationToken);
         var ledgers = settings.Settings.Ledgers;
         var company = settings.Settings.Connection.ActiveCompanyName;
+        var print = settings.Settings.Print;
 
         XElement xml;
         try
         {
-            xml = TallyXmlVoucherBuilder.Build(request, ledgers, company);
+            xml = TallyXmlVoucherBuilder.Build(request, ledgers, company, print.CompanyState, print.CompanyCountry);
         }
         catch (VoucherBuildException ex)
         {

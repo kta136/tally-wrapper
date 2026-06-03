@@ -11,7 +11,9 @@ public static class TallyXmlVoucherBuilder
     public static XElement Build(
         TallyPostRequest request,
         LedgerMappingsDto ledgers,
-        string companyName)
+        string companyName,
+        string? companyState = null,
+        string? companyCountry = null)
     {
         var bill = request.Payload;
 
@@ -125,6 +127,17 @@ public static class TallyXmlVoucherBuilder
             voucherElement.Add(new XElement("VOUCHERNUMBER", request.InvoiceNumber));
         }
         voucherElement.Add(new XElement("PARTYLEDGERNAME", partyLedger));
+        var normalizedCompanyState = NormalizeOptional(companyState);
+        if (normalizedCompanyState is not null)
+        {
+            voucherElement.Add(new XElement("STATENAME", normalizedCompanyState));
+            voucherElement.Add(new XElement("PLACEOFSUPPLY", normalizedCompanyState));
+        }
+        var normalizedCompanyCountry = NormalizeOptional(companyCountry);
+        if (normalizedCompanyCountry is not null)
+        {
+            voucherElement.Add(new XElement("COUNTRYNAME", normalizedCompanyCountry));
+        }
         voucherElement.Add(new XElement("ISINVOICE", "Yes"));
         // V1 parity: NARRATION carries the free-text customer label and operator notes,
         // joined by " | ". The party-ledger element above already identifies the Tally
@@ -242,6 +255,9 @@ public static class TallyXmlVoucherBuilder
         string.IsNullOrWhiteSpace(unit)
             ? rate.ToString("0.##", CultureInfo.InvariantCulture)
             : $"{rate.ToString("0.##", CultureInfo.InvariantCulture)}/{unit.Trim()}";
+
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed class VoucherBuildException(string errorCode, string message, bool terminal)

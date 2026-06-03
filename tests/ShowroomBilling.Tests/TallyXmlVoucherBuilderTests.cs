@@ -36,6 +36,38 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Equal("101", voucher.Attribute("TAGVALUE")?.Value);
     }
 
+    [Fact]
+    public void Build_EmitsCompanyStatePlaceOfSupplyAndCountryWhenConfigured()
+    {
+        var xml = TallyXmlVoucherBuilder.Build(
+            Request(),
+            Ledgers(),
+            "Acme Jewellers",
+            companyState: " Uttar Pradesh ",
+            companyCountry: " India ");
+
+        var voucher = xml.Descendants("VOUCHER").Single();
+        Assert.Equal("Uttar Pradesh", voucher.Element("STATENAME")?.Value);
+        Assert.Equal("Uttar Pradesh", voucher.Element("PLACEOFSUPPLY")?.Value);
+        Assert.Equal("India", voucher.Element("COUNTRYNAME")?.Value);
+    }
+
+    [Fact]
+    public void Build_OmitsCompanyStatePlaceOfSupplyAndCountryWhenBlank()
+    {
+        var xml = TallyXmlVoucherBuilder.Build(
+            Request(),
+            Ledgers(),
+            "Acme Jewellers",
+            companyState: " ",
+            companyCountry: "");
+
+        var voucher = xml.Descendants("VOUCHER").Single();
+        Assert.Null(voucher.Element("STATENAME"));
+        Assert.Null(voucher.Element("PLACEOFSUPPLY"));
+        Assert.Null(voucher.Element("COUNTRYNAME"));
+    }
+
     private static TallyPostRequest Request(
         TallyPostOperation operation = TallyPostOperation.Create,
         string? targetTagName = null,
