@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Contracts.Admin;
@@ -8,7 +10,9 @@ namespace ShowroomBilling.Api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-public sealed class AdminController(IAdminAuthService adminService) : ControllerBase
+public sealed class AdminController(
+    IAdminAuthService adminService,
+    IOptions<DeviceAuthOptions> deviceAuthOptions) : ControllerBase
 {
     [HttpGet("passcode")]
     public async Task<ActionResult<AdminPasscodeStatusResponse>> GetPasscodeStatus(CancellationToken cancellationToken)
@@ -26,6 +30,14 @@ public sealed class AdminController(IAdminAuthService adminService) : Controller
         {
             return ControllerProblemDetails.BadRequest("Request body is required.");
         }
+
+        var status = await adminService.GetPasscodeStatusAsync(cancellationToken);
+        if (!status.IsConfigured
+            && ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
+        {
+            return denied;
+        }
+
         await adminService.SetPasscodeAsync(request, cancellationToken);
         return NoContent();
     }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +13,7 @@ using ShowroomBilling.Api.Controllers;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -48,6 +50,22 @@ public sealed class DatabaseConfigurationTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void Store_UsesAppDataOverrideAsExactRoot()
+    {
+        WithIsolatedConfigurationStore(() =>
+        {
+            Directory.CreateDirectory(DatabaseConfigurationStore.DirectoryPath);
+            var tokenPath = Path.Combine(DatabaseConfigurationStore.DirectoryPath, MaintenanceTokenConstants.FileName);
+            File.WriteAllText(tokenPath, "maintenance-secret");
+
+            Assert.Equal(
+                Environment.GetEnvironmentVariable("SHOWROOM_BILLING_APPDATA"),
+                DatabaseConfigurationStore.DirectoryPath);
+            Assert.True(new MaintenanceTokenStore().Validate("maintenance-secret"));
+        });
     }
 
     [Fact]
@@ -231,11 +249,57 @@ public sealed class DatabaseConfigurationTests
         });
     }
 
+    [Fact]
+    public async Task ServerMode_DatabaseTest_RejectsNonLoopbackRequest()
+    {
+        var controller = BuildController(
+            configured: string.Empty,
+            applied: string.Empty,
+            deviceAuthOptions: new DeviceAuthOptions { Mode = "TrustedLan", TrustedNetworks = ["192.168.0.0/16"] },
+            remoteAddress: System.Net.IPAddress.Parse("192.168.1.25"));
+
+        var result = await controller.TestDatabaseConfiguration(
+            new TestDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+            CancellationToken.None);
+
+        var denied = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
+    public async Task MaintenanceDatabaseConfiguration_UsesTokenWithoutAdminAuth()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            Directory.CreateDirectory(DatabaseConfigurationStore.DirectoryPath);
+            await File.WriteAllTextAsync(
+                Path.Combine(DatabaseConfigurationStore.DirectoryPath, MaintenanceTokenConstants.FileName),
+                "maintenance-secret");
+            var controller = BuildController(
+                configured: string.Empty,
+                applied: string.Empty,
+                environmentName: "Production",
+                verifier: new FakeDatabaseConnectionVerifier(
+                    DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD")));
+            controller.HttpContext.Request.Headers[MaintenanceTokenConstants.HeaderName] = "maintenance-secret";
+
+            var result = await controller.UpdateDatabaseConfigurationForMaintenance(
+                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                CancellationToken.None);
+
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
+            Assert.True(response.IsLocalOverridePresent);
+        });
+    }
+
     private static RuntimeController BuildController(
         string configured,
         string applied,
         string environmentName = "Development",
-        IDatabaseConnectionVerifier? verifier = null)
+        IDatabaseConnectionVerifier? verifier = null,
+        DeviceAuthOptions? deviceAuthOptions = null,
+        System.Net.IPAddress? remoteAddress = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -249,7 +313,7 @@ public sealed class DatabaseConfigurationTests
         services.AddHealthChecks();
         using var provider = services.BuildServiceProvider();
 
-        return new RuntimeController(
+        var controller = new RuntimeController(
             configuration,
             new FakeCloudSettingsService(),
             new ShowroomBillingDbContext(new DbContextOptionsBuilder<ShowroomBillingDbContext>()
@@ -260,7 +324,15 @@ public sealed class DatabaseConfigurationTests
                 DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: DEV.", "DEV")),
             new AppliedDatabaseConfiguration(applied),
             new FakeHostEnvironment(environmentName),
-            Options.Create(new ApiRuntimeOptions()));
+            Options.Create(new ApiRuntimeOptions()),
+            Options.Create(deviceAuthOptions ?? new DeviceAuthOptions()),
+            new MaintenanceTokenStore());
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        controller.HttpContext.Connection.RemoteIpAddress = remoteAddress ?? System.Net.IPAddress.Loopback;
+        return controller;
     }
 
     private static void WithIsolatedConfigurationStore(Action action)

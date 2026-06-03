@@ -19,11 +19,18 @@ public sealed class ConfigFilesTests
     public void Desktop_Api_Child_Process_Is_Pinned_To_Production_Port_And_Environment()
     {
         using var document = ReadJson("src/ShowroomBilling.Desktop/appsettings.json");
-        var api = document.RootElement
+        var root = document.RootElement;
+        var api = root
             .GetProperty("ChildProcesses")
             .GetProperty("Api");
 
         Assert.Equal("--urls http://127.0.0.1:5107", api.GetProperty("Arguments").GetString());
+        Assert.Equal(
+            "LocalEmbedded",
+            root.GetProperty("DesktopBootstrap").GetProperty("ConnectionMode").GetString());
+        Assert.Equal(
+            "http://localhost:5107",
+            root.GetProperty("DesktopBootstrap").GetProperty("ServerApiBaseUrl").GetString());
         Assert.Equal(
             "Production",
             api.GetProperty("EnvironmentVariables").GetProperty("ASPNETCORE_ENVIRONMENT").GetString());
@@ -47,6 +54,12 @@ public sealed class ConfigFilesTests
         Assert.Equal(
             "http://localhost:5108",
             root.GetProperty("DesktopBootstrap").GetProperty("ApiBaseUrl").GetString());
+        Assert.Equal(
+            "LocalEmbedded",
+            root.GetProperty("DesktopBootstrap").GetProperty("ConnectionMode").GetString());
+        Assert.Equal(
+            "http://localhost:5108",
+            root.GetProperty("DesktopBootstrap").GetProperty("ServerApiBaseUrl").GetString());
         Assert.Equal("--urls http://127.0.0.1:5108", api.GetProperty("Arguments").GetString());
         Assert.Equal(
             "Development",

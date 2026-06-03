@@ -1,6 +1,8 @@
+using System.IO;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Runtime;
+using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Services.ProcessSupervision;
 using ShowroomBilling.Desktop.ViewModels.Settings;
@@ -9,6 +11,116 @@ namespace ShowroomBilling.Desktop.Tests;
 
 public sealed class DatabaseSettingsViewModelTests
 {
+    [Fact]
+    public async Task SaveApiConnectionMode_WritesBootstrapOverride_AndRestarts()
+    {
+        using var bootstrapFile = new BootstrapOverrideFileScope();
+        var restartCount = 0;
+        var vm = new SettingsViewModel(
+            settingsApi: null,
+            mastersApi: null,
+            printAssetApi: null,
+            printDispatcher: null,
+            printPreferences: null,
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.LocalEmbedded,
+                ApiBaseUrl = "http://localhost:5107"
+            },
+            restartApplication: () => restartCount++);
+
+        vm.ApiConnectionMode = DesktopConnectionModes.Server;
+        vm.ServerApiBaseUrl = "http://192.168.0.10:5107/api/health";
+
+        await vm.SaveApiConnectionModeCommand.ExecuteAsync(null);
+
+        var pairs = DesktopBootstrapLocalOverrideStore.LoadConfigurationPairs();
+        Assert.Equal(DesktopConnectionModes.Server, pairs["DesktopBootstrap:ConnectionMode"]);
+        Assert.Equal("http://192.168.0.10:5107", pairs["DesktopBootstrap:ServerApiBaseUrl"]);
+        Assert.Equal(1, restartCount);
+        Assert.Contains("Saved Server", vm.ApiConnectionStatus);
+    }
+
+    [Fact]
+    public async Task SaveApiConnectionMode_CanCancelRestart_WhenSettingsAreDirty()
+    {
+        using var bootstrapFile = new BootstrapOverrideFileScope();
+        var restartCount = 0;
+        var vm = new SettingsViewModel(
+            settingsApi: null,
+            mastersApi: null,
+            printAssetApi: null,
+            printDispatcher: null,
+            printPreferences: null,
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.LocalEmbedded,
+                ApiBaseUrl = "http://localhost:5107"
+            },
+            restartApplication: () => restartCount++,
+            confirmConnectionModeRestart: () => false);
+
+        vm.IsDirty = true;
+        vm.ApiConnectionMode = DesktopConnectionModes.Server;
+        vm.ServerApiBaseUrl = "http://192.168.1.13:5107";
+
+        await vm.SaveApiConnectionModeCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, restartCount);
+        Assert.Contains("cancelled", vm.ApiConnectionStatus);
+        Assert.Empty(DesktopBootstrapLocalOverrideStore.LoadConfigurationPairs());
+    }
+
+
+    [Fact]
+    public void ServerMode_DisablesLocalEmbeddedDatabaseOverrideCommands()
+    {
+        var vm = new SettingsViewModel(
+            settingsApi: null,
+            mastersApi: null,
+            printAssetApi: null,
+            printDispatcher: null,
+            printPreferences: null,
+            runtimeApi: new FakeRuntimeApiClient(),
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.Server,
+                ServerApiBaseUrl = "http://192.168.0.10:5107"
+            });
+
+        vm.DatabaseConnectionString = "Host=db;Database=showroom;Username=user;Password=secret";
+
+        Assert.False(vm.IsDatabaseOverrideEditorEnabled);
+        Assert.False(vm.TestDatabaseConnectionCommand.CanExecute(null));
+        Assert.False(vm.SaveDatabaseConfigCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SwitchingBackToServer_RestoresLastNonLocalhostServerUrl()
+    {
+        var vm = new SettingsViewModel(
+            settingsApi: null,
+            mastersApi: null,
+            printAssetApi: null,
+            printDispatcher: null,
+            printPreferences: null,
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.LocalEmbedded,
+                ApiBaseUrl = "http://localhost:5107",
+                ServerApiBaseUrl = "http://192.168.1.13:5107"
+            });
+
+        vm.ApiConnectionMode = DesktopConnectionModes.Server;
+        Assert.Equal("http://192.168.1.13:5107", vm.ServerApiBaseUrl);
+
+        vm.ApiConnectionMode = DesktopConnectionModes.LocalEmbedded;
+        Assert.Contains("http://localhost:5107", vm.ApiConnectionStatus);
+
+        vm.ApiConnectionMode = DesktopConnectionModes.Server;
+        Assert.Equal("http://192.168.1.13:5107", vm.ServerApiBaseUrl);
+    }
+
     [Fact]
     public async Task SaveDatabaseConfig_RequiresAdminUnlock_AndSendsToken()
     {
@@ -202,4 +314,36 @@ public sealed class DatabaseSettingsViewModelTests
             false,
             "Windows DPAPI CurrentUser",
             canBootstrap);
+
+    private sealed class BootstrapOverrideFileScope : IDisposable
+    {
+        private readonly string _path = DesktopBootstrapLocalOverrideStore.ConfigPath;
+        private readonly bool _existed;
+        private readonly string? _backup;
+
+        public BootstrapOverrideFileScope()
+        {
+            if (File.Exists(_path))
+            {
+                _existed = true;
+                _backup = File.ReadAllText(_path);
+                File.Delete(_path);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_existed)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                File.WriteAllText(_path, _backup);
+                return;
+            }
+
+            if (File.Exists(_path))
+            {
+                File.Delete(_path);
+            }
+        }
+    }
 }

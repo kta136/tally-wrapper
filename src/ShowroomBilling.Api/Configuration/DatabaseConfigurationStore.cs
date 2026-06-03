@@ -16,10 +16,9 @@ public static class DatabaseConfigurationStore
     };
 
     public static string DirectoryPath =>
-        Path.Combine(
-            Environment.GetEnvironmentVariable(AppDataOverrideEnvironmentVariable)
-                ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ShowroomBilling");
+        Environment.GetEnvironmentVariable(AppDataOverrideEnvironmentVariable) is { Length: > 0 } appDataOverride
+            ? appDataOverride
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShowroomBilling");
 
     public static string ConfigPath => ConfigPathForEnvironment(GetCurrentEnvironmentName());
 

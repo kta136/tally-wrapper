@@ -124,6 +124,16 @@
                             Padding="14,10">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button Style="{StaticResource BtnBase}"
+                                    Content="Switch to Local Fallback"
+                                    Command="{Binding SwitchToLocalFallbackCommand}"
+                                    Visibility="{Binding IsSwitchToLocalFallbackVisible, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,0,8,0" />
+                            <Button Style="{StaticResource BtnBase}"
+                                    Content="Switch Back to Server"
+                                    Command="{Binding SwitchToServerModeCommand}"
+                                    Visibility="{Binding IsSwitchToServerVisible, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,0,8,0" />
+                            <Button Style="{StaticResource BtnBase}"
                                     Content="Open Database Settings"
                                     Command="{Binding OpenDatabaseSettingsCommand}"
                                     Margin="0,0,8,0" />

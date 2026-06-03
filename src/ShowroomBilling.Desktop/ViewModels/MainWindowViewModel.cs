@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -136,6 +138,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         {
             OpenDatabaseSettings();
         });
+        SwitchToLocalFallbackCommand = new AsyncRelayCommand(SwitchToLocalFallbackAsync);
+        SwitchToServerModeCommand = new AsyncRelayCommand(SwitchToServerModeAsync);
         RefreshHealthCommand = new AsyncRelayCommand(ct => RefreshHealthAsync(forceTallyCompany: true, ct));
         RefreshAllMastersCommand = new AsyncRelayCommand(RefreshAllMastersAsync);
         CloseDialogCommand = new RelayCommand(() =>
@@ -328,6 +332,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IRelayCommand OpenSyntheticBatchCommand { get; }
     public IRelayCommand OpenHealthCommand { get; }
     public IRelayCommand OpenDatabaseSettingsCommand { get; }
+    public IAsyncRelayCommand SwitchToLocalFallbackCommand { get; }
+    public IAsyncRelayCommand SwitchToServerModeCommand { get; }
     public IAsyncRelayCommand RefreshHealthCommand { get; }
     public IAsyncRelayCommand RefreshAllMastersCommand { get; }
     public IRelayCommand CloseDialogCommand { get; }
@@ -375,6 +381,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public bool IsBillsVisible => ActiveTab == NavTab.Bills && SystemState != SystemState.Limited;
     public bool IsSettingsVisible => ActiveTab == NavTab.Settings;
     public bool IsLimitedVisible => SystemState == SystemState.Limited && ActiveTab != NavTab.Settings;
+    public bool IsServerMode => _bootstrapOptions.IsServerMode;
+    public bool IsSwitchToLocalFallbackVisible => IsLimitedVisible && IsServerMode;
+    public bool IsSwitchToServerVisible => IsLimitedVisible && !IsServerMode;
 
     public bool IsDegradedBannerVisible => SystemState == SystemState.Degraded;
     public bool IsLimitedBannerVisible => SystemState == SystemState.Limited;
@@ -410,6 +419,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
         OnPropertyChanged(nameof(IsLimitedVisible));
+        OnPropertyChanged(nameof(IsSwitchToLocalFallbackVisible));
+        OnPropertyChanged(nameof(IsSwitchToServerVisible));
         OnPropertyChanged(nameof(IsDegradedBannerVisible));
         OnPropertyChanged(nameof(IsLimitedBannerVisible));
     }
@@ -525,6 +536,51 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Settings.SelectedSection = SettingsSectionKey.Database;
         ActiveTab = NavTab.Settings;
         _ = Settings.LoadDatabaseConfigAsync();
+    }
+
+    private async Task SwitchToLocalFallbackAsync(CancellationToken cancellationToken)
+    {
+        var confirm = MessageBox.Show(
+            "Switch this workstation to local embedded API mode and restart Billing? This fallback requires local database configuration on this PC, and any unsaved in-memory invoice work will be lost.",
+            "Switch to local fallback",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning,
+            MessageBoxResult.Cancel);
+        if (confirm != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        await DesktopBootstrapLocalOverrideStore.SaveAsync(
+            DesktopConnectionModes.LocalEmbedded,
+            _bootstrapOptions.ServerApiBaseUrl,
+            cancellationToken);
+        RestartCurrentProcess();
+    }
+
+    private async Task SwitchToServerModeAsync(CancellationToken cancellationToken)
+    {
+        await DesktopBootstrapLocalOverrideStore.SaveAsync(
+            DesktopConnectionModes.Server,
+            _bootstrapOptions.ServerApiBaseUrl,
+            cancellationToken);
+        RestartCurrentProcess();
+    }
+
+    private static void RestartCurrentProcess()
+    {
+        var executable = Environment.ProcessPath
+            ?? Process.GetCurrentProcess().MainModule?.FileName;
+        if (!string.IsNullOrWhiteSpace(executable))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = executable,
+                UseShellExecute = true
+            });
+        }
+
+        System.Windows.Application.Current.Shutdown();
     }
 
     private void StartHealthPolling()

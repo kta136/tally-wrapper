@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ShowroomBilling.Desktop.Configuration;
+using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.Services.ProcessSupervision;
 
@@ -20,14 +21,19 @@ public sealed class ChildProcessSupervisor : IChildProcessSupervisor, IDisposabl
 {
     private readonly ILogger<ChildProcessSupervisor> _logger;
     private readonly ChildProcessOptions _options;
+    private readonly IApiEndpointResolver _endpointResolver;
     private readonly JobObject? _job;
     private readonly List<Process> _spawned = new();
     private bool _disposed;
 
-    public ChildProcessSupervisor(IOptions<ChildProcessOptions> options, ILogger<ChildProcessSupervisor> logger)
+    public ChildProcessSupervisor(
+        IOptions<ChildProcessOptions> options,
+        IApiEndpointResolver endpointResolver,
+        ILogger<ChildProcessSupervisor> logger)
     {
         _logger = logger;
         _options = options.Value;
+        _endpointResolver = endpointResolver;
 
         if (!_options.Enabled)
         {
@@ -46,6 +52,12 @@ public sealed class ChildProcessSupervisor : IChildProcessSupervisor, IDisposabl
 
     public void Start()
     {
+        if (_endpointResolver.IsServerMode)
+        {
+            _logger.LogInformation("Desktop is in server API mode; embedded API child process will not be launched.");
+            return;
+        }
+
         if (_options.Enabled is false || _job is null) return;
 
         TryLaunch("API", _options.Api);
@@ -53,6 +65,7 @@ public sealed class ChildProcessSupervisor : IChildProcessSupervisor, IDisposabl
 
     public bool CanRestartApi =>
         _options.Enabled
+        && !_endpointResolver.IsServerMode
         && _options.Api.Enabled
         && _job is not null
         && !string.IsNullOrWhiteSpace(_options.Api.ExecutablePath);

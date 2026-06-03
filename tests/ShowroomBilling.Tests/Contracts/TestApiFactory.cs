@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -7,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ShowroomBilling.Api.Options;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -31,6 +34,18 @@ namespace ShowroomBilling.Tests.Contracts;
 /// </summary>
 public sealed class TestApiFactory : WebApplicationFactory<Program>
 {
+    private readonly IReadOnlyDictionary<string, string?> _extraConfiguration;
+
+    public TestApiFactory()
+        : this(new Dictionary<string, string?>())
+    {
+    }
+
+    internal TestApiFactory(IReadOnlyDictionary<string, string?> extraConfiguration)
+    {
+        _extraConfiguration = extraConfiguration;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -42,6 +57,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
                 ["Database:AutoMigrateOnStartup"] = "false",
                 ["ConnectionStrings:Postgres"] = "Host=test-not-used;Database=test;Username=test;Password=test"
             });
+            config.AddInMemoryCollection(_extraConfiguration);
         });
 
         builder.ConfigureTestServices(services =>
@@ -52,11 +68,48 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<ITallyMasterRefresher>();
             services.AddScoped<ITallyMasterRefresher, StubTallyMasterRefresher>();
+            services.AddSingleton<IStartupFilter, LoopbackRemoteAddressStartupFilter>();
+
+            services.PostConfigure<DeviceAuthOptions>(options =>
+            {
+                if (_extraConfiguration.TryGetValue("DeviceAuth:Mode", out var mode)
+                    && !string.IsNullOrWhiteSpace(mode))
+                {
+                    options.Mode = mode;
+                }
+
+                var trustedNetworks = _extraConfiguration
+                    .Where(pair => pair.Key.StartsWith("DeviceAuth:TrustedNetworks:", StringComparison.OrdinalIgnoreCase))
+                    .Select(pair => pair.Value)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .ToArray();
+
+                if (trustedNetworks.Length > 0)
+                {
+                    options.TrustedNetworks = trustedNetworks;
+                }
+            });
         });
     }
 
     public string GetDeviceToken() =>
         Services.GetRequiredService<ShowroomBilling.Api.Security.DeviceTokenStore>().GetOrCreateToken();
+}
+
+internal sealed class LoopbackRemoteAddressStartupFilter : IStartupFilter
+{
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) =>
+        app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                context.Connection.RemoteIpAddress = IPAddress.Loopback;
+                return nextMiddleware();
+            });
+
+            next(app);
+        };
 }
 
 internal sealed class StubTallyMasterRefresher : ITallyMasterRefresher

@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ShowroomBilling.Api.Options;
 using ShowroomBilling.Contracts.Device;
 
 namespace ShowroomBilling.Api.Security;
@@ -19,13 +20,21 @@ public sealed class DeviceAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    DeviceTokenStore tokenStore)
+    DeviceTokenStore tokenStore,
+    IOptionsMonitor<DeviceAuthOptions> deviceAuthOptions)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "DeviceToken";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        var configured = deviceAuthOptions.CurrentValue;
+        if (configured.IsTrustedLan
+            && TrustedNetworkMatcher.IsTrusted(Request.HttpContext.Connection.RemoteIpAddress, configured))
+        {
+            return Task.FromResult(AuthenticateResult.Success(BuildTicket()));
+        }
+
         if (!Request.Headers.TryGetValue(DeviceTokenConstants.HeaderName, out var headerValues))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
@@ -37,12 +46,16 @@ public sealed class DeviceAuthenticationHandler(
             return Task.FromResult(AuthenticateResult.Fail("Device token missing or invalid."));
         }
 
+        return Task.FromResult(AuthenticateResult.Success(BuildTicket()));
+    }
+
+    private static AuthenticationTicket BuildTicket()
+    {
         var identity = new ClaimsIdentity(
             new[] { new Claim(ClaimTypes.Role, DevicePolicy.PolicyName) },
             SchemeName);
         var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, SchemeName);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return new AuthenticationTicket(principal, SchemeName);
     }
 }
 

@@ -4,10 +4,13 @@ This repository is the V2 rewrite of the showroom billing system documented in [
 
 ## Architecture
 
-Two processes:
+Supported runtime shapes:
 
 - **`ShowroomBilling.Desktop`** — WPF counter app. Edits bills, prints invoices, drives admin workflows. No business state stored locally.
 - **`ShowroomBilling.Api`** — ASP.NET Core modular monolith. Owns bills, numbering, audit trail, and the Tally integration. Runs on the same Windows machine as TallyPrime and dials its localhost XML endpoint directly.
+- **`ShowroomBilling.ServerTray`** — the server installer/tray companion. The published server EXE embeds the API, installs/repairs the API Windows Service, registers the tray at login, shows service/API/DB/client status, and configures the server DB through localhost maintenance endpoints.
+
+The original desktop-owned API remains available (`LocalEmbedded` mode). For multi-counter LAN use, install the API as a Windows Service on the Tally server and point desktops at it with `DesktopBootstrap:ConnectionMode=Server` plus `ServerApiBaseUrl=http://<tally-server>:5107`.
 
 All Tally interaction is **synchronous and operator-initiated**:
 
@@ -18,7 +21,7 @@ PostgreSQL is the system of record for bills, revisions, numbering, audit events
 
 ## Database Configuration
 
-The API reads `ConnectionStrings:Postgres` from configuration at startup. Operators can update the local machine override from **Desktop → Settings → Database**. The override is stored at `%APPDATA%\ShowroomBilling\database.{Environment}.local.json`; after saving, restart the API or Desktop app so the EF Core connection pool uses the new connection string.
+The API reads `ConnectionStrings:Postgres` from configuration at startup. Operators can update the local machine override from **Desktop → Settings → Database** in embedded mode, or from the server tray on the Tally server in service mode. Embedded overrides live under `%APPDATA%\ShowroomBilling`; server-service overrides are installed under `C:\ProgramData\ShowroomBilling` via `SHOWROOM_BILLING_APPDATA`.
 
 VS Code/debug launches use the `Development` API environment on `http://localhost:5108`. Published EXE launches use the `Production` API environment on `http://localhost:5107`. The database itself owns the final marker in `public.database_identity`; set it to `DEV` on the dev DB and `PROD` on the prod DB. The desktop status bar shows that DB-owned value (`DB DEV`, `DB PROD`, or `DB UNSET`).
 
@@ -33,7 +36,9 @@ Both the Desktop exe and the API exe emit under `src/*/bin/Debug/net10.0{,-windo
 
 ## Deployment
 
-Single Windows machine per showroom, running TallyPrime + API + Desktop. Spawning is handled by `ChildProcessSupervisor` on Desktop startup under a Windows Job Object with `KillOnJobClose`.
+Pilot/single-machine mode runs TallyPrime + Desktop + embedded API on one Windows machine; spawning is handled by `ChildProcessSupervisor` under a Windows Job Object with `KillOnJobClose`.
+
+LAN/server mode uses one published server EXE: `publish/server/ShowroomBilling.Server.exe`. Run it on the Tally server; it extracts the API under `C:\ProgramData\ShowroomBilling\bin`, installs/repairs the `ShowroomBilling.Api` Windows Service, registers the tray app for login, and starts the service. Workstation fallback to `LocalEmbedded` is per-PC and requires that PC to have its own DB override and Tally host settings that can reach the Tally server.
 
 ## Docs
 

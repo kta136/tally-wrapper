@@ -69,6 +69,7 @@ public partial class App : System.Windows.Application
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonStream(baseSettingsStream)
             .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+            .AddInMemoryCollection(DesktopBootstrapLocalOverrideStore.LoadConfigurationPairs())
             .AddEnvironmentVariables(prefix: "SHOWROOM_DESKTOP_");
 
         if (embeddedApi is not null)
@@ -86,6 +87,8 @@ public partial class App : System.Windows.Application
         builder.Services.Configure<DesktopBootstrapOptions>(builder.Configuration.GetSection(DesktopBootstrapOptions.SectionName));
         builder.Services.Configure<DesktopLocalPreferencesOptions>(builder.Configuration.GetSection(DesktopLocalPreferencesOptions.SectionName));
         builder.Services.Configure<ChildProcessOptions>(builder.Configuration.GetSection(ChildProcessOptions.SectionName));
+        builder.Services.AddSingleton<IApiEndpointResolver, ApiEndpointResolver>();
+        builder.Services.AddSingleton<DesktopDeviceIdentityStore>();
         builder.Services.AddSingleton<ChildProcessSupervisor>();
         builder.Services.AddSingleton<IChildProcessSupervisor>(sp => sp.GetRequiredService<ChildProcessSupervisor>());
         builder.Services.AddSingleton<ISetupWizardCompletionStore, SetupWizardCompletionStore>();
@@ -94,59 +97,67 @@ public partial class App : System.Windows.Application
         builder.Services.AddTransient<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IRuntimeApiClient, RuntimeApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<ISettingsApiClient, SettingsApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IBillsApiClient, BillsApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<INumberingApiClient, NumberingApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IMastersApiClient, MastersApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IHealthApiClient, HealthApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
             client.Timeout = TimeSpan.FromSeconds(5);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IAdminApiClient, AdminApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IDraftLeaseApiClient, DraftLeaseApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
         builder.Services.AddHttpClient<IPrintAssetApiClient, PrintAssetApiClient>((services, client) =>
         {
-            var options = services.GetRequiredService<IOptions<DesktopBootstrapOptions>>().Value;
-            client.BaseAddress = new Uri(options.ApiBaseUrl);
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
         }).AddHttpMessageHandler<CorrelationIdHandler>()
           .AddHttpMessageHandler<DeviceTokenHandler>();
+        builder.Services.AddHttpClient<IClientPresenceApiClient, ClientPresenceApiClient>((services, client) =>
+        {
+            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+            client.BaseAddress = new Uri(endpoint.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(5);
+        }).AddHttpMessageHandler<CorrelationIdHandler>()
+          .AddHttpMessageHandler<DeviceTokenHandler>();
+        builder.Services.AddHostedService<ClientPresenceHeartbeatService>();
         builder.Services.AddSingleton<AdminTokenStore>();
         // Set by MainWindow.OnLoaded after the API child is reachable; awaited
         // by InvoiceViewModel.RefreshNextNumberAsync(waitForApi: true) so the
@@ -179,7 +190,8 @@ public partial class App : System.Windows.Application
             sp.GetService<IRuntimeApiClient>(),
             sp.GetService<IHealthApiClient>(),
             sp.GetService<AdminTokenStore>(),
-            sp.GetService<IChildProcessSupervisor>()));
+            sp.GetService<IChildProcessSupervisor>(),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DesktopBootstrapOptions>>().Value));
         builder.Services.AddSingleton<AdminUnlockViewModel>();
         builder.Services.AddSingleton(sp => new ViewModels.SyntheticBatch.SyntheticBatchViewModel(
             sp.GetService<IBillsApiClient>(),
@@ -198,9 +210,8 @@ public partial class App : System.Windows.Application
         var hostBuildMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
 
-        // Desktop registers no IHostedService instances, so StartAsync is
-        // effectively a no-op — but we still call it for parity with the
-        // Generic Host contract (loggers register here, etc.).
+        // Starts lightweight host services such as the non-blocking client
+        // presence heartbeat.
         await _host.StartAsync();
         var hostStartMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
@@ -242,6 +253,12 @@ public partial class App : System.Windows.Application
 
             try
             {
+                var endpoint = services.GetRequiredService<IApiEndpointResolver>();
+                if (endpoint.IsServerMode)
+                {
+                    return new ApiChildStartupTiming(deviceTokenMs, spawnTimer.ElapsedMilliseconds, Succeeded: true);
+                }
+
                 services.GetRequiredService<DeviceTokenProvider>().GetOrCreateToken();
                 deviceTokenMs = spawnTimer.ElapsedMilliseconds;
                 spawnTimer.Restart();

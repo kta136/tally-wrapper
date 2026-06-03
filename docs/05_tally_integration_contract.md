@@ -8,6 +8,7 @@ Direction already chosen:
 
 - Windows-first WPF desktop
 - ASP.NET Core modular monolith backend (runs on the same machine as TallyPrime)
+- backend can run either as the desktop-owned embedded API or as a Windows Service on the Tally server for LAN workstations
 - PostgreSQL system of record
 - no separate bridge process, no job queue, no polling
 - no local durable business storage on the desktop
@@ -33,6 +34,8 @@ The desktop does **not**:
 - own Tally posting truth
 - own any background notification or retry mechanism
 
+In `Server` connection mode, the desktop calls `http://<tally-server>:5107` and does not start a local API child process. Switching back to `LocalEmbedded` is a per-workstation fallback and requires that workstation to have its own DB override and Tally host settings that point at the Tally server over the LAN.
+
 ### 1.2 Cloud API
 
 The API does everything else:
@@ -55,6 +58,8 @@ TallyPrime remains:
 - the LAN-local accounting endpoint
 - the source for company, ledger, stock item, and voucher type lists
 - the consumer of canonical sales voucher XML
+
+The server tray is a maintenance/status companion for the API Windows Service. It may show API/DB/client status and control the Windows Service, but it must not poll Tally. Tally checks still happen only through operator-triggered Push or Refresh flows.
 
 ---
 

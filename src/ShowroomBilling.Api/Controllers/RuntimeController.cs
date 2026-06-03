@@ -8,6 +8,7 @@ using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Infrastructure.Persistence;
 
@@ -23,7 +24,9 @@ public sealed class RuntimeController(
     IDatabaseConnectionVerifier databaseConnectionVerifier,
     AppliedDatabaseConfiguration appliedDatabaseConfiguration,
     IHostEnvironment hostEnvironment,
-    IOptions<ApiRuntimeOptions> runtimeOptions) : ControllerBase
+    IOptions<ApiRuntimeOptions> runtimeOptions,
+    IOptions<DeviceAuthOptions> deviceAuthOptions,
+    MaintenanceTokenStore maintenanceTokenStore) : ControllerBase
 {
     [HttpGet("bootstrap")]
     public async Task<ActionResult<RuntimeBootstrapResponse>> GetBootstrap(CancellationToken cancellationToken)
@@ -110,6 +113,11 @@ public sealed class RuntimeController(
         [FromBody] UpdateDatabaseConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        if (ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
+        {
+            return denied;
+        }
+
         if (!CanBootstrapDatabaseConfiguration())
         {
             return Conflict(new ProblemDetails
@@ -148,6 +156,11 @@ public sealed class RuntimeController(
         [FromBody] TestDatabaseConfigurationRequest request,
         CancellationToken cancellationToken)
     {
+        if (ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
+        {
+            return denied;
+        }
+
         if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
         {
             return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
@@ -166,6 +179,52 @@ public sealed class RuntimeController(
             ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
             cancellationToken);
         return Ok(new DatabaseConfigurationTestResponse(verification.Success, verification.Message));
+    }
+
+    [HttpPost("database/maintenance/test")]
+    public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(
+        [FromBody] TestDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (AuthorizeMaintenance() is { } denied)
+        {
+            return denied;
+        }
+
+        return await TestDatabaseConfiguration(request, cancellationToken);
+    }
+
+    [HttpPut("database/maintenance")]
+    public async Task<ActionResult<DatabaseConfigurationResponse>> UpdateDatabaseConfigurationForMaintenance(
+        [FromBody] UpdateDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (AuthorizeMaintenance() is { } denied)
+        {
+            return denied;
+        }
+
+        var connectionString = ParseConnectionStringOrProblem(request);
+        if (connectionString.Result is not null)
+        {
+            return connectionString.Result;
+        }
+
+        var verification = await databaseConnectionVerifier.VerifyAsync(
+            connectionString.Value!,
+            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            cancellationToken);
+        if (!verification.Success)
+        {
+            return ControllerProblemDetails.BadRequest(verification.Message);
+        }
+
+        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
+            connectionString.Value!,
+            hostEnvironment.EnvironmentName,
+            cancellationToken);
+
+        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
     }
 
     [HttpGet("health")]
@@ -241,6 +300,30 @@ public sealed class RuntimeController(
     private bool CanBootstrapDatabaseConfiguration() =>
         !DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName)
         && string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString());
+
+    private ActionResult? AuthorizeMaintenance()
+    {
+        if (ServerRequestGuard.RequireLoopback(HttpContext) is { } denied)
+        {
+            return denied;
+        }
+
+        if (!Request.Headers.TryGetValue(MaintenanceTokenConstants.HeaderName, out var headerValues)
+            || !maintenanceTokenStore.Validate(headerValues.ToString()))
+        {
+            return new ObjectResult(new ProblemDetails
+            {
+                Title = "Maintenance token invalid.",
+                Detail = "Server maintenance actions require the local maintenance token.",
+                Status = StatusCodes.Status401Unauthorized
+            })
+            {
+                StatusCode = StatusCodes.Status401Unauthorized
+            };
+        }
+
+        return null;
+    }
 
     private static string MaskConnectionString(string connectionString)
     {

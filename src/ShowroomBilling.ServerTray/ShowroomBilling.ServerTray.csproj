@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>ShowroomBilling.ServerTray</AssemblyName>
+    <Version>1.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ShowroomBilling.Contracts\ShowroomBilling.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.ServiceProcess.ServiceController" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('Resources\Embedded\ShowroomBilling.Api.exe')">
+    <EmbeddedResource Include="Resources\Embedded\ShowroomBilling.Api.exe" LogicalName="ShowroomBilling.Api.exe" />
+  </ItemGroup>
+</Project>

@@ -972,7 +972,6 @@
                     <!--  Database  -->
                     <StackPanel Visibility="{Binding IsDatabaseVisible, Converter={StaticResource BoolToVis}}">
                         <StackPanel.Resources>
-                            <!--  Chip variants for Yes/No state  -->
                             <Style x:Key="DbStateCard" TargetType="Border">
                                 <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
                                 <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
@@ -982,13 +981,134 @@
                             </Style>
                         </StackPanel.Resources>
 
-                        <TextBlock Text="Database" Style="{StaticResource SectionHeader}" Margin="0,0,0,16" />
+                        <TextBlock Text="Database" Style="{StaticResource SectionHeader}" Margin="0,0,0,12" />
+
+                        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="API Connection Mode" Margin="0,0,0,8" />
+                        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="16" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="CURRENT API" />
+                                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                               FontSize="11.5"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource InkBrush}"
+                                               Text="{Binding CurrentApiBaseUrl}" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               FontSize="11"
+                                               Foreground="{StaticResource InkMutedBrush}"
+                                               Text="{Binding ApiConnectionModeSummary}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="RUNNING MODE" />
+                                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                               FontSize="11.5"
+                                               Foreground="{StaticResource InkBrush}"
+                                               Text="{Binding RunningConnectionModeText}" />
+                                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="BOOTSTRAP FILE" />
+                                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                               FontSize="11.5"
+                                               TextWrapping="Wrap"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               Text="{Binding DesktopBootstrapConfigPath}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="MODE" />
+                                <ComboBox ItemsSource="{Binding ApiConnectionModeOptions}"
+                                          SelectedItem="{Binding ApiConnectionMode, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="SERVER API URL" />
+                                <TextBox Text="{Binding ServerApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsServerApiUrlEnabled}"
+                                         FontFamily="{StaticResource MonoFontFamily}"
+                                         FontSize="11.5" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,17,0,0" VerticalAlignment="Top">
+                                <Button Style="{StaticResource BtnSm}" Command="{Binding TestServerConnectionCommand}" Content="Test server" Margin="0,0,6,0" />
+                                <Button Style="{StaticResource BtnSm}" Command="{Binding FindServerCommand}" Content="Find server" Margin="0,0,6,0" />
+                                <Button Style="{StaticResource BtnPrimary}" Command="{Binding SaveApiConnectionModeCommand}" Content="Save and restart" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock FontSize="11.5"
+                                   Foreground="{StaticResource InkMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"
+                                   Text="{Binding SelectedConnectionModeHelp}" />
+
+                        <Border Margin="0,0,0,18"
+                                Padding="10,7"
+                                Background="{StaticResource InfoSoftBrush}"
+                                BorderBrush="{StaticResource InfoBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource Radius}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ApiConnectionStatus}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ApiConnectionStatus}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource InfoBrush}" />
+                                <TextBlock VerticalAlignment="Center"
+                                           FontSize="11.5"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource InfoInkBrush}"
+                                           Text="{Binding ApiConnectionStatus}" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Local Embedded Database" Margin="0,0,0,8" />
                         <TextBlock FontSize="12"
                                    LineHeight="19"
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource InkMutedBrush}"
-                                   Margin="0,0,0,22"
-                                   Text="PostgreSQL connection used by the local API. Saving writes a local machine override; restart the API or desktop app to apply it." />
+                                   Margin="0,0,0,14"
+                                   Text="Used only when this workstation runs LocalEmbedded mode. Server mode database configuration is maintained from the server tray." />
+
+                        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="LOCAL EMBEDDED API" />
+                                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="11.5"
+                                           Foreground="{StaticResource InkBrush}"
+                                           Text="{Binding LocalEmbeddedApiBaseUrl}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,0,0,16"
+                                Padding="10,8"
+                                Background="{StaticResource WarnSoftBrush}"
+                                BorderBrush="{StaticResource WarnBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource Radius}"
+                                Visibility="{Binding IsRunningServerMode, Converter={StaticResource BoolToVis}}">
+                            <TextBlock FontSize="11.5"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource WarnInkBrush}"
+                                       Text="This workstation is currently using Server mode. Switch to LocalEmbedded and restart before editing this workstation's local fallback DB override." />
+                        </Border>
 
                         <Border Margin="0,0,0,16"
                                 Padding="10,8"
@@ -1003,23 +1123,24 @@
                                        Text="{Binding DatabaseSetupModeText}" />
                         </Border>
 
-                        <!--  Connection string editor  -->
-                        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Connection String" Margin="0,0,0,8" />
-                        <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="64"
-                                 VerticalScrollBarVisibility="Auto"
-                                 VerticalContentAlignment="Top"
-                                 Padding="10,8"
-                                 FontFamily="{StaticResource MonoFontFamily}"
-                                 FontSize="11.5" />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button Style="{StaticResource BtnSm}" Command="{Binding LoadDatabaseConfigCommand}" Content="Load" Margin="0,0,6,0" />
-                            <Button Style="{StaticResource BtnSm}" Command="{Binding TestDatabaseConnectionCommand}" Content="Test connection" Margin="0,0,6,0" />
-                            <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Content="{Binding SaveDatabaseConfigButtonText}" Margin="0,0,6,0" />
-                            <Rectangle Width="1" Margin="4,0" Fill="{StaticResource DividerBrush}" />
-                            <Button Style="{StaticResource BtnSm}" Command="{Binding RestartApiCommand}" Content="Restart API" Margin="6,0,0,0" />
+                        <StackPanel IsEnabled="{Binding IsDatabaseOverrideEditorEnabled}">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="POSTGRES CONNECTION STRING" />
+                            <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="64"
+                                     VerticalScrollBarVisibility="Auto"
+                                     VerticalContentAlignment="Top"
+                                     Padding="10,8"
+                                     FontFamily="{StaticResource MonoFontFamily}"
+                                     FontSize="11.5" />
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button Style="{StaticResource BtnSm}" Command="{Binding LoadDatabaseConfigCommand}" Content="Load" Margin="0,0,6,0" />
+                                <Button Style="{StaticResource BtnSm}" Command="{Binding TestDatabaseConnectionCommand}" Content="Test connection" Margin="0,0,6,0" />
+                                <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Content="{Binding SaveDatabaseConfigButtonText}" Margin="0,0,6,0" />
+                                <Rectangle Width="1" Margin="4,0" Fill="{StaticResource DividerBrush}" />
+                                <Button Style="{StaticResource BtnSm}" Command="{Binding RestartApiCommand}" Content="Restart API" Margin="6,0,0,0" />
+                            </StackPanel>
                         </StackPanel>
 
                         <!--  Inline status strip — only renders when there's a message  -->

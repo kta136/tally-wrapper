@@ -13,17 +13,17 @@ public partial class MainWindow : Window
     private static readonly TimeSpan ApiReadyTimeout = TimeSpan.FromSeconds(5);
 
     private readonly MainWindowViewModel _viewModel;
-    private readonly DesktopBootstrapOptions _bootstrapOptions;
+    private readonly IApiEndpointResolver _endpointResolver;
     private readonly IApiReadinessSignal _apiReadiness;
 
     public MainWindow(
         MainWindowViewModel viewModel,
-        IOptions<DesktopBootstrapOptions> bootstrapOptions,
+        IApiEndpointResolver endpointResolver,
         IApiReadinessSignal apiReadiness)
     {
         InitializeComponent();
         _viewModel = viewModel;
-        _bootstrapOptions = bootstrapOptions.Value;
+        _endpointResolver = endpointResolver;
         _apiReadiness = apiReadiness;
         DataContext = _viewModel;
         Loaded += OnLoaded;
@@ -73,7 +73,7 @@ public partial class MainWindow : Window
 
     private async Task WaitForApiReadinessAsync()
     {
-        if (!Uri.TryCreate(_bootstrapOptions.ApiBaseUrl, UriKind.Absolute, out var uri) || uri.IsDefaultPort)
+        if (!Uri.TryCreate(_endpointResolver.BaseUrl, UriKind.Absolute, out var uri) || uri.IsDefaultPort)
         {
             return;
         }

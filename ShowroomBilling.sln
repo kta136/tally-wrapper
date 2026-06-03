@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShowroomBilling.Printing", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShowroomBilling.Desktop.Tests", "tests\ShowroomBilling.Desktop.Tests\ShowroomBilling.Desktop.Tests.csproj", "{A7E07DE5-8627-4BB6-9C36-9D5F709F649A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShowroomBilling.ServerTray", "src\ShowroomBilling.ServerTray\ShowroomBilling.ServerTray.csproj", "{4495034F-F464-43A3-8232-C970FF7250D1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -129,6 +131,18 @@ Global
 		{A7E07DE5-8627-4BB6-9C36-9D5F709F649A}.Release|x64.Build.0 = Release|Any CPU
 		{A7E07DE5-8627-4BB6-9C36-9D5F709F649A}.Release|x86.ActiveCfg = Release|Any CPU
 		{A7E07DE5-8627-4BB6-9C36-9D5F709F649A}.Release|x86.Build.0 = Release|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Debug|x64.Build.0 = Debug|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Debug|x86.Build.0 = Debug|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Release|x64.ActiveCfg = Release|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Release|x64.Build.0 = Release|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Release|x86.ActiveCfg = Release|Any CPU
+		{4495034F-F464-43A3-8232-C970FF7250D1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -142,5 +156,6 @@ Global
 		{A3D5C669-05D0-4900-B39E-206D7FC75868} = {6F97B280-733F-4033-B2CA-27B09A41A1DF}
 		{8694CFF9-7052-47CF-B8F5-A667D42F8362} = {9118F89B-C01E-49B6-849E-DF771A990048}
 		{A7E07DE5-8627-4BB6-9C36-9D5F709F649A} = {6F97B280-733F-4033-B2CA-27B09A41A1DF}
+		{4495034F-F464-43A3-8232-C970FF7250D1} = {9118F89B-C01E-49B6-849E-DF771A990048}
 	EndGlobalSection
 EndGlobal

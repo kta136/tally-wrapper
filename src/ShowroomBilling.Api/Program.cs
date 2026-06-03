@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using QuestPDF.Infrastructure;
+using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Middleware;
 using ShowroomBilling.Api.Options;
@@ -11,6 +12,13 @@ using ShowroomBilling.Infrastructure;
 QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
+var windowsServiceName = Environment.GetEnvironmentVariable("SHOWROOM_BILLING_SERVICE_NAME");
+builder.Host.UseWindowsService(options =>
+{
+    options.ServiceName = string.IsNullOrWhiteSpace(windowsServiceName)
+        ? "ShowroomBilling.Api"
+        : windowsServiceName;
+});
 
 // Outside Development, bind only to loopback. The Desktop dials 127.0.0.1
 // directly; there is no scenario where we want the API listening on a
@@ -40,6 +48,7 @@ builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "api");
 builder.Services.AddSingleton(new AppliedDatabaseConfiguration(
     builder.Configuration.GetConnectionString("Postgres") ?? string.Empty));
 builder.Services.Configure<ApiRuntimeOptions>(builder.Configuration.GetSection(ApiRuntimeOptions.SectionName));
+builder.Services.Configure<DeviceAuthOptions>(builder.Configuration.GetSection(DeviceAuthOptions.SectionName));
 builder.Services.AddSingleton<IDatabaseConnectionVerifier, DatabaseConnectionVerifier>();
 
 builder.Services.AddApplicationLayer();
@@ -51,6 +60,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
 builder.Services.AddSingleton<DeviceTokenStore>();
+builder.Services.AddSingleton<MaintenanceTokenStore>();
+builder.Services.AddSingleton<ClientPresenceRegistry>();
 builder.Services
     .AddAuthentication(AdminAuthenticationHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, AdminAuthenticationHandler>(
@@ -71,7 +82,11 @@ var app = builder.Build();
 
 // Ensure the device token file exists on disk before the Desktop tries to
 // read it. First-run idempotent; no-op on subsequent boots.
-app.Services.GetRequiredService<DeviceTokenStore>().GetOrCreateToken();
+var deviceAuth = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<DeviceAuthOptions>>().Value;
+if (!deviceAuth.IsTrustedLan)
+{
+    app.Services.GetRequiredService<DeviceTokenStore>().GetOrCreateToken();
+}
 
 if (app.Environment.IsDevelopment())
 {

@@ -18,5 +18,10 @@
     </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ShowroomBillingExcludeAppSettings)' == 'true'">
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>

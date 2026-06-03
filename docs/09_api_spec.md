@@ -15,11 +15,12 @@ Style:
 ## 1. Conventions
 
 - Base path: `/api`
-- Payload format: JSON over HTTPS unless stated otherwise
+- Payload format: JSON over HTTP(S) unless stated otherwise. The server-service LAN install binds HTTP on the trusted LAN only.
 - IDs: UUIDs as strings
-- Auth model: two independent local-IPC tokens.
-  - **Device token (`X-Device-Token`)** — a 32-byte random secret stored at `%LOCALAPPDATA%\ShowroomBilling\device_token.txt`. Both Desktop and API read/create this file on startup (Desktop wins the race since it spawns the API child). Every **mutating** endpoint requires this header; reads do not. Gated via `[Authorize(Policy = "Device")]` (`DeviceAuthenticationHandler`). Goal: prevent other local processes on a shared machine from mutating billing state.
+- Auth model: one workstation-write layer plus one admin layer.
+  - **Device auth (`DeviceAuth:Mode`)** gates every normal **mutating** endpoint via `[Authorize(Policy = "Device")]`. In default `LocalFile` mode, the desktop/API share `X-Device-Token`, a 32-byte random secret stored at `%LOCALAPPDATA%\ShowroomBilling\device_token.txt`. In server-service `TrustedLan` mode, the API accepts mutating requests from loopback or configured `DeviceAuth:TrustedNetworks` CIDRs without a per-workstation token. Firewall scope must match the trusted CIDRs. Reads remain unauthenticated.
   - **Admin token (`X-Admin-Token`)** — operator-entered passcode, 30 min TTL, lives in `AdminTokenStore`. Required for destructive/admin endpoints. Gated via `[Authorize(Policy = "Admin")]` (`AdminAuthenticationHandler`). Admin-gated routes do **not** additionally require the device token (the admin passcode is the stronger secret); if you're adding a new admin-only route, just the admin policy is fine.
+  - **Maintenance token (`X-Maintenance-Token`)** — installer-generated local file token used only by the server tray against localhost maintenance DB endpoints. It is not a workstation credential.
 - Timestamps: ISO 8601 UTC
 - Error bodies: **RFC 7807 ProblemDetails** (`application/problem+json`) for all failure responses, emitted by a global `IExceptionHandler` (`DomainExceptionHandler`). The only deliberate exception is `POST /api/draft-leases/acquire`, which still returns the typed `DraftLeaseConflictResponse { Error, ExistingLease }` on 409 because the Desktop parses it as a record.
 
@@ -33,6 +34,14 @@ Style:
 |---|---|---|---|
 | `GET` | `/api/runtime/bootstrap` | Load startup/runtime payload for desktop | active showroom, counter settings, connection status summary, feature flags |
 | `GET` | `/api/runtime/health` | Desktop health summary | API availability, master freshness, limited-mode reasons |
+| `GET` | `/api/runtime/database` | Current DB override metadata | override source, masked connection string, file paths |
+| `PUT` | `/api/runtime/database` | **Admin** — save DB override | updated DB metadata |
+| `PUT` | `/api/runtime/database/bootstrap` | First anonymous DB override setup | loopback-only in server mode; rejects when an override already exists |
+| `POST` | `/api/runtime/database/test` | Test a candidate DB string | loopback-only in server mode |
+| `POST` | `/api/runtime/database/maintenance/test` | Server tray DB test | localhost-only; requires `X-Maintenance-Token` |
+| `PUT` | `/api/runtime/database/maintenance` | Server tray DB save/recovery | localhost-only; requires `X-Maintenance-Token` |
+
+In `TrustedLan` server mode, anonymous DB bootstrap, DB test, and first admin-passcode setup are restricted to loopback. Workstations cannot use the LAN trust boundary to reconfigure the server.
 
 ### 2.2 Bills
 
@@ -149,6 +158,15 @@ Response per master type: `{ masterType, succeeded, itemCount, batchId?, errorMe
 
 Leases use a 2-minute TTL. The database enforces exactly one live lease per bill via a unique partial index on `(BillId) WHERE ReleasedAtUtc IS NULL`.
 
+### 2.8 Client presence
+
+| Method | Path | Purpose | Summary response |
+|---|---|---|---|
+| `POST` | `/api/clients/heartbeat` | Workstation heartbeat, sent every 30 seconds by Desktop | current registered client presence |
+| `GET` | `/api/clients/presence` | Tray/status view of recently seen clients | localhost-only list with 2-minute TTL |
+
+Heartbeat body: `{ deviceId, counterName, appVersion, connectionMode, machineName, userDisplayName }`. The desktop sends it non-blocking; failures never block billing. Presence is in-memory only, capped, and resets when the API restarts.
+
 ---
 
 ## 3. ~~Tally bridge-facing endpoints~~ (removed)
@@ -171,6 +189,8 @@ Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates vi
 | `POST` | `/api/admin/logout` | Revoke the current token | 204 |
 
 After 4 consecutive failed unlock attempts, the API enters an exponential cooldown (2s, 4s, 8s, 16s, capped at 30s) per showroom. Subsequent attempts during the cooldown return `429 Too Many Requests` with a `Retry-After` header. A successful unlock resets the counter; the counter is in-memory only and resets on API restart. Failed attempts are recorded as `admin.unlock.failed` audit events.
+
+When `DeviceAuth:Mode=TrustedLan` and no admin passcode exists yet, the initial `POST /api/admin/passcode` setup is loopback-only. Later passcode rotations still require the existing admin credential.
 | `GET` | `/api/admin/session` (admin) | Inspect the session behind the current token | `AdminSessionInfoResponse` |
 | `GET` | `/api/draft-leases/active` (admin) | List every live draft lease across the showroom | `DraftLeaseListResponse` |
 | `POST` | `/api/draft-leases/{leaseId}/force-release` (admin) | Force-release a stale lease with a reason | 204; audits `lease.force_released` |
