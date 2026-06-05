@@ -1,11 +1,9 @@
-using System.Diagnostics;
-using System.ServiceProcess;
-
 namespace ShowroomBilling.ServerTray;
 
 public sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly ServerTrayOptions _options;
+    private readonly ServerTrayActions _actions;
     private readonly NotifyIcon _notifyIcon;
     private readonly System.Windows.Forms.Timer _timer;
     private StatusForm? _statusForm;
@@ -13,9 +11,11 @@ public sealed class TrayApplicationContext : ApplicationContext
     public TrayApplicationContext(ServerTrayOptions options)
     {
         _options = options;
+        _actions = new ServerTrayActions(options);
+        _actions.StatusChanged += (_, _) => RefreshTrayText();
         _notifyIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = AppIconProvider.CreateIcon(),
             Text = "Showroom Billing Server",
             Visible = true,
             ContextMenuStrip = BuildMenu()
@@ -31,16 +31,18 @@ public sealed class TrayApplicationContext : ApplicationContext
     private ContextMenuStrip BuildMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open Status", null, (_, _) => ShowStatus());
-        menu.Items.Add("Install / Repair Server", null, (_, _) => InstallOrRepairServer());
-        menu.Items.Add("Start API Service", null, (_, _) => ControlService(ServiceControllerStatus.Running));
-        menu.Items.Add("Stop API Service", null, (_, _) => ControlService(ServiceControllerStatus.Stopped));
-        menu.Items.Add("Restart API Service", null, (_, _) => RestartService());
-        menu.Items.Add("Open Logs", null, (_, _) => OpenPath(_options.LogsPath));
-        menu.Items.Add("Open Local Health", null, (_, _) => OpenUrl($"{_options.ApiBaseUrl.TrimEnd('/')}/api/health/live"));
-        menu.Items.Add("Copy Server URL", null, (_, _) => Clipboard.SetText(ServerUrlHelper.GetWorkstationApiBaseUrl(_options.ApiBaseUrl)));
+        menu.Items.Add("Open Server Dashboard", null, (_, _) => ShowStatus());
+        menu.Items.Add("Install / Repair Server", null, (_, _) => _actions.InstallOrRepairServer());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit Tray", null, (_, _) => ExitThread());
+        menu.Items.Add("Start API Service", null, (_, _) => _actions.StartService());
+        menu.Items.Add("Stop API Service", null, (_, _) => _actions.StopService());
+        menu.Items.Add("Restart API Service", null, (_, _) => _actions.RestartService());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Open Logs", null, (_, _) => _actions.OpenLogs());
+        menu.Items.Add("Open Local Health", null, (_, _) => _actions.OpenLocalHealth());
+        menu.Items.Add("Copy Server URL", null, (_, _) => _actions.CopyServerUrl());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Exit Tray", null, (_, _) => StopServiceAndExitTray());
         return menu;
     }
 
@@ -52,78 +54,32 @@ public sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        _statusForm = new StatusForm(_options);
+        _statusForm = new StatusForm(_options, _actions, StopServiceAndExitTray);
         _statusForm.Show();
     }
 
     private void RefreshTrayText()
     {
-        try
-        {
-            using var service = new ServiceController(_options.ServiceName);
-            _notifyIcon.Text = $"Showroom Billing Server: {service.Status}";
-        }
-        catch
-        {
-            _notifyIcon.Text = "Showroom Billing Server: service not installed";
-        }
+        _notifyIcon.Text = _actions.GetServiceStatusText().Replace("Service:", "Showroom Billing Server:");
     }
 
-    private void InstallOrRepairServer()
+    private void StopServiceAndExitTray()
     {
-        var installed = ServerInstaller.EnsureInstalledInteractive(_options, forceRepair: true);
-        RefreshTrayText();
-        MessageBox.Show(
-            installed
-                ? "Server setup is installed, repaired, and started."
-                : "Server setup was cancelled or did not complete.",
+        var result = MessageBox.Show(
+            "Stop the API Windows Service and close the tray?\n\nBilling workstations will lose server access until the service is started again.",
             "Showroom Billing Server",
-            MessageBoxButtons.OK,
-            installed ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-    }
-
-    private void ControlService(ServiceControllerStatus target)
-    {
-        try
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (result != DialogResult.Yes)
         {
-            using var service = new ServiceController(_options.ServiceName);
-            if (target == ServiceControllerStatus.Running && service.Status != ServiceControllerStatus.Running)
-            {
-                service.Start();
-                service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
-            }
-            else if (target == ServiceControllerStatus.Stopped && service.Status != ServiceControllerStatus.Stopped)
-            {
-                service.Stop();
-                service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
-            }
-            RefreshTrayText();
+            return;
         }
-        catch (Exception ex)
+
+        if (_actions.StopService())
         {
-            MessageBox.Show(
-                $"Service control failed: {ex.Message}\n\nRun the tray as Administrator or grant service-control rights to this user.",
-                "Showroom Billing Server",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+            ExitThread();
         }
-    }
-
-    private void RestartService()
-    {
-        ControlService(ServiceControllerStatus.Stopped);
-        ControlService(ServiceControllerStatus.Running);
-    }
-
-    private static void OpenPath(string path)
-    {
-        Directory.CreateDirectory(path);
-        Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
-    }
-
-    private static void OpenUrl(string url)
-    {
-        Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
     }
 
     protected override void Dispose(bool disposing)

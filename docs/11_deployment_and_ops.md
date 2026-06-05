@@ -129,9 +129,12 @@ Server mode intentionally trusts clients inside the configured LAN CIDR for norm
 Tray features:
 
 - show service state, API liveness, DB health, and recently seen workstation clients
+- install/repair the server, start/stop/restart the API Windows Service, open the local health page, open logs/config/install-log folders, and copy the workstation server URL from either the tray menu or the main dashboard window
 - configure/test/save DB settings through localhost-only maintenance endpoints using `maintenance_token.txt`
-- open logs, copy the workstation server URL, and open the local health page
+- exit the tray by stopping the API Windows Service first, then closing the companion UI
 - no Tally polling; Tally is checked only by operator-triggered push/refresh flows
+
+The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windows Service Control Manager before closing the companion tray UI. This is the server shutdown path for the Tally host.
 
 ### Startup hosted services
 

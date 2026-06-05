@@ -5,6 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>ShowroomBilling.ServerTray</AssemblyName>
     <Version>1.0</Version>
+    <ApplicationIcon>..\ShowroomBilling.Desktop\Resources\Billing.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
