@@ -127,16 +127,22 @@ public static class TallyXmlVoucherBuilder
             voucherElement.Add(new XElement("VOUCHERNUMBER", request.InvoiceNumber));
         }
         voucherElement.Add(new XElement("PARTYLEDGERNAME", partyLedger));
+        voucherElement.Add(new XElement("PARTYNAME", partyLedger));
+        voucherElement.Add(new XElement("GSTREGISTRATIONTYPE", "Unregistered/Consumer"));
         var normalizedCompanyState = NormalizeOptional(companyState);
         if (normalizedCompanyState is not null)
         {
             voucherElement.Add(new XElement("STATENAME", normalizedCompanyState));
             voucherElement.Add(new XElement("PLACEOFSUPPLY", normalizedCompanyState));
+            voucherElement.Add(new XElement("CONSIGNEESTATENAME", normalizedCompanyState));
         }
         var normalizedCompanyCountry = NormalizeOptional(companyCountry);
         if (normalizedCompanyCountry is not null)
         {
+            // COUNTRYNAME shows on the sales voucher; the other two feed Tally's GST/GSTR fields.
             voucherElement.Add(new XElement("COUNTRYNAME", normalizedCompanyCountry));
+            voucherElement.Add(new XElement("COUNTRYOFRESIDENCE", normalizedCompanyCountry));
+            voucherElement.Add(new XElement("CONSIGNEECOUNTRYNAME", normalizedCompanyCountry));
         }
         voucherElement.Add(new XElement("ISINVOICE", "Yes"));
         // V1 parity: NARRATION carries the free-text customer label and operator notes,
@@ -154,7 +160,7 @@ public static class TallyXmlVoucherBuilder
         //   Dr legs (party receiving, discount expense) -> AMOUNT is NEGATIVE
         //   Cr legs (sales, CGST, SGST, round-off income) -> AMOUNT is POSITIVE
         //   Round-off sign preserved as-is: positive => Cr, negative => Dr
-        voucherElement.Add(BuildLedgerEntry(partyLedger, -bill.Totals.GrandTotal, deemedPositive: true));
+        voucherElement.Add(BuildLedgerEntry(partyLedger, -bill.Totals.GrandTotal, deemedPositive: true, isPartyLedger: true));
 
         var grossSum = bill.Lines.Sum(l => l.LineTotal);
         var netLineAmounts = AllocateNetAmounts(bill.Lines, grossSum, bill.Totals.Subtotal);
@@ -197,11 +203,22 @@ public static class TallyXmlVoucherBuilder
                             voucherElement)))));
     }
 
-    private static XElement BuildLedgerEntry(string ledgerName, decimal amount, bool deemedPositive) =>
-        new("ALLLEDGERENTRIES.LIST",
+    private static XElement BuildLedgerEntry(
+        string ledgerName,
+        decimal amount,
+        bool deemedPositive,
+        bool isPartyLedger = false)
+    {
+        var entry = new XElement("ALLLEDGERENTRIES.LIST",
             new XElement("LEDGERNAME", ledgerName),
-            new XElement("ISDEEMEDPOSITIVE", deemedPositive ? "Yes" : "No"),
-            new XElement("AMOUNT", FormatAmount(amount)));
+            new XElement("ISDEEMEDPOSITIVE", deemedPositive ? "Yes" : "No"));
+        if (isPartyLedger)
+        {
+            entry.Add(new XElement("ISPARTYLEDGER", "Yes"));
+        }
+        entry.Add(new XElement("AMOUNT", FormatAmount(amount)));
+        return entry;
+    }
 
     private static XElement BuildInventoryAllocation(BillLineItemDto line, decimal netAmount)
     {

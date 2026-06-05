@@ -117,6 +117,19 @@ This split exists because the customer label is unbounded free text and would ne
 
 The single shared helper is [`PaymentMode`](../src/ShowroomBilling.Contracts/Bills/PaymentMode.cs) in `ShowroomBilling.Contracts.Bills`. Use it from any code that reads or normalizes the payment field — voucher builder, synthetic batch planner, and the Invoice payment dropdown all share it.
 
+### 3.2 GST state/country fields
+
+The voucher builder emits the party and location fields Tally uses for GST return readiness:
+
+- resolved party ledger → `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and the debit ledger entry's `<ISPARTYLEDGER>Yes</ISPARTYLEDGER>`
+- all sales posted by this app → `<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>`
+- `Print.CompanyState` → `<STATENAME>`, `<PLACEOFSUPPLY>`, `<CONSIGNEESTATENAME>`
+- `Print.CompanyCountry` → `<COUNTRYNAME>`, `<COUNTRYOFRESIDENCE>`, `<CONSIGNEECOUNTRYNAME>`
+
+`COUNTRYNAME` is enough for the sales voucher screen to show a country, but GSTR-1 uses the GST transaction storages (`COUNTRYOFRESIDENCE` / `CONSIGNEECOUNTRYNAME`). V2 bills do not collect a separate buyer country for counter sales, so the configured invoice country is the domestic default for those voucher fields.
+
+Do not emit a free-text customer label as `<PARTYNAME>`: Tally expects the party ledger there. Do not emit `<PARTYGSTIN>` or `<CONSIGNEEGSTIN>` from this billing app; this workflow is only for unregistered/consumer sales. The operator-entered customer label remains narration/printing context.
+
 ---
 
 ## 4. Posting model

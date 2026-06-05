@@ -157,12 +157,18 @@ Accepted request:
             <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
             <ISINVOICE>Yes</ISINVOICE>
             <PARTYLEDGERNAME>CASH</PARTYLEDGERNAME>
+            <PARTYNAME>CASH</PARTYNAME>
+            <GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>
             <STATENAME>Uttar Pradesh</STATENAME>
             <PLACEOFSUPPLY>Uttar Pradesh</PLACEOFSUPPLY>
+            <CONSIGNEESTATENAME>Uttar Pradesh</CONSIGNEESTATENAME>
             <COUNTRYNAME>India</COUNTRYNAME>
+            <COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>
+            <CONSIGNEECOUNTRYNAME>India</CONSIGNEECOUNTRYNAME>
             <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>CASH</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
               <AMOUNT>-103.000</AMOUNT>
             </ALLLEDGERENTRIES.LIST>
             <ALLLEDGERENTRIES.LIST>
@@ -406,16 +412,21 @@ The voucher builder reads these from `ICloudSettingsService.GetEffectiveSettings
 |---|---|---|
 | `Ledgers.SalesVoucherType` | `<VOUCHERTYPENAME>` + `VCHTYPE` attribute on `<VOUCHER>` | always (defaults to `Sales`) |
 | `Ledgers.SalesLedger` | Sales-side `<LEDGERNAME>` inside each `ACCOUNTINGALLOCATIONS.LIST` | always |
-| `Ledgers.CashLedger` | `<PARTYLEDGERNAME>` + offsetting Dr ledger when `bill.Payment` normalizes to `Cash` | always |
-| `Ledgers.CreditDebitLedger` | `<PARTYLEDGERNAME>` + offsetting Dr ledger when `bill.Payment` normalizes to `Credit and debit` | always |
+| `Ledgers.CashLedger` | `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and offsetting party Dr ledger when `bill.Payment` normalizes to `Cash` | always |
+| `Ledgers.CreditDebitLedger` | `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and offsetting party Dr ledger when `bill.Payment` normalizes to `Credit and debit` | always |
+| Unregistered/consumer sales policy | `<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>`; no `<PARTYGSTIN>` / `<CONSIGNEEGSTIN>` is emitted by this app | always |
 | `Ledgers.CgstLedger` + `Ledgers.SgstLedger` | Credit ledgers for CGST / SGST halves of `BillTotals.TaxTotal` | only when `TaxTotal != 0` |
 | `Ledgers.DiscountLedger` | Debit ledger for `BillTotals.DiscountTotal` | only when `DiscountTotal != 0` |
 | `Ledgers.RoundOffLedger` | Credit/debit ledger for `BillTotals.RoundOff` | only when `RoundOff != 0` |
 | `Connection.ActiveCompanyName` | `<SVCURRENTCOMPANY>` scope for the import | always |
+| `Print.CompanyState` | `<STATENAME>`, `<PLACEOFSUPPLY>`, `<CONSIGNEESTATENAME>` GST transaction state fields | when configured |
+| `Print.CompanyCountry` | `<COUNTRYNAME>` for the voucher view plus `<COUNTRYOFRESIDENCE>` / `<CONSIGNEECOUNTRYNAME>` for GST/GSTR-1 fields | when configured |
 
 Missing config raises `VoucherBuildException` with `Terminal = true`, surfacing in the UI as a `failed` bill with `CONFIG_MISSING_*` error code — operator fixes the mapping in Settings, then clicks Retry.
 
 The `{PartyLedger}` placeholder in `<PARTYLEDGERNAME>` and the offsetting Dr ledger entry is **resolved from the bill's payment mode**, not from the customer name. `bill.Payment` is normalized via [`PaymentMode.Normalize`](../src/ShowroomBilling.Contracts/Bills/PaymentMode.cs) into `Cash` or `Credit and debit`, then mapped to `Ledgers.CashLedger` or `Ledgers.CreditDebitLedger`. The free-text `bill.PartyName` (operator's customer label) is joined with `bill.Notes` and emitted as `<NARRATION>` — it never reaches `<PARTYLEDGERNAME>`. See [`05_tally_integration_contract.md` §3.1](05_tally_integration_contract.md) for the full derivation rule.
+
+`<PARTYNAME>` deliberately uses the same resolved party ledger. It is a Tally GST transaction field, not the free-text customer label.
 
 ### 8.3 Envelope shape (`voucher-import-v1`)
 
@@ -442,6 +453,14 @@ This is the *Accounting Invoice* layout, live-verified against the `dummy` compa
             <VOUCHERTYPENAME>{SalesVoucherType}</VOUCHERTYPENAME>
             <VOUCHERNUMBER>{InvoiceNumber}</VOUCHERNUMBER>
             <PARTYLEDGERNAME>{PartyLedger}</PARTYLEDGERNAME>
+            <PARTYNAME>{PartyLedger}</PARTYNAME>
+            <GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>
+            <STATENAME>{CompanyState}</STATENAME>
+            <PLACEOFSUPPLY>{CompanyState}</PLACEOFSUPPLY>
+            <CONSIGNEESTATENAME>{CompanyState}</CONSIGNEESTATENAME>
+            <COUNTRYNAME>{CompanyCountry}</COUNTRYNAME>
+            <COUNTRYOFRESIDENCE>{CompanyCountry}</COUNTRYOFRESIDENCE>
+            <CONSIGNEECOUNTRYNAME>{CompanyCountry}</CONSIGNEECOUNTRYNAME>
             <ISINVOICE>Yes</ISINVOICE>
             <NARRATION>{PartyName} | {Notes}</NARRATION>
 
@@ -449,6 +468,7 @@ This is the *Accounting Invoice* layout, live-verified against the `dummy` compa
             <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>{PartyLedger}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
               <AMOUNT>-{GrandTotal}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>
 

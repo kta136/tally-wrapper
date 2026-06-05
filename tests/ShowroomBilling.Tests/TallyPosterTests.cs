@@ -75,9 +75,17 @@ public sealed class TallyPosterTests
         await poster.PostAsync(Request());
 
         var voucher = client.LastRequest!.Descendants("VOUCHER").Single();
+        Assert.Equal("Cash", voucher.Element("PARTYNAME")?.Value);
+        Assert.Equal("Unregistered/Consumer", voucher.Element("GSTREGISTRATIONTYPE")?.Value);
         Assert.Equal("Uttar Pradesh", voucher.Element("STATENAME")?.Value);
         Assert.Equal("Uttar Pradesh", voucher.Element("PLACEOFSUPPLY")?.Value);
+        Assert.Equal("Uttar Pradesh", voucher.Element("CONSIGNEESTATENAME")?.Value);
         Assert.Equal("India", voucher.Element("COUNTRYNAME")?.Value);
+        Assert.Equal("India", voucher.Element("COUNTRYOFRESIDENCE")?.Value);
+        Assert.Equal("India", voucher.Element("CONSIGNEECOUNTRYNAME")?.Value);
+        var partyEntry = voucher.Elements("ALLLEDGERENTRIES.LIST")
+            .Single(x => x.Element("LEDGERNAME")?.Value == "Cash");
+        Assert.Equal("Yes", partyEntry.Element("ISPARTYLEDGER")?.Value);
     }
 
     private static TallyPoster BuildPoster(XElement response) =>
