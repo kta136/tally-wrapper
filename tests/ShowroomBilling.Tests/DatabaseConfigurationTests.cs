@@ -103,6 +103,21 @@ public sealed class DatabaseConfigurationTests
     }
 
     [Fact]
+    public void ServerMode_GetDatabaseConfiguration_RejectsNonLoopbackRequest()
+    {
+        var controller = BuildController(
+            configured: "Host=db;Database=showroom;Username=user;Password=secret",
+            applied: "Host=db;Database=showroom;Username=user;Password=secret",
+            deviceAuthOptions: new DeviceAuthOptions { Mode = "TrustedLan", TrustedNetworks = ["192.168.0.0/16"] },
+            remoteAddress: System.Net.IPAddress.Parse("192.168.1.25"));
+
+        var result = controller.GetDatabaseConfiguration();
+
+        var denied = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateDatabaseConfiguration_RejectsInvalidConnectionString()
     {
         var controller = BuildController(

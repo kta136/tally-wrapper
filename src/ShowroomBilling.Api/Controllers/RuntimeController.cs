@@ -72,6 +72,11 @@ public sealed class RuntimeController(
     [HttpGet("database")]
     public ActionResult<DatabaseConfigurationResponse> GetDatabaseConfiguration()
     {
+        if (ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
+        {
+            return denied;
+        }
+
         var connectionString = configuration.GetConnectionString("Postgres") ?? string.Empty;
         return Ok(BuildDatabaseConfigurationResponse(
             connectionString,

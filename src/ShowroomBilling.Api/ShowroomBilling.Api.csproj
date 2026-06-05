@@ -24,4 +24,13 @@
   <ItemGroup Condition="'$(ShowroomBillingExcludeAppSettings)' == 'true'">
     <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Real environment files are local/private and may contain DB credentials.
+         dotnet run loads them from the project content root; do not copy them
+         into bin/test output folders where they are easy to zip accidentally. -->
+    <Content Update="appsettings.Development.json;appsettings.Production.json"
+             CopyToOutputDirectory="Never"
+             CopyToPublishDirectory="Never" />
+  </ItemGroup>
 </Project>

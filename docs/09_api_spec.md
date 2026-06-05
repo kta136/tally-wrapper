@@ -34,14 +34,14 @@ Style:
 |---|---|---|---|
 | `GET` | `/api/runtime/bootstrap` | Load startup/runtime payload for desktop | active showroom, counter settings, connection status summary, feature flags |
 | `GET` | `/api/runtime/health` | Desktop health summary | API availability, master freshness, limited-mode reasons |
-| `GET` | `/api/runtime/database` | Current DB override metadata | override source, masked connection string, file paths |
+| `GET` | `/api/runtime/database` | Current DB override metadata | loopback-only in server mode; override source, masked connection string, file paths |
 | `PUT` | `/api/runtime/database` | **Admin** — save DB override | updated DB metadata |
 | `PUT` | `/api/runtime/database/bootstrap` | First anonymous DB override setup | loopback-only in server mode; rejects when an override already exists |
 | `POST` | `/api/runtime/database/test` | Test a candidate DB string | loopback-only in server mode |
 | `POST` | `/api/runtime/database/maintenance/test` | Server tray DB test | localhost-only; requires `X-Maintenance-Token` |
 | `PUT` | `/api/runtime/database/maintenance` | Server tray DB save/recovery | localhost-only; requires `X-Maintenance-Token` |
 
-In `TrustedLan` server mode, anonymous DB bootstrap, DB test, and first admin-passcode setup are restricted to loopback. Workstations cannot use the LAN trust boundary to reconfigure the server.
+In `TrustedLan` server mode, DB override metadata, anonymous DB bootstrap, DB test, and first admin-passcode setup are restricted to loopback. Workstations cannot use the LAN trust boundary to inspect or reconfigure the server database.
 
 ### 2.2 Bills
 

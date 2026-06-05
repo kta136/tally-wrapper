@@ -8,19 +8,14 @@
 
 ## Database
 
-Primary database is Neon serverless Postgres 17 in `aws-ap-southeast-1` (Singapore), project `DDA Billing` (project id `odd-tooth-30158149`). Two branches:
+Primary development database is PostgreSQL 17+. Use a local Postgres instance, Docker, or a managed Postgres provider such as Neon. Real connection strings are intentionally not committed. Keep environment-specific values in ignored files (`src/ShowroomBilling.Api/appsettings.Development.json`, `src/ShowroomBilling.Api/appsettings.Production.json`), user-secrets, or local environment variables.
 
-| Env | Branch | Used by |
-|---|---|---|
-| `Development` (test) | `dev` (`br-spring-poetry-a10b7jjn`, endpoint `ep-proud-waterfall-a1engquq`) | `appsettings.Development.json` |
-| `Production` (prod) | `main` (`br-crimson-mode-a13yu6vn`) | `appsettings.Production.json` |
+For Neon, use the **direct** endpoint host (`ep-<id>.<region>.aws.neon.tech`) rather than the `-pooler` host because EF Core migrations and warmup can hold long-lived connections. Set `Database:AutoMigrateOnStartup=true` only in private local environment files.
 
-Connection strings already live in the respective `appsettings.{Env}.json` files. Use the **direct** endpoint host (`ep-<id>.ap-southeast-1.aws.neon.tech`) — not the `-pooler` host — because EF Core holds long-lived connections. `Database:AutoMigrateOnStartup` is `true` in both env overrides, so the API applies migrations on first boot against whichever branch the running environment points at.
-
-Manual migration command (uses the connection string resolved by the running environment):
+Manual migration command:
 
 ```powershell
-dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api
+dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<postgres-connection-string>"
 ```
 
 Local fallback (only if you want an offline Postgres):
