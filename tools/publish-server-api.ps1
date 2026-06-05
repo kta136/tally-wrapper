@@ -33,14 +33,16 @@ $exePath = Join-Path $resolvedOutput 'ShowroomBilling.Api.exe'
 if (-not (Test-Path $exePath)) {
     throw "Expected $exePath but it was not produced."
 }
+$publicExePath = Join-Path $resolvedOutput 'TallyWrapper.Api.exe'
+Move-Item -Force $exePath $publicExePath
 
 Get-ChildItem -Path $resolvedOutput -Force |
-    Where-Object { $_.FullName -ne $exePath } |
+    Where-Object { $_.FullName -ne $publicExePath } |
     Remove-Item -Recurse -Force
 
 $leftovers = Get-ChildItem -Path $resolvedOutput -Force
-if ($leftovers.Count -ne 1 -or $leftovers[0].FullName -ne $exePath) {
-    throw "Server API publish should contain only ShowroomBilling.Api.exe."
+if ($leftovers.Count -ne 1 -or $leftovers[0].FullName -ne $publicExePath) {
+    throw "Server API publish should contain only TallyWrapper.Api.exe."
 }
 
 Write-Host "Published sanitized server API to $resolvedOutput"

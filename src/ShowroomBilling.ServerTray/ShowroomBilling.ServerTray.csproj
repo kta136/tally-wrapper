@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>ShowroomBilling.ServerTray</AssemblyName>
+    <AssemblyName>TallyWrapper.ServerTray</AssemblyName>
     <Version>1.0</Version>
     <ApplicationIcon>..\ShowroomBilling.Desktop\Resources\Billing.ico</ApplicationIcon>
   </PropertyGroup>

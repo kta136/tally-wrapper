@@ -1,8 +1,8 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$ServiceName = 'ShowroomBilling.Api',
-    [string]$DisplayName = 'Showroom Billing API',
-    [string]$ApiPath = (Join-Path $PSScriptRoot '..\publish\server\api\ShowroomBilling.Api.exe'),
+    [string]$DisplayName = 'Tally Wrapper API',
+    [string]$ApiPath = (Join-Path $PSScriptRoot '..\publish\server\api\TallyWrapper.Api.exe'),
     [string]$ConfigRoot = 'C:\ProgramData\ShowroomBilling',
     [string]$LanCidr = '192.168.0.0/16',
     [System.Management.Automation.PSCredential]$Credential,
@@ -32,7 +32,7 @@ $newServiceArgs = @{
     DisplayName = $DisplayName
     BinaryPathName = $binaryPath
     StartupType = 'Automatic'
-    Description = 'Showroom Billing API service hosted on the Tally server.'
+    Description = 'Tally Wrapper API service hosted on the Tally server.'
 }
 if ($PSBoundParameters.ContainsKey('Credential')) {
     $newServiceArgs.Credential = $Credential

@@ -188,7 +188,7 @@ public sealed class SetupWizardViewModelTests
             new EffectiveCloudSettingsDto(
                 new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Development Company"),
                 new NumberingSettingsDto("DEV-", string.Empty, 4),
-                new PrintSettingsDto("Showroom Billing V2", null, null, null, null, "India", null, null, null, null, null, true, false, false, 11, 9),
+                new PrintSettingsDto("Tally Wrapper", null, null, null, null, "India", null, null, null, null, null, true, false, false, 11, 9),
                 new LedgerMappingsDto("Sales", "Cash", "Card / UPI", "CGST", "SGST", "Round Off", "Discount", "Sales"),
                 new MasterDataSettingsDto("[]", "[]")),
             [],

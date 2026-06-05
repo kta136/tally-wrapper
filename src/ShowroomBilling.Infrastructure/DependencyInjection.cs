@@ -32,7 +32,7 @@ namespace ShowroomBilling.Infrastructure;
 public static class DependencyInjection
 {
     private const string DefaultLocalPostgresConnectionString =
-        "Host=localhost;Port=5432;Database=showroom_billing_v2;Username=postgres;Password=postgres";
+        "Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres";
 
     public static IServiceCollection AddInfrastructureLayer(this IServiceCollection services, IConfiguration configuration)
     {

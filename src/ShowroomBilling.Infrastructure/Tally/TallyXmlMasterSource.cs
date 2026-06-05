@@ -24,10 +24,10 @@ public sealed class TallyXmlMasterSource(
     ICloudSettingsService cloudSettings,
     ILogger<TallyXmlMasterSource> logger) : ITallyMasterSource
 {
-    private const string CollectionCompany = "SBV2_Companies";
-    private const string CollectionLedger = "SBV2_Ledgers";
-    private const string CollectionStockItem = "SBV2_StockItems";
-    private const string CollectionVoucherType = "SBV2_VoucherTypes";
+    private const string CollectionCompany = "TW_Companies";
+    private const string CollectionLedger = "TW_Ledgers";
+    private const string CollectionStockItem = "TW_StockItems";
+    private const string CollectionVoucherType = "TW_VoucherTypes";
 
     public async Task<IReadOnlyList<CompanySnapshotItem>?> FetchCompaniesAsync(CancellationToken cancellationToken = default)
     {

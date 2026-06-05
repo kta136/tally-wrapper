@@ -1,6 +1,6 @@
 # Database Schema
 
-This document defines the target V2 PostgreSQL schema at the level needed to implement the first production version.
+This document defines the target Tally Wrapper PostgreSQL schema at the level needed to implement the first production version.
 
 Design principles:
 
@@ -106,7 +106,7 @@ Constraints / indexes:
 
 ### 1.4 ~~`tally_posting_jobs`~~ (removed — dropped by the `DropPostingJobsAndBridgeSession` migration)
 
-V2 posting is synchronous and inline inside `BillService.PushAsync`. There is no queue, no outbox, no lease, no claim loop. Post outcomes are recorded as `tally.posted` / `tally.failed` audit events on the bill itself. Retry and repost re-run the same synchronous push path; edited-after-push bills alter the prior Tally voucher using the pre-edit `tally.posted.details.tallyMasterId` (or numeric legacy `remoteId`) instead of creating a new voucher.
+Tally Wrapper posting is synchronous and inline inside `BillService.PushAsync`. There is no queue, no outbox, no lease, no claim loop. Post outcomes are recorded as `tally.posted` / `tally.failed` audit events on the bill itself. Retry and repost re-run the same synchronous push path; edited-after-push bills alter the prior Tally voucher using the pre-edit `tally.posted.details.tallyMasterId` (or numeric legacy `remoteId`) instead of creating a new voucher.
 
 ### 1.5 ~~`tally_posting_attempts`~~ (removed — dropped alongside `tally_posting_jobs`)
 
@@ -277,7 +277,7 @@ The table was part of the original bridge design. It was dropped once the API ab
 
 ### 3.2 ~~Posting job leases~~ (removed)
 
-V2 has no posting jobs and no leases on the Tally side. Push is synchronous — the API holds the Tally connection for the duration of one HTTP request. If the API crashes mid-call, `StuckPostingRecoveryHostedService` flips any bill stranded in `posting` back to `pending` on the next API boot with a `bill.posting.recovered` audit event.
+Tally Wrapper has no posting jobs and no leases on the Tally side. Push is synchronous — the API holds the Tally connection for the duration of one HTTP request. If the API crashes mid-call, `StuckPostingRecoveryHostedService` flips any bill stranded in `posting` back to `pending` on the next API boot with a `bill.posting.recovered` audit event.
 
 ---
 
@@ -290,7 +290,7 @@ V2 has no posting jobs and no leases on the Tally side. Push is synchronous — 
 - operational recovery needs for locks and failed posting jobs
 - master-data snapshot concept, though current app handled it locally
 
-### Redesign in V2
+### Redesign in Tally Wrapper
 
 - local repository tables become cloud PostgreSQL tables
 - same-bill posted mutation model becomes immutable revision model

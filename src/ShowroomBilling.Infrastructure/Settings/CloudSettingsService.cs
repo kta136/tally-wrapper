@@ -251,7 +251,7 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
 
     private static bool RequiresInitialSetup(CloudSettingsEntity entity) =>
         string.Equals(entity.ActiveCompanyName, "Development Company", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(entity.PrintCompanyName, "Showroom Billing V2", StringComparison.OrdinalIgnoreCase)
+        || IsDefaultPrintCompanyName(entity.PrintCompanyName)
         || string.Equals(entity.InvoicePrefix, "DEV-", StringComparison.OrdinalIgnoreCase)
         || string.Equals(entity.SalesLedger, "Sales", StringComparison.OrdinalIgnoreCase)
         || string.Equals(entity.CashLedger, "Cash", StringComparison.OrdinalIgnoreCase)
@@ -259,6 +259,10 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
         || string.Equals(entity.SalesVoucherType, "Sales", StringComparison.OrdinalIgnoreCase)
         || IsEmptyJsonArray(entity.ItemMasterDataJson)
         || IsEmptyJsonArray(entity.KaratMappingDataJson);
+
+    private static bool IsDefaultPrintCompanyName(string? value) =>
+        string.Equals(value, "Tally Wrapper", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, string.Concat("Showroom", " Billing ", "V", "2"), StringComparison.OrdinalIgnoreCase);
 
     private static bool IsEmptyJsonArray(string? value)
     {

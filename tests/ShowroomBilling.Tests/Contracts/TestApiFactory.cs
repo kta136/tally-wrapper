@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShowroomBilling.Api.Options;
+using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -29,12 +30,16 @@ namespace ShowroomBilling.Tests.Contracts;
 ///    <see cref="StubTallyMasterRefresher"/> so the refresh endpoint
 ///    returns deterministic results without dialing Tally.
 ///
-/// The real <c>DeviceTokenStore</c> is left in place; tests read the
-/// generated token via <see cref="GetDeviceToken"/> rather than substituting.
+/// <c>DeviceTokenStore</c> is still the real implementation, but each factory
+/// points it at an isolated temp file so parallel CI runs do not contend on the
+/// runner user's LocalApplicationData token path.
 /// </summary>
 public sealed class TestApiFactory : WebApplicationFactory<Program>
 {
     private readonly IReadOnlyDictionary<string, string?> _extraConfiguration;
+    private readonly string _deviceTokenRoot = Path.Combine(
+        Path.GetTempPath(),
+        $"tally-wrapper-contract-{Guid.NewGuid():N}");
 
     public TestApiFactory()
         : this(new Dictionary<string, string?>())
@@ -68,6 +73,8 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<ITallyMasterRefresher>();
             services.AddScoped<ITallyMasterRefresher, StubTallyMasterRefresher>();
+            services.RemoveAll<DeviceTokenStore>();
+            services.AddSingleton(new DeviceTokenStore(Path.Combine(_deviceTokenRoot, "device_token.txt")));
             services.AddSingleton<IStartupFilter, LoopbackRemoteAddressStartupFilter>();
 
             services.PostConfigure<DeviceAuthOptions>(options =>
@@ -94,7 +101,28 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
     }
 
     public string GetDeviceToken() =>
-        Services.GetRequiredService<ShowroomBilling.Api.Security.DeviceTokenStore>().GetOrCreateToken();
+        Services.GetRequiredService<DeviceTokenStore>().GetOrCreateToken();
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!disposing)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(_deviceTokenRoot))
+            {
+                Directory.Delete(_deviceTokenRoot, recursive: true);
+            }
+        }
+        catch
+        {
+            // Best-effort test temp cleanup.
+        }
+    }
 }
 
 internal sealed class LoopbackRemoteAddressStartupFilter : IStartupFilter

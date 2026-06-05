@@ -951,7 +951,7 @@ function SettingsAdvanced() {
   const folders = [
     { label:'Log Folder',      path:'C:\\Users\\kk\\AppData\\Roaming\\ShowroomBilling\\logs' },
     { label:'App Data Folder', path:'C:\\Users\\kk\\AppData\\Roaming\\ShowroomBilling' },
-    { label:'Install Folder',  path:'D:\\Projects\\Tally_Wrapper_V2\\src\\ShowroomBilling.Desktop\\bin\\Debug\\net10.0-windows\\' },
+    { label:'Install Folder',  path:'D:\\Projects\\tally-wrapper\\src\\ShowroomBilling.Desktop\\bin\\Debug\\net10.0-windows\\' },
   ];
   const cloudItems = ['Connection settings','Active company','Numbering','Print settings','Ledger mappings','Voucher type settings','Item master data','Karat/stock mappings','Admin/shared operational settings'];
   const localItems = ['Bootstrap API endpoint','Protected local secrets/tokens','Logs','Workstation-local UX preferences'];

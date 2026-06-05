@@ -56,8 +56,8 @@ $publishArgs = @(
 dotnet publish $trayProj @publishArgs -o $resolvedOutput
 if ($LASTEXITCODE -ne 0) { throw 'Server tray publish failed.' }
 
-$serverExe = Join-Path $resolvedOutput 'ShowroomBilling.Server.exe'
-$publishedTray = Join-Path $resolvedOutput 'ShowroomBilling.ServerTray.exe'
+$serverExe = Join-Path $resolvedOutput 'TallyWrapper.Server.exe'
+$publishedTray = Join-Path $resolvedOutput 'TallyWrapper.ServerTray.exe'
 if (-not (Test-Path $publishedTray)) { throw "Expected $publishedTray but it was not produced." }
 Move-Item -Force $publishedTray $serverExe
 
@@ -69,4 +69,4 @@ Remove-Item -Recurse -Force $apiStaging
 Remove-Item -Force $embeddedApi
 
 Write-Host "Published one-file server installer/tray to $serverExe"
-Write-Host "Run ShowroomBilling.Server.exe on the Tally server. It installs/repairs the API service and keeps the tray running."
+Write-Host "Run TallyWrapper.Server.exe on the Tally server. It installs/repairs the API service and keeps the tray running."

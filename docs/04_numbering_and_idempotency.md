@@ -1,6 +1,6 @@
 # Numbering and Idempotency
 
-This document freezes invoice numbering, renumbering policy, Tally posting identity, and retry/replay handling for V2.
+This document freezes invoice numbering, renumbering policy, Tally posting identity, and retry/replay handling for Tally Wrapper.
 
 ---
 
@@ -14,7 +14,7 @@ Current system behavior:
 - preview does **not** reserve the final number used by save/post
 - true allocation happens in the persistence path, not the label preview path
 
-This distinction must be preserved conceptually in V2.
+This distinction must be preserved conceptually in Tally Wrapper.
 
 ### 1.2 Current numbering side effects
 
@@ -36,11 +36,11 @@ Current system warns when:
 
 ---
 
-## 2. V2 numbering design
+## 2. Tally Wrapper numbering design
 
 ### 2.1 Core design
 
-V2 numbering is server-side only.
+Tally Wrapper numbering is server-side only.
 
 Rules:
 
@@ -63,7 +63,7 @@ Recommended table key:
 
 - `(tenant_id, showroom_id, fiscal_year, document_type)`
 
-### 2.3 Preview behavior in V2
+### 2.3 Preview behavior in Tally Wrapper
 
 Preview endpoint returns a non-reserved next visible number.
 
@@ -132,9 +132,9 @@ Guaranteed:
 
 ### 3.3 Gaps policy
 
-V2 does **not** promise literal gapless numbering.
+Tally Wrapper does **not** promise literal gapless numbering.
 
-V2 guarantees instead:
+Tally Wrapper guarantees instead:
 
 - no duplicates
 - no invisible orphan numbers
@@ -157,9 +157,9 @@ Current system allows manual renumber for:
 - `sync_review`
 - `posted`
 
-### 4.2 V2 policy
+### 4.2 Tally Wrapper policy
 
-V2 redesign:
+Tally Wrapper redesign:
 
 - normal operator renumber is allowed only while the bill is still `pending`
 - after push/finalization, the invoice number is immutable
@@ -211,7 +211,7 @@ They are related but not interchangeable.
 
 ### 6.1 Primary idempotency key
 
-Recommended V2 key:
+Recommended Tally Wrapper key:
 
 `showroom_id + bill_id + bill_revision_id + operation_type`
 
@@ -246,9 +246,9 @@ The XML golden path must be preserved:
 - plain no-batch fallback second
 - do not blindly reuse `REMOTEID` after failed shape changes
 
-### 7.2 V2 `REMOTEID` policy
+### 7.2 Tally Wrapper `REMOTEID` policy
 
-Implemented V2 `REMOTEID` content:
+Implemented Tally Wrapper `REMOTEID` content:
 
 - create/import requests use the posting idempotency key: `post:{billId:N}:{revisionId:N}`
 - stable for the lifetime of that bill revision post attempt
@@ -332,7 +332,7 @@ These are examples only. Final format depends on configured prefix/suffix and sh
 - numbering warnings matter historically and must not disappear without replacement
 - posted-number changes are accounting-sensitive
 
-### Intentional redesign in V2
+### Intentional redesign in Tally Wrapper
 
 - no renumbering of finalized documents in normal operator flow
 - no gap reuse as a normal side effect of delete/renumber

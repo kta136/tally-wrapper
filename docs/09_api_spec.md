@@ -1,6 +1,6 @@
 # API Specification
 
-This document defines the V2 backend API surface.
+This document defines the Tally Wrapper backend API surface.
 
 Style:
 
@@ -8,7 +8,7 @@ Style:
 - not full OpenAPI
 - concrete enough to build desktop and API in parallel
 
-**Architectural note:** V2 is a two-process deployment — Desktop + API. There is no separate Tally bridge. The API talks to Tally XML directly, synchronously, only when an operator clicks Push (or Refresh). All bridge-facing routes from the previous version (`/api/bridge/session/*`, `/api/bridge/jobs/*`, `/api/bridge/masters/*`) have been removed.
+**Architectural note:** Tally Wrapper is a two-process deployment — Desktop + API. There is no separate Tally bridge. The API talks to Tally XML directly, synchronously, only when an operator clicks Push (or Refresh). All bridge-facing routes from the previous version (`/api/bridge/session/*`, `/api/bridge/jobs/*`, `/api/bridge/masters/*`) have been removed.
 
 ---
 
@@ -171,7 +171,7 @@ Heartbeat body: `{ deviceId, counterName, appVersion, connectionMode, machineNam
 
 ## 3. ~~Tally bridge-facing endpoints~~ (removed)
 
-V2 no longer has a bridge process. All bridge-facing endpoints (`/api/bridge/session/*`, `/api/bridge/jobs/*`, `/api/bridge/masters/*`, `/api/bridge/heartbeat`, `/api/bridge/config`) have been deleted. The API talks to Tally directly in-process.
+Tally Wrapper no longer has a bridge process. All bridge-facing endpoints (`/api/bridge/session/*`, `/api/bridge/jobs/*`, `/api/bridge/masters/*`, `/api/bridge/heartbeat`, `/api/bridge/config`) have been deleted. The API talks to Tally directly in-process.
 
 ---
 
@@ -224,7 +224,7 @@ These are the five admin-gated Bill endpoints listed in §2.2:
 
 ## 6. ~~SignalR events~~ (removed)
 
-V2 no longer hosts a SignalR hub. The previous `/hubs/system` endpoint and all event broadcasting (`JobHint`, `tally.posted`, etc.) are gone. The desktop refreshes explicitly after every command it runs (which is the only case it cares about), so real-time push is not needed.
+Tally Wrapper no longer hosts a SignalR hub. The previous `/hubs/system` endpoint and all event broadcasting (`JobHint`, `tally.posted`, etc.) are gone. The desktop refreshes explicitly after every command it runs (which is the only case it cares about), so real-time push is not needed.
 
 ---
 

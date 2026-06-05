@@ -6,7 +6,7 @@ function TitleBar({ company, counter, operator }) {
     <div className="titlebar">
       <div className="brand">
         <span className="brand-mark">S</span>
-        <span>Showroom Billing</span>
+        <span>Tally Wrapper</span>
         <span style={{ color: 'var(--ink-soft)', fontWeight: 400, fontSize: 10 }}>v3.4.2</span>
       </div>
       <div className="ctx">

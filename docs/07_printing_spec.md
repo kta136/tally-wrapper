@@ -1,6 +1,6 @@
 # Printing Specification
 
-This document freezes operator-visible printing behavior for V2.
+This document freezes operator-visible printing behavior for Tally Wrapper.
 
 Implementation direction:
 
@@ -22,7 +22,7 @@ Current behavior to preserve:
 - it opens a preview dialog
 - it is not the same as final stored-bill print
 
-V2 rule:
+Tally Wrapper rule:
 
 - keep estimate as a preview-first workflow from the draft screen
 - do not silently turn it into final invoice print
@@ -35,7 +35,7 @@ Current behavior to preserve:
 - single bill print opens preview
 - batch bill print opens merged preview
 
-V2 rule:
+Tally Wrapper rule:
 
 - keep final invoice print separate from estimate print
 - keep bills/history print separate from draft estimate print
@@ -48,12 +48,12 @@ Current behavior to preserve:
 - after successful save/update there is a direct-print fast path
 - direct print bypasses visible preview dialog
 
-V2 rule:
+Tally Wrapper rule:
 
 - keep both preview and direct-print modes
 - direct print remains an explicit choice, not the only path
 
-V2 implementation:
+Tally Wrapper implementation:
 
 - preview dialog has a "Direct print after save (skip preview)" checkbox stored in
   the local `IPrintPreferencesStore`
@@ -70,7 +70,7 @@ Current behavior to preserve:
 - preview dialog supports PDF export
 - last PDF directory is remembered locally
 
-V2 rule:
+Tally Wrapper rule:
 
 - keep PDF export from preview
 - remember the last save directory locally per workstation/user profile
@@ -91,7 +91,7 @@ Rules:
 - if all copy toggles are unchecked, `Original` is auto-restored
 - copy defaults come from saved settings
 
-V2 implementation note:
+Tally Wrapper implementation note:
 
 - QuestPDF should render all selected copies from one canonical template
 - operator semantics stay the same even if the rendering engine changes
@@ -105,7 +105,7 @@ Current behavior to preserve:
 - selecting multiple bills and printing creates one merged preview
 - batch print is preview-based, not direct print
 
-V2 rule:
+Tally Wrapper rule:
 
 - keep merged preview behavior for batch print
 - merged output should avoid duplicate asset loading behavior where practical
@@ -120,7 +120,7 @@ Current behavior to preserve:
 - selected printer name is remembered locally
 - later preview/direct-print flows reuse that printer selection when appropriate
 
-V2 rule:
+Tally Wrapper rule:
 
 - preserve local remembered printer selection
 - printer persistence is local workstation preference, not cloud-shared business data
@@ -138,7 +138,7 @@ Current behavior to preserve:
 - clear/browse actions
 - assets affect rendered invoice output
 
-V2 rule:
+Tally Wrapper rule:
 
 - preserve logo/signature usage
 - preserve ability to clear or replace assets
@@ -153,12 +153,12 @@ Current behavior to preserve:
 - signature width/height/position
 - live layout calibration editor
 
-V2 rule:
+Tally Wrapper rule:
 
 - preserve operator/admin ability to calibrate output
 - the rendering engine may change, but calibration controls must survive materially
 
-V2 clamp ranges (ported from V1 `core/print_layout.py`; enforced by
+Tally Wrapper clamp ranges (ported from V1 `core/print_layout.py`; enforced by
 `PrintLayoutOptions.Clamped()` before rendering):
 
 - per-side page margin: `0 mm` – `25 mm`
@@ -169,7 +169,7 @@ V2 clamp ranges (ported from V1 `core/print_layout.py`; enforced by
 - signature size: within `~15.9 × 6.4 mm` minimum and the `~58.2 × 19.6 mm` slot;
   offset clamped the same way
 
-V2 default layout (operator-blank install): margins `10 / 10 / 10 / 12 mm`,
+Tally Wrapper default layout (operator-blank install): margins `10 / 10 / 10 / 12 mm`,
 invoice font `11`, terms font `9`, original copy on, duplicate/triplicate off.
 
 ### 5.4 Live preview in Settings
@@ -242,7 +242,7 @@ The document must preserve the current commercial content categories:
 
 ### 6.3 Consistency
 
-V2 should preserve operator-visible content structure, but exact pixel-for-pixel parity with the old HTML print engine is not required.
+Tally Wrapper should preserve operator-visible content structure, but exact pixel-for-pixel parity with the old HTML print engine is not required.
 
 The following **must remain semantically identical**:
 
@@ -252,7 +252,7 @@ The following **must remain semantically identical**:
 - direct-print vs preview availability
 - whether a draft estimate can be printed before saving
 
-### 6.4 V2 layout blocks (QuestPDF)
+### 6.4 Tally Wrapper layout blocks (QuestPDF)
 
 The `BillDocument` composer in `src/ShowroomBilling.Printing` renders, per copy,
 a single A4 page with the following blocks (top-to-bottom):
@@ -267,7 +267,7 @@ a single A4 page with the following blocks (top-to-bottom):
    mirroring V1's `sales_tab` auto-default. When PartyName *is* populated, a
    small `Payment: {mode}` line is rendered below the address/GSTIN/phone block
    so the payment context is preserved on print — V1 dropped this signal once
-   the operator typed a real customer name; V2 keeps it.
+   the operator typed a real customer name; Tally Wrapper keeps it.
 4. Line-item table. Columns, conditional where noted:
    `#`, `Description`, `HSN` (defaults to `711319` when blank),
    `Gross Wt` + `Less Wt` (shown when any line has a non-zero less weight),
@@ -319,7 +319,7 @@ This does not violate the no local durable business storage rule because it is w
 - printer selection is remembered
 - logo/signature and layout controls exist
 
-### Can improve in V2
+### Can improve in Tally Wrapper
 
 - rendering engine internals
 - preview shell UX

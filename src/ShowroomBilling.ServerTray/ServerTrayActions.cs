@@ -121,7 +121,7 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
 
     private static void ShowMessage(IWin32Window? owner, string text, MessageBoxIcon icon)
     {
-        const string caption = "Showroom Billing Server";
+        const string caption = "Tally Wrapper Server";
         if (owner is null)
         {
             MessageBox.Show(text, caption, MessageBoxButtons.OK, icon);

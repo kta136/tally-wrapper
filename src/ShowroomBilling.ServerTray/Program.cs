@@ -24,7 +24,7 @@ internal static class Program
                 TryWriteInstallFailure(options, ex);
                 MessageBox.Show(
                     $"Server setup failed:\n\n{ex.Message}\n\nLog: {options.InstallLogPath}",
-                    "Showroom Billing Server",
+                    "Tally Wrapper Server",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 Environment.ExitCode = 1;
@@ -39,7 +39,7 @@ internal static class Program
         {
             MessageBox.Show(
                 "Server setup did not complete. The tray will open, but the API service may be unavailable.",
-                "Showroom Billing Server",
+                "Tally Wrapper Server",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }

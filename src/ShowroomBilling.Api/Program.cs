@@ -105,7 +105,7 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/", () => Results.Ok(new
 {
-    service = "Showroom Billing V2 API",
+    service = "Tally Wrapper API",
     mode = "foundation",
     docs = "/swagger",
 }));

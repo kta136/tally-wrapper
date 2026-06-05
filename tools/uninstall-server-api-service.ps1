@@ -1,7 +1,7 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [string]$ServiceName = 'ShowroomBilling.Api',
-    [string]$FirewallDisplayName = 'Showroom Billing API LAN',
+    [string]$FirewallDisplayName = 'Tally Wrapper API LAN',
     [switch]$RemoveConfig
 )
 

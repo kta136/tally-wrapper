@@ -13,7 +13,7 @@ internal static class CloudSettingsDefaults
             Port = 9000,
             TimeoutSeconds = 30,
             ActiveCompanyName = "Development Company",
-            PrintCompanyName = "Showroom Billing V2",
+            PrintCompanyName = "Tally Wrapper",
             CompanyCountry = "India",
             InvoicePrefix = "DEV-",
             InvoiceSuffix = string.Empty,

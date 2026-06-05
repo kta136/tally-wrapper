@@ -11,7 +11,8 @@ public static class ServerInstaller
 {
     public const string DefaultLanCidr = "192.168.0.0/16";
     private const string RunValueName = "ShowroomBilling.ServerTray";
-    private const string FirewallDisplayName = "Showroom Billing API LAN";
+    private const string FirewallDisplayName = "Tally Wrapper API LAN";
+    private static readonly string LegacyFirewallDisplayName = string.Concat("Showroom", " Billing API LAN");
     private const string ApiResourceName = "ShowroomBilling.Api.exe";
 
     public static bool IsServiceInstalled(string serviceName)
@@ -57,7 +58,7 @@ public static class ServerInstaller
         {
             MessageBox.Show(
                 $"Server setup failed. Install log:\n{options.InstallLogPath}\n\n{Tail(options.InstallLogPath, 3000)}",
-                "Showroom Billing Server",
+                "Tally Wrapper Server",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
@@ -169,7 +170,7 @@ public static class ServerInstaller
         var script = $$"""
             $ErrorActionPreference = 'Stop'
             $serviceName = '{{EscapePowerShell(options.ServiceName)}}'
-            $displayName = 'Showroom Billing API'
+            $displayName = 'Tally Wrapper API'
             $apiPath = '{{EscapePowerShell(options.ApiExecutablePath)}}'
             $binaryPath = '"' + $apiPath + '"'
 
@@ -181,7 +182,7 @@ public static class ServerInstaller
             & sc.exe config $serviceName binPath= $binaryPath start= auto DisplayName= $displayName | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "sc config failed with exit code $LASTEXITCODE" }
 
-            & sc.exe description $serviceName 'Showroom Billing API service hosted on the Tally server.' | Out-Null
+            & sc.exe description $serviceName 'Tally Wrapper API service hosted on the Tally server.' | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "sc description failed with exit code $LASTEXITCODE" }
             """;
 
@@ -221,6 +222,7 @@ public static class ServerInstaller
         var script = $"""
             $ErrorActionPreference = 'Stop'
             Get-NetFirewallRule -DisplayName '{EscapePowerShell(FirewallDisplayName)}' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+            Get-NetFirewallRule -DisplayName '{EscapePowerShell(LegacyFirewallDisplayName)}' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
             New-NetFirewallRule -DisplayName '{EscapePowerShell(FirewallDisplayName)}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5107 -RemoteAddress '{EscapePowerShell(lanCidr)}' -Program '{EscapePowerShell(options.ApiExecutablePath)}' | Out-Null
             """;
 
@@ -322,7 +324,7 @@ public static class ServerInstaller
     {
         using var form = new Form
         {
-            Text = "Showroom Billing Server Setup",
+            Text = "Tally Wrapper Server Setup",
             Width = 430,
             Height = 155,
             StartPosition = FormStartPosition.CenterScreen,

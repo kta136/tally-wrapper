@@ -587,13 +587,13 @@ public partial class SettingsViewModel : ObservableObject,
     private async Task FindServerAsync(CancellationToken cancellationToken)
     {
         IsFindingServer = true;
-        ApiConnectionStatus = "Scanning the local network for Showroom Billing server...";
+        ApiConnectionStatus = "Scanning the local network for Tally Wrapper server...";
         try
         {
             var found = await FindServerCandidatesAsync(cancellationToken);
             if (found.Count == 0)
             {
-                ApiConnectionStatus = "No Showroom Billing server found on this subnet. Enter the server URL manually.";
+                ApiConnectionStatus = "No Tally Wrapper server found on this subnet. Enter the server URL manually.";
                 return;
             }
 
@@ -730,7 +730,7 @@ public partial class SettingsViewModel : ObservableObject,
             }
 
             var body = await live.Content.ReadAsStringAsync(cancellationToken);
-            return body.Contains("Showroom Billing", StringComparison.OrdinalIgnoreCase);
+            return body.Contains("Tally Wrapper", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {

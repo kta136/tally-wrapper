@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
-    <AssemblyName>Billing</AssemblyName>
+    <AssemblyName>TallyWrapper</AssemblyName>
     <Version>1.0</Version>
     <ApplicationIcon>Resources\Billing.ico</ApplicationIcon>
     <UserSecretsId>ShowroomBilling-Desktop-Foundation</UserSecretsId>
@@ -27,7 +27,7 @@
     <!--
       appsettings.json is embedded as a manifest resource (LogicalName="appsettings.json")
       and loaded via AddJsonStream in App.OnStartup. The on-disk copy used to ship in
-      publish/prod/ next to Billing.exe; we want the prod folder to contain only the exe
+      publish/prod/ next to TallyWrapper.exe; we want the prod folder to contain only the exe
       and the .NET runtime artifacts (.deps.json, .runtimeconfig.json), so the base config
       is baked into the exe itself. appsettings.{Environment}.json overrides still load
       from disk so dev can override without rebuilding.

@@ -1,7 +1,7 @@
 # Writes the local DPAPI-protected database override used by the API at runtime.
 #
 # This keeps production DB credentials out of Git and out of published Desktop
-# artifacts. Run it once on the Windows user account that will run Billing.exe.
+# artifacts. Run it once on the Windows user account that will run TallyWrapper.exe.
 #
 # Examples:
 #   .\tools\configure-local-db.ps1

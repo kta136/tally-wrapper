@@ -1,6 +1,6 @@
 # Bill State Machine
 
-This document freezes the current bill lifecycle from the existing system and the target lifecycle for V2.
+This document freezes the current bill lifecycle from the existing system and the target lifecycle for Tally Wrapper.
 
 Source priority for conflicts:
 
@@ -12,7 +12,7 @@ Source priority for conflicts:
 
 ## 1. V1 (Python) state model — historical, for migration context only
 
-> Section 1 describes the **V1 Python system** that was the source of migration signal. V2 does **not** use these states or transitions — see Section 3 for the actual V2 state model. Keeping this section here documents what V1 did so future readers can understand the reasoning behind V2's choices.
+> Section 1 describes the **V1 Python system** that was the source of migration signal. Tally Wrapper does **not** use these states or transitions — see Section 3 for the actual Tally Wrapper state model. Keeping this section here documents what V1 did so future readers can understand the reasoning behind Tally Wrapper's choices.
 
 ### 1.1 V1 persisted states
 
@@ -78,7 +78,7 @@ This current behavior wins over older requirement-doc wording.
 
 ## 2. Current behavior to preserve vs redesign
 
-### 2.1 Preserve in V2
+### 2.1 Preserve in Tally Wrapper
 
 | Behavior | Preserve? | Why |
 |---|---|---|
@@ -88,7 +88,7 @@ This current behavior wins over older requirement-doc wording.
 | Current state visibility in bills/history | Yes | Migration-critical operator expectation |
 | Posted-bill behavior as a tracked migration issue | Yes | Must not be lost silently |
 
-### 2.2 Intentionally redesign in V2
+### 2.2 Intentionally redesign in Tally Wrapper
 
 | Behavior | Redesign? | Target direction |
 |---|---|---|
@@ -99,7 +99,7 @@ This current behavior wins over older requirement-doc wording.
 
 ---
 
-## 3. Target V2 state model
+## 3. Target Tally Wrapper state model
 
 ### 3.1 Target states
 
@@ -132,7 +132,7 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 
 ### 3.3 Target editability rules
 
-| State | Editable in V2? | Rule |
+| State | Editable in Tally Wrapper? | Rule |
 |---|---:|---|
 | `pending` | Yes | Normal editing state |
 | `posting` | No | Active Tally call — never editable |
@@ -154,7 +154,7 @@ If the API crashes mid-post, `StuckPostingRecoveryHostedService` runs on startup
 
 ---
 
-## 4. V2 layer ownership
+## 4. Tally Wrapper layer ownership
 
 Everything Tally-related runs in-process in the API. There is no separate bridge; Tally calls happen inside the HTTP request that triggered them.
 
@@ -184,10 +184,10 @@ Everything Tally-related runs in-process in the API. There is no separate bridge
 ### Redesign
 
 - do not carry forward the current misleading `Revise Posted` label while changing semantics silently
-- do not let numbered/finalized bills remain casually mutable in V2
+- do not let numbered/finalized bills remain casually mutable in Tally Wrapper
 - do not let desktop clients directly own posting lifecycle state
 - do not rebuild the old local-state machine around local durable storage
 
 ### Decision note
 
-V2 intentionally redesigns the posted-bill correction model. The new target is immutable finalized snapshots with explicit repost or revision workflows. That is a deliberate redesign, not an accidental drift.
+Tally Wrapper intentionally redesigns the posted-bill correction model. The new target is immutable finalized snapshots with explicit repost or revision workflows. That is a deliberate redesign, not an accidental drift.

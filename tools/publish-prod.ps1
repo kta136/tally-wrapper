@@ -11,8 +11,8 @@
 #   2. Zip the sanitized API into the Desktop embedded resource.
 #   3. Publish Desktop self-contained, single-file, win-x64.
 #   4. Remove loose appsettings files from the Desktop output. The Desktop base
-#      config is embedded in Billing.exe, and database setup is done through UI.
-#   5. Output: publish/prod/Billing.exe plus required .NET runtime metadata.
+#      config is embedded in TallyWrapper.exe, and database setup is done through UI.
+#   5. Output: publish/prod/TallyWrapper.exe plus required .NET runtime metadata.
 #
 # Examples:
 #   .\tools\publish-prod.ps1
@@ -116,9 +116,9 @@ if ($LASTEXITCODE -ne 0) { throw "Desktop publish failed." }
 
 # --- 4. Tidy up ----------------------------------------------------------------
 # Final layout in publish/prod/:
-#   Billing.exe                  — the single-file Desktop exe
-#   Billing.deps.json            — .NET runtime: assembly resolution manifest, required
-#   Billing.runtimeconfig.json   — .NET runtime: framework/runtime options, required
+#   TallyWrapper.exe                  — the single-file Desktop exe
+#   TallyWrapper.deps.json            — .NET runtime: assembly resolution manifest, required
+#   TallyWrapper.runtimeconfig.json   — .NET runtime: framework/runtime options, required
 # The Desktop's baseline appsettings.json is an EmbeddedResource and is loaded via
 # AddJsonStream in App.OnStartup. The .pdb is already gone via DebugType=embedded;
 # the LatoFont folder is removed below.
@@ -147,7 +147,7 @@ $publishedAppSettings = Join-Path $desktopOut 'appsettings.json'
 if (Test-Path $publishedAppSettings) { Remove-Item -Force $publishedAppSettings }
 
 # --- Sanity report --------------------------------------------------------------
-$desktopExe = Join-Path $desktopOut 'Billing.exe'
+$desktopExe = Join-Path $desktopOut 'TallyWrapper.exe'
 if (-not (Test-Path $desktopExe)) { throw "Expected $desktopExe but it wasn't produced." }
 $desktopMb = [math]::Round((Get-Item $desktopExe).Length / 1MB, 1)
 

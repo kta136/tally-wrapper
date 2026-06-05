@@ -1,6 +1,6 @@
 # Settings Catalog
 
-This document catalogs all settings and related actions that matter for V2.
+This document catalogs all settings and related actions that matter for Tally Wrapper.
 
 Scope rules:
 
@@ -93,7 +93,7 @@ Scope rules:
 | `Admin-only` | Shared but only editable after admin unlock/role confirmation |
 | `Bootstrap-only` | Relevant only during initial setup/limited-mode/bootstrap flow |
 
-### V2 persistence rules
+### Tally Wrapper persistence rules
 
 - Tally/business settings live in cloud backend/PostgreSQL.
 - Printer name and PDF directory may remain local-only.
@@ -104,7 +104,7 @@ Scope rules:
 
 ## 4. Hidden admin-mode behaviors
 
-| Behavior | Current system | V2 treatment |
+| Behavior | Current system | Tally Wrapper treatment |
 |---|---|---|
 | `~` unlock shortcut | Hidden session unlock in settings | Preserve as migration-critical admin behavior unless replaced with explicit UI |
 | Local SQLite no-unlock admin mode | Auto-grants admin features in local mode | Retire if local SQLite mode is removed |
@@ -113,7 +113,7 @@ Scope rules:
 
 ---
 
-## 5. V2 redesign notes
+## 5. Tally Wrapper redesign notes
 
 ### Preserve materially
 
@@ -125,5 +125,5 @@ Scope rules:
 
 ### Redesign intentionally
 
-- backend switching: current system supports Local SQLite vs remote; V2 target stack is PostgreSQL-backed cloud system, so this becomes deployment/bootstrap configuration rather than normal day-to-day operator switching
-- delete-all-vouchers: current destructive local purge should not be copied blindly into cloud V2 without explicit product sign-off — **still deferred as of Phase 10; not shipped**
+- backend switching: current system supports Local SQLite vs remote; Tally Wrapper target stack is PostgreSQL-backed cloud system, so this becomes deployment/bootstrap configuration rather than normal day-to-day operator switching
+- delete-all-vouchers: current destructive local purge should not be copied blindly into cloud Tally Wrapper without explicit product sign-off — **still deferred as of Phase 10; not shipped**

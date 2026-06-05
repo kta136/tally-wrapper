@@ -1,6 +1,6 @@
 # Settings Storage Contract
 
-This note is the implementation-level reminder for the V2 foundation scaffold.
+This note is the implementation-level reminder for the Tally Wrapper foundation scaffold.
 
 ## Local storage is allowed only for
 

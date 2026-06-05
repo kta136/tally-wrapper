@@ -160,7 +160,7 @@ public sealed class BillDocument : IDocument
                 // V1 parity: when the operator leaves Party blank, the headline falls
                 // back to the payment-mode label (V1's sales_tab auto-defaulted Party
                 // to "Cash" / "Credit and Debit"). When the operator typed a real
-                // customer name, V1 lost the payment-mode signal on print — V2 keeps
+                // customer name, V1 lost the payment-mode signal on print; the current app keeps
                 // it as a small "Payment: …" line below.
                 var partyText = _options.Content.PartyName?.Trim();
                 var paymentLabel = string.IsNullOrWhiteSpace(_options.Content.Payment)

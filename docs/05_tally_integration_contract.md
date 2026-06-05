@@ -1,8 +1,8 @@
 # Tally Integration Contract
 
-This document defines the V2 contract between the desktop client, the cloud API, and TallyPrime.
+This document defines the Tally Wrapper contract between the desktop client, the cloud API, and TallyPrime.
 
-**Architectural note:** V2 no longer ships a separate `TallyBridge` process or a posting queue. The API talks to Tally XML directly, in-process, only when an operator clicks Push (or Refresh for masters). Every Tally interaction is synchronous and initiated by a human click.
+**Architectural note:** Tally Wrapper no longer ships a separate `TallyBridge` process or a posting queue. The API talks to Tally XML directly, in-process, only when an operator clicks Push (or Refresh for masters). Every Tally interaction is synchronous and initiated by a human click.
 
 Direction already chosen:
 
@@ -82,7 +82,7 @@ The canonical XML request/response shapes, `<FETCH>` field lists per master type
 
 ## 3. What is posted to Tally
 
-V2 initial posting scope:
+Tally Wrapper initial posting scope:
 
 - sales vouchers only
 
@@ -126,7 +126,7 @@ The voucher builder emits the party and location fields Tally uses for GST retur
 - `Print.CompanyState` → `<STATENAME>`, `<PLACEOFSUPPLY>`, `<CONSIGNEESTATENAME>`
 - `Print.CompanyCountry` → `<COUNTRYNAME>`, `<COUNTRYOFRESIDENCE>`, `<CONSIGNEECOUNTRYNAME>`
 
-`COUNTRYNAME` is enough for the sales voucher screen to show a country, but GSTR-1 uses the GST transaction storages (`COUNTRYOFRESIDENCE` / `CONSIGNEECOUNTRYNAME`). V2 bills do not collect a separate buyer country for counter sales, so the configured invoice country is the domestic default for those voucher fields.
+`COUNTRYNAME` is enough for the sales voucher screen to show a country, but GSTR-1 uses the GST transaction storages (`COUNTRYOFRESIDENCE` / `CONSIGNEECOUNTRYNAME`). Tally Wrapper bills do not collect a separate buyer country for counter sales, so the configured invoice country is the domestic default for those voucher fields.
 
 Do not emit a free-text customer label as `<PARTYNAME>`: Tally expects the party ledger there. Do not emit `<PARTYGSTIN>` or `<CONSIGNEEGSTIN>` from this billing app; this workflow is only for unregistered/consumer sales. The operator-entered customer label remains narration/printing context.
 

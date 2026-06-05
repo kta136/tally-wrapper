@@ -21,7 +21,7 @@ public sealed class HealthController(
     public IActionResult Live() => Ok(new
     {
         status = "Healthy",
-        service = "Showroom Billing V2 API",
+        service = "Tally Wrapper API",
         utcNow = DateTimeOffset.UtcNow
     });
 

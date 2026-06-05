@@ -1,6 +1,6 @@
 # Deployment and Operations
 
-This document describes how V2 is deployed and operated.
+This document describes how Tally Wrapper is deployed and operated.
 
 ---
 
@@ -49,7 +49,7 @@ Acceptable pilot/early rollout option:
 
 The typed local override file is `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json` and is intentionally limited to `connectionMode` and `serverApiBaseUrl`. It must not override child-process settings, database strings, Tally settings, or shared business behavior.
 
-Operators normally change this from **Settings -> Database -> API Connection Mode** in the desktop. Choosing `Server` and saving writes the local override, then restarts Billing so the next boot skips the embedded API. Choosing `LocalEmbedded` restores the old desktop-owned API path. The UI remembers the last non-localhost server URL, can test the server health endpoints, and can scan the local `/24` subnet for a Showroom Billing API on port `5107`. The same Database section shows the local embedded DB override; editing is disabled while the desktop is currently running in `Server` mode because server DB configuration is owned by the tray on the Tally server.
+Operators normally change this from **Settings -> Database -> API Connection Mode** in the desktop. Choosing `Server` and saving writes the local override, then restarts Tally Wrapper so the next boot skips the embedded API. Choosing `LocalEmbedded` restores the old desktop-owned API path. The UI remembers the last non-localhost server URL, can test the server health endpoints, and can scan the local `/24` subnet for a Tally Wrapper API on port `5107`. The same Database section shows the local embedded DB override; editing is disabled while the desktop is currently running in `Server` mode because server DB configuration is owned by the tray on the Tally server.
 
 Fallback remains available per workstation: switching back to `LocalEmbedded` requires that workstation's own DB override and Tally host settings that can reach the Tally server by LAN name/IP.
 
@@ -104,7 +104,7 @@ Server mode is published with:
 .\tools\publish-server-tray.ps1
 ```
 
-Copy `publish\server\ShowroomBilling.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR, elevates via UAC, extracts the embedded API to `C:\ProgramData\ShowroomBilling\bin\ShowroomBilling.Api.exe`, installs the `ShowroomBilling.Api` Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
+Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR, elevates via UAC, extracts the embedded API to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
 
 Running the same EXE again is idempotent. It checks the embedded API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
 
@@ -172,7 +172,7 @@ PostgreSQL is the system of record for:
 
 ## 5. ~~SignalR~~ (removed)
 
-V2 no longer hosts a SignalR hub. The desktop refreshes explicitly after every command it runs; there's no background push channel to maintain.
+Tally Wrapper no longer hosts a SignalR hub. The desktop refreshes explicitly after every command it runs; there's no background push channel to maintain.
 
 ---
 

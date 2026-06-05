@@ -1,4 +1,4 @@
-// Sample data for Showroom Billing
+// Sample data for Tally Wrapper
 window.SAMPLE = (() => {
   const items = [
     { sku: 'CHN-22-045', name: '22kt Gold Chain (Rope, 18")', karat: '22kt', unit: 'gm', wt: 12.450, wastage: 8, labour: 320, rate: 7125 },

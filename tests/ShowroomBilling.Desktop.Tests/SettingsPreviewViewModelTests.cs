@@ -29,6 +29,7 @@ public class SettingsPreviewViewModelTests
             settings.Draft.PrintCompanyName = $"Acme {i}";
         }
 
+        await dispatcher.WaitForRenderCountAsync(1);
         await Task.Delay(DebounceSettleMs);
 
         Assert.Equal(1, dispatcher.RenderCount);
@@ -46,10 +47,10 @@ public class SettingsPreviewViewModelTests
         dispatcher.Gate = _ => Interlocked.Increment(ref gen) == 1 ? release1.Task : release2.Task;
 
         vm.SetActive(true);
-        await Task.Delay(DebounceSettleMs); // render 1 starts, stuck on release1
+        await dispatcher.WaitForRenderCountAsync(1); // render 1 starts, stuck on release1
 
         settings.Draft.PrintCompanyName = "second";
-        await Task.Delay(DebounceSettleMs); // render 2 starts, stuck on release2
+        await dispatcher.WaitForRenderCountAsync(2); // render 2 starts, stuck on release2
 
         // Newer render (2) completes first; older (1) is now stale.
         release2.SetResult(true);
@@ -79,10 +80,10 @@ public class SettingsPreviewViewModelTests
         };
 
         vm.SetActive(true);
-        await Task.Delay(DebounceSettleMs);
+        await dispatcher.WaitForRenderCountAsync(1);
 
         settings.Draft.PrintCompanyName = "second";
-        await Task.Delay(DebounceSettleMs);
+        await dispatcher.WaitForRenderCountAsync(2);
         await dispatcher.WaitForCompleteCountAsync(1);
 
         // Now let the stale render fail. Failure must be suppressed.
@@ -109,7 +110,7 @@ public class SettingsPreviewViewModelTests
 
         // Trailing edge.
         settings.IsSaving = false;
-        await Task.Delay(DebounceSettleMs);
+        await dispatcher.WaitForRenderCountAsync(1);
 
         Assert.Equal(1, dispatcher.RenderCount);
     }
@@ -206,6 +207,17 @@ public class SettingsPreviewViewModelTests
         public string? DefaultPrinter() => null;
         public bool PrintToPrinter(PrintDocumentOptions options, string printerName) => false;
         public string SavePdfToDisk(PrintDocumentOptions options, string directory, string fileName) => string.Empty;
+
+        public async Task WaitForRenderCountAsync(int target, int timeoutMs = 3000)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (RenderCount < target)
+            {
+                if (DateTime.UtcNow > deadline)
+                    throw new TimeoutException($"Expected {target} renders to start; got {RenderCount}");
+                await Task.Delay(10);
+            }
+        }
 
         public async Task WaitForCompleteCountAsync(int target, int timeoutMs = 2000)
         {

@@ -2,7 +2,7 @@
 
 **Status:** Canonical reference for the live Tally XML read and write paths  
 **Last live verification:**
-- write path (sales voucher, V2 C# builder): April 23, 2026
+- write path (sales voucher, Tally Wrapper C# builder): April 23, 2026
 - read path (master collections): April 20, 2026
 
 **Verified against:** `192.168.1.13:9000`  
@@ -10,7 +10,7 @@
 
 ## Change control
 
-Do not change the posting order, accepted XML shape, fallback sequence, or `REMOTEID` handling in this document without live revalidation against a real Tally company. This is the golden path for V2 as well.
+Do not change the posting order, accepted XML shape, fallback sequence, or `REMOTEID` handling in this document without live revalidation against a real Tally company. This is the golden path for Tally Wrapper as well.
 
 ---
 
@@ -271,7 +271,7 @@ Every master fetch is a `TYPE=Collection` export request. Canonical template (co
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Collection</TYPE>
-    <ID>SBV2_Companies</ID>
+    <ID>TW_Companies</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -281,7 +281,7 @@ Every master fetch is a `TYPE=Collection` export request. Canonical template (co
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="SBV2_Companies">
+          <COLLECTION NAME="TW_Companies">
             <TYPE>Company</TYPE>
             <FETCH>Name, IsInactive</FETCH>
           </COLLECTION>
@@ -531,9 +531,9 @@ The builder uses proportional allocation so multi-line bills with rounding drift
 
 #### 8.3.1 Gotchas that produce silent `TALLY_NO_EFFECT`
 
-These are all bugs that caused real failed pushes during V2 bring-up — each one produces the opaque response `<RESPONSE>Unknown Request, cannot be processed</RESPONSE>` (with `CREATED=0, ALTERED=0, ERRORS=0, EXCEPTIONS=0`), which `TallyPoster` classifies as `TALLY_NO_EFFECT`. None of them produce a useful LINEERROR or ERRORS count, so you *must* inspect the `requestExcerpt` and `responseExcerpt` on the `tally.failed` audit event.
+These are all bugs that caused real failed pushes during Tally Wrapper bring-up — each one produces the opaque response `<RESPONSE>Unknown Request, cannot be processed</RESPONSE>` (with `CREATED=0, ALTERED=0, ERRORS=0, EXCEPTIONS=0`), which `TallyPoster` classifies as `TALLY_NO_EFFECT`. None of them produce a useful LINEERROR or ERRORS count, so you *must* inspect the `requestExcerpt` and `responseExcerpt` on the `tally.failed` audit event.
 
-1. **`<VERSION>1</VERSION>` in the Import Data header.** Tally Prime's Import Data handler rejects the request outright when `VERSION` is present. The Export request shape *requires* `<VERSION>`, which tempts copy-paste; Import requests *must* omit it. This was the single biggest blocker during V2 bring-up.
+1. **`<VERSION>1</VERSION>` in the Import Data header.** Tally Prime's Import Data handler rejects the request outright when `VERSION` is present. The Export request shape *requires* `<VERSION>`, which tempts copy-paste; Import requests *must* omit it. This was the single biggest blocker during Tally Wrapper bring-up.
 2. **Flat `ALLINVENTORYENTRIES.LIST` + `ACCOUNTINGALLOCATIONS.LIST` layout.** This is the Item-Invoice shape — Tally accepts it *on some companies* but returned `EXCEPTIONS=1` against `dummy`. The nested `INVENTORYALLOCATIONS.LIST` layout shown above is the canonical one.
 3. **Sign convention inverted** (party positive, sales negative). Looks plausible if you think of `AMOUNT` as a signed Dr/Cr value, but produces `EXCEPTIONS=1`. Use the Dr-negative / Cr-positive convention above.
 4. **Sales allocation uses gross `LineTotal` instead of net.** `lineTotal` in the bill payload is the gross (tax-inclusive) value. Posting it directly to Sales while *also* posting CGST + SGST separately double-counts tax, leaves the voucher imbalanced by exactly `TaxTotal`, and Tally rejects it silently.
@@ -569,7 +569,7 @@ Success and failure audit events both carry truncated `RequestExcerpt` and `Resp
 
 ### 8.6 Terminal vs transient categorisation
 
-Since V2 has no auto-retry, "terminal" vs "transient" is informational only — the operator decides what to do next. Typical categorisation:
+Since Tally Wrapper has no auto-retry, "terminal" vs "transient" is informational only — the operator decides what to do next. Typical categorisation:
 
 - **Config errors → fix Settings, then Retry:** `CONFIG_MISSING_SALES_LEDGER`, `CONFIG_MISSING_CGST_LEDGER`, `CONFIG_MISSING_SGST_LEDGER`, `CONFIG_MISSING_ROUNDOFF_LEDGER`, `CONFIG_MISSING_DISCOUNT_LEDGER`, `CONFIG_MISSING_COMPANY`, `TALLY_NOT_CONFIGURED`.
 - **Bill-content errors → Revise, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`.

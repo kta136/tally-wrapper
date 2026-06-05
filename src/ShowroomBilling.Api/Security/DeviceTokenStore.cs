@@ -17,8 +17,18 @@ public sealed class DeviceTokenStore
     private string? _cached;
 
     public DeviceTokenStore()
+        : this(DeviceTokenConstants.ResolveTokenFilePath())
     {
-        _path = DeviceTokenConstants.ResolveTokenFilePath();
+    }
+
+    public DeviceTokenStore(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("Device-token path is required.", nameof(path));
+        }
+
+        _path = path;
     }
 
     public string GetOrCreateToken()

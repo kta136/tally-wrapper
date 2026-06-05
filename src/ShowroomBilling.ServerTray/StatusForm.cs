@@ -55,7 +55,7 @@ public sealed class StatusForm : Form
         _stopServiceAndExitTray = stopServiceAndExitTray;
         _httpClient = new HttpClient { BaseAddress = new Uri(options.ApiBaseUrl), Timeout = TimeSpan.FromSeconds(5) };
 
-        Text = "Showroom Billing Server";
+        Text = "Tally Wrapper Server";
         Icon = AppIconProvider.CreateIcon();
         BackColor = PageBackground;
         Width = 920;
@@ -120,7 +120,7 @@ public sealed class StatusForm : Form
         var text = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1 };
         text.Controls.Add(new Label
         {
-            Text = "Showroom Billing Server",
+            Text = "Tally Wrapper Server",
             AutoSize = true,
             Font = new Font(UiFontFamily(), 18, FontStyle.Bold),
             ForeColor = Ink
@@ -355,14 +355,14 @@ public sealed class StatusForm : Form
             MessageBox.Show(
                 this,
                 response.IsSuccessStatusCode ? $"{label} succeeded.\n\n{body}" : $"{label} failed: HTTP {(int)response.StatusCode}\n\n{body}",
-                "Showroom Billing Server",
+                "Tally Wrapper Server",
                 MessageBoxButtons.OK,
                 response.IsSuccessStatusCode ? MessageBoxIcon.Information : MessageBoxIcon.Error);
             await RefreshAsync();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"{label} failed: {ex.Message}", "Showroom Billing Server", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, $"{label} failed: {ex.Message}", "Tally Wrapper Server", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -377,7 +377,7 @@ public sealed class StatusForm : Form
         MessageBox.Show(
             this,
             $"Maintenance token was not found at {path}. Run Install / Repair Server first.",
-            "Showroom Billing Server",
+            "Tally Wrapper Server",
             MessageBoxButtons.OK,
             MessageBoxIcon.Error);
         return null;

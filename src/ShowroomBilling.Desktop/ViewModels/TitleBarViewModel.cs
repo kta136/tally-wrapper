@@ -5,7 +5,7 @@ namespace ShowroomBilling.Desktop.ViewModels;
 public partial class TitleBarViewModel : ObservableObject
 {
     [ObservableProperty]
-    private string appName = "Showroom Billing";
+    private string appName = "Tally Wrapper";
 
     [ObservableProperty]
     private string version = "v1.0";

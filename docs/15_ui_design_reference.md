@@ -2,13 +2,13 @@
 
 ## 1. Purpose
 
-The canonical visual and interaction target for the Showroom Billing V2 desktop shell is the prototype bundled under [docs/design/](design/). It is an HTML/CSS/React hi-fi mockup exported from Claude Design; it is **not** production code.
+The canonical visual and interaction target for the Tally Wrapper desktop shell is the prototype bundled under [docs/design/](design/). It is an HTML/CSS/React hi-fi mockup exported from Claude Design; it is **not** production code.
 
 This document is the contract between the implementation and the design bundle: it tells the implementer **what the final UI should look and feel like**.
 
 ## 2. What to read before implementing a UI slice
 
-1. [design/Showroom Billing.html](design/Showroom%20Billing.html) — entry point; pulls in the component files below.
+1. [design/Tally Wrapper.html](design/Tally%20Wrapper.html) — entry point; pulls in the component files below.
 2. [design/app/styles.css](design/app/styles.css) — the full design system (tokens, components, density toggle, focus ring). Treat this as the source of truth for colors, spacing, typography, and states.
 3. [design/app/shell.jsx](design/app/shell.jsx) — titlebar, nav, F-key strip, status bar.
 4. [design/app/invoice.jsx](design/app/invoice.jsx) — invoice screen.

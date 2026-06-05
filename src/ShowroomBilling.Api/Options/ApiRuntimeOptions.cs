@@ -4,7 +4,7 @@ public sealed class ApiRuntimeOptions
 {
     public const string SectionName = "Runtime";
 
-    public string ProductName { get; init; } = "Showroom Billing V2";
+    public string ProductName { get; init; } = "Tally Wrapper";
 
     public string ApiVersion { get; init; } = "1.0";
 

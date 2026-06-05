@@ -1,4 +1,4 @@
-# Showroom Billing V2
+# Tally Wrapper
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
@@ -6,7 +6,7 @@
 [![WPF](https://img.shields.io/badge/UI-WPF-5C2D91)](https://learn.microsoft.com/dotnet/desktop/wpf/)
 [![TallyPrime](https://img.shields.io/badge/integration-TallyPrime-0F766E)](https://tallysolutions.com/)
 
-Showroom Billing V2 is a Windows billing system for jewellery showrooms. It combines a WPF counter app, a local ASP.NET Core API, PostgreSQL, QuestPDF printing, and direct TallyPrime XML integration.
+Tally Wrapper is a Windows billing system for jewellery showrooms. It combines a WPF counter app, a local ASP.NET Core API, PostgreSQL, QuestPDF printing, and direct TallyPrime XML integration.
 
 The system is designed for operator-controlled billing. Bills are saved locally through the API, printed from the desktop app, and pushed to Tally only when an operator explicitly clicks a push action. There is no background Tally polling, queue worker, or automatic posting loop.
 
@@ -28,7 +28,7 @@ The system is designed for operator-controlled billing. Bills are saved locally 
 
 ## What It Does
 
-Showroom Billing V2 supports the core workflow for a jewellery billing counter:
+Tally Wrapper supports the core workflow for a jewellery billing counter:
 
 | Area | Capabilities |
 |---|---|
@@ -45,9 +45,9 @@ The app is intentionally split into a small number of clear runtime pieces:
 
 ```mermaid
 flowchart LR
-    Operator["Billing operator"] --> Desktop["ShowroomBilling.Desktop<br/>WPF counter app"]
-    Desktop --> Api["ShowroomBilling.Api<br/>ASP.NET Core API"]
-    ServerTray["ShowroomBilling.ServerTray<br/>server installer + tray UI"] --> Api
+    Operator["Billing operator"] --> Desktop["Tally Wrapper Desktop<br/>WPF counter app"]
+    Desktop --> Api["Tally Wrapper API<br/>ASP.NET Core API"]
+    ServerTray["Tally Wrapper Server<br/>installer + tray UI"] --> Api
     Api --> Postgres["PostgreSQL<br/>system of record"]
     Api --> Tally["TallyPrime<br/>local XML endpoint"]
     Desktop --> Printing["QuestPDF / Windows printing"]
@@ -123,7 +123,7 @@ Clone and build:
 
 ```powershell
 git clone <repo-url>
-cd Tally_Wrapper_V2
+cd tally-wrapper
 
 dotnet restore ShowroomBilling.sln
 dotnet build ShowroomBilling.sln
@@ -170,7 +170,7 @@ Real connection strings are not committed. Keep them in one of these private loc
 The safe placeholder in `src/ShowroomBilling.Api/appsettings.json` points to local Postgres:
 
 ```text
-Host=localhost;Port=5432;Database=showroom_billing_v2;Username=postgres;Password=postgres
+Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres
 ```
 
 Manual migration command:
@@ -254,7 +254,7 @@ The publish scripts create self-contained Windows artifacts under `publish/`.
 Output:
 
 ```text
-publish\prod\Billing.exe
+publish\prod\TallyWrapper.exe
 ```
 
 The desktop artifact embeds a sanitized API payload. Production database credentials are not embedded.
@@ -268,7 +268,7 @@ The desktop artifact embeds a sanitized API payload. Production database credent
 Output:
 
 ```text
-publish\server\ShowroomBilling.Server.exe
+publish\server\TallyWrapper.Server.exe
 ```
 
 This one-file EXE embeds the API service binary and installs/repairs the server-mode Windows Service.
@@ -282,7 +282,7 @@ This one-file EXE embeds the API service binary and installs/repairs the server-
 Output:
 
 ```text
-publish\server\api\ShowroomBilling.Api.exe
+publish\server\api\TallyWrapper.Api.exe
 ```
 
 Use this when you need the raw API service binary without the tray installer wrapper.
@@ -297,7 +297,7 @@ Server mode is for a multi-counter showroom where TallyPrime runs on one server 
    .\tools\publish-server-tray.ps1
    ```
 
-2. Copy `publish\server\ShowroomBilling.Server.exe` to the Tally server.
+2. Copy `publish\server\TallyWrapper.Server.exe` to the Tally server.
 
 3. Run it on the Tally server.
 
@@ -309,8 +309,8 @@ Server mode is for a multi-counter showroom where TallyPrime runs on one server 
 
 5. The installer:
 
-   - extracts `ShowroomBilling.Api.exe` to `C:\ProgramData\ShowroomBilling\bin`
-   - installs the `ShowroomBilling.Api` Windows Service
+   - extracts the API service binary to `C:\ProgramData\ShowroomBilling\bin`
+   - installs the Tally Wrapper API Windows Service
    - configures the service for `http://0.0.0.0:5107`
    - creates a firewall rule scoped to the trusted LAN CIDR
    - creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt`
@@ -348,7 +348,7 @@ This project is built for a trusted showroom LAN, not internet exposure.
 
 Important deployment notes:
 
-- Do not expose `ShowroomBilling.Api` directly to the internet.
+- Do not expose the Tally Wrapper API directly to the internet.
 - Keep the trusted CIDR as narrow as practical.
 - Admin passcode setup is loopback-only in server mode until configured.
 - DB override metadata, DB bootstrap, DB test, and maintenance endpoints are loopback-only in server mode.
@@ -386,7 +386,7 @@ The test DB provider is EF Core InMemory for most DB-backed unit tests. It valid
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| Build fails copying Desktop DLLs | Desktop EXE is still running | Close `Billing.exe` / `ShowroomBilling.Desktop.exe` and rebuild |
+| Build fails copying Desktop DLLs | Desktop EXE is still running | Close `TallyWrapper.exe` / the Desktop process and rebuild |
 | API starts but DB is not ready | Missing or invalid Postgres connection string | Configure DB from Settings or server tray, then restart API |
 | Desktop says cloud/API down | API child process not started or wrong port | Check `%APPDATA%\ShowroomBilling\logs` and `ChildProcesses` settings |
 | Tally push fails | TallyPrime closed, wrong company open, wrong endpoint, or XML error | Open TallyPrime, verify active company/settings, retry from Bills tab |

@@ -55,7 +55,7 @@ public partial class App : System.Windows.Application
 
         // appsettings.json is embedded into the Desktop assembly (see csproj
         // <EmbeddedResource Include="appsettings.json"/>) so the prod folder contains
-        // only Billing.exe + the two .NET runtime artifacts. AddJsonStream binds the
+        // only TallyWrapper.exe + the two .NET runtime artifacts. AddJsonStream binds the
         // baked-in baseline; appsettings.{Environment}.json still loads from disk so
         // dev can override without rebuilding, and SHOWROOM_DESKTOP_* env vars win
         // last as before.

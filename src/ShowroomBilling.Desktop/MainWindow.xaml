@@ -13,7 +13,7 @@
         xmlns:adminViews="clr-namespace:ShowroomBilling.Desktop.Views.Admin"
         xmlns:syntheticViews="clr-namespace:ShowroomBilling.Desktop.Views.SyntheticBatch"
         mc:Ignorable="d"
-        Title="Showroom Billing"
+        Title="Tally Wrapper"
         Height="720"
         Width="1180"
         MinHeight="600"
