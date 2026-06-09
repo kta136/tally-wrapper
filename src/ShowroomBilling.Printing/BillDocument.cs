@@ -231,48 +231,56 @@ public sealed class BillDocument : IDocument
         {
             table.ColumnsDefinition(cd =>
             {
-                cd.ConstantColumn(22);  // #
+                cd.ConstantColumn(20);  // #
                 cd.RelativeColumn(3);   // Description
-                cd.ConstantColumn(48);  // HSN
                 if (hasLessWt)
                 {
                     cd.ConstantColumn(46); // Gross Wt
                     cd.ConstantColumn(44); // Less Wt
                 }
-                cd.ConstantColumn(50); // Net Wt
-                cd.ConstantColumn(46); // Purity — 3-char values; 40pt wraps the header
-                cd.ConstantColumn(48); // Making
+                cd.ConstantColumn(48); // Net Wt
+                cd.ConstantColumn(42); // Purity
+                cd.ConstantColumn(64); // Making — enough for rare percentage+labour without reserving the old 78pt
                 if (hasExtra)
                 {
-                    cd.ConstantColumn(52); // Extra Charges
+                    cd.ConstantColumn(44); // Extra Charges
                 }
-                cd.ConstantColumn(62); // Rate/g
+                cd.ConstantColumn(56); // Rate/g
                 cd.ConstantColumn(76); // Amount — Description's RelativeColumn absorbs the delta from earlier baseline
             });
 
             table.Header(header =>
             {
                 static IContainer H(IContainer c, int font) => c.Border(1f).BorderColor(Colors.Black)
-                    .PaddingVertical(2).PaddingHorizontal(6)
+                    .PaddingVertical(2).PaddingHorizontal(4)
                     .DefaultTextStyle(ts => ts.SemiBold().FontSize(font));
 
-                header.Cell().Element(c => H(c, _smallFont)).AlignCenter().Text("#");
+                void HeaderCell(string text, bool center = false, bool right = false)
+                {
+                    var cell = header.Cell().Element(c => H(c, _smallFont));
+                    cell = center ? cell.AlignCenter() : right ? cell.AlignRight() : cell.AlignLeft();
+                    cell.ScaleToFit().Text(t =>
+                    {
+                        t.Span(KeepOnOneLine(text)).FontSize(_xSmallFont);
+                    });
+                }
+
+                HeaderCell("#", center: true);
                 header.Cell().Element(c => H(c, _smallFont)).AlignLeft().Text("Description");
-                header.Cell().Element(c => H(c, _smallFont)).AlignCenter().Text("HSN");
                 if (hasLessWt)
                 {
-                    header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Gross Wt");
-                    header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Less Wt");
+                    HeaderCell("Gross", right: true);
+                    HeaderCell("Less", right: true);
                 }
-                header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Net Wt");
-                header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Purity");
-                header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Making");
+                HeaderCell("Net Wt", right: true);
+                HeaderCell("Purity", right: true);
+                HeaderCell("Making", right: true);
                 if (hasExtra)
                 {
-                    header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Extra");
+                    HeaderCell("Extra", right: true);
                 }
-                header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Rate/g");
-                header.Cell().Element(c => H(c, _smallFont)).AlignRight().Text("Amount");
+                HeaderCell("Rate/g", right: true);
+                HeaderCell("Amount", right: true);
             });
 
             int idx = 1;
@@ -283,43 +291,52 @@ public sealed class BillDocument : IDocument
                 // Amount columns at the default 11pt body. Headers were already on
                 // _smallFont, so the table now reads at one consistent size.
                 IContainer Cell(IContainer c) => c.Border(1f).BorderColor(Colors.Black)
-                    .PaddingVertical(2).PaddingHorizontal(6)
+                    .PaddingVertical(2).PaddingHorizontal(4)
                     .DefaultTextStyle(ts => ts.FontSize(_smallFont));
+
+                void ValueCell(string text, bool center = false, bool bold = false)
+                {
+                    var cell = table.Cell().Element(Cell);
+                    cell = center ? cell.AlignCenter() : cell.AlignRight();
+                    cell.ScaleToFit().Text(t =>
+                    {
+                        var span = t.Span(KeepOnOneLine(text)).FontSize(_xSmallFont);
+                        if (bold) span.SemiBold();
+                    });
+                }
 
                 var unit = string.IsNullOrWhiteSpace(line.Unit) ? "g" : line.Unit!.Trim();
                 var grossWt = line.GrossWeight ?? 0m;
                 var lessWt = line.LessWeight ?? 0m;
                 var isDiamond = IsDiamond(line);
 
-                table.Cell().Element(Cell).AlignCenter().Text(idx.ToString(CultureInfo.InvariantCulture));
+                ValueCell(idx.ToString(CultureInfo.InvariantCulture), center: true);
                 table.Cell().Element(Cell).Text(t => t.Span(line.ItemName).SemiBold());
-                table.Cell().Element(Cell).AlignCenter().Text(
-                    string.IsNullOrWhiteSpace(line.HsnCode) ? DefaultHsnCode : line.HsnCode!);
 
                 if (hasLessWt)
                 {
-                    table.Cell().Element(Cell).AlignRight().Text(
-                        !isDiamond && grossWt > 0m ? FormatWeight(grossWt, unit) : "—");
-                    table.Cell().Element(Cell).AlignRight().Text(
-                        !isDiamond && lessWt > 0m ? FormatWeight(lessWt, unit) : "—");
+                    ValueCell(!isDiamond && grossWt > 0m ? FormatWeight(grossWt, unit) : "—");
+                    ValueCell(!isDiamond && lessWt > 0m ? FormatWeight(lessWt, unit) : "—");
                 }
 
-                table.Cell().Element(Cell).AlignRight().Text(FormatWeight(line.Quantity, unit));
-                table.Cell().Element(Cell).AlignCenter().Text(isDiamond ? "—" : line.Karat ?? "—");
-                table.Cell().Element(Cell).AlignRight().Text(FormatMaking(line));
+                ValueCell(FormatWeight(line.Quantity, unit));
+                ValueCell(isDiamond ? "—" : line.Karat ?? "—", center: true);
+                ValueCell(FormatMaking(line));
 
                 if (hasExtra)
                 {
                     var extra = line.Extra ?? 0m;
-                    table.Cell().Element(Cell).AlignRight().Text(extra != 0m ? FormatMoney(extra) : "—");
+                    ValueCell(extra != 0m ? FormatMoney(extra) : "—");
                 }
 
-                table.Cell().Element(Cell).AlignRight().Text(FormatMoney(line.Rate));
-                table.Cell().Element(Cell).AlignRight().Text(t => t.Span(FormatMoney(line.LineTotal)).SemiBold());
+                ValueCell(FormatMoney(line.Rate));
+                ValueCell(FormatMoney(line.LineTotal), bold: true);
                 idx++;
             }
         });
     }
+
+    private static string KeepOnOneLine(string text) => text.Replace(" ", "\u00A0", StringComparison.Ordinal);
 
     private void ComposeSummary(IContainer container)
     {
@@ -385,15 +402,17 @@ public sealed class BillDocument : IDocument
 
                 c.Item().Row(header =>
                 {
-                    GstHeaderCell(header, "Taxable Value Before GST");
+                    GstHeaderCell(header, "HSN Code");
+                    GstHeaderCell(header, "Taxable Value", width: 1.25f);
                     GstHeaderCell(header, $"CGST @ {CgstRatePct:0.#}%");
                     GstHeaderCell(header, $"SGST @ {SgstRatePct:0.#}%");
-                    GstHeaderCell(header, "Total GST Included", last: true);
+                    GstHeaderCell(header, "Total GST", last: true);
                 });
 
                 c.Item().Row(values =>
                 {
-                    GstValueCell(values, FormatMoney(totals.Subtotal));
+                    GstValueCell(values, GetHsnCodeDisplay(), center: true);
+                    GstValueCell(values, FormatMoney(totals.Subtotal), width: 1.25f);
                     GstValueCell(values, FormatMoney(cgst));
                     GstValueCell(values, FormatMoney(sgst));
                     GstValueCell(values, FormatMoney(gstTotal), last: true, bold: true);
@@ -420,20 +439,38 @@ public sealed class BillDocument : IDocument
         });
     }
 
-    private void GstHeaderCell(RowDescriptor row, string text, bool last = false)
+    private string GetHsnCodeDisplay()
+    {
+        var codes = _options.Content.Lines
+            .Select(line => string.IsNullOrWhiteSpace(line.HsnCode) ? DefaultHsnCode : line.HsnCode.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return codes.Length == 0 ? DefaultHsnCode : string.Join(", ", codes);
+    }
+
+    private void GstHeaderCell(RowDescriptor row, string text, bool last = false, float width = 1f)
     {
         // Border must precede Padding in the chain so the 1pt line sits at the cell
         // edge (outside the padding), matching V1's border-collapse grid appearance.
-        var cell = row.RelativeItem().BorderBottom(1f).BorderColor(Colors.Black);
+        var cell = row.RelativeItem(width).BorderBottom(1f).BorderColor(Colors.Black);
         if (!last) cell = cell.BorderRight(1f);
         cell.PaddingVertical(2).PaddingHorizontal(5).Text(text).FontSize(_xSmallFont).SemiBold();
     }
 
-    private void GstValueCell(RowDescriptor row, string text, bool last = false, bool bold = false)
+    private void GstValueCell(
+        RowDescriptor row,
+        string text,
+        bool last = false,
+        bool bold = false,
+        float width = 1f,
+        bool center = false)
     {
-        var cell = row.RelativeItem();
+        var cell = row.RelativeItem(width);
         if (!last) cell = cell.BorderRight(1f).BorderColor(Colors.Black);
-        cell.PaddingVertical(3).PaddingHorizontal(5).AlignRight().Text(t =>
+        var content = cell.PaddingVertical(3).PaddingHorizontal(5);
+        content = center ? content.AlignCenter() : content.AlignRight();
+        content.Text(t =>
         {
             var span = t.Span(text).FontSize(_smallFont);
             if (bold) span.SemiBold();

@@ -269,14 +269,19 @@ a single A4 page with the following blocks (top-to-bottom):
    so the payment context is preserved on print — V1 dropped this signal once
    the operator typed a real customer name; Tally Wrapper keeps it.
 4. Line-item table. Columns, conditional where noted:
-   `#`, `Description`, `HSN` (defaults to `711319` when blank),
-   `Gross Wt` + `Less Wt` (shown when any line has a non-zero less weight),
+   `#`, `Description`, `Gross Wt` + `Less Wt` (shown when any line has a non-zero less weight),
    `Net Wt`, `Purity`, `Making` (wastage % + labour per gram),
    `Extra` (shown when any line has extra charges),
    `Rate/g`, `Amount` (GST-inclusive, allocated proportionally per line).
+   `Description` is the only item-table column allowed to wrap; all other
+   item-table headers and values are kept to a single line. Weight and making
+   values use compact print formatting (`22.345g`, `12.5%+150/g`) to avoid
+   space-based wraps in the fixed-width columns. `Making` is narrower than the
+   old wide column but still fits the rare percentage+labour value.
 5. Right-aligned summary: `Items Total (Incl. GST)`, optional `Discount`,
    optional `Round Off`, bold `Total Amount (Incl. GST)`.
-6. GST breakup box: Taxable Value / `CGST @ 1.5%` / `SGST @ 1.5%` / Total GST Included.
+6. GST breakup box: HSN Code (defaults to `711319` when blank) / Taxable Value /
+   `CGST @ 1.5%` / `SGST @ 1.5%` / Total GST.
    (CGST/SGST percentages are hardcoded to mirror the V1 default; making them
    configurable is tracked separately.)
 7. Bank details box (rendered only when any of bank name / account / IFSC / UPI

@@ -4,8 +4,8 @@ namespace ShowroomBilling.Printing;
 
 /// <summary>
 /// Deterministic sample invoice content used to render the live Settings preview.
-/// Must exercise every optional print column — HSN, gross/less weight, extra
-/// charges, making (wastage + labour), bank block, terms — so operator changes to
+/// Must exercise HSN fallback plus every optional print column — gross/less
+/// weight, extra charges, making (wastage + labour), bank block, terms — so operator changes to
 /// those fields become visible in the preview without needing a real saved bill.
 /// </summary>
 public static class PreviewSampleProvider

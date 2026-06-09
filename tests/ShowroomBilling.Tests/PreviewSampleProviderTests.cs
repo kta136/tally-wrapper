@@ -19,7 +19,7 @@ public class PreviewSampleProviderTests
         TermsAndConditions: null);
 
     [Fact]
-    public void Sample_exercises_HSN_gross_less_extra_and_bare_line()
+    public void Sample_exercises_hsn_fallback_gross_less_extra_and_bare_line()
     {
         var content = PreviewSampleProvider.CreateSampleContent(AnyCompany);
 
@@ -28,7 +28,7 @@ public class PreviewSampleProviderTests
         Assert.Equal(2, content.Lines.Count);
 
         var rich = content.Lines[0];
-        Assert.True(rich.HsnCode is null, "first line leaves HSN null so the 711319 fallback renders");
+        Assert.True(rich.HsnCode is null, "first line leaves HSN null so the GST table fallback renders");
         Assert.True((rich.GrossWeight ?? 0m) > 0m);
         Assert.True((rich.LessWeight ?? 0m) > 0m);
         Assert.True((rich.Extra ?? 0m) > 0m);

@@ -25,7 +25,7 @@ internal static class BillDocumentText
         var num = value % 1 == 0m
             ? value.ToString("0", CultureInfo.InvariantCulture)
             : value.ToString("0.000", CultureInfo.InvariantCulture);
-        return $"{num} {unit}";
+        return $"{num}{unit}";
     }
 
     internal static string FormatSigned(decimal value)
@@ -43,9 +43,15 @@ internal static class BillDocumentText
         var wastage = line.WastagePercent ?? 0m;
         var labour = line.LabourPerUnit ?? 0m;
         if (wastage != 0m)
-            parts.Add((wastage % 1 == 0m ? wastage.ToString("0") : wastage.ToString("0.00")) + "%");
-        if (labour != 0m) parts.Add($"{FormatMoney(labour)}/g");
-        return parts.Count == 0 ? "—" : string.Join(" + ", parts);
+            parts.Add((wastage % 1 == 0m ? wastage.ToString("0") : wastage.ToString("0.##")) + "%");
+        if (labour != 0m) parts.Add($"{FormatCompactNumber(labour)}/g");
+        return parts.Count == 0 ? "—" : string.Join("+", parts);
+    }
+
+    private static string FormatCompactNumber(decimal value)
+    {
+        var fmt = value % 1 == 0m ? "N0" : "N2";
+        return value.ToString(fmt, IndianCulture);
     }
 
     internal static bool IsDiamond(BillLineItemDto line)
