@@ -9,6 +9,7 @@ namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 public partial class BillLineViewModel : ObservableObject
 {
     private int rowNumber;
+    private bool _suppressItemMasterDefaults;
 
     [ObservableProperty] private string itemName = string.Empty;
     [ObservableProperty] private decimal? grossWeight;
@@ -50,6 +51,19 @@ public partial class BillLineViewModel : ObservableObject
         : ItemMaster?.PricingMode ?? PricingModes.Wastage;
 
     public event EventHandler? MutationOccurred;
+
+    public void SetItemMasterFromPayload(ItemMasterRowVm? value)
+    {
+        _suppressItemMasterDefaults = true;
+        try
+        {
+            ItemMaster = value;
+        }
+        finally
+        {
+            _suppressItemMasterDefaults = false;
+        }
+    }
 
     partial void OnItemNameChanged(string value)
     {
@@ -100,7 +114,7 @@ public partial class BillLineViewModel : ObservableObject
 
     partial void OnItemMasterChanged(ItemMasterRowVm? value)
     {
-        if (value is not null)
+        if (value is not null && !_suppressItemMasterDefaults)
         {
             ItemName = value.Name;
             if (!string.IsNullOrWhiteSpace(value.Unit)) Unit = value.Unit;

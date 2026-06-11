@@ -28,6 +28,7 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
     private Dictionary<string, ItemMasterRowVm>? _itemMasterByName;
     private bool _deferLineCollectionRecompute;
+    private bool _syncingLinkedTotals;
     private Guid? _draftBillId;
     private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
     private const decimal CgstRate = BillCalculator.CgstRate;
@@ -147,6 +148,7 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private decimal sgst;
     [ObservableProperty] private decimal roundOff;
     [ObservableProperty] private decimal grandTotal;
+    [ObservableProperty] private decimal finalAmount;
     [ObservableProperty] private int itemCount;
     [ObservableProperty] private decimal totalWeight;
 
@@ -157,10 +159,37 @@ public partial class InvoiceViewModel : ObservableObject
         if (value is > 0m) RateMissing = false;
         Recompute();
     }
-    partial void OnDiscountChanged(decimal value) => RecomputeTotalsFromCurrentLines();
+    partial void OnDiscountChanged(decimal value)
+    {
+        if (_syncingLinkedTotals) return;
+
+        if (value < 0m)
+        {
+            SetDiscountFromLinkedTotals(0m);
+            SaveStatus = "Discount cannot be negative.";
+            RecomputeTotalsFromCurrentLines();
+            return;
+        }
+
+        if (value > 0m && !DiscountEnabled)
+        {
+            SetDiscountEnabledFromLinkedTotals(true);
+        }
+
+        RecomputeTotalsFromCurrentLines();
+    }
+
     partial void OnDiscountEnabledChanged(bool value)
     {
+        if (_syncingLinkedTotals) return;
         if (!value) Discount = 0m;
+        else RecomputeTotalsFromCurrentLines();
+    }
+
+    partial void OnFinalAmountChanged(decimal value)
+    {
+        if (_syncingLinkedTotals) return;
+        ApplyFinalAmount(value);
     }
 
     private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -400,8 +429,29 @@ public partial class InvoiceViewModel : ObservableObject
 
     private void RecomputeTotalsFromCurrentLines()
     {
-        decimal weight = 0m;
+        var (inclusiveTotal, weight, count) = SummarizeCurrentLines();
+        var effectiveDiscount = Math.Max(0m, Discount);
+        if (effectiveDiscount != Discount)
+            SetDiscountFromLinkedTotals(effectiveDiscount);
+
+        var totals = BillCalculator.BuildTotals(inclusiveTotal, effectiveDiscount);
+        Subtotal = totals.SubtotalBase;
+        Cgst = totals.Cgst;
+        Sgst = totals.Sgst;
+        RoundOff = totals.RoundOff;
+        GrandTotal = totals.GrandTotal;
+        SetFinalAmountFromLinkedTotals(totals.GrandTotal);
+        ItemCount = count;
+        TotalWeight = weight;
+        DiscountPercentHint = (effectiveDiscount > 0m && Subtotal > 0m)
+            ? $"≈ {(double)(effectiveDiscount / Subtotal) * 100.0:0.0}%"
+            : string.Empty;
+    }
+
+    private (decimal InclusiveTotal, decimal Weight, int Count) SummarizeCurrentLines()
+    {
         decimal inclusiveTotal = 0m;
+        decimal weight = 0m;
         int count = 0;
 
         foreach (var line in Lines)
@@ -413,17 +463,82 @@ public partial class InvoiceViewModel : ObservableObject
             count++;
         }
 
-        var totals = BillCalculator.BuildTotals(inclusiveTotal, Discount);
-        Subtotal = totals.SubtotalBase;
-        Cgst = totals.Cgst;
-        Sgst = totals.Sgst;
-        RoundOff = totals.RoundOff;
-        GrandTotal = totals.GrandTotal;
-        ItemCount = count;
-        TotalWeight = weight;
-        DiscountPercentHint = (Discount > 0m && Subtotal > 0m)
-            ? $"≈ {(double)(Discount / Subtotal) * 100.0:0.0}%"
-            : string.Empty;
+        return (inclusiveTotal, weight, count);
+    }
+
+    private void ApplyFinalAmount(decimal requestedFinalAmount)
+    {
+        var targetGrand = Math.Round(Math.Max(0m, requestedFinalAmount), 0, MidpointRounding.AwayFromZero);
+        var (inclusiveTotal, _, _) = SummarizeCurrentLines();
+        var undiscounted = BillCalculator.BuildTotals(inclusiveTotal, 0m);
+
+        if (targetGrand >= undiscounted.GrandTotal)
+        {
+            SetDiscountFromLinkedTotals(0m);
+            RecomputeTotalsFromCurrentLines();
+            if (targetGrand > undiscounted.GrandTotal && undiscounted.GrandTotal > 0m)
+            {
+                SaveStatus = $"Final amount cannot exceed ₹{undiscounted.GrandTotal:N0}; discount reset.";
+            }
+            return;
+        }
+
+        var preDiscountTotal = undiscounted.SubtotalBase + undiscounted.Cgst + undiscounted.Sgst;
+        var computedDiscount = Math.Round(
+            Math.Max(0m, preDiscountTotal - targetGrand),
+            2,
+            MidpointRounding.AwayFromZero);
+
+        if (!DiscountEnabled)
+            SetDiscountEnabledFromLinkedTotals(true);
+
+        SetDiscountFromLinkedTotals(computedDiscount);
+        RecomputeTotalsFromCurrentLines();
+    }
+
+    private void SetDiscountFromLinkedTotals(decimal value)
+    {
+        if (Discount == value) return;
+
+        _syncingLinkedTotals = true;
+        try
+        {
+            Discount = value;
+        }
+        finally
+        {
+            _syncingLinkedTotals = false;
+        }
+    }
+
+    private void SetDiscountEnabledFromLinkedTotals(bool value)
+    {
+        if (DiscountEnabled == value) return;
+
+        _syncingLinkedTotals = true;
+        try
+        {
+            DiscountEnabled = value;
+        }
+        finally
+        {
+            _syncingLinkedTotals = false;
+        }
+    }
+
+    private void SetFinalAmountFromLinkedTotals(decimal value)
+    {
+        if (FinalAmount == value) return;
+
+        _syncingLinkedTotals = true;
+        try
+        {
+            FinalAmount = value;
+        }
+        finally
+        {
+            _syncingLinkedTotals = false;
+        }
     }
 
     private decimal ResolvePurityPercent(BillLineViewModel line)

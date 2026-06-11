@@ -562,7 +562,11 @@
                     BorderBrush="{StaticResource BorderBrushTok}"
                     BorderThickness="0,1,0,0">
                 <Grid>
-                    <StackPanel Orientation="Horizontal">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
                         <Button Style="{StaticResource BtnBase}" Command="{Binding PrintPreviewCommand}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Print Estimate" VerticalAlignment="Center" />
@@ -602,20 +606,40 @@
                                      FontFamily="{StaticResource MonoFontFamily}"
                                      Foreground="{StaticResource ErrBrush}"
                                      IsEnabled="{Binding DiscountEnabled}"
-                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=LostFocus}" />
+                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="8,0,0,0"
                                        VerticalAlignment="Center"
                                        FontSize="11"
                                        Foreground="{StaticResource InkMutedBrush}"
                                        Text="{Binding DiscountPercentHint}" />
+                            <Rectangle Width="1"
+                                       Height="18"
+                                       Margin="10,0"
+                                       Fill="{StaticResource DividerBrush}" />
+                            <TextBlock VerticalAlignment="Center"
+                                       Style="{StaticResource FieldLabel}"
+                                       Margin="0"
+                                       Text="FINAL" />
+                            <TextBlock Margin="8,0,2,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="₹" />
+                            <TextBox Width="88"
+                                     Padding="4,0"
+                                     Height="22"
+                                     VerticalContentAlignment="Center"
+                                     TextAlignment="Right"
+                                     FontFamily="{StaticResource MonoFontFamily}"
+                                     Text="{Binding FinalAmount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                         <TextBlock Margin="14,0,0,0"
                                    VerticalAlignment="Center"
                                    FontSize="11"
+                                   TextTrimming="CharacterEllipsis"
                                    Foreground="{StaticResource InkMutedBrush}"
                                    Text="{Binding SaveStatus}" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
                             <TextBlock Text="Grand " Foreground="{StaticResource InkMutedBrush}" />
                             <TextBlock FontFamily="{StaticResource MonoFontFamily}"

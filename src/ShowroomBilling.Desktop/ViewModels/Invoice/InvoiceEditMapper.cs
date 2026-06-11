@@ -30,8 +30,8 @@ internal static class InvoiceEditMapper
 
             if (itemMasters is not null)
             {
-                row.ItemMaster = itemMasters.FirstOrDefault(m =>
-                    string.Equals(m.Name, line.ItemName, StringComparison.OrdinalIgnoreCase));
+                row.SetItemMasterFromPayload(itemMasters.FirstOrDefault(m =>
+                    string.Equals(m.Name, line.ItemName, StringComparison.OrdinalIgnoreCase)));
             }
 
             row.ItemCategory = InvoicePayloadMapper.ResolveLineItemCategory(line, row.ItemMaster);

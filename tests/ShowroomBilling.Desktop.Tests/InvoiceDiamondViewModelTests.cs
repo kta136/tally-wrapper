@@ -160,6 +160,138 @@ public sealed class InvoiceDiamondViewModelTests
         Assert.Equal(2m, loaded.NetWeight);
     }
 
+    [Fact]
+    public async Task LoadBillForEdit_preserves_stored_wastage_and_labour_when_master_defaults_differ()
+    {
+        var billId = Guid.NewGuid();
+        var settings = new SettingsViewModel();
+        var master = new ItemMasterRowVm
+        {
+            Name = "22K Ring",
+            Unit = ItemUnits.Gram,
+            ItemCategory = ItemCategories.GoldBased,
+            PricingMode = PricingModes.Both,
+            WastagePercent = "10",
+            DefaultLabourPerGram = "500"
+        };
+        settings.Draft.ItemMasterRows.Add(master);
+        settings.Draft.KaratRows.Add(new KaratMasterRowVm
+        {
+            Label = "22K",
+            PurityPercent = "91.6",
+            TallyItem = "Gold 22K"
+        });
+        var payload = new BillPayloadDto(
+            PartyName: "Customer",
+            PartyGstin: null,
+            PartyPhone: null,
+            PartyAddress: null,
+            BillDate: new DateOnly(2026, 4, 24),
+            Lines:
+            [
+                new BillLineItemDto(
+                    ItemName: "22K Ring",
+                    HsnCode: "7113",
+                    Quantity: 10m,
+                    Unit: ItemUnits.Gram,
+                    Rate: 6000m,
+                    LineTotal: 60000m,
+                    Karat: "22K",
+                    RawJson: null,
+                    StockName: "Gold 22K",
+                    GrossWeight: 10m,
+                    LessWeight: 0m,
+                    WastagePercent: 8m,
+                    LabourPerUnit: 320m,
+                    DiamondRate: null,
+                    Extra: 0m,
+                    ItemCategory: ItemCategories.GoldBased,
+                    PricingMode: PricingModes.Both)
+            ],
+            Totals: new BillTotalsDto(58252.43m, 0m, 1747.57m, 0m, 60000m),
+            Notes: null,
+            Payment: "Cash",
+            Rate24Kt: 6000m);
+        var api = new FakeBillsApi
+        {
+            GetResponse = BillResponseFor(billId, payload)
+        };
+        var vm = new InvoiceViewModel(api, null, settings);
+
+        await vm.LoadBillForEditAsync(billId);
+
+        var loaded = vm.Lines.First(l => !l.IsEmpty);
+        Assert.Same(master, loaded.ItemMaster);
+        Assert.Equal(8m, loaded.WastagePercent);
+        Assert.Equal(320m, loaded.LabourPerUnit);
+        Assert.Equal(PricingModes.Both, loaded.PricingMode);
+    }
+
+    [Fact]
+    public void Selecting_item_master_applies_defaults_for_new_rows()
+    {
+        var master = new ItemMasterRowVm
+        {
+            Name = "22K Ring",
+            Unit = ItemUnits.Gram,
+            ItemCategory = ItemCategories.GoldBased,
+            PricingMode = PricingModes.Both,
+            WastagePercent = "10",
+            DefaultLabourPerGram = "500"
+        };
+        var line = new BillLineViewModel
+        {
+            WastagePercent = 8m,
+            LabourPerUnit = 320m
+        };
+
+        line.ItemMaster = master;
+
+        Assert.Equal(10m, line.WastagePercent);
+        Assert.Equal(500m, line.LabourPerUnit);
+        Assert.Equal(PricingModes.Both, line.PricingMode);
+    }
+
+    [Fact]
+    public void Discount_updates_final_amount_immediately()
+    {
+        var vm = InvoiceWithDiamondLine();
+
+        vm.DiscountEnabled = true;
+        vm.Discount = 100m;
+
+        Assert.Equal(900m, vm.GrandTotal);
+        Assert.Equal(900m, vm.FinalAmount);
+    }
+
+    [Fact]
+    public void Final_amount_updates_discount_and_grand_total_immediately()
+    {
+        var vm = InvoiceWithDiamondLine();
+
+        vm.FinalAmount = 850m;
+
+        Assert.True(vm.DiscountEnabled);
+        Assert.Equal(149.99m, vm.Discount);
+        Assert.Equal(850m, vm.GrandTotal);
+        Assert.Equal(850m, vm.FinalAmount);
+    }
+
+    [Fact]
+    public void Final_amount_above_undiscounted_total_clamps_discount_to_zero()
+    {
+        var vm = InvoiceWithDiamondLine();
+        vm.DiscountEnabled = true;
+        vm.Discount = 100m;
+
+        vm.FinalAmount = 1200m;
+
+        Assert.Equal(0m, vm.Discount);
+        Assert.Equal(1000m, vm.GrandTotal);
+        Assert.Equal(1000m, vm.FinalAmount);
+        Assert.Contains("cannot exceed", vm.SaveStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ItemMasterRowVm DiamondMaster(string defaultStockMappingLabel = "") => new()
     {
         Name = "Diamond Ring",
@@ -180,6 +312,16 @@ public sealed class InvoiceDiamondViewModelTests
         WastagePercent = "8",
         DefaultLabourPerGram = "0"
     };
+
+    private static InvoiceViewModel InvoiceWithDiamondLine()
+    {
+        var vm = new InvoiceViewModel(null, null, null);
+        var line = vm.Lines[0];
+        line.ItemMaster = DiamondMaster();
+        line.GrossWeight = 10m;
+        line.DiamondRate = 100m;
+        return vm;
+    }
 
     private static BillPayloadDto PayloadWithLine(BillLineItemDto line) => new(
         PartyName: "Customer",
