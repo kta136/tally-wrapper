@@ -1,0 +1,87 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.ConnectionSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Text="Connection" Style="{StaticResource SectionHeader}" Margin="0,0,0,8" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="TALLY HOST" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.Host, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="TIMEOUT (SECONDS)" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.TimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="PORT" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.Port, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="ACTIVE COMPANY" />
+                <Border Style="{StaticResource ReadOnlyBox}">
+                    <TextBlock Text="{Binding ActiveCompanyName, TargetNullValue='—', FallbackValue='—'}" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Connection · Active Company" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox Grid.Column="0"
+                      Margin="0,0,8,0"
+                      ItemsSource="{Binding Companies}"
+                      SelectedItem="{Binding SelectedCompany}"
+                      DisplayMemberPath="Name" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Style="{StaticResource BtnSm}"
+                        Margin="0,0,6,0"
+                        Command="{Binding RequestCompanyRefreshCommand}"
+                        Content="Refresh from Tally" />
+                <Button Style="{StaticResource BtnPrimary}"
+                        Command="{Binding SetActiveCompanyCommand}"
+                        Content="Set Active" />
+            </StackPanel>
+        </Grid>
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="Cached" />
+            <TextBlock Margin="6,0,0,0"
+                       FontFamily="{StaticResource MonoFontFamily}"
+                       FontSize="11"
+                       Foreground="{StaticResource InkSoftBrush}"
+                       Text="{Binding CompaniesCount, StringFormat='{}{0} companies'}" />
+            <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="Freshness" />
+            <TextBlock Margin="6,0,0,0"
+                       FontFamily="{StaticResource MonoFontFamily}"
+                       FontSize="11"
+                       Foreground="{StaticResource InkSoftBrush}"
+                       Text="{Binding CompaniesFreshness}" />
+            <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="Fetched" />
+            <TextBlock Margin="6,0,0,0"
+                       FontFamily="{StaticResource MonoFontFamily}"
+                       FontSize="11"
+                       Foreground="{StaticResource InkSoftBrush}"
+                       Text="{Binding CompaniesFetchedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+        </StackPanel>
+        <TextBlock Margin="0,6,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Text="The dropdown auto-populates from the cached cloud snapshot. Refresh from Tally re-pulls the list and updates the dropdown in one step. Set Active changes the active company via the dedicated settings endpoint (no Save needed)." />
+    </StackPanel>
+</UserControl>

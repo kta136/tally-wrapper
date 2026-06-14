@@ -1,0 +1,115 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.InvoiceSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Text="Invoice · Company on Invoice" Style="{StaticResource SectionHeader}" Margin="0,0,0,8" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="COMPANY NAME" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.PrintCompanyName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="GSTIN" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.CompanyGstin, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="PHONE" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.CompanyPhone, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="ADDRESS" />
+                <TextBox Style="{StaticResource SettingsInputMulti}" Text="{Binding Draft.CompanyAddress, UpdateSourceTrigger=PropertyChanged}" MinHeight="60" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="STATE" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.CompanyState, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="COUNTRY" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.CompanyCountry, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Invoice · Bank Details" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="BANK NAME" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.BankName, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="ACCOUNT" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.BankAccount, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="IFSC" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.BankIfsc, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="UPI" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.BankUpi, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Invoice · Numbering" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="120" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="PREFIX" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.InvoicePrefix, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="SUFFIX" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.InvoiceSuffix, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="PADDING" ToolTip="Width of zero-padded core (e.g. 4 → 0049, 5 → 00049). Range 1-10." />
+                <TextBox Style="{StaticResource SettingsInput}" ToolTip="Width of zero-padded core (e.g. 4 → 0049, 5 → 00049). Range 1-10." Text="{Binding Draft.InvoicePadding, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Invoice · Print Copies (defaults)" Style="{StaticResource SectionHeader}" />
+        <StackPanel>
+            <CheckBox Style="{StaticResource SettingsCheck}" IsChecked="{Binding Draft.CopyOriginalDefault}" Content="Original (for customer)" />
+            <CheckBox Style="{StaticResource SettingsCheck}" IsChecked="{Binding Draft.CopyDuplicateDefault}" Content="Duplicate (for showroom)" />
+            <CheckBox Style="{StaticResource SettingsCheck}" IsChecked="{Binding Draft.CopyTriplicateDefault}" Content="Triplicate (for transport)" />
+        </StackPanel>
+
+        <TextBlock Text="Invoice · Layout" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="PRINT FONT SIZE" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.PrintFontSize, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="TERMS FONT SIZE" />
+                <TextBox Style="{StaticResource SettingsInput}" Text="{Binding Draft.PrintTermsFontSize, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Invoice · Terms &amp; Conditions" Style="{StaticResource SectionHeader}" />
+        <TextBox Style="{StaticResource SettingsInputMulti}" Text="{Binding Draft.TermsAndConditions, UpdateSourceTrigger=PropertyChanged}" />
+
+        <TextBlock Margin="0,10,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Text="Logo / signature upload and margin / placement editor live under the Print Layout section." />
+    </StackPanel>
+</UserControl>

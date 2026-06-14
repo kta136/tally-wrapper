@@ -1,0 +1,315 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.MastersSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Text="Masters · Bill Items" Style="{StaticResource SectionHeader}" Margin="0,0,0,8" />
+        <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
+                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Rows" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding Draft.ItemMasterRows.Count}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource BtnSm}"
+                        Margin="0,0,6,0"
+                        Command="{Binding RequestStockItemRefreshCommand}"
+                        Content="↻ Tally Items"
+                        ToolTip="Re-pull Tally stock items. Populates the dropdowns without leaving this tab." />
+                <Button Style="{StaticResource BtnSm}"
+                        Command="{Binding AddItemMasterRowCommand}"
+                        Content="Add Item"
+                        Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" />
+            </StackPanel>
+        </Grid>
+        <Border BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="1"
+                CornerRadius="3"
+                MaxHeight="320">
+            <ListBox ItemsSource="{Binding Draft.ItemMasterRows}"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="8,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="1.5*" />
+                                <ColumnDefinition Width="32" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Style="{StaticResource MasterRowInput}"
+                                     Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Name" />
+                            <ComboBox Grid.Column="1"
+                                      Style="{StaticResource MasterRowCombo}"
+                                      IsEditable="False"
+                                      ItemsSource="{Binding DataContext.ItemUnitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      SelectedItem="{Binding Unit}" />
+                            <ComboBox Grid.Column="2"
+                                      Style="{StaticResource MasterRowCombo}"
+                                      IsEditable="False"
+                                      ItemsSource="{Binding DataContext.ItemCategoryOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      SelectedItem="{Binding ItemCategory}" />
+                            <ComboBox Grid.Column="3"
+                                      Style="{StaticResource MasterRowCombo}"
+                                      IsEditable="False"
+                                      ItemsSource="{Binding DataContext.PricingModeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      SelectedItem="{Binding PricingMode}" />
+                            <TextBox Grid.Column="4"
+                                     Style="{StaticResource MasterRowInput}"
+                                     Text="{Binding WastagePercent, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Wastage %" />
+                            <TextBox Grid.Column="5"
+                                     Style="{StaticResource MasterRowInput}"
+                                     Text="{Binding DefaultLabourPerGram, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Labour / gram" />
+                            <ComboBox Grid.Column="6"
+                                      Style="{StaticResource MasterRowCombo}"
+                                      IsEditable="True"
+                                      DisplayMemberPath="Name"
+                                      TextSearch.TextPath="Name"
+                                      ItemsSource="{Binding DataContext.StockItems, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Text="{Binding DefaultStockMappingLabel, UpdateSourceTrigger=LostFocus}" />
+                            <Button Grid.Column="7" Margin="2"
+                                    Style="{StaticResource BtnSm}"
+                                    Content="×"
+                                    ToolTip="Remove row"
+                                    Command="{Binding DataContext.RemoveItemMasterRowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    Visibility="{Binding DataContext.IsEditing, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+        <Grid Margin="10,4,10,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="70" />
+                <ColumnDefinition Width="1.2*" />
+                <ColumnDefinition Width="1.2*" />
+                <ColumnDefinition Width="80" />
+                <ColumnDefinition Width="80" />
+                <ColumnDefinition Width="1.5*" />
+                <ColumnDefinition Width="32" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="NAME" />
+            <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="UNIT" />
+            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="CATEGORY" />
+            <TextBlock Grid.Column="3" Style="{StaticResource FieldLabel}" Text="PRICING MODE" />
+            <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="WASTAGE %" />
+            <TextBlock Grid.Column="5" Style="{StaticResource FieldLabel}" Text="LAB/GM" />
+            <TextBlock Grid.Column="6" Style="{StaticResource FieldLabel}" Text="STOCK MAPPING LABEL" />
+        </Grid>
+
+        <TextBlock Text="Masters · Karats" Style="{StaticResource SectionHeader}" />
+        <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
+                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Rows" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding Draft.KaratRows.Count}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource BtnSm}"
+                        Margin="0,0,6,0"
+                        Command="{Binding RequestStockItemRefreshCommand}"
+                        Content="↻ Tally Items"
+                        ToolTip="Re-pull Tally stock items. Populates the dropdowns without leaving this tab." />
+                <Button Style="{StaticResource BtnSm}"
+                        Command="{Binding AddKaratRowCommand}"
+                        Content="Add Karat"
+                        Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" />
+            </StackPanel>
+        </Grid>
+        <Border BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="1"
+                CornerRadius="3"
+                MaxHeight="240">
+            <ListBox ItemsSource="{Binding Draft.KaratRows}"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="8,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="2.5*" />
+                                <ColumnDefinition Width="32" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0"
+                                     Style="{StaticResource MasterRowInput}"
+                                     Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Karat label (e.g. 22kt)" />
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource MasterRowInput}"
+                                     Text="{Binding PurityPercent, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Purity %" />
+                            <ComboBox Grid.Column="2"
+                                      Style="{StaticResource MasterRowCombo}"
+                                      IsEditable="True"
+                                      DisplayMemberPath="Name"
+                                      TextSearch.TextPath="Name"
+                                      ItemsSource="{Binding DataContext.StockItems, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Text="{Binding TallyItem, UpdateSourceTrigger=LostFocus}" />
+                            <Button Grid.Column="3" Margin="2"
+                                    Style="{StaticResource BtnSm}"
+                                    Content="×"
+                                    ToolTip="Remove row"
+                                    Command="{Binding DataContext.RemoveKaratRowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}"
+                                    Visibility="{Binding DataContext.IsEditing, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+        <Grid Margin="10,4,10,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.2*" />
+                <ColumnDefinition Width="100" />
+                <ColumnDefinition Width="2.5*" />
+                <ColumnDefinition Width="32" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="LABEL" />
+            <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="PURITY %" />
+            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="TALLY STOCK ITEM" />
+        </Grid>
+        <TextBlock Margin="0,8,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Text="Bill Items describe what lines in the invoice look like (weight-based gold / diamond, pricing mode). Karats map a label + purity to a Tally stock item for posting. Karats draw from the cached Tally Stock Items list below." />
+
+        <TextBlock Text="Masters · Tally Stock Items" Style="{StaticResource SectionHeader}" />
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
+                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Cached" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding StockItemsCount, StringFormat='{}{0} item(s)'}" />
+                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Freshness" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding StockItemsFreshness}" />
+                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Fetched" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding StockItemsFetchedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource BtnSm}"
+                        Command="{Binding RequestStockItemRefreshCommand}"
+                        Content="Refresh from Tally" />
+            </StackPanel>
+        </Grid>
+        <Border BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="1"
+                CornerRadius="3"
+                MaxHeight="280">
+            <ListBox ItemsSource="{Binding StockItems}"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Focusable" Value="False" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="10,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="{Binding Karat, TargetNullValue='—'}" />
+                            <TextBlock Grid.Column="2" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="{Binding BaseUnit, TargetNullValue='—'}" />
+                            <TextBlock Grid.Column="3" FontFamily="{StaticResource MonoFontFamily}" FontSize="11" Foreground="{StaticResource InkSoftBrush}" Text="{Binding HsnCode, TargetNullValue='—'}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </StackPanel>
+</UserControl>

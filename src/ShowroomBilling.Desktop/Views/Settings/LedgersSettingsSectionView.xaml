@@ -1,0 +1,118 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.LedgersSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Text="Ledgers · Mappings" Style="{StaticResource SectionHeader}" Margin="0,0,0,8" />
+
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
+                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Ledgers" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding LedgersCount, StringFormat='{}{0}'}" />
+                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Voucher types" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding VoucherTypesCount, StringFormat='{}{0}'}" />
+                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Freshness" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding LedgersFreshness}" />
+                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Fetched" />
+                <TextBlock Margin="6,0,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding LedgersFetchedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource BtnSm}"
+                        Command="{Binding RequestLedgerRefreshCommand}"
+                        Content="Refresh from Tally" />
+            </StackPanel>
+        </Grid>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="SALES LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.SalesLedger, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="CASH LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.CashLedger, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="CARD / UPI / NON-CASH LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.CreditDebitLedger, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="SALES VOUCHER TYPE" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding VoucherTypeOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.SalesVoucherType, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="CGST LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.CgstLedger, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="SGST LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.SgstLedger, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="ROUND-OFF LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.RoundOffLedger, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Style="{StaticResource FieldLabel}" Text="DISCOUNT LEDGER" />
+                <ComboBox Style="{StaticResource SettingsCombo}"
+                          ItemsSource="{Binding LedgerOptions}"
+                          DisplayMemberPath="Name"
+                          Text="{Binding Draft.DiscountLedger, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+        </Grid>
+        <TextBlock Margin="0,6,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Text="Cached ledger and voucher-type snapshots auto-populate from the cloud on load. Refresh from Tally re-pulls and updates the dropdowns in one step. Free-text entry still works if the snapshot is empty or stale." />
+    </StackPanel>
+</UserControl>
