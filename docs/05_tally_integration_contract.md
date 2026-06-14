@@ -59,7 +59,7 @@ TallyPrime remains:
 - the source for company, ledger, stock item, and voucher type lists
 - the consumer of canonical sales voucher XML
 
-The server tray is a maintenance/status companion for the API Windows Service. It may show API/DB/client status and control the Windows Service, but it must not poll Tally. Tally checks still happen only through operator-triggered Push or Refresh flows.
+The server tray is a maintenance/status companion for the API Windows Service. It may show API/DB/client status and control the Windows Service, but it must not poll Tally. Tally checks still happen only through operator-triggered Push, Refresh, and System Health flows.
 
 ---
 
@@ -138,11 +138,12 @@ Do not emit a free-text customer label as `<PARTYNAME>`: Tally expects the party
 
 When the operator clicks Push on the Bills tab, the desktop calls `POST /api/bills/{billId}/push`. Inside that HTTP request, `BillService.PushInternalAsync`:
 
-1. Atomically transitions the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If 0 rows are affected — another concurrent push already won the flip, or the state drifted — the request short-circuits and returns the current bill without a second Tally call. Closes a double-click / duplicate-request race that would otherwise produce two vouchers.
-2. Chooses Tally operation: normal pushes/retries/reposts use create XML; bills reopened after a prior successful push (`EditedAfterPush=true`) use alter XML against the old Tally voucher `MASTER ID`.
-3. Calls `ITallyPoster.PostAsync` — this builds voucher XML, sends it to Tally via HTTP, parses the response, and returns an outcome.
-4. Writes `tally.posted` or `tally.failed` audit and transitions the bill to `posted` or `failed`.
-5. Returns the resulting `BillResponse` to the desktop.
+1. Checks Tally company health via `ITallyCompanyHealthService`. Tally must be reachable and the configured active company must be open. If not, the API returns `503 Tally unavailable` and leaves the bill in its original state.
+2. Atomically transitions the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If 0 rows are affected — another concurrent push already won the flip, or the state drifted — the request short-circuits and returns the current bill without a second Tally call. Closes a double-click / duplicate-request race that would otherwise produce two vouchers.
+3. Chooses Tally operation: normal pushes/retries/reposts use create XML; bills reopened after a prior successful push (`EditedAfterPush=true`) use alter XML against the old Tally voucher `MASTER ID`.
+4. Calls `ITallyPoster.PostAsync` — this builds voucher XML, sends it to Tally via HTTP, parses the response, and returns an outcome.
+5. Writes `tally.posted` or `tally.failed` audit and transitions the bill to `posted` or `failed`.
+6. Returns the resulting `BillResponse` to the desktop.
 
 If an edited-after-push bill cannot resolve the prior Tally `MASTER ID` from its pre-edit `tally.posted` audit, the API settles the attempt as `failed` with `TALLY_ALTER_TARGET_MISSING` and does not call Tally. It never falls back to creating a second voucher for that edited bill.
 
@@ -167,10 +168,10 @@ If the API process dies mid-call, any bill stuck in `posting` is flipped back to
 
 ### 5.1 Retryable failures (bill lands in `failed`, operator clicks Retry)
 
-- Tally host unreachable
-- DNS/LAN connectivity issue
-- timeout
-- connection refused
+- Tally transport failure after a successful preflight
+- DNS/LAN connectivity issue after a successful preflight
+- timeout after a successful preflight
+- connection refused after a successful preflight
 - transient HTTP transport failure
 
 ### 5.2 Non-retryable failures (bill lands in `failed`, operator fixes config/data then Retry or Revise)
@@ -198,11 +199,11 @@ There is no automatic reconciliation path; the operator is the reconciler.
 
 | Scenario | Expected behavior |
 |---|---|
-| Tally down, API up | Push fails immediately with `TALLY_HTTP` or `TALLY_TIMEOUT`; bill lands in `failed`. Operator retries when Tally is back. |
+| Tally down or wrong active company, API up | Push is blocked by preflight with `503 Tally unavailable`; the bill remains `pending`/`failed`/`posted` as it was. Operator opens Tally or the correct company, then retries. |
 | API down | Desktop shows "Cloud unavailable"; bills stay in `pending` on whatever was last persisted; clicking Push is disabled. |
 | API crashes mid-post | Bill is stuck in `posting` until API restart; `StuckPostingRecoveryHostedService` flips it back to `pending` on boot with an audit breadcrumb. Operator retries. |
 | Desktop down during a push | That push fails; no correctness lost (the API either completed the post or crashed; either way recovery is deterministic). |
-| Network partitions mid-post | Timeout → bill in `failed` → operator verifies in Tally → Mark as Pushed or Retry. |
+| Network partitions after preflight / mid-post | Timeout → bill in `failed` → operator verifies in Tally → Mark as Pushed or Retry. |
 
 ---
 
@@ -251,6 +252,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 - `ITallyPoster` + `TallyXmlClient` live in `ShowroomBilling.Infrastructure.Tally`. They're in-process services, not hosted workers.
 - `ITallyMasterRefresher` follows the same pattern for master data.
 - Edited-after-push bills alter the existing Tally voucher by `MASTER ID`; plain first push, retry, and unedited repost keep create/import semantics.
+- Push, retry, repost, selected push, and push-all-pending must run a Tally company preflight before any bill is moved to `posting`. Batch push probes once before iterating.
 - **No business-level retry loop.** Every bill-level retry is an explicit operator click — `/retry`, `/repost`, re-pushing after fixing config. The state machine is not "eventually consistent".
 - The HTTP client under `ITallyXmlClient` has a **transport-layer** Polly pipeline (2 retries, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx) to absorb single transient blips. This does not re-run Tally body errors (`LINEERROR`, `EXCEPTIONS > 0`) — those flow straight to `failed` and wait for the operator. Treat this as a connect-fail smoother, not a retry strategy.
 - Do not re-introduce a queue, polling loop, or second process as an "optimization." The architecture was explicitly collapsed from two-process to single-process; reversing it would re-open the whole class of bugs we removed.

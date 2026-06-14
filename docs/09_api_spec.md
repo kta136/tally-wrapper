@@ -71,7 +71,7 @@ In `TrustedLan` server mode, DB override metadata, anonymous DB bootstrap, DB te
 - Bill payload shape: `{ partyName, partyGstin, partyPhone, partyAddress, billDate, lines[], totals, notes }`. Each line also round-trips `grossWeight`, `lessWeight`, `wastagePercent`, `labourPerUnit`, `diamondRate`, `extra` for edit support. Totals: `{ subtotal, discountTotal, taxTotal, roundOff, grandTotal }`. Stored as `bill_revisions.snapshot_json` (jsonb) with projected helpers.
 - `POST /api/bills/drafts` returns 201 with a `Location` header. State starts at `pending`. A sales-invoice number is **reserved and written to `bills.invoice_number` at this point** (idempotency key `draft:{billId}`).
 - `PUT /api/bills/drafts/{billId}` appends a new `bill_revisions` row and repoints `bills.current_revision_id`. Accepts any state except `posting`, `voided`, and `revised`. If the prior state was `posted` or `failed`, the bill is reopened to `pending` with `EditedAfterPush = true`. 409 on `posting`, `voided`, `revised`.
-- `POST /api/bills/{billId}/push` body: `{ fiscalYear?, reason? }`. Transactional, synchronous: marks the revision `submitted_at = finalized_at = now`, transitions the bill to `posting` and saves, then calls `ITallyPoster.PostAsync` which builds voucher XML, sends it to Tally via HTTP, parses the response, and settles the bill in `posted` (success) or `failed` (error). First pushes create Tally vouchers. Bills reopened after a prior successful push (`EditedAfterPush=true`) alter the original Tally voucher by `MASTER ID`; if that target cannot be resolved, the push fails with `TALLY_ALTER_TARGET_MISSING` and no Tally call/new voucher is attempted. Writes `tally.posted` or `tally.failed` audit. Returns the resulting `BillResponse`. No queue, no retry, no background work.
+- `POST /api/bills/{billId}/push` body: `{ fiscalYear?, reason? }`. Synchronous: first runs a Tally company preflight. If Tally is unreachable or the configured active company is not open, returns `503 Tally unavailable` and leaves the bill unchanged. Otherwise marks the revision `submitted_at = finalized_at = now`, transitions the bill to `posting` and saves, then calls `ITallyPoster.PostAsync` which builds voucher XML, sends it to Tally via HTTP, parses the response, and settles the bill in `posted` (success) or `failed` (error). First pushes create Tally vouchers. Bills reopened after a prior successful push (`EditedAfterPush=true`) alter the original Tally voucher by `MASTER ID`; if that target cannot be resolved, the push fails with `TALLY_ALTER_TARGET_MISSING` and no Tally call/new voucher is attempted. Writes `tally.posted` or `tally.failed` audit. Returns the resulting `BillResponse`. No queue, no retry, no background work.
 - `POST /api/bills/push-pending` body: `{ fiscalYear?, reason?, maxBills? }`. Iterates oldest pending bills in created-at order, calls the sync push path for each, and returns aggregate counts. Stops on first failure so the operator can investigate.
 - `POST /api/bills/push-selected` body: `{ billIds, fiscalYear?, reason? }`. Same mechanics as push-pending but for an explicit set.
 - `POST /api/bills/{billId}/retry` body: `{ reason? }`. Requires state `failed`. Runs the same sync push path.
@@ -81,7 +81,7 @@ In `TrustedLan` server mode, DB override metadata, anonymous DB bootstrap, DB te
 - `POST /api/bills/{billId}/void` transitions to `voided` from `pending`, `draft`, or `failed`.
 - Admin-gated endpoints (`/change-number`, `/mark-posted`, `/mark-pending`, `DELETE`, `/delete-selected`) require `X-Admin-Token` and are gated via `[Authorize(Policy = "Admin")]`. Behavior is detailed in §4 and in [`03_bill_state_machine.md`](03_bill_state_machine.md).
 - All state transitions write `audit_events` rows (`bill.pending.created`, `bill.pending.updated`, `bill.edit.reopened`, `bill.push.requested`, `tally.posted`, `tally.failed`, `bill.revised`, `bill.voided`, `bill.number.changed`, `bill.mark_posted`, `bill.mark_pending`, `bill.deleted`, `bill.posting.recovered`).
-- 404 when the bill is unknown; 409 on state-gate violations; 400 on malformed request payloads **or payload-math validation failures** (see §2.2.1); 401 on missing/expired admin or device token.
+- 404 when the bill is unknown; 409 on state-gate violations; 503 when Tally preflight blocks a push/retry/repost; 400 on malformed request payloads **or payload-math validation failures** (see §2.2.1); 401 on missing/expired admin or device token.
 
 #### 2.2.1 Payload validation on create / update / revise
 
@@ -97,7 +97,9 @@ Failure returns `400 Bill payload invalid` with the list of errors joined into `
 
 #### 2.2.2 Push concurrency guard
 
-`POST /api/bills/{billId}/push` (and `/retry`, `/repost`, the batch push endpoints) atomically flip the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If another concurrent push won the flip, the request short-circuits and returns the current bill state without making a second Tally round-trip. This closes a double-click / duplicate-request race that would otherwise post the voucher twice.
+`POST /api/bills/{billId}/push` (and `/retry`, `/repost`, the batch push endpoints) first checks Tally company health. Tally must be reachable and the configured active company must be open. Batch push checks this once before iterating. If preflight fails, the API returns `503` and does not move any bill to `posting`.
+
+After preflight, push atomically flips the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If another concurrent push won the flip, the request short-circuits and returns the current bill state without making a second Tally round-trip. This closes a double-click / duplicate-request race that would otherwise post the voucher twice.
 
 The flip is deliberately **not** wrapped in a transaction with the Tally call — `posting` must be visible in the DB before the HTTP round-trip so `StuckPostingRecoveryHostedService` can heal a row if the API crashes mid-call.
 
@@ -214,6 +216,7 @@ These are the five admin-gated Bill endpoints listed in §2.2:
 | `GET` | `/api/health/live` | Liveness probe | basic OK |
 | `GET` | `/api/health/ready` | Readiness probe | DB, migrations |
 | `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages |
+| `GET` | `/api/health/tally-company` | Operator-triggered Tally reachability + active-company check | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
 | `GET` | `/api/health/startup` | Startup hosted-service status (DB migration + stuck-posting recovery) | `{ startedAtUtc, databaseReady, databaseError?, recoveryRan, recoveryHealedCount, recoveryError? }` |
 
 `/api/health/startup` exposes whether the DB-init and stuck-posting-recovery hosted services completed cleanly on this API boot. Both services are bounded (DB init: 60s timeout, recovery: 30s) and never throw — a Postgres outage during startup leaves the API up but with `databaseReady = false` so the Desktop can show a degraded-mode banner. State is in-memory and resets on each API restart.

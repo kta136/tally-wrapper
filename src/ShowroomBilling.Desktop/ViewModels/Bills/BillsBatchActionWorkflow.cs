@@ -14,6 +14,7 @@ internal sealed class BillsBatchActionWorkflow(
 
         var selectedIds = host.SelectedBillIds;
         if (selectedIds.Count == 0) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         host.IsPushingSelected = true;
         try
@@ -43,6 +44,7 @@ internal sealed class BillsBatchActionWorkflow(
             MessageBoxImage.Question,
             MessageBoxResult.Cancel);
         if (confirm != MessageBoxResult.OK) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         host.IsPushingSelected = true;
         try
@@ -73,6 +75,7 @@ internal sealed class BillsBatchActionWorkflow(
 
         var selectedIds = host.SelectedBillIds;
         if (selectedIds.Count == 0) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         host.IsRetryingSelected = true;
         try
@@ -180,6 +183,7 @@ internal sealed class BillsBatchActionWorkflow(
             MessageBoxImage.Question,
             MessageBoxResult.Cancel);
         if (confirm != MessageBoxResult.OK) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         host.IsRetryingSelected = true;
         try

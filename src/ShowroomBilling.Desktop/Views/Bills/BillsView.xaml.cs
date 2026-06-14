@@ -16,21 +16,8 @@ public partial class BillsView : UserControl
     private BillsViewModel? ViewModel => DataContext as BillsViewModel;
     private MainWindowViewModel? ShellViewModel => Window.GetWindow(this)?.DataContext as MainWindowViewModel;
 
-    private void OnBillRowClick(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is FrameworkElement { DataContext: BillListRowViewModel row } && ViewModel is not null)
-        {
-            ViewModel.SelectOnly(row);
-        }
-    }
-
     private void OnBillRowDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: BillListRowViewModel row } && ViewModel is not null)
-        {
-            ViewModel.SelectOnly(row);
-        }
-
         if (ShellViewModel?.OpenBillDetailsCommand.CanExecute(null) == true)
         {
             ShellViewModel.OpenBillDetailsCommand.Execute(null);
@@ -88,33 +75,6 @@ public partial class BillsView : UserControl
     private static BillListRowViewModel? RowFrom(object sender) =>
         sender is FrameworkElement { DataContext: BillListRowViewModel row } ? row : null;
 
-    private async void OnPushRowMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.PushRowCommand.CanExecute(row))
-        {
-            await ViewModel.PushRowCommand.ExecuteAsync(row);
-        }
-    }
-
-    private async void OnRetryRowMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.RetryRowCommand.CanExecute(row))
-        {
-            await ViewModel.RetryRowCommand.ExecuteAsync(row);
-        }
-    }
-
-    private async void OnRepostRowMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.RepostRowCommand.CanExecute(row))
-        {
-            await ViewModel.RepostRowCommand.ExecuteAsync(row);
-        }
-    }
-
     private async void OnPrintRowMenuItemClick(object sender, RoutedEventArgs e)
     {
         var row = RowFrom(sender);
@@ -152,33 +112,6 @@ public partial class BillsView : UserControl
         if (ViewModel is not null && row is not null && ViewModel.ChangeNumberRowCommand.CanExecute(row))
         {
             await ViewModel.ChangeNumberRowCommand.ExecuteAsync(row);
-        }
-    }
-
-    private async void OnMarkPostedRowMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.MarkPostedRowCommand.CanExecute(row))
-        {
-            await ViewModel.MarkPostedRowCommand.ExecuteAsync(row);
-        }
-    }
-
-    private async void OnMarkPendingRowMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.MarkPendingRowCommand.CanExecute(row))
-        {
-            await ViewModel.MarkPendingRowCommand.ExecuteAsync(row);
-        }
-    }
-
-    private async void OnDeleteRowMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.DeleteRowCommand.CanExecute(row))
-        {
-            await ViewModel.DeleteRowCommand.ExecuteAsync(row);
         }
     }
 

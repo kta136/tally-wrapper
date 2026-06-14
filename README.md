@@ -389,7 +389,7 @@ The test DB provider is EF Core InMemory for most DB-backed unit tests. It valid
 | Build fails copying Desktop DLLs | Desktop EXE is still running | Close `TallyWrapper.exe` / the Desktop process and rebuild |
 | API starts but DB is not ready | Missing or invalid Postgres connection string | Configure DB from Settings or server tray, then restart API |
 | Desktop says cloud/API down | API child process not started or wrong port | Check `%APPDATA%\ShowroomBilling\logs` and `ChildProcesses` settings |
-| Tally push fails | TallyPrime closed, wrong company open, wrong endpoint, or XML error | Open TallyPrime, verify active company/settings, retry from Bills tab |
+| Tally push is blocked or fails | TallyPrime closed, wrong company open, wrong endpoint, or XML error | Open TallyPrime, verify active company/settings, retry from Bills tab. Preflight blocks leave bill state unchanged. |
 | Workstation cannot reach server | Firewall/CIDR/API URL mismatch | Re-run server installer and verify `http://<server>:5107/api/health/live` |
 | Admin action returns 401 | Admin token expired or not unlocked | Press `~` in Desktop and unlock again |
 | Server tray DB save fails | Maintenance token missing or API not running locally | Run Install / Repair Server from the tray dashboard |

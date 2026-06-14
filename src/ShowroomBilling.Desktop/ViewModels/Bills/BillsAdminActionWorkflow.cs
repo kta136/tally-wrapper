@@ -48,20 +48,62 @@ internal sealed class BillsAdminActionWorkflow(
 
     internal async Task MarkPostedRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
+        await MarkPostedRowsAsync(GetContextRows(row), cancellationToken);
+    }
+
+    internal async Task MarkPostedSelectedAsync(CancellationToken cancellationToken)
+    {
+        await MarkPostedRowsAsync(host.Items.Where(x => x.IsSelected).ToArray(), cancellationToken);
+    }
+
+    internal async Task MarkPendingRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
+    {
+        await MarkPendingRowsAsync(GetContextRows(row), cancellationToken);
+    }
+
+    internal async Task MarkPendingSelectedAsync(CancellationToken cancellationToken)
+    {
+        await MarkPendingRowsAsync(host.Items.Where(x => x.IsSelected).ToArray(), cancellationToken);
+    }
+
+    private async Task MarkPostedRowsAsync(IReadOnlyList<BillListRowViewModel> rows, CancellationToken cancellationToken)
+    {
+        if (billsApi is null || rows.Count == 0) return;
+        if (rows.Any(row => !row.CanMarkPosted))
+        {
+            host.StatusMessage = "Mark pushed blocked: every selected bill must be pending, draft, or failed.";
+            return;
+        }
+
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
+        var reason = await PromptForAdminReasonAsync(
+            rows,
+            "Mark as Pushed",
+            rows.Count == 1
+                ? $"{rows[0].InvoiceNumberDisplay} will be marked posted locally without calling Tally."
+                : $"{rows.Count} selected bills will be marked posted locally without calling Tally.",
+            cancellationToken);
+        if (reason is null) return;
 
         host.IsRetryingSelected = true;
         try
         {
-            host.StatusMessage = $"Marking {row.InvoiceNumberDisplay} as pushed…";
-            await billsApi.MarkPostedAsync(row.Id, new MarkBillStateRequest(null), token, cancellationToken);
-            host.StatusMessage = $"Marked {row.InvoiceNumberDisplay} as pushed.";
+            var completed = 0;
+            foreach (var row in rows)
+            {
+                host.StatusMessage = $"Marking {completed + 1} of {rows.Count} as pushed…";
+                await billsApi.MarkPostedAsync(row.Id, new MarkBillStateRequest(reason), token, cancellationToken);
+                completed++;
+            }
+
+            host.StatusMessage = rows.Count == 1
+                ? $"Marked {rows[0].InvoiceNumberDisplay} as pushed."
+                : $"Marked {completed} bill(s) as pushed.";
         }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Mark pushed failed: {ex.Message}";
+            host.StatusMessage = $"Mark pushed stopped: {ex.Message}";
         }
         finally
         {
@@ -70,22 +112,44 @@ internal sealed class BillsAdminActionWorkflow(
         await host.LoadAsync(cancellationToken);
     }
 
-    internal async Task MarkPendingRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
+    private async Task MarkPendingRowsAsync(IReadOnlyList<BillListRowViewModel> rows, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
+        if (billsApi is null || rows.Count == 0) return;
+        if (rows.Any(row => !row.CanMarkPending))
+        {
+            host.StatusMessage = "Mark pending blocked: every selected bill must be posted or failed.";
+            return;
+        }
+
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
+        var reason = await PromptForAdminReasonAsync(
+            rows,
+            "Mark as Pending",
+            rows.Count == 1
+                ? $"{rows[0].InvoiceNumberDisplay} will be marked pending locally without changing Tally."
+                : $"{rows.Count} selected bills will be marked pending locally without changing Tally.",
+            cancellationToken);
+        if (reason is null) return;
 
         host.IsRetryingSelected = true;
         try
         {
-            host.StatusMessage = $"Marking {row.InvoiceNumberDisplay} as pending…";
-            await billsApi.MarkPendingAsync(row.Id, new MarkBillStateRequest(null), token, cancellationToken);
-            host.StatusMessage = $"Marked {row.InvoiceNumberDisplay} as pending.";
+            var completed = 0;
+            foreach (var row in rows)
+            {
+                host.StatusMessage = $"Marking {completed + 1} of {rows.Count} as pending…";
+                await billsApi.MarkPendingAsync(row.Id, new MarkBillStateRequest(reason), token, cancellationToken);
+                completed++;
+            }
+
+            host.StatusMessage = rows.Count == 1
+                ? $"Marked {rows[0].InvoiceNumberDisplay} as pending."
+                : $"Marked {completed} bill(s) as pending.";
         }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Mark pending failed: {ex.Message}";
+            host.StatusMessage = $"Mark pending stopped: {ex.Message}";
         }
         finally
         {
@@ -97,6 +161,13 @@ internal sealed class BillsAdminActionWorkflow(
     internal async Task DeleteRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
         if (billsApi is null || row is null) return;
+        var contextRows = GetContextRows(row);
+        if (contextRows.Count > 1)
+        {
+            await DeleteSelectedAsync(cancellationToken);
+            return;
+        }
+
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
 
@@ -184,23 +255,32 @@ internal sealed class BillsAdminActionWorkflow(
         await host.LoadAsync(cancellationToken);
     }
 
-    private async Task<(string Token, string Reason)?> PromptForAdminReasonAsync(
-        BillListRowViewModel? row,
+    private async Task<string?> PromptForAdminReasonAsync(
+        IReadOnlyList<BillListRowViewModel> rows,
         string title,
-        Func<BillListRowViewModel, string> messageFactory,
+        string message,
         CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return null;
-        var token = await EnsureAdminTokenAsync(cancellationToken);
-        if (token is null) return null;
+        if (rows.Count == 0) return null;
         if (host.ReasonPromptHandler is null)
         {
             host.StatusMessage = "Reason prompt is not wired.";
             return null;
         }
 
-        var reason = await host.ReasonPromptHandler(title, messageFactory(row), cancellationToken);
-        return reason is null ? null : (token, reason);
+        return await host.ReasonPromptHandler(title, message, cancellationToken);
+    }
+
+    private IReadOnlyList<BillListRowViewModel> GetContextRows(BillListRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return Array.Empty<BillListRowViewModel>();
+        }
+
+        return row.IsSelected && host.Items.Count(x => x.IsSelected) > 1
+            ? host.Items.Where(x => x.IsSelected).ToArray()
+            : new[] { row };
     }
 
     private async Task<string?> EnsureAdminTokenAsync(CancellationToken cancellationToken)

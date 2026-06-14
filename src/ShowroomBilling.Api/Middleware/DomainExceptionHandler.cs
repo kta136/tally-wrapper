@@ -61,6 +61,7 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
     {
         BillNotFoundException      => (StatusCodes.Status404NotFound,   "Bill not found"),
         DraftLeaseNotFoundException => (StatusCodes.Status404NotFound,   "Draft lease not found"),
+        TallyPreflightUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Tally unavailable"),
         BillStateConflictException => (StatusCodes.Status409Conflict,   "Bill state conflict"),
         BillValidationException    => (StatusCodes.Status400BadRequest, "Bill payload invalid"),
         AdminPasscodeNotConfiguredException => (StatusCodes.Status409Conflict, "Admin passcode not configured"),

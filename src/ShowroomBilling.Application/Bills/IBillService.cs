@@ -112,6 +112,8 @@ public interface IBillService
 
 public sealed class BillStateConflictException(string message) : InvalidOperationException(message);
 
+public sealed class TallyPreflightUnavailableException(string message) : InvalidOperationException(message);
+
 public sealed class BillNotFoundException(Guid billId) : Exception($"Bill '{billId}' was not found.");
 
 public sealed class BillValidationException : Exception

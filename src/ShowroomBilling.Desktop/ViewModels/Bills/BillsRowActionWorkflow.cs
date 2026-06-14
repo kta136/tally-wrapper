@@ -11,6 +11,7 @@ internal sealed class BillsRowActionWorkflow(
     internal async Task PushRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
         if (billsApi is null || row is null) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
         host.IsPushingSelected = true;
         try
         {
@@ -32,6 +33,7 @@ internal sealed class BillsRowActionWorkflow(
     internal async Task RetryRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
         if (billsApi is null || row is null) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
         host.IsRetryingSelected = true;
         try
         {
@@ -61,6 +63,7 @@ internal sealed class BillsRowActionWorkflow(
             MessageBoxImage.Question,
             MessageBoxResult.Cancel);
         if (confirm != MessageBoxResult.OK) return;
+        if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         host.IsRetryingSelected = true;
         try

@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using ShowroomBilling.Application.Bills;
+using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
@@ -497,6 +499,80 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task Push_WhenTallyPreflightIsUnhealthy_LeavesBillPendingAndDoesNotCallTally()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        var ex = await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
+            service.PushAsync(bill.Id, new PushBillRequest(null, "manual")));
+
+        Assert.Contains("Tally push blocked", ex.Message);
+        Assert.Equal(0, poster.CallCount);
+        var reloaded = await service.GetAsync(bill.Id);
+        Assert.Equal(IBillService.StatePending, reloaded!.State);
+        Assert.DoesNotContain(await db.AuditEvents.ToListAsync(), a => a.EventType == "bill.push.requested");
+    }
+
+    [Fact]
+    public async Task Retry_WhenTallyPreflightIsUnhealthy_LeavesBillFailedAndDoesNotCallTally()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var entity = await db.Bills.FirstAsync(x => x.Id == bill.Id);
+        entity.State = IBillService.StateFailed;
+        await db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
+            service.RetryAsync(bill.Id, new RetryBillPostingRequest("retry")));
+
+        Assert.Equal(0, poster.CallCount);
+        var reloaded = await service.GetAsync(bill.Id);
+        Assert.Equal(IBillService.StateFailed, reloaded!.State);
+    }
+
+    [Fact]
+    public async Task Repost_WhenTallyPreflightIsUnhealthy_LeavesPostedBillPostedAndDoesNotCallTally()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var entity = await db.Bills.FirstAsync(x => x.Id == bill.Id);
+        entity.State = IBillService.StatePosted;
+        await db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
+            service.RepostAsync(bill.Id, new RepostBillRequest(Guid.NewGuid().ToString("N"), "repost")));
+
+        Assert.Equal(0, poster.CallCount);
+        var reloaded = await service.GetAsync(bill.Id);
+        Assert.Equal(IBillService.StatePosted, reloaded!.State);
+    }
+
+    [Fact]
+    public async Task PushPending_WhenTallyPreflightIsUnhealthy_LeavesAllPendingAndDoesNotCallTally()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
+
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
+
+        await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
+            service.PushPendingAsync(new PushPendingBillsRequest(null, "push all", 10)));
+
+        Assert.Equal(0, poster.CallCount);
+        Assert.Equal(IBillService.StatePending, (await service.GetAsync(first.Id))!.State);
+        Assert.Equal(IBillService.StatePending, (await service.GetAsync(second.Id))!.State);
+    }
+
+    [Fact]
     public async Task Search_DefaultWorkflowSort_PinsPendingThenOrdersNumberedHistoryByInvoiceDescending()
     {
         await using var db = CreateDbContext();
@@ -879,10 +955,13 @@ public sealed class BillServiceTests
             Totals: new BillTotalsDto(grandTotal, 0m, 0m, 0m, grandTotal),
             Notes: null);
 
-    private static BillService BuildService(ShowroomBillingDbContext db, ITallyPoster? poster = null)
+    private static BillService BuildService(
+        ShowroomBillingDbContext db,
+        ITallyPoster? poster = null,
+        ITallyCompanyHealthService? tallyHealth = null)
     {
         var numbering = new NumberingService(db);
-        return new BillService(db, numbering, poster ?? new FakeTallyPoster());
+        return new BillService(db, numbering, poster ?? new FakeTallyPoster(), tallyHealth ?? FakeTallyHealth.Healthy());
     }
 
     private static ShowroomBillingDbContext CreateDbContext()
@@ -942,5 +1021,31 @@ public sealed class BillServiceTests
                     : FailedResponse("FAKE_ERROR", "fake failure");
             return Task.FromResult(response);
         }
+    }
+
+    private sealed class FakeTallyHealth(TallyCompanyHealthResponse response) : ITallyCompanyHealthService
+    {
+        public static FakeTallyHealth Healthy() =>
+            new(new TallyCompanyHealthResponse(
+                Status: "healthy",
+                TallyReachable: true,
+                ActiveCompanyName: "Test Company",
+                ActiveCompanyOpen: true,
+                CompanyCount: 1,
+                CheckedAtUtc: DateTimeOffset.UtcNow,
+                Message: "Tally OK - active company 'Test Company' is open."));
+
+        public static FakeTallyHealth Unhealthy(string message) =>
+            new(new TallyCompanyHealthResponse(
+                Status: "unhealthy",
+                TallyReachable: false,
+                ActiveCompanyName: "Test Company",
+                ActiveCompanyOpen: false,
+                CompanyCount: 0,
+                CheckedAtUtc: DateTimeOffset.UtcNow,
+                Message: message));
+
+        public Task<TallyCompanyHealthResponse> CheckAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(response);
     }
 }

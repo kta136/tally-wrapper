@@ -200,6 +200,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Bills.EditBillHandler = LoadBillForEditInInvoiceTabAsync;
         Bills.ChangeNumberPromptHandler = PromptChangeNumberAsync;
         Bills.ReasonPromptHandler = PromptReasonAsync;
+        Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
     }
 
     private Task RequestAdminUnlockAsync(CancellationToken cancellationToken)
@@ -376,6 +377,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     partial void OnLastHealthCheckedAtUtcChanged(DateTimeOffset? value) =>
         OnPropertyChanged(nameof(LastHealthCheckedDisplay));
+
+    partial void OnLastHealthSnapshotChanged(SystemHealthSnapshot? value) =>
+        Bills.ApplyTallyHealthSnapshot(value);
 
     public bool IsInvoiceVisible => ActiveTab == NavTab.Invoice && SystemState != SystemState.Limited;
     public bool IsBillsVisible => ActiveTab == NavTab.Bills && SystemState != SystemState.Limited;
@@ -598,4 +602,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         bool forceTallyCompany = false,
         CancellationToken cancellationToken = default)
         => await _healthCoordinator.RefreshHealthAsync(forceTallyCompany, cancellationToken);
+
+    private async Task<SystemHealthSnapshot?> RefreshBillsTallyHealthAsync(CancellationToken cancellationToken)
+    {
+        await RefreshHealthAsync(forceTallyCompany: true, cancellationToken);
+        return LastHealthSnapshot;
+    }
 }

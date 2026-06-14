@@ -132,7 +132,7 @@ Tray features:
 - install/repair the server, start/stop/restart the API Windows Service, open the local health page, open logs/config/install-log folders, and copy the workstation server URL from either the tray menu or the main dashboard window
 - configure/test/save DB settings through localhost-only maintenance endpoints using `maintenance_token.txt`
 - exit the tray by stopping the API Windows Service first, then closing the companion UI
-- no Tally polling; Tally is checked only by operator-triggered push/refresh flows
+- no Tally polling; Tally is checked only by operator-triggered push/refresh/System Health flows
 
 The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windows Service Control Manager before closing the companion tray UI. This is the server shutdown path for the Tally host.
 
@@ -229,6 +229,7 @@ Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\P
 - `/api/health/live` — liveness
 - `/api/health/ready` — DB connectivity + migration readiness
 - `/api/health/masters` — freshness of companies/ledgers/stock-items/voucher-types snapshots
+- `/api/health/tally-company` — operator-triggered Tally reachability + active-company check
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
 
 ### What's NOT a health check anymore
@@ -239,7 +240,9 @@ Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\P
 
 ### Tally reachability
 
-Tally reachability is only verified when the operator clicks Push or Refresh. A failed Push surfaces `TALLY_HTTP`, `TALLY_TIMEOUT`, or `TALLY_NOT_CONFIGURED` in the bill's `LastErrorCode`. The System Health dialog's Tally card shows a neutral "manual" status — it cannot pre-probe without making unsolicited Tally calls, which the architecture forbids.
+Tally reachability is only verified when the operator clicks Push/Retry/Repost, Push All Pending, Refresh from Tally, or Refresh in the System Health dialog. Push-family endpoints run a Tally company preflight before any bill moves to `posting`; if Tally is unreachable or the configured active company is not open, the API returns `503 Tally unavailable` and leaves bill state unchanged.
+
+If Tally becomes unavailable after preflight, the normal posting failure path can still settle the bill in `failed` with `TALLY_HTTP`, `TALLY_TIMEOUT`, or the parsed Tally rejection details. The architecture still forbids background Tally polling.
 
 ### Master freshness
 

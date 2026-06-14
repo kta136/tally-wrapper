@@ -128,6 +128,7 @@
 
         <Style x:Key="BillRowContainer" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
@@ -405,6 +406,16 @@
                 <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}" Content="{Binding TallyPushButtonLabel}" />
                 <Button Style="{StaticResource BtnSm}"
                         Margin="0,0,6,0"
+                        Command="{Binding MarkPostedSelectedCommand}"
+                        Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}"
+                        Content="Mark Pushed" />
+                <Button Style="{StaticResource BtnSm}"
+                        Margin="0,0,6,0"
+                        Command="{Binding MarkPendingSelectedCommand}"
+                        Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}"
+                        Content="Mark Pending" />
+                <Button Style="{StaticResource BtnSm}"
+                        Margin="0,0,6,0"
                         Command="{Binding DataContext.OpenSelectedBillsPrintPreviewCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                         Content="Print" />
                 <!--  Delete is server-side admin-gated; hide it when locked so the operator sees only actions they can actually run.  -->
@@ -463,6 +474,7 @@
 
                 <ListBox Grid.Row="1"
                          ItemsSource="{Binding GroupedItems}"
+                         SelectionMode="Extended"
                          BorderThickness="0"
                          Background="Transparent"
                          ItemContainerStyle="{StaticResource BillRowContainer}"
@@ -515,7 +527,6 @@
                                     BorderThickness="0,0,0,1"
                                     MinHeight="{StaticResource RowHeight}"
                                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    MouseLeftButtonUp="OnBillRowClick"
                                     MouseLeftButtonDown="OnBillRowMouseLeftButtonDown"
                                     PreviewMouseRightButtonDown="OnBillRowRightClick">
                                 <Border.Style>
@@ -537,13 +548,16 @@
                                         <Separator />
                                         <MenuItem Header="Retry Sync" InputGestureText="R"
                                                   Visibility="{Binding CanBeRetried, Converter={StaticResource BoolToVis}}"
-                                                  Click="OnRetryRowMenuItemClick" />
+                                                  Command="{Binding PlacementTarget.Tag.RetryRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}" />
                                         <MenuItem Header="Post to Tally" InputGestureText="P"
                                                   Visibility="{Binding CanBePushed, Converter={StaticResource BoolToVis}}"
-                                                  Click="OnPushRowMenuItemClick" />
+                                                  Command="{Binding PlacementTarget.Tag.PushRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}" />
                                         <MenuItem Header="Repost to Tally" InputGestureText="Shift+P"
                                                   Visibility="{Binding CanBeReposted, Converter={StaticResource BoolToVis}}"
-                                                  Click="OnRepostRowMenuItemClick" />
+                                                  Command="{Binding PlacementTarget.Tag.RepostRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}" />
                                         <Separator />
                                         <MenuItem Header="Print" InputGestureText="Ctrl+P" Click="OnPrintRowMenuItemClick" />
                                         <!--
@@ -557,19 +571,19 @@
                                                   Click="OnChangeNumberRowMenuItemClick"
                                                   Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
                                         <MenuItem Header="Mark as Pushed…"
-                                                  IsEnabled="{Binding CanMarkPosted}"
-                                                  Click="OnMarkPostedRowMenuItemClick"
+                                                  Command="{Binding PlacementTarget.Tag.MarkPostedRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}"
                                                   ToolTip="Flip the bill to 'posted' without calling Tally. Use when the voucher is already in Tally (manual reconciliation)."
                                                   Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
                                         <MenuItem Header="Mark as Pending…"
-                                                  IsEnabled="{Binding CanMarkPending}"
-                                                  Click="OnMarkPendingRowMenuItemClick"
+                                                  Command="{Binding PlacementTarget.Tag.MarkPendingRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}"
                                                   ToolTip="Revert a posted/failed bill to 'pending'. Doesn't touch Tally."
                                                   Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
                                         <Separator />
                                         <MenuItem Header="Delete Local…"
-                                                  IsEnabled="{Binding CanBeDeleted}"
-                                                  Click="OnDeleteRowMenuItemClick"
+                                                  Command="{Binding PlacementTarget.Tag.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}"
                                                   Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
                                     </ContextMenu>
                                 </Border.ContextMenu>

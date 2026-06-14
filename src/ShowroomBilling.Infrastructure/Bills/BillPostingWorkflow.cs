@@ -5,8 +5,10 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application.Bills;
+using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
@@ -17,7 +19,8 @@ internal sealed class BillPostingWorkflow(
     ShowroomBillingDbContext dbContext,
     ITallyPoster tallyPoster,
     BillAuditStore auditStore,
-    ILogger<BillPostingWorkflow> logger)
+    ILogger<BillPostingWorkflow> logger,
+    ITallyCompanyHealthService? tallyCompanyHealthService = null)
 {
     private const string DefaultShowroomCode = "default";
     private const string TallyAlterTargetTagName = "MASTER ID";
@@ -28,7 +31,13 @@ internal sealed class BillPostingWorkflow(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return PushInternalAsync(billId, request.FiscalYear, request.Reason, broadcastHint: true, cancellationToken);
+        return PushInternalAsync(
+            billId,
+            request.FiscalYear,
+            request.Reason,
+            broadcastHint: true,
+            requireTallyPreflight: true,
+            cancellationToken);
     }
 
     internal Task<BillBatchPushResponse> PushSelectedAsync(
@@ -70,7 +79,14 @@ internal sealed class BillPostingWorkflow(
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; retry is only allowed from 'failed'.");
         }
-        await PushInternalAsync(billId, fiscalYearInput: null, reason: request?.Reason ?? "retry", broadcastHint: false, cancellationToken);
+        await EnsureTallyReadyAsync(cancellationToken);
+        await PushInternalAsync(
+            billId,
+            fiscalYearInput: null,
+            reason: request?.Reason ?? "retry",
+            broadcastHint: false,
+            requireTallyPreflight: false,
+            cancellationToken);
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
 
@@ -86,6 +102,9 @@ internal sealed class BillPostingWorkflow(
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; repost is only allowed from 'posted' or 'failed'.");
         }
+
+        await EnsureTallyReadyAsync(cancellationToken);
+
         if (bill.State == IBillService.StatePosted)
         {
             // Briefly flip to pending so PushInternalAsync accepts it.
@@ -93,7 +112,13 @@ internal sealed class BillPostingWorkflow(
             bill.UpdatedAtUtc = DateTimeOffset.UtcNow;
             await dbContext.SaveChangesAsync(cancellationToken);
         }
-        await PushInternalAsync(billId, fiscalYearInput: null, reason: request.Reason ?? "repost", broadcastHint: false, cancellationToken);
+        await PushInternalAsync(
+            billId,
+            fiscalYearInput: null,
+            reason: request.Reason ?? "repost",
+            broadcastHint: false,
+            requireTallyPreflight: false,
+            cancellationToken);
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
 
@@ -102,6 +127,7 @@ internal sealed class BillPostingWorkflow(
         string? fiscalYearInput,
         string? reason,
         bool broadcastHint,
+        bool requireTallyPreflight,
         CancellationToken cancellationToken)
     {
         _ = broadcastHint;
@@ -134,6 +160,11 @@ internal sealed class BillPostingWorkflow(
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is missing a reserved invoice number; drafts are expected to reserve their serial at creation.");
+        }
+
+        if (requireTallyPreflight)
+        {
+            await EnsureTallyReadyAsync(cancellationToken);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -337,6 +368,8 @@ internal sealed class BillPostingWorkflow(
             return new BillBatchPushResponse(0, 0, 0, false, null, null, Array.Empty<BillBatchPushItemResult>());
         }
 
+        await EnsureTallyReadyAsync(cancellationToken);
+
         var items = new List<BillBatchPushItemResult>(orderedBillIds.Count);
         var succeeded = 0;
         Guid? failedBillId = null;
@@ -351,6 +384,7 @@ internal sealed class BillPostingWorkflow(
                     fiscalYear,
                     reason,
                     broadcastHint: false,
+                    requireTallyPreflight: false,
                     cancellationToken);
                 items.Add(new BillBatchPushItemResult(
                     response.Id,
@@ -383,6 +417,49 @@ internal sealed class BillPostingWorkflow(
             failedBillId,
             failureMessage,
             items);
+    }
+
+    private async Task EnsureTallyReadyAsync(CancellationToken cancellationToken)
+    {
+        if (tallyCompanyHealthService is null)
+        {
+            return;
+        }
+
+        TallyCompanyHealthResponse health;
+        try
+        {
+            health = await tallyCompanyHealthService.CheckAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new TallyPreflightUnavailableException(
+                $"Tally push blocked: Tally health could not be checked. {ex.Message}");
+        }
+
+        if (IsTallyReady(health))
+        {
+            return;
+        }
+
+        throw new TallyPreflightUnavailableException(BuildTallyPreflightMessage(health));
+    }
+
+    private static bool IsTallyReady(TallyCompanyHealthResponse health) =>
+        string.Equals(health.Status, "healthy", StringComparison.OrdinalIgnoreCase)
+        && health.TallyReachable
+        && health.ActiveCompanyOpen;
+
+    private static string BuildTallyPreflightMessage(TallyCompanyHealthResponse health)
+    {
+        var message = string.IsNullOrWhiteSpace(health.Message)
+            ? "Tally is not ready for posting."
+            : health.Message.Trim();
+        return $"Tally push blocked: {message}";
     }
 
     private async Task<string?> ResolveAlterTargetMasterIdAsync(Guid billId, CancellationToken cancellationToken)

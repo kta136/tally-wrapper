@@ -13,6 +13,7 @@ internal interface IBillsActionWorkflowHost
     Func<Guid, CancellationToken, Task>? EditBillHandler { get; }
     Func<BillListRowViewModel, CancellationToken, Task<(bool Confirmed, string NewNumber, string? Reason)>>? ChangeNumberPromptHandler { get; }
     Func<string, string, CancellationToken, Task<string?>>? ReasonPromptHandler { get; }
+    Task<bool> EnsureTallyPushAllowedAsync(CancellationToken cancellationToken);
     Task LoadAsync(CancellationToken cancellationToken = default);
 }
 
@@ -100,9 +101,19 @@ internal sealed class BillsActionWorkflow(
         await _adminActions.MarkPostedRowAsync(row, cancellationToken);
     }
 
+    public async Task MarkPostedSelectedAsync(CancellationToken cancellationToken)
+    {
+        await _adminActions.MarkPostedSelectedAsync(cancellationToken);
+    }
+
     public async Task MarkPendingRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
         await _adminActions.MarkPendingRowAsync(row, cancellationToken);
+    }
+
+    public async Task MarkPendingSelectedAsync(CancellationToken cancellationToken)
+    {
+        await _adminActions.MarkPendingSelectedAsync(cancellationToken);
     }
 
     public async Task DeleteRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
