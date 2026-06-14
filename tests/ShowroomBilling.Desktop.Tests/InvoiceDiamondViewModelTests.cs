@@ -228,6 +228,78 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task LoadBillForEdit_preserves_stored_values_when_same_master_rebinds()
+    {
+        var billId = Guid.NewGuid();
+        var settings = new SettingsViewModel();
+        var master = new ItemMasterRowVm
+        {
+            Name = "22K Ring",
+            Unit = ItemUnits.Gram,
+            ItemCategory = ItemCategories.GoldBased,
+            PricingMode = PricingModes.Both,
+            WastagePercent = "10",
+            DefaultLabourPerGram = "500"
+        };
+        settings.Draft.ItemMasterRows.Add(master);
+        var payload = new BillPayloadDto(
+            PartyName: "Customer",
+            PartyGstin: null,
+            PartyPhone: null,
+            PartyAddress: null,
+            BillDate: new DateOnly(2026, 4, 24),
+            Lines:
+            [
+                new BillLineItemDto(
+                    ItemName: "22K Ring",
+                    HsnCode: "7113",
+                    Quantity: 9m,
+                    Unit: ItemUnits.Gram,
+                    Rate: 6111.11m,
+                    LineTotal: 55000m,
+                    Karat: "22K",
+                    RawJson: null,
+                    StockName: "Saved Stock",
+                    GrossWeight: 10m,
+                    LessWeight: 1m,
+                    WastagePercent: 7.5m,
+                    LabourPerUnit: 275m,
+                    DiamondRate: 1200m,
+                    Extra: 450m,
+                    ItemCategory: ItemCategories.GoldBased,
+                    PricingMode: PricingModes.Labour)
+            ],
+            Totals: new BillTotalsDto(53398.06m, 0m, 1601.94m, 0m, 55000m),
+            Notes: null,
+            Payment: "Cash",
+            Rate24Kt: 6000m);
+        var api = new FakeBillsApi
+        {
+            GetResponse = BillResponseFor(billId, payload)
+        };
+        var vm = new InvoiceViewModel(api, null, settings);
+
+        await vm.LoadBillForEditAsync(billId);
+
+        var loaded = vm.Lines.First(l => !l.IsEmpty);
+        loaded.ItemMaster = null;
+        loaded.ItemMaster = master;
+
+        Assert.Equal("22K Ring", loaded.ItemName);
+        Assert.Equal(ItemUnits.Gram, loaded.Unit);
+        Assert.Equal("22K", loaded.Karat);
+        Assert.Equal(10m, loaded.GrossWeight);
+        Assert.Equal(1m, loaded.LessWeight);
+        Assert.Equal(7.5m, loaded.WastagePercent);
+        Assert.Equal(275m, loaded.LabourPerUnit);
+        Assert.Equal(1200m, loaded.DiamondRate);
+        Assert.Equal(450m, loaded.Extra);
+        Assert.Equal(ItemCategories.GoldBased, loaded.ItemCategory);
+        Assert.Equal(PricingModes.Labour, loaded.PricingMode);
+        Assert.Equal("Saved Stock", loaded.StockName);
+    }
+
+    [Fact]
     public void Selecting_item_master_applies_defaults_for_new_rows()
     {
         var master = new ItemMasterRowVm

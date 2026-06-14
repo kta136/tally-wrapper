@@ -10,6 +10,8 @@ public partial class BillLineViewModel : ObservableObject
 {
     private int rowNumber;
     private bool _suppressItemMasterDefaults;
+    private ItemMasterRowVm? _payloadItemMaster;
+    private string? _payloadItemName;
 
     [ObservableProperty] private string itemName = string.Empty;
     [ObservableProperty] private decimal? grossWeight;
@@ -54,6 +56,8 @@ public partial class BillLineViewModel : ObservableObject
 
     public void SetItemMasterFromPayload(ItemMasterRowVm? value)
     {
+        _payloadItemMaster = value;
+        _payloadItemName = value?.Name;
         _suppressItemMasterDefaults = true;
         try
         {
@@ -114,7 +118,8 @@ public partial class BillLineViewModel : ObservableObject
 
     partial void OnItemMasterChanged(ItemMasterRowVm? value)
     {
-        if (value is not null && !_suppressItemMasterDefaults)
+        var preservePayloadValues = IsPayloadMasterRebind(value);
+        if (value is not null && !_suppressItemMasterDefaults && !preservePayloadValues)
         {
             ItemName = value.Name;
             if (!string.IsNullOrWhiteSpace(value.Unit)) Unit = value.Unit;
@@ -135,6 +140,15 @@ public partial class BillLineViewModel : ObservableObject
         OnPropertyChanged(nameof(NetWeight));
         OnPropertyChanged(nameof(ResolvedPricingMode));
         Raise();
+    }
+
+    private bool IsPayloadMasterRebind(ItemMasterRowVm? value)
+    {
+        if (value is null || _payloadItemMaster is null) return false;
+        if (!ReferenceEquals(value, _payloadItemMaster)) return false;
+        if (string.IsNullOrWhiteSpace(_payloadItemName)) return true;
+
+        return string.Equals(ItemName, _payloadItemName, StringComparison.OrdinalIgnoreCase);
     }
 
     partial void OnKaratMasterChanged(KaratMasterRowVm? value)
