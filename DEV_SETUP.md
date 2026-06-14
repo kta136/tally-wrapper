@@ -56,6 +56,25 @@ dotnet build ShowroomBilling.sln
 dotnet test ShowroomBilling.sln
 ```
 
+Postgres integration tests are opt-in because they require either a local Docker
+endpoint reachable by Testcontainers or an explicit remote Postgres test
+connection string. They create isolated test databases; they do not read local
+or Neon connection strings.
+
+```powershell
+.\tools\run-postgres-tests.ps1
+```
+
+The script starts a temporary `postgres:17` container on the configured Docker
+context, runs `Category=Postgres`, and stops the container afterward. To run
+against an already-running remote Postgres instance instead:
+
+```powershell
+$env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS='1'
+$env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=postgres'
+dotnet test tests/ShowroomBilling.Tests --filter "Category=Postgres"
+```
+
 ## Run the API
 
 ```powershell

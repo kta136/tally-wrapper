@@ -369,6 +369,23 @@ Run API contract tests only:
 dotnet test --filter "FullyQualifiedName~Contracts"
 ```
 
+Run the opt-in Postgres integration tests, which require a local Docker endpoint
+reachable by Testcontainers or an explicit Postgres test connection string:
+
+```powershell
+.\tools\run-postgres-tests.ps1
+```
+
+The script starts a temporary `postgres:17` container on the configured Docker
+context, runs `Category=Postgres`, and stops the container afterward. To run the
+tests against an already-running remote Postgres instance instead:
+
+```powershell
+$env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS='1'
+$env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=postgres'
+dotnet test tests/ShowroomBilling.Tests --filter "Category=Postgres"
+```
+
 What the tests cover:
 
 - bill state workflows

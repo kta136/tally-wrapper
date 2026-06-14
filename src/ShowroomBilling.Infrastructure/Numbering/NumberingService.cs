@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -13,6 +14,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
 {
     private const string DefaultShowroomCode = "default";
     private const string InMemoryProviderName = "Microsoft.EntityFrameworkCore.InMemory";
+    private const int MaxReservationAttempts = 3;
 
     public async Task<NumberingPreviewResponse> GetPreviewAsync(
         string documentType,
@@ -56,6 +58,35 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
         var year = NormalizeFiscalYear(request.FiscalYear);
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
 
+        for (var attempt = 1; attempt <= MaxReservationAttempts; attempt++)
+        {
+            try
+            {
+                return await ReserveCoreAsync(
+                    request,
+                    idempotencyKey,
+                    normalizedType,
+                    year,
+                    showroomId,
+                    cancellationToken);
+            }
+            catch (DbUpdateException ex) when (IsRetryableReservationConflict(ex) && attempt < MaxReservationAttempts)
+            {
+                dbContext.ChangeTracker.Clear();
+            }
+        }
+
+        throw new InvalidOperationException("Invoice number reservation retry loop exited unexpectedly.");
+    }
+
+    private async Task<ReserveNumberResponse> ReserveCoreAsync(
+        ReserveNumberRequest request,
+        string idempotencyKey,
+        string normalizedType,
+        string year,
+        Guid showroomId,
+        CancellationToken cancellationToken)
+    {
         var existing = await dbContext.InvoiceNumberReservations
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, cancellationToken);
@@ -182,6 +213,19 @@ FOR UPDATE")
             FormattedNumber: reservation.FormattedNumber,
             ReservedAtUtc: reservation.ReservedAtUtc,
             AlreadyExisted: false);
+    }
+
+    private bool IsRetryableReservationConflict(DbUpdateException exception)
+    {
+        if (UsesInMemoryProvider())
+        {
+            return false;
+        }
+
+        return exception.GetBaseException() is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation
+        };
     }
 
     public async Task<NumberingScopesResponse> GetScopesAsync(CancellationToken cancellationToken = default)
@@ -316,4 +360,7 @@ FOR UPDATE")
         var hash = MD5.HashData(bytes);
         return new Guid(hash);
     }
+
+    private bool UsesInMemoryProvider() =>
+        string.Equals(dbContext.Database.ProviderName, InMemoryProviderName, StringComparison.Ordinal);
 }
