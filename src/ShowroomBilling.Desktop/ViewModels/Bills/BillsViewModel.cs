@@ -629,7 +629,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         var selected = Items.Where(x => x.IsSelected).ToArray();
         if (selected.All(x => x.IsPendingLike)) return TallyPushMode.Push;
         if (selected.All(x => x.IsRetryable)) return TallyPushMode.Retry;
-        if (selected.All(x => x.State == "posted")) return TallyPushMode.Repost;
+        if (selected.All(x => BillStateCapabilities.IsPosted(x.State))) return TallyPushMode.Repost;
         return TallyPushMode.None;
     }
 

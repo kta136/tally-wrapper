@@ -220,7 +220,7 @@ internal sealed class BillsAdminActionWorkflow(
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
 
-        var anyPosted = rows.Any(r => r.State is "posted" or "failed");
+        var anyPosted = rows.Any(r => BillStateCapabilities.TallyDivergesIfDeleted(r.State));
         var prompt = anyPosted
             ? $"Permanently delete {rows.Length} bill(s)? Some were posted to Tally and will NOT be removed there — reconcile manually."
             : $"Permanently delete {rows.Length} bill(s)? This cannot be undone.";

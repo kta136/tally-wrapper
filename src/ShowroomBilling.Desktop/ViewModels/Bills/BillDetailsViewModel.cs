@@ -52,11 +52,11 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     public BillTotalsDto? Totals => Payload?.Totals;
     public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
     public bool HasAuditTrail => AuditTrail.Count > 0;
-    public bool IsPendingLike => Bill?.State is "pending" or "draft";
-    public bool IsPosted => Bill?.State == "posted";
-    public bool IsFailed => Bill?.State == "failed";
-    public bool CanVoidNow => Bill?.State is "pending" or "draft" or "failed";
-    public bool CanReviseNow => Bill?.State is "pending" or "draft" or "posted";
+    public bool IsPendingLike => BillStateCapabilities.IsPendingLike(Bill?.State);
+    public bool IsPosted => BillStateCapabilities.IsPosted(Bill?.State);
+    public bool IsFailed => BillStateCapabilities.IsFailed(Bill?.State);
+    public bool CanVoidNow => BillStateCapabilities.CanVoid(Bill?.State);
+    public bool CanReviseNow => BillStateCapabilities.CanRevise(Bill?.State);
     public string InvoiceNumberDisplay => string.IsNullOrWhiteSpace(Bill?.InvoiceNumber) ? "Assigned on push" : Bill!.InvoiceNumber!;
     public string AuditEmptyMessage => IsLoading ? "Loading timeline…" : "No timeline events yet.";
 
@@ -105,11 +105,11 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     }
 
     private bool CanAct() => _billsApi is not null && Bill is not null && !IsActing && !IsLoading;
-    private bool CanPush() => CanAct() && Bill!.State is "pending" or "draft";
-    private bool CanRetry() => CanAct() && Bill!.State == "failed";
-    private bool CanRepost() => CanAct() && Bill!.State is "posted" or "failed";
-    private bool CanVoid() => CanAct() && Bill!.State is "pending" or "draft" or "failed";
-    private bool CanRevise() => CanAct() && Bill!.State is "pending" or "draft" or "posted";
+    private bool CanPush() => CanAct() && BillStateCapabilities.CanPush(Bill!.State);
+    private bool CanRetry() => CanAct() && BillStateCapabilities.CanRetry(Bill!.State);
+    private bool CanRepost() => CanAct() && BillStateCapabilities.CanRepost(Bill!.State);
+    private bool CanVoid() => CanAct() && BillStateCapabilities.CanVoid(Bill!.State);
+    private bool CanRevise() => CanAct() && BillStateCapabilities.CanRevise(Bill!.State);
 
     public async Task LoadAsync(Guid billId, CancellationToken cancellationToken = default)
     {

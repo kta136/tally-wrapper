@@ -729,7 +729,7 @@ public partial class InvoiceViewModel : ObservableObject
             _draftBillId = bill.Id;
             CurrentBillState = bill.State;
             IsEditingExistingBill = true;
-            IsEditingPosted = bill.State is not ("pending" or "draft");
+            IsEditingPosted = !BillStateCapabilities.IsPendingLike(bill.State);
             RateMissing = false;
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
                 InvoiceNumber = bill.InvoiceNumber!;

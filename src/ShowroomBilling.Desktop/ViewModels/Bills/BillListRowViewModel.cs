@@ -28,29 +28,29 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
     // numbered peers within the same day.
     public long InvoiceNumberSortKey => InvoiceNumberFormatter.TryParseTrailingCore(Item.InvoiceNumber) ?? 0L;
 
-    public bool IsPendingLike => State is "pending" or "draft";
-    public bool IsRetryable => State == "failed";
+    public bool IsPendingLike => BillStateCapabilities.IsPendingLike(State);
+    public bool IsRetryable => BillStateCapabilities.CanRetry(State);
 
-    public bool CanBePushed => IsPendingLike;
-    public bool CanBeRetried => IsRetryable;
-    public bool CanBeReposted => State is "posted" or "failed";
-    public bool CanBeRevised => State is "pending" or "draft" or "posted";
-    public bool CanBeVoided => State is "pending" or "draft" or "failed";
-    public bool CanBeEdited => State is "pending" or "draft" or "failed" or "posted";
-    public bool CanChangeNumber => State != "posting";
-    public bool CanBeDeleted => State != "posting";
-    public bool CanMarkPosted => State is "pending" or "draft" or "failed";
-    public bool CanMarkPending => State is "posted" or "failed";
+    public bool CanBePushed => BillStateCapabilities.CanPush(State);
+    public bool CanBeRetried => BillStateCapabilities.CanRetry(State);
+    public bool CanBeReposted => BillStateCapabilities.CanRepost(State);
+    public bool CanBeRevised => BillStateCapabilities.CanRevise(State);
+    public bool CanBeVoided => BillStateCapabilities.CanVoid(State);
+    public bool CanBeEdited => BillStateCapabilities.CanEdit(State);
+    public bool CanChangeNumber => BillStateCapabilities.CanChangeNumber(State);
+    public bool CanBeDeleted => BillStateCapabilities.CanDelete(State);
+    public bool CanMarkPosted => BillStateCapabilities.CanMarkPosted(State);
+    public bool CanMarkPending => BillStateCapabilities.CanMarkPending(State);
     public bool CanCopyInvoiceNumber => !string.IsNullOrWhiteSpace(InvoiceNumber);
 
     public string RowNote => State switch
     {
-        "pending" or "draft" => "Awaiting Tally push",
-        "posting" => "Posting in progress",
-        "posted" => EditedAfterPush ? "Edited after push" : "—",
-        "failed" => "Requires retry or repost",
-        "voided" => "Voided locally",
-        "revised" => "Revision created",
+        BillStates.Pending or BillStates.Draft => "Awaiting Tally push",
+        BillStates.Posting => "Posting in progress",
+        BillStates.Posted => EditedAfterPush ? "Edited after push" : "—",
+        BillStates.Failed => "Requires retry or repost",
+        BillStates.Voided => "Voided locally",
+        BillStates.Revised => "Revision created",
         _ => "—"
     };
 
@@ -64,13 +64,13 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
             //  characters chosen so they line up next to JetBrains/Cascadia.
             var basic = State switch
             {
-                "pending" => "◐ Pending",
-                "draft" => "○ Draft",
-                "posting" => "◐ Posting",
-                "posted" => "● Posted",
-                "failed" => "✕ Failed",
-                "revised" => "↻ Revised",
-                "voided" => "— Voided",
+                BillStates.Pending => "◐ Pending",
+                BillStates.Draft => "○ Draft",
+                BillStates.Posting => "◐ Posting",
+                BillStates.Posted => "● Posted",
+                BillStates.Failed => "✕ Failed",
+                BillStates.Revised => "↻ Revised",
+                BillStates.Voided => "— Voided",
                 _ => State
             };
             return EditedAfterPush ? $"{basic} · edit" : basic;

@@ -71,7 +71,7 @@ internal sealed class BillDetailsActionWorkflow(
     {
         if (billsApi is null || host.Bill is null) return;
 
-        var alreadyPosted = host.Bill.State == "posted";
+        var alreadyPosted = BillStateCapabilities.IsPosted(host.Bill.State);
         var warning = alreadyPosted
             ? $"This bill (Invoice {host.Bill.InvoiceNumber ?? "—"}) is already posted to Tally. Reposting will push the current revision to Tally again — if the original voucher hasn't been cleared in Tally first, you will end up with a duplicate voucher.\n\nProceed with repost?"
             : $"Repost Invoice {host.Bill.InvoiceNumber ?? "—"} to Tally?";
