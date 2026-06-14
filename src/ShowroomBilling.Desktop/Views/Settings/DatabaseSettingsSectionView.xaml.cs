@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace ShowroomBilling.Desktop.Views.Settings;
 
-public partial class SettingsView : UserControl
+public partial class DatabaseSettingsSectionView : UserControl
 {
-    public SettingsView()
+    public DatabaseSettingsSectionView()
     {
         InitializeComponent();
     }

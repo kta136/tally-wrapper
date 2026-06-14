@@ -1,0 +1,173 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.PrintLayoutSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:PrintLayoutViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
+                <TextBlock Text="Print Layout" Style="{StaticResource SectionHeader}" Margin="0" />
+                <TextBlock Margin="12,10,0,0"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           Text="Updated" />
+                <TextBlock Margin="6,10,0,0"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkSoftBrush}"
+                           Text="{Binding UpdatedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0"
+                        Command="{Binding LoadCommand}" Content="Refresh" />
+                <Button Style="{StaticResource BtnPrimary}"
+                        Command="{Binding SaveCommand}" Content="Save" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Margins (cm)" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="LEFT" />
+                <TextBox Margin="0,0,0,8" Text="{Binding LeftMarginCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="4,0,4,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="RIGHT" />
+                <TextBox Margin="0,0,0,8" Text="{Binding RightMarginCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Margin="4,0,4,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="TOP" />
+                <TextBox Margin="0,0,0,8" Text="{Binding TopMarginCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="BOTTOM" />
+                <TextBox Margin="0,0,0,8" Text="{Binding BottomMarginCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Logo" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource ReadOnlyBox}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT FILE" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding LogoFileName}" />
+                </StackPanel>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Top">
+                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0"
+                        Command="{Binding UploadLogoCommand}" Content="Browse…" />
+                <Button Style="{StaticResource BtnSm}"
+                        Command="{Binding DeleteLogoCommand}"
+                        Visibility="{Binding HasLogo, Converter={StaticResource BoolToVis}}"
+                        Content="Delete" />
+            </StackPanel>
+        </Grid>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="OFFSET X (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding LogoOffsetXCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="4,0,4,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="OFFSET Y (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding LogoOffsetYCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Margin="4,0,4,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="WIDTH (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding LogoWidthCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="HEIGHT (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding LogoHeightCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Text="Signature" Style="{StaticResource SectionHeader}" />
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource ReadOnlyBox}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT FILE" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding SignatureFileName}" />
+                </StackPanel>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Top">
+                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0"
+                        Command="{Binding UploadSignatureCommand}" Content="Browse…" />
+                <Button Style="{StaticResource BtnSm}"
+                        Command="{Binding DeleteSignatureCommand}"
+                        Visibility="{Binding HasSignature, Converter={StaticResource BoolToVis}}"
+                        Content="Delete" />
+            </StackPanel>
+        </Grid>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="OFFSET X (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding SignatureOffsetXCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Margin="4,0,4,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="OFFSET Y (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding SignatureOffsetYCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Margin="4,0,4,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="WIDTH (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding SignatureWidthCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Margin="8,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="HEIGHT (CM)" />
+                <TextBox Margin="0,0,0,8" Text="{Binding SignatureHeightCm, UpdateSourceTrigger=LostFocus}" />
+            </StackPanel>
+        </Grid>
+
+        <TextBlock Margin="0,6,0,0"
+                   FontSize="11"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Text="{Binding StatusMessage}" />
+        <TextBlock Margin="0,6,0,0"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Text="Images are capped at 2 MB. Uploading replaces the old asset reference. Margins and placement are stored per showroom and applied by the print renderer." />
+    </StackPanel>
+</UserControl>

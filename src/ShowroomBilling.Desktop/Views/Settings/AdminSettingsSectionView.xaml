@@ -1,0 +1,230 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.AdminSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel DataContext="{Binding AdminVm}">
+        <TextBlock Text="Admin" Style="{StaticResource SectionHeader}" Margin="0,0,0,16" />
+
+        <!--  Not-wired fallback (tests / design-time contexts)  -->
+        <Border Style="{StaticResource AdminBannerWarn}"
+                Visibility="{Binding DataContext.IsAdminVmWired, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource InverseBoolToVis}}">
+            <TextBlock FontSize="12"
+                       Foreground="{StaticResource WarnInkBrush}"
+                       Text="Admin view-model is not wired — open Admin dialog via ~ (backtick) to unlock first." />
+        </Border>
+
+        <!--  Unlocked / locked status strip  -->
+        <Border Style="{StaticResource AdminBannerInfo}"
+                Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="7"
+                             Height="7"
+                             Margin="0,0,8,0"
+                             VerticalAlignment="Center"
+                             Fill="{StaticResource OkBrush}" />
+                    <TextBlock Text="{Binding SessionSummary}"
+                               Foreground="{StaticResource OkInkBrush}"
+                               FontWeight="Medium"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Style="{StaticResource BtnBase}"
+                        Content="Lock session"
+                        Command="{Binding LockCommand}" />
+            </Grid>
+        </Border>
+
+        <Border Style="{StaticResource AdminBannerErr}"
+                Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="12"
+                       Foreground="{StaticResource ErrInkBrush}"
+                       TextWrapping="Wrap">
+                <Run Text="Admin is locked. Press " /><Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource ErrBrush}" Text="~" /><Run Text=" (backtick) to open the unlock dialog. Draft-lock force-release is disabled until unlocked." />
+            </TextBlock>
+        </Border>
+
+        <!--  Error / status inline (bound to AdminVm)  -->
+        <Border Style="{StaticResource AdminBannerErr}"
+                Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="12"
+                       Foreground="{StaticResource ErrInkBrush}"
+                       TextWrapping="Wrap"
+                       Text="{Binding ErrorMessage}" />
+        </Border>
+        <Border Style="{StaticResource AdminBannerInfo}"
+                Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="12"
+                       Foreground="{StaticResource InfoInkBrush}"
+                       TextWrapping="Wrap"
+                       Text="{Binding StatusMessage}" />
+        </Border>
+
+        <!--  Set / change passcode  -->
+        <Border Style="{StaticResource AdminSectionPanel}">
+            <StackPanel>
+                <Grid Margin="0,0,0,8">
+                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                               Margin="0"
+                               Text="CHANGE PASSCODE"
+                               Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                               Margin="0"
+                               Text="SET PASSCODE"
+                               Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource InverseBoolToVis}}" />
+                    <TextBlock HorizontalAlignment="Right"
+                               FontSize="10.5"
+                               Foreground="{StaticResource InkSoftBrush}"
+                               Text="Min. 6 characters"
+                               VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Style="{StaticResource AdminFieldLabel}" Text="CURRENT PASSCODE" />
+                    <PasswordBox x:Name="AdminCurrentPasscodeBox" PasswordChanged="AdminCurrentPasscodeBox_PasswordChanged" />
+                </StackPanel>
+                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,8,0,3" Text="NEW PASSCODE" />
+                <PasswordBox x:Name="AdminNewPasscodeBox" PasswordChanged="AdminNewPasscodeBox_PasswordChanged" />
+                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
+                <PasswordBox x:Name="AdminConfirmNewPasscodeBox" PasswordChanged="AdminConfirmNewPasscodeBox_PasswordChanged" />
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <Button Style="{StaticResource BtnPrimary}"
+                            MinWidth="120"
+                            Content="Save passcode"
+                            Command="{Binding SetOrChangePasscodeCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!--  Active draft locks (visible when unlocked)  -->
+        <Border Style="{StaticResource AdminSectionPanel}"
+                Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <Grid Margin="0,0,0,8">
+                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                               Margin="0"
+                               Text="ACTIVE DRAFT LOCKS" />
+                    <Button HorizontalAlignment="Right"
+                            Style="{StaticResource BtnSm}"
+                            Content="Refresh"
+                            Command="{Binding RefreshLeasesCommand}" />
+                </Grid>
+
+                <DataGrid Style="{StaticResource AdminDataGrid}"
+                          ItemsSource="{Binding ActiveLeases}"
+                          SelectedItem="{Binding SelectedLease}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          MaxHeight="220">
+                    <DataGrid.Resources>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
+                            <Setter Property="BorderThickness" Value="0,0,0,1" />
+                            <Setter Property="Padding" Value="10,4" />
+                            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                            <Setter Property="HorizontalContentAlignment" Value="Left" />
+                        </Style>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Padding" Value="10,0" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="DataGridCell">
+                                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter VerticalAlignment="Center" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                                    <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.Resources>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Bill" Binding="{Binding BillId}" Width="*">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Header="Owner" Binding="{Binding OwnerActorId}" Width="130" />
+                        <DataGridTextColumn Header="Counter" Binding="{Binding OwnerCounterName}" Width="110" />
+                        <DataGridTextColumn Header="Expires" Binding="{Binding ExpiresAtUtc, StringFormat=\{0:HH:mm:ss\}}" Width="80">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+                                    <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,10,0,3" Text="FORCE-RELEASE REASON (REQUIRED)" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             Text="{Binding ForceReleaseReason, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,8,0" />
+                    <Button Grid.Column="1"
+                            Style="{StaticResource BtnDanger}"
+                            Content="Force release"
+                            Command="{Binding ForceReleaseSelectedLeaseCommand}" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!--
+            Batch Data Scheduler — admin-only; lives here now
+            (previously in Advanced). The inner DataContext is
+            AdminVm, so walk to Window to reach
+            MainWindowViewModel.OpenSyntheticBatchCommand.
+        -->
+        <Border Style="{StaticResource AdminSectionPanel}"
+                Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource AdminSectionTitle}" Margin="0,0,0,8" Text="BATCH DATA SCHEDULER" />
+                <TextBlock FontSize="12"
+                           LineHeight="19"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           Margin="0,0,0,10">
+                    <Run Text="Generates a cluster of realistic " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="pending" /><Run Text=" bills by partitioning a total target amount into bills of ₹25,000–₹1,99,000, scattered across a chosen time window. No Tally traffic; audit timestamps are backfilled." />
+                </TextBlock>
+                <Button HorizontalAlignment="Left"
+                        Style="{StaticResource BtnBase}"
+                        Command="{Binding DataContext.OpenSyntheticBatchCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Content="Open Batch Data Scheduler…" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -28,6 +28,7 @@
     <SolidColorBrush x:Key="InkSoftBrush" Color="#FF7F8491" />
     <SolidColorBrush x:Key="InkDisabledBrush" Color="#FFB2B6C0" />
     <SolidColorBrush x:Key="InkInverseBrush" Color="#FFFDFDFD" />
+    <Color x:Key="ShadowColor">#FF0F172A</Color>
 
     <!--  Status (matched chroma)  -->
     <SolidColorBrush x:Key="OkBrush" Color="#FF3E8E54" />

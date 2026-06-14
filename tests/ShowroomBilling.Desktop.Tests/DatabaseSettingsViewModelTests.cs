@@ -16,12 +16,7 @@ public sealed class DatabaseSettingsViewModelTests
     {
         using var bootstrapFile = new BootstrapOverrideFileScope();
         var restartCount = 0;
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             bootstrapOptions: new DesktopBootstrapOptions
             {
                 ConnectionMode = DesktopConnectionModes.LocalEmbedded,
@@ -46,21 +41,16 @@ public sealed class DatabaseSettingsViewModelTests
     {
         using var bootstrapFile = new BootstrapOverrideFileScope();
         var restartCount = 0;
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             bootstrapOptions: new DesktopBootstrapOptions
             {
                 ConnectionMode = DesktopConnectionModes.LocalEmbedded,
                 ApiBaseUrl = "http://localhost:5107"
             },
             restartApplication: () => restartCount++,
-            confirmConnectionModeRestart: () => false);
+            confirmConnectionModeRestart: () => false,
+            hasUnsavedSettingsEdits: () => true);
 
-        vm.IsDirty = true;
         vm.ApiConnectionMode = DesktopConnectionModes.Server;
         vm.ServerApiBaseUrl = "http://192.168.1.13:5107";
 
@@ -75,12 +65,7 @@ public sealed class DatabaseSettingsViewModelTests
     [Fact]
     public void ServerMode_DisablesLocalEmbeddedDatabaseOverrideCommands()
     {
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             runtimeApi: new FakeRuntimeApiClient(),
             bootstrapOptions: new DesktopBootstrapOptions
             {
@@ -98,12 +83,7 @@ public sealed class DatabaseSettingsViewModelTests
     [Fact]
     public void SwitchingBackToServer_RestoresLastNonLocalhostServerUrl()
     {
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             bootstrapOptions: new DesktopBootstrapOptions
             {
                 ConnectionMode = DesktopConnectionModes.LocalEmbedded,
@@ -126,12 +106,7 @@ public sealed class DatabaseSettingsViewModelTests
     {
         var runtime = new FakeRuntimeApiClient();
         var tokenStore = new AdminTokenStore();
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             runtimeApi: runtime,
             adminTokenStore: tokenStore);
 
@@ -161,12 +136,7 @@ public sealed class DatabaseSettingsViewModelTests
             DatabaseConfiguration = Response(canBootstrap: true, localOverride: false, requiresRestart: false)
         };
         var tokenStore = new AdminTokenStore();
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             runtimeApi: runtime,
             adminTokenStore: tokenStore);
 
@@ -204,12 +174,7 @@ public sealed class DatabaseSettingsViewModelTests
                 "PROD",
                 true)));
         var supervisor = new FakeChildProcessSupervisor { CanRestartApi = true };
-        var vm = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
-            printAssetApi: null,
-            printDispatcher: null,
-            printPreferences: null,
+        var vm = new DatabaseSettingsViewModel(
             runtimeApi: runtime,
             healthApi: health,
             adminTokenStore: new AdminTokenStore(),
@@ -223,6 +188,26 @@ public sealed class DatabaseSettingsViewModelTests
 
         Assert.Equal(1, supervisor.RestartCount);
         Assert.Contains("database is ready", vm.DatabaseConfigStatus);
+    }
+
+    [Fact]
+    public async Task SettingsViewModel_BridgesAdminUnlockHandler_AndDatabaseLoad()
+    {
+        var runtime = new FakeRuntimeApiClient();
+        Func<CancellationToken, Task> handler = _ => Task.CompletedTask;
+        var vm = new SettingsViewModel(
+            settingsApi: null,
+            mastersApi: null,
+            printAssetApi: null,
+            printDispatcher: null,
+            printPreferences: null,
+            runtimeApi: runtime);
+
+        vm.AdminUnlockHandler = handler;
+        await vm.LoadDatabaseConfigAsync();
+
+        Assert.Same(handler, vm.Database.AdminUnlockHandler);
+        Assert.Contains("loaded", vm.Database.DatabaseConfigStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class FakeRuntimeApiClient : IRuntimeApiClient

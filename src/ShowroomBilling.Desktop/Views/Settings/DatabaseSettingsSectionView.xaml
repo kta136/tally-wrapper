@@ -1,0 +1,332 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.DatabaseSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:DatabaseSettingsViewModel, IsDesignTimeCreatable=False}">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Text="Database" Style="{StaticResource SectionHeader}" Margin="0,0,0,12" />
+
+        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="API Connection Mode" Margin="0,0,0,8" />
+        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="CURRENT API" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="11.5"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource InkBrush}"
+                               Text="{Binding CurrentApiBaseUrl}" />
+                    <TextBlock Margin="0,6,0,0"
+                               FontSize="11"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="{Binding ApiConnectionModeSummary}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="RUNNING MODE" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="11.5"
+                               Foreground="{StaticResource InkBrush}"
+                               Text="{Binding RunningConnectionModeText}" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="BOOTSTRAP FILE" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="11.5"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource AccentBrush}"
+                               Text="{Binding DesktopBootstrapConfigPath}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="210" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="MODE" />
+                <ComboBox ItemsSource="{Binding ApiConnectionModeOptions}"
+                          SelectedItem="{Binding ApiConnectionMode, UpdateSourceTrigger=PropertyChanged}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="SERVER API URL" />
+                <TextBox Text="{Binding ServerApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding IsServerApiUrlEnabled}"
+                         FontFamily="{StaticResource MonoFontFamily}"
+                         FontSize="11.5" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,17,0,0" VerticalAlignment="Top">
+                <Button Style="{StaticResource BtnSm}" Command="{Binding TestServerConnectionCommand}" Content="Test server" Margin="0,0,6,0" />
+                <Button Style="{StaticResource BtnSm}" Command="{Binding FindServerCommand}" Content="Find server" Margin="0,0,6,0" />
+                <Button Style="{StaticResource BtnPrimary}" Command="{Binding SaveApiConnectionModeCommand}" Content="Save and restart" />
+            </StackPanel>
+        </Grid>
+        <TextBlock FontSize="11.5"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8"
+                   Text="{Binding SelectedConnectionModeHelp}" />
+
+        <Border Margin="0,0,0,18"
+                Padding="10,7"
+                Background="{StaticResource InfoSoftBrush}"
+                BorderBrush="{StaticResource InfoBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource Radius}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ApiConnectionStatus}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding ApiConnectionStatus}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource InfoBrush}" />
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="11.5"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource InfoInkBrush}"
+                           Text="{Binding ApiConnectionStatus}" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Local Embedded Database" Margin="0,0,0,8" />
+        <TextBlock FontSize="12"
+                   LineHeight="19"
+                   TextWrapping="Wrap"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   Margin="0,0,0,14"
+                   Text="Used only when this workstation runs LocalEmbedded mode. Server mode database configuration is maintained from the server tray." />
+
+        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="LOCAL EMBEDDED API" />
+                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11.5"
+                           Foreground="{StaticResource InkBrush}"
+                           Text="{Binding LocalEmbeddedApiBaseUrl}" />
+            </StackPanel>
+        </Border>
+
+        <Border Margin="0,0,0,16"
+                Padding="10,8"
+                Background="{StaticResource WarnSoftBrush}"
+                BorderBrush="{StaticResource WarnBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource Radius}"
+                Visibility="{Binding IsRunningServerMode, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="11.5"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource WarnInkBrush}"
+                       Text="This workstation is currently using Server mode. Switch to LocalEmbedded and restart before editing this workstation's local fallback DB override." />
+        </Border>
+
+        <Border Margin="0,0,0,16"
+                Padding="10,8"
+                Background="{StaticResource WarnSoftBrush}"
+                BorderBrush="{StaticResource WarnBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource Radius}"
+                Visibility="{Binding CanBootstrapDatabaseWithoutAdmin, Converter={StaticResource BoolToVis}}">
+            <TextBlock FontSize="11.5"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource WarnInkBrush}"
+                       Text="{Binding DatabaseSetupModeText}" />
+        </Border>
+
+        <StackPanel IsEnabled="{Binding IsDatabaseOverrideEditorEnabled}">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="POSTGRES CONNECTION STRING" />
+            <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="64"
+                     VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top"
+                     Padding="10,8"
+                     FontFamily="{StaticResource MonoFontFamily}"
+                     FontSize="11.5" />
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Style="{StaticResource BtnSm}" Command="{Binding LoadDatabaseConfigCommand}" Content="Load" Margin="0,0,6,0" />
+                <Button Style="{StaticResource BtnSm}" Command="{Binding TestDatabaseConnectionCommand}" Content="Test connection" Margin="0,0,6,0" />
+                <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Content="{Binding SaveDatabaseConfigButtonText}" Margin="0,0,6,0" />
+                <Rectangle Width="1" Margin="4,0" Fill="{StaticResource DividerBrush}" />
+                <Button Style="{StaticResource BtnSm}" Command="{Binding RestartApiCommand}" Content="Restart API" Margin="6,0,0,0" />
+            </StackPanel>
+        </StackPanel>
+
+        <!--  Inline status strip — only renders when there's a message  -->
+        <Border Margin="0,14,0,0"
+                Padding="10,7"
+                Background="{StaticResource InfoSoftBrush}"
+                BorderBrush="{StaticResource InfoBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource Radius}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding DatabaseConfigStatus}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding DatabaseConfigStatus}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource InfoBrush}" />
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="11.5"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource InfoInkBrush}"
+                           Text="{Binding DatabaseConfigStatus}" />
+            </StackPanel>
+        </Border>
+
+        <!--  Current State  -->
+        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Current State" Margin="0,24,0,10" />
+
+        <!--  Masked current value card  -->
+        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="MASKED CURRENT VALUE" />
+                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11.5"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource InkBrush}"
+                           Text="{Binding DatabaseMaskedConnectionString}" />
+            </StackPanel>
+        </Border>
+
+        <!--  Local override file card  -->
+        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="LOCAL OVERRIDE FILE" />
+                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11.5"
+                           TextWrapping="Wrap"
+                           Foreground="{StaticResource AccentBrush}"
+                           Text="{Binding DatabaseConfigPath}" />
+            </StackPanel>
+        </Border>
+
+        <!--  Override + Restart side-by-side  -->
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--  Override present  -->
+            <Border Grid.Column="0" Style="{StaticResource DbStateCard}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,6" Text="LOCAL OVERRIDE" />
+                    <StackPanel Orientation="Horizontal">
+                        <!--  Active (override file present)  -->
+                        <Border Padding="7,0"
+                                Height="18"
+                                CornerRadius="2"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource AccentSoftBrush}"
+                                Visibility="{Binding IsLocalDatabaseOverridePresent, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource AccentBrush}" />
+                                <TextBlock Text="ACTIVE"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <!--  Not present  -->
+                        <Border Padding="7,0"
+                                Height="18"
+                                CornerRadius="2"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource NeutralChipBrush}"
+                                Visibility="{Binding IsLocalDatabaseOverridePresent, Converter={StaticResource InverseBoolToVis}}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource InkDisabledBrush}" />
+                                <TextBlock Text="NONE"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource InkMutedBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!--  Restart required  -->
+            <Border Grid.Column="2" Style="{StaticResource DbStateCard}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,6" Text="RESTART REQUIRED" />
+                    <StackPanel Orientation="Horizontal">
+                        <!--  Yes, restart pending  -->
+                        <Border Padding="7,0"
+                                Height="18"
+                                CornerRadius="2"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource WarnSoftBrush}"
+                                Visibility="{Binding DatabaseConfigRequiresRestart, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource WarnBrush}" />
+                                <TextBlock Text="PENDING"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource WarnInkBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <!--  No  -->
+                        <Border Padding="7,0"
+                                Height="18"
+                                CornerRadius="2"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource OkSoftBrush}"
+                                Visibility="{Binding DatabaseConfigRequiresRestart, Converter={StaticResource InverseBoolToVis}}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
+                                <TextBlock Text="IN SYNC"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource OkInkBrush}"
+                                           VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>

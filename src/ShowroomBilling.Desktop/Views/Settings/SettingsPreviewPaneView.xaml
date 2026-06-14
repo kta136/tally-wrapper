@@ -1,0 +1,188 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.SettingsPreviewPaneView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:SettingsPreviewViewModel, IsDesignTimeCreatable=False}">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Thumb Grid.Column="0"
+               Width="6"
+               HorizontalAlignment="Stretch"
+               VerticalAlignment="Stretch"
+               Cursor="SizeWE"
+               DragDelta="OnPreviewResizeThumbDragDelta">
+            <Thumb.Template>
+                <ControlTemplate TargetType="Thumb">
+                    <Border Background="{StaticResource DividerBrush}" />
+                </ControlTemplate>
+            </Thumb.Template>
+        </Thumb>
+
+        <Border Grid.Column="1"
+                Width="{Binding PaneWidth}"
+                MinWidth="320"
+                Background="{StaticResource BgPanelBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="1,0,0,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="14,10,14,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock FontSize="13" FontWeight="SemiBold" Text="Live preview" />
+                        <TextBlock FontSize="10.5"
+                                   Margin="0,2,0,0"
+                                   Foreground="{StaticResource InkMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding PreviewSummary}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button Style="{StaticResource BtnGhost}"
+                                Width="28"
+                                Height="24"
+                                Padding="0"
+                                Command="{Binding ZoomOutCommand}"
+                                Content="-"
+                                ToolTip="Zoom out" />
+                        <Button Style="{StaticResource BtnGhost}"
+                                MinWidth="48"
+                                Height="24"
+                                Margin="4,0"
+                                Padding="8,0"
+                                Command="{Binding ResetZoomCommand}"
+                                Content="{Binding PreviewZoomDisplay}"
+                                ToolTip="Reset zoom" />
+                        <Button Style="{StaticResource BtnGhost}"
+                                Width="28"
+                                Height="24"
+                                Padding="0"
+                                Command="{Binding ZoomInCommand}"
+                                Content="+"
+                                ToolTip="Zoom in" />
+                        <Button Style="{StaticResource BtnGhost}"
+                                MinWidth="36"
+                                Height="24"
+                                Margin="4,0,0,0"
+                                Padding="8,0"
+                                Command="{Binding FitWidthCommand}"
+                                Content="Fit"
+                                ToolTip="Fit preview to pane width" />
+                        <Button Style="{StaticResource BtnGhost}"
+                                Width="28"
+                                Height="24"
+                                Margin="4,0,0,0"
+                                Padding="0"
+                                Command="{Binding RefreshCommand}"
+                                Content="R"
+                                ToolTip="Refresh preview" />
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1"
+                        Margin="14,0,14,8"
+                        Background="{StaticResource BgSunkenBrush}"
+                        BorderBrush="{StaticResource BorderBrushTok}"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        Padding="8">
+                    <Grid>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding PreviewPages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,8"
+                                                Background="{StaticResource BgPanelBrush}"
+                                                BorderBrush="{StaticResource BorderStrongBrush}"
+                                                BorderThickness="1"
+                                                SnapsToDevicePixels="True">
+                                            <Border.Effect>
+                                                <DropShadowEffect BlurRadius="16"
+                                                                  Opacity="0.12"
+                                                                  ShadowDepth="2"
+                                                                  Color="{StaticResource ShadowColor}" />
+                                            </Border.Effect>
+                                            <Border.LayoutTransform>
+                                                <ScaleTransform ScaleX="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                ScaleY="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                                            </Border.LayoutTransform>
+                                            <Image Source="{Binding}"
+                                                   Stretch="Uniform" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Border Padding="14,12"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource BgPanelBrush}"
+                                BorderBrush="{StaticResource BorderBrushTok}"
+                                BorderThickness="1"
+                                CornerRadius="3"
+                                Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVis}}">
+                            <TextBlock FontSize="11"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="Preview will appear here" />
+                        </Border>
+
+                        <Border Padding="14,12"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource BgPanelBrush}"
+                                BorderBrush="{StaticResource BorderBrushTok}"
+                                BorderThickness="1"
+                                CornerRadius="3"
+                                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <ProgressBar Width="150"
+                                             Height="3"
+                                             IsIndeterminate="True" />
+                                <TextBlock Margin="0,8,0,0"
+                                           HorizontalAlignment="Center"
+                                           FontSize="11"
+                                           Foreground="{StaticResource InkMutedBrush}"
+                                           Text="Rendering preview" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="2" Margin="14,0,14,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               FontSize="10.5"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               TextWrapping="Wrap"
+                               Text="{Binding StatusMessage}"
+                               Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Grid.Column="1"
+                               Margin="8,0,0,0"
+                               FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="10.5"
+                               Foreground="{StaticResource InkSoftBrush}"
+                               Text="{Binding PreviewZoomDisplay}" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
