@@ -135,12 +135,15 @@
 
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <Grid Margin="20,16,20,20">
-                    <settingsViews:ConnectionSettingsSectionView Visibility="{Binding IsConnectionVisible, Converter={StaticResource BoolToVis}}" />
+                    <settingsViews:ConnectionSettingsSectionView DataContext="{Binding MasterData}"
+                                                                 Visibility="{Binding DataContext.IsConnectionVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:InvoiceSettingsSectionView Visibility="{Binding IsInvoiceVisible, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:PrintLayoutSettingsSectionView DataContext="{Binding PrintLayout}"
                                                                    Visibility="{Binding DataContext.IsPrintLayoutVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
-                    <settingsViews:LedgersSettingsSectionView Visibility="{Binding IsLedgersVisible, Converter={StaticResource BoolToVis}}" />
-                    <settingsViews:MastersSettingsSectionView Visibility="{Binding IsMastersVisible, Converter={StaticResource BoolToVis}}" />
+                    <settingsViews:LedgersSettingsSectionView DataContext="{Binding MasterData}"
+                                                              Visibility="{Binding DataContext.IsLedgersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                    <settingsViews:MastersSettingsSectionView DataContext="{Binding MasterData}"
+                                                              Visibility="{Binding DataContext.IsMastersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:DatabaseSettingsSectionView DataContext="{Binding Database}"
                                                                Visibility="{Binding DataContext.IsDatabaseVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdvancedSettingsSectionView Visibility="{Binding IsAdvancedVisible, Converter={StaticResource BoolToVis}}" />

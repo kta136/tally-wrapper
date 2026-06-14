@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Desktop.Configuration;
-using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Services.ProcessSupervision;
@@ -17,13 +16,11 @@ using ShowroomBilling.Desktop.ViewModels.Admin;
 namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
 public partial class SettingsViewModel : ObservableObject,
-    ISettingsMasterSnapshotHost,
     ISettingsEditWorkflowHost,
-    ISettingsSectionHost
+    ISettingsSectionHost,
+    IMasterDataSettingsShell
 {
     private readonly ISettingsApiClient? _settingsApi;
-    private readonly IMastersApiClient? _mastersApi;
-    private readonly SettingsMasterSnapshotWorkflow _masterWorkflow;
     private readonly SettingsEditWorkflow _editWorkflow;
     private readonly SettingsSectionCoordinator _sectionCoordinator;
     private readonly object _loadGate = new();
@@ -92,7 +89,9 @@ public partial class SettingsViewModel : ObservableObject,
     {
         ArgumentNullException.ThrowIfNull(previewFactory);
         _settingsApi = settingsApi;
-        _mastersApi = mastersApi;
+        Draft = new SettingsDraft();
+        Draft.PropertyChanged += OnDraftPropertyChanged;
+
         Database = new DatabaseSettingsViewModel(
             runtimeApi,
             healthApi,
@@ -102,7 +101,7 @@ public partial class SettingsViewModel : ObservableObject,
             restartApplication,
             confirmConnectionModeRestart,
             () => IsDirty);
-        _masterWorkflow = new SettingsMasterSnapshotWorkflow(_settingsApi, _mastersApi, this, LoadAsync);
+        MasterData = new MasterDataSettingsViewModel(_settingsApi, mastersApi, this);
         _editWorkflow = new SettingsEditWorkflow(_settingsApi, this);
         _sectionCoordinator = new SettingsSectionCoordinator(this);
 
@@ -123,42 +122,13 @@ public partial class SettingsViewModel : ObservableObject,
         };
         SelectedSection = SettingsSectionKey.Database;
 
-        Draft = new SettingsDraft();
-        Draft.PropertyChanged += OnDraftPropertyChanged;
-
         Preview = previewFactory(Draft, PrintLayout, this);
         _sectionCoordinator.UpdatePreviewActivation();
-
-        Companies = new ObservableCollection<CompanySnapshotItem>();
-        LedgerOptions = new ObservableCollection<LedgerSnapshotItem>();
-        VoucherTypeOptions = new ObservableCollection<VoucherTypeSnapshotItem>();
-        StockItems = new ObservableCollection<StockItemSnapshotItem>();
 
         RefreshCommand = new AsyncRelayCommand(() => LoadAsync(CancellationToken.None), () => !IsLoading && !IsEditing);
         BeginEditCommand = new RelayCommand(BeginEdit, () => !IsEditing && !IsLoading && Settings is not null);
         DiscardChangesCommand = new RelayCommand(DiscardChanges, () => IsEditing && !IsSaving);
         SaveAllCommand = new AsyncRelayCommand(SaveAsync, () => IsEditing && IsDirty && !IsSaving);
-        RequestCompanyRefreshCommand = new AsyncRelayCommand(RequestCompanyRefreshAsync,
-            () => _mastersApi is not null && !IsFetchingCompanies && !IsSettingActiveCompany);
-        SetActiveCompanyCommand = new AsyncRelayCommand(SetActiveCompanyAsync,
-            () => _settingsApi is not null
-                && SelectedCompany is not null
-                && !IsSettingActiveCompany
-                && !IsFetchingCompanies
-                && !string.Equals(SelectedCompany.Name, ActiveCompanyName, StringComparison.Ordinal));
-        FetchLedgersAndVoucherTypesCommand = new AsyncRelayCommand(FetchLedgersAndVoucherTypesAsync,
-            () => _mastersApi is not null && !IsFetchingLedgers);
-        RequestLedgerRefreshCommand = new AsyncRelayCommand(RequestLedgerRefreshAsync,
-            () => _mastersApi is not null && !IsFetchingLedgers);
-        FetchStockItemsCommand = new AsyncRelayCommand(FetchStockItemsAsync,
-            () => _mastersApi is not null && !IsFetchingStockItems);
-        RequestStockItemRefreshCommand = new AsyncRelayCommand(RequestStockItemRefreshAsync,
-            () => _mastersApi is not null && !IsFetchingStockItems);
-
-        AddItemMasterRowCommand = new RelayCommand(AddItemMasterRow, () => IsEditing);
-        RemoveItemMasterRowCommand = new RelayCommand<ItemMasterRowVm>(RemoveItemMasterRow, _ => IsEditing);
-        AddKaratRowCommand = new RelayCommand(AddKaratRow, () => IsEditing);
-        RemoveKaratRowCommand = new RelayCommand<KaratMasterRowVm>(RemoveKaratRow, _ => IsEditing);
 
         OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
         OpenInstallFolderCommand = new RelayCommand(OpenInstallFolder);
@@ -238,6 +208,7 @@ public partial class SettingsViewModel : ObservableObject,
 
     public ObservableCollection<SettingsSectionKey> Sections { get; }
     public DatabaseSettingsViewModel Database { get; }
+    public MasterDataSettingsViewModel MasterData { get; }
     public SettingsDraft Draft { get; }
     public PrintLayoutViewModel PrintLayout { get; }
     public SettingsPreviewViewModel Preview { get; }
@@ -246,25 +217,6 @@ public partial class SettingsViewModel : ObservableObject,
     public IRelayCommand BeginEditCommand { get; }
     public IRelayCommand DiscardChangesCommand { get; }
     public IAsyncRelayCommand SaveAllCommand { get; }
-    public IAsyncRelayCommand RequestCompanyRefreshCommand { get; }
-    public IAsyncRelayCommand SetActiveCompanyCommand { get; }
-    public IAsyncRelayCommand FetchLedgersAndVoucherTypesCommand { get; }
-    public IAsyncRelayCommand RequestLedgerRefreshCommand { get; }
-    public IAsyncRelayCommand FetchStockItemsCommand { get; }
-    public IAsyncRelayCommand RequestStockItemRefreshCommand { get; }
-    public IRelayCommand AddItemMasterRowCommand { get; }
-    public IRelayCommand<ItemMasterRowVm> RemoveItemMasterRowCommand { get; }
-    public IRelayCommand AddKaratRowCommand { get; }
-    public IRelayCommand<KaratMasterRowVm> RemoveKaratRowCommand { get; }
-
-    public ObservableCollection<CompanySnapshotItem> Companies { get; }
-    public ObservableCollection<LedgerSnapshotItem> LedgerOptions { get; }
-    public ObservableCollection<VoucherTypeSnapshotItem> VoucherTypeOptions { get; }
-    public ObservableCollection<StockItemSnapshotItem> StockItems { get; }
-
-    public IReadOnlyList<string> ItemUnitOptions { get; } = ItemUnits.All;
-    public IReadOnlyList<string> ItemCategoryOptions { get; } = ItemCategories.All;
-    public IReadOnlyList<string> PricingModeOptions { get; } = PricingModes.All;
 
     [ObservableProperty] private SettingsSectionKey selectedSection;
     [ObservableProperty] private bool isLoading;
@@ -276,24 +228,6 @@ public partial class SettingsViewModel : ObservableObject,
     [ObservableProperty] private string summary = string.Empty;
     [ObservableProperty] private DateTimeOffset? updatedAtUtc;
     [ObservableProperty] private EffectiveCloudSettingsDto? settings;
-
-    [ObservableProperty] private CompanySnapshotItem? selectedCompany;
-    [ObservableProperty] private bool isFetchingCompanies;
-    [ObservableProperty] private bool isSettingActiveCompany;
-    [ObservableProperty] private string companiesFreshness = "—";
-    [ObservableProperty] private DateTimeOffset? companiesFetchedAtUtc;
-    [ObservableProperty] private int companiesCount;
-
-    [ObservableProperty] private bool isFetchingLedgers;
-    [ObservableProperty] private string ledgersFreshness = "—";
-    [ObservableProperty] private DateTimeOffset? ledgersFetchedAtUtc;
-    [ObservableProperty] private int ledgersCount;
-    [ObservableProperty] private int voucherTypesCount;
-
-    [ObservableProperty] private bool isFetchingStockItems;
-    [ObservableProperty] private string stockItemsFreshness = "—";
-    [ObservableProperty] private DateTimeOffset? stockItemsFetchedAtUtc;
-    [ObservableProperty] private int stockItemsCount;
 
     public IReadOnlyList<string> CloudOwnedCategories { get; private set; } = Array.Empty<string>();
     public IReadOnlyList<string> LocalOnlyCategories { get; private set; } = Array.Empty<string>();
@@ -311,38 +245,24 @@ public partial class SettingsViewModel : ObservableObject,
     public bool IsPreviewVisible => _sectionCoordinator.IsPreviewVisible;
 
     public string ActiveCompanyName => Settings?.Connection.ActiveCompanyName ?? string.Empty;
-    public int ItemMasterRowCount => CountJsonRows(Settings?.Masters.ItemMasterDataJson);
-    public int KaratMappingRowCount => CountJsonRows(Settings?.Masters.KaratMappingDataJson);
 
     partial void OnSelectedSectionChanged(SettingsSectionKey value)
         => _sectionCoordinator.OnSelectedSectionChanged();
 
     partial void OnIsLoadingChanged(bool value) => NotifyCommandsChanged();
     partial void OnIsSavingChanged(bool value) => NotifyCommandsChanged();
-    partial void OnIsEditingChanged(bool value) => NotifyCommandsChanged();
+    partial void OnIsEditingChanged(bool value)
+    {
+        NotifyCommandsChanged();
+        MasterData.NotifyShellStateChanged();
+    }
     partial void OnIsDirtyChanged(bool value) => SaveAllCommand.NotifyCanExecuteChanged();
-
-    partial void OnIsFetchingCompaniesChanged(bool value) => NotifyCompanyCommandsChanged();
-    partial void OnIsSettingActiveCompanyChanged(bool value) => NotifyCompanyCommandsChanged();
-    partial void OnSelectedCompanyChanged(CompanySnapshotItem? value) => SetActiveCompanyCommand.NotifyCanExecuteChanged();
-    partial void OnIsFetchingLedgersChanged(bool value)
-    {
-        FetchLedgersAndVoucherTypesCommand.NotifyCanExecuteChanged();
-        RequestLedgerRefreshCommand.NotifyCanExecuteChanged();
-    }
-    partial void OnIsFetchingStockItemsChanged(bool value)
-    {
-        FetchStockItemsCommand.NotifyCanExecuteChanged();
-        RequestStockItemRefreshCommand.NotifyCanExecuteChanged();
-    }
 
     partial void OnSettingsChanged(EffectiveCloudSettingsDto? value)
     {
         OnPropertyChanged(nameof(ActiveCompanyName));
-        OnPropertyChanged(nameof(ItemMasterRowCount));
-        OnPropertyChanged(nameof(KaratMappingRowCount));
         BeginEditCommand.NotifyCanExecuteChanged();
-        SetActiveCompanyCommand.NotifyCanExecuteChanged();
+        MasterData.NotifyShellStateChanged();
     }
 
     private void NotifyCommandsChanged()
@@ -351,10 +271,6 @@ public partial class SettingsViewModel : ObservableObject,
         BeginEditCommand.NotifyCanExecuteChanged();
         DiscardChangesCommand.NotifyCanExecuteChanged();
         SaveAllCommand.NotifyCanExecuteChanged();
-        AddItemMasterRowCommand.NotifyCanExecuteChanged();
-        RemoveItemMasterRowCommand.NotifyCanExecuteChanged();
-        AddKaratRowCommand.NotifyCanExecuteChanged();
-        RemoveKaratRowCommand.NotifyCanExecuteChanged();
     }
 
     public void NotifySectionPropertiesChanged()
@@ -368,23 +284,6 @@ public partial class SettingsViewModel : ObservableObject,
         OnPropertyChanged(nameof(IsAdvancedVisible));
         OnPropertyChanged(nameof(IsAdminVisible));
         OnPropertyChanged(nameof(IsPreviewVisible));
-    }
-
-    private void AddItemMasterRow() => Draft.ItemMasterRows.Add(new ItemMasterRowVm());
-    private void RemoveItemMasterRow(ItemMasterRowVm? row)
-    {
-        if (row is not null) Draft.ItemMasterRows.Remove(row);
-    }
-    private void AddKaratRow() => Draft.KaratRows.Add(new KaratMasterRowVm());
-    private void RemoveKaratRow(KaratMasterRowVm? row)
-    {
-        if (row is not null) Draft.KaratRows.Remove(row);
-    }
-
-    private void NotifyCompanyCommandsChanged()
-    {
-        RequestCompanyRefreshCommand.NotifyCanExecuteChanged();
-        SetActiveCompanyCommand.NotifyCanExecuteChanged();
     }
 
     private void OnDraftPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -456,19 +355,7 @@ public partial class SettingsViewModel : ObservableObject,
             // Populate cached snapshots automatically so the operator doesn't
             // need manual "Fetch" clicks on each section. The per-section
             // "Refresh from Tally" button now re-pulls and re-fetches in one go.
-            if (_mastersApi is not null)
-            {
-                var snapshotLoads = new List<Task>(capacity: 3);
-                if (Companies.Count == 0)
-                    snapshotLoads.Add(FetchCompaniesAsync(cancellationToken));
-                if (LedgerOptions.Count == 0)
-                    snapshotLoads.Add(FetchLedgersAndVoucherTypesAsync(cancellationToken));
-                if (StockItems.Count == 0)
-                    snapshotLoads.Add(FetchStockItemsAsync(cancellationToken));
-
-                if (snapshotLoads.Count > 0)
-                    await Task.WhenAll(snapshotLoads);
-            }
+            await MasterData.LoadMissingSnapshotsAsync(cancellationToken);
         }
         catch (HttpRequestException ex)
         {
@@ -495,43 +382,6 @@ public partial class SettingsViewModel : ObservableObject,
 
     private async Task SaveAsync(CancellationToken cancellationToken)
         => await _editWorkflow.SaveAsync(cancellationToken);
-
-    private async Task FetchCompaniesAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.FetchCompaniesAsync(cancellationToken);
-
-    private async Task RequestCompanyRefreshAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.RequestCompanyRefreshAsync(cancellationToken);
-
-    private async Task SetActiveCompanyAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.SetActiveCompanyAsync(cancellationToken);
-
-    private async Task FetchLedgersAndVoucherTypesAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.FetchLedgersAndVoucherTypesAsync(cancellationToken);
-
-    private async Task RequestLedgerRefreshAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.RequestLedgerRefreshAsync(cancellationToken);
-
-    private async Task FetchStockItemsAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.FetchStockItemsAsync(cancellationToken);
-
-    private async Task RequestStockItemRefreshAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.RequestStockItemRefreshAsync(cancellationToken);
-
-    private static int CountJsonRows(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json)) return 0;
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array
-                ? doc.RootElement.GetArrayLength()
-                : 0;
-        }
-        catch
-        {
-            return 0;
-        }
-    }
 
 }
 
