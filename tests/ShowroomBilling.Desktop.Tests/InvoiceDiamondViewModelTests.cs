@@ -300,6 +300,87 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task LoadBillForEdit_preserves_gold_making_fields_for_diamond_named_line()
+    {
+        var billId = Guid.NewGuid();
+        var settings = new SettingsViewModel();
+        var master = new ItemMasterRowVm
+        {
+            Name = "Diamond Jewellery",
+            Unit = ItemUnits.Gram,
+            ItemCategory = ItemCategories.Diamond,
+            PricingMode = PricingModes.Wastage,
+            WastagePercent = "0",
+            DefaultLabourPerGram = "0"
+        };
+        settings.Draft.ItemMasterRows.Add(master);
+        settings.Draft.KaratRows.Add(new KaratMasterRowVm
+        {
+            Label = "18K",
+            PurityPercent = "75",
+            TallyItem = "Diamond Jewellery 18K"
+        });
+        var payload = new BillPayloadDto(
+            PartyName: "Customer",
+            PartyGstin: null,
+            PartyPhone: null,
+            PartyAddress: null,
+            BillDate: new DateOnly(2026, 4, 24),
+            Lines:
+            [
+                new BillLineItemDto(
+                    ItemName: "Diamond Jewellery",
+                    HsnCode: "7113",
+                    Quantity: 7.5m,
+                    Unit: ItemUnits.Gram,
+                    Rate: 5800m,
+                    LineTotal: 43500m,
+                    Karat: "18K",
+                    RawJson: null,
+                    StockName: "Diamond Jewellery 18K",
+                    GrossWeight: 8m,
+                    LessWeight: 0.5m,
+                    WastagePercent: 2.5m,
+                    LabourPerUnit: 400m,
+                    DiamondRate: null,
+                    Extra: 100m,
+                    ItemCategory: ItemCategories.Diamond,
+                    PricingMode: PricingModes.Both)
+            ],
+            Totals: new BillTotalsDto(42233.01m, 0m, 1266.99m, 0m, 43500m),
+            Notes: null,
+            Payment: "Cash",
+            Rate24Kt: 6000m);
+        var api = new FakeBillsApi
+        {
+            GetResponse = BillResponseFor(billId, payload)
+        };
+        var vm = new InvoiceViewModel(api, null, settings);
+
+        await vm.LoadBillForEditAsync(billId);
+
+        var loaded = vm.Lines.First(l => !l.IsEmpty);
+        Assert.Same(master, loaded.ItemMaster);
+        Assert.True(loaded.IsGoldLine);
+        Assert.Equal(ItemCategories.GoldBased, loaded.ItemCategory);
+        Assert.Equal("18K", loaded.Karat);
+        Assert.NotNull(loaded.KaratMaster);
+        Assert.Equal(8m, loaded.GrossWeight);
+        Assert.Equal(0.5m, loaded.LessWeight);
+        Assert.Equal(2.5m, loaded.WastagePercent);
+        Assert.Equal(400m, loaded.LabourPerUnit);
+        Assert.Equal(100m, loaded.Extra);
+
+        loaded.ItemMaster = null;
+        loaded.ItemMaster = master;
+
+        Assert.True(loaded.IsGoldLine);
+        Assert.Equal(0.5m, loaded.LessWeight);
+        Assert.Equal(2.5m, loaded.WastagePercent);
+        Assert.Equal(400m, loaded.LabourPerUnit);
+    }
+
+    [Fact]
     public void Selecting_item_master_applies_defaults_for_new_rows()
     {
         var master = new ItemMasterRowVm

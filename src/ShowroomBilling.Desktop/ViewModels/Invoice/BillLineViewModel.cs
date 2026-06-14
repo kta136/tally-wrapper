@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -10,6 +11,7 @@ public partial class BillLineViewModel : ObservableObject
 {
     private int rowNumber;
     private bool _suppressItemMasterDefaults;
+    private bool _restoringPayloadValues;
     private ItemMasterRowVm? _payloadItemMaster;
     private string? _payloadItemName;
 
@@ -69,9 +71,51 @@ public partial class BillLineViewModel : ObservableObject
         }
     }
 
+    public void ApplyPayloadValues(
+        BillLineItemDto line,
+        string itemCategory,
+        string pricingMode,
+        ItemMasterRowVm? itemMaster,
+        KaratMasterRowVm? karatMaster)
+    {
+        _payloadItemMaster = itemMaster;
+        _payloadItemName = line.ItemName;
+        _restoringPayloadValues = true;
+        _suppressItemMasterDefaults = true;
+        try
+        {
+            ItemMaster = itemMaster;
+            ItemCategory = string.IsNullOrWhiteSpace(itemCategory) ? ItemCategories.GoldBased : itemCategory;
+            PricingMode = string.IsNullOrWhiteSpace(pricingMode) ? PricingModes.Wastage : pricingMode;
+            ItemName = line.ItemName;
+            Unit = string.IsNullOrWhiteSpace(line.Unit) ? ItemUnits.Gram : line.Unit!;
+            Karat = line.Karat ?? string.Empty;
+            GrossWeight = line.GrossWeight;
+            LessWeight = line.LessWeight;
+            WastagePercent = line.WastagePercent;
+            LabourPerUnit = line.LabourPerUnit;
+            DiamondRate = line.DiamondRate;
+            Extra = line.Extra;
+            StockName = line.StockName;
+            KaratMaster = karatMaster;
+        }
+        finally
+        {
+            _suppressItemMasterDefaults = false;
+            _restoringPayloadValues = false;
+        }
+
+        OnPropertyChanged(nameof(ResolvedItemCategory));
+        OnPropertyChanged(nameof(IsDiamond));
+        OnPropertyChanged(nameof(IsGoldLine));
+        OnPropertyChanged(nameof(NetWeight));
+        OnPropertyChanged(nameof(ResolvedPricingMode));
+        Raise();
+    }
+
     partial void OnItemNameChanged(string value)
     {
-        if (ItemMaster is null)
+        if (!_restoringPayloadValues && ItemMaster is null)
         {
             var shouldBeDiamond = !string.IsNullOrEmpty(value)
                 && value.Contains("diamond", StringComparison.OrdinalIgnoreCase);
@@ -86,7 +130,7 @@ public partial class BillLineViewModel : ObservableObject
     }
     partial void OnLessWeightChanged(decimal? value)
     {
-        if (IsDiamond && (value ?? 0m) != 0m)
+        if (!_restoringPayloadValues && IsDiamond && (value ?? 0m) != 0m)
         {
             LessWeight = 0m;
             return;
@@ -103,7 +147,8 @@ public partial class BillLineViewModel : ObservableObject
     partial void OnStockNameChanged(string? value) => Raise();
     partial void OnItemCategoryChanged(string value)
     {
-        NormalizeDiamondFields();
+        if (!_restoringPayloadValues)
+            NormalizeDiamondFields();
         OnPropertyChanged(nameof(ResolvedItemCategory));
         OnPropertyChanged(nameof(IsDiamond));
         OnPropertyChanged(nameof(IsGoldLine));
@@ -119,7 +164,7 @@ public partial class BillLineViewModel : ObservableObject
     partial void OnItemMasterChanged(ItemMasterRowVm? value)
     {
         var preservePayloadValues = IsPayloadMasterRebind(value);
-        if (value is not null && !_suppressItemMasterDefaults && !preservePayloadValues)
+        if (value is not null && !_restoringPayloadValues && !_suppressItemMasterDefaults && !preservePayloadValues)
         {
             ItemName = value.Name;
             if (!string.IsNullOrWhiteSpace(value.Unit)) Unit = value.Unit;
@@ -133,7 +178,8 @@ public partial class BillLineViewModel : ObservableObject
                     LabourPerUnit = l;
             }
         }
-        NormalizeDiamondFields();
+        if (!_restoringPayloadValues && !preservePayloadValues)
+            NormalizeDiamondFields();
         OnPropertyChanged(nameof(ResolvedItemCategory));
         OnPropertyChanged(nameof(IsDiamond));
         OnPropertyChanged(nameof(IsGoldLine));
@@ -153,6 +199,12 @@ public partial class BillLineViewModel : ObservableObject
 
     partial void OnKaratMasterChanged(KaratMasterRowVm? value)
     {
+        if (_restoringPayloadValues)
+        {
+            Raise();
+            return;
+        }
+
         if (IsDiamond)
         {
             if (value is not null) KaratMaster = null;

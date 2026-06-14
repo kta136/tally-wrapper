@@ -145,10 +145,15 @@ internal static class InvoicePayloadMapper
     }
 
     public static string ResolveLineItemCategory(BillLineItemDto line, ItemMasterRowVm? itemMaster)
-        => FirstNonBlank(
+    {
+        if (HasGoldMakingFields(line))
+            return ItemCategories.GoldBased;
+
+        return FirstNonBlank(
             line.ItemCategory,
             itemMaster?.ItemCategory,
             ItemCategories.GoldBased)!;
+    }
 
     public static string ResolveLinePricingMode(BillLineItemDto line, ItemMasterRowVm? itemMaster)
         => FirstNonBlank(
@@ -178,6 +183,11 @@ internal static class InvoicePayloadMapper
 
         return null;
     }
+
+    private static bool HasGoldMakingFields(BillLineItemDto line)
+        => (line.LessWeight ?? 0m) > 0m
+           || (line.WastagePercent ?? 0m) > 0m
+           || (line.LabourPerUnit ?? 0m) > 0m;
 
     private static string? FirstNonBlank(params string?[] values)
     {
