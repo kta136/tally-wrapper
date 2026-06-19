@@ -77,7 +77,8 @@ internal sealed class ShellPrintCoordinator(
                 bool printed;
                 try
                 {
-                    printed = await Task.Run(() => printDispatcher.PrintToPrinter(options, printer!));
+                    printed = await Task.Run(() =>
+                        printDispatcher.PrintToPrinter(options, printer!, printPreferences.PrintJobSettings));
                 }
                 catch
                 {

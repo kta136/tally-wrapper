@@ -59,7 +59,8 @@ Tally Wrapper implementation:
   the local `IPrintPreferencesStore`
 - when enabled and a printer is remembered (or a Windows default printer exists),
   post-save jobs go straight to the printer with the copy defaults and clamped
-  layout from the cloud settings; the invoice screen clears immediately
+  layout from the cloud settings plus the locally remembered printer settings;
+  the invoice screen clears immediately
 - when direct print fails (no remembered/default printer, or the print queue
   rejects the job) the flow falls back to preview so the operator sees the issue
 
@@ -124,6 +125,18 @@ Tally Wrapper rule:
 
 - preserve local remembered printer selection
 - printer persistence is local workstation preference, not cloud-shared business data
+
+The print preview dialog also exposes local printer-job settings:
+
+- Duplex: printer default / one-sided / both sides long edge / both sides short edge
+- Color: printer default / color / black and white
+- Collation: printer default / collated / uncollated
+
+These settings are queried from the selected printer's `PrintCapabilities`, unsupported
+options are omitted, and the selected values are merged/validated into a WPF
+`PrintTicket` before dispatch. If capabilities cannot be read, the dialog falls
+back to printer defaults. The values are stored only in the local
+`print-preferences.json` file and are reused by direct-print-after-save.
 
 ---
 
@@ -221,7 +234,8 @@ Not allowed to regress:
 
 ### 6.1 Page
 
-- A4 portrait invoice output
+- A4 portrait invoice output; printer-job settings do not change invoice page
+  orientation or paper size
 - predictable margins under operator-configured layout
 - stable totals/footer placement
 
@@ -304,6 +318,7 @@ user toggle.
 Allowed local-only persistence:
 
 - last printer name
+- duplex / color / collation printer-job settings
 - last PDF directory
 - local preview/UI preferences if needed
 

@@ -110,34 +110,66 @@
                             </ListBox>
                     </Border>
 
-                    <StackPanel Grid.Column="1" Margin="16,0,0,0">
-                        <TextBlock Style="{StaticResource TxtSectionTitle}" Text="COPIES" />
-                        <StackPanel Margin="0,6,0,14">
-                            <CheckBox Margin="0,3" IsChecked="{Binding CopyOriginal}" Content="Original (for customer)" />
-                            <CheckBox Margin="0,3" IsChecked="{Binding CopyDuplicate}" Content="Duplicate (for showroom)" />
-                            <CheckBox Margin="0,3" IsChecked="{Binding CopyTriplicate}" Content="Triplicate (for transport)" />
+                    <ScrollViewer Grid.Column="1"
+                                  Margin="16,0,0,0"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource TxtSectionTitle}" Text="COPIES" />
+                            <StackPanel Margin="0,6,0,14">
+                                <CheckBox Margin="0,3" IsChecked="{Binding CopyOriginal}" Content="Original (for customer)" />
+                                <CheckBox Margin="0,3" IsChecked="{Binding CopyDuplicate}" Content="Duplicate (for showroom)" />
+                                <CheckBox Margin="0,3" IsChecked="{Binding CopyTriplicate}" Content="Triplicate (for transport)" />
+                            </StackPanel>
+
+                            <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINTER" />
+                            <ComboBox Margin="0,6,0,14"
+                                      ItemsSource="{Binding Printers}"
+                                      SelectedItem="{Binding SelectedPrinter}" />
+
+                            <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINT SETTINGS" />
+                            <StackPanel Margin="0,6,0,14">
+                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="DUPLEX" />
+                                <ComboBox Margin="0,4,0,10"
+                                          ItemsSource="{Binding DuplexOptions}"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectedValuePath="Value"
+                                          SelectedValue="{Binding SelectedDuplexMode}"
+                                          IsEnabled="{Binding HasSelectedPrinter}" />
+
+                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="COLOR" />
+                                <ComboBox Margin="0,4,0,10"
+                                          ItemsSource="{Binding ColorOptions}"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectedValuePath="Value"
+                                          SelectedValue="{Binding SelectedColorMode}"
+                                          IsEnabled="{Binding HasSelectedPrinter}" />
+
+                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="COLLATION" />
+                                <ComboBox Margin="0,4,0,0"
+                                          ItemsSource="{Binding CollationOptions}"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectedValuePath="Value"
+                                          SelectedValue="{Binding SelectedCollationMode}"
+                                          IsEnabled="{Binding HasSelectedPrinter}" />
+                            </StackPanel>
+
+                            <CheckBox Margin="0,0,0,14"
+                                      IsChecked="{Binding DirectPrintAfterSave}"
+                                      Content="Direct print after save (skip preview)" />
+
+                            <Border Background="{StaticResource BgSunkenBrush}"
+                                    BorderBrush="{StaticResource BorderBrushTok}"
+                                    BorderThickness="1"
+                                    CornerRadius="3"
+                                    Padding="8">
+                                <TextBlock FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Foreground="{StaticResource InkMutedBrush}"
+                                           Text="The invoice is saved and pending. Pushing to Tally happens only when you hit Push on the Bills tab." />
+                            </Border>
                         </StackPanel>
-
-                        <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINTER" />
-                        <ComboBox Margin="0,6,0,14"
-                                  ItemsSource="{Binding Printers}"
-                                  SelectedItem="{Binding SelectedPrinter}" />
-
-                        <CheckBox Margin="0,0,0,14"
-                                  IsChecked="{Binding DirectPrintAfterSave}"
-                                  Content="Direct print after save (skip preview)" />
-
-                        <Border Background="{StaticResource BgSunkenBrush}"
-                                BorderBrush="{StaticResource BorderBrushTok}"
-                                BorderThickness="1"
-                                CornerRadius="3"
-                                Padding="8">
-                            <TextBlock FontSize="11"
-                                       TextWrapping="Wrap"
-                                       Foreground="{StaticResource InkMutedBrush}"
-                                       Text="The invoice is saved and pending. Pushing to Tally happens only when you hit Push on the Bills tab." />
-                        </Border>
-                    </StackPanel>
+                    </ScrollViewer>
                 </Grid>
 
                 <!--  Footer  -->

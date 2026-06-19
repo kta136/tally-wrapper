@@ -79,10 +79,12 @@ public sealed class PrintPreviewZoomPreferenceTests
         public string? LastPdfDirectory { get; private set; }
         public bool DirectPrintAfterSave { get; private set; }
         public double PrintPreviewZoomPercent { get; set; } = 100;
+        public PrintJobSettings PrintJobSettings { get; private set; } = PrintJobSettings.Default;
 
         public void SaveLastPrinter(string printerName) => LastPrinterName = printerName;
         public void SaveLastPdfDirectory(string directory) => LastPdfDirectory = directory;
         public void SaveDirectPrintAfterSave(bool value) => DirectPrintAfterSave = value;
+        public void SavePrintJobSettings(PrintJobSettings settings) => PrintJobSettings = settings;
 
         public void SavePrintPreviewZoomPercent(double value)
         {

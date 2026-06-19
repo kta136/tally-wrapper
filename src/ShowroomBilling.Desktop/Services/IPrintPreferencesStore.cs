@@ -8,9 +8,11 @@ public interface IPrintPreferencesStore
     string? LastPdfDirectory { get; }
     bool DirectPrintAfterSave { get; }
     double PrintPreviewZoomPercent { get; }
+    PrintJobSettings PrintJobSettings { get; }
 
     void SaveLastPrinter(string printerName);
     void SaveLastPdfDirectory(string directory);
     void SaveDirectPrintAfterSave(bool value);
     void SavePrintPreviewZoomPercent(double value);
+    void SavePrintJobSettings(PrintJobSettings settings);
 }

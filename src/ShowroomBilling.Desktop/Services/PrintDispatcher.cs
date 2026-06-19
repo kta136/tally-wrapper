@@ -38,6 +38,68 @@ public sealed class PrintDispatcher : IPrintDispatcher
         return _defaultPrinter;
     }
 
+    public PrintJobCapabilities GetPrinterCapabilities(string printerName)
+    {
+        if (string.IsNullOrWhiteSpace(printerName))
+        {
+            return PrintJobCapabilities.Unknown;
+        }
+
+        try
+        {
+            return RunOnSta(() =>
+            {
+                using var server = new LocalPrintServer();
+                using var queue = server.GetPrintQueue(printerName);
+                var capabilities = queue.GetPrintCapabilities();
+
+                var duplexModes = new List<PrintDuplexMode>
+                {
+                    PrintDuplexMode.PrinterDefault,
+                    PrintDuplexMode.OneSided,
+                };
+                if (capabilities.DuplexingCapability.Contains(Duplexing.TwoSidedLongEdge))
+                {
+                    duplexModes.Add(PrintDuplexMode.TwoSidedLongEdge);
+                }
+                if (capabilities.DuplexingCapability.Contains(Duplexing.TwoSidedShortEdge))
+                {
+                    duplexModes.Add(PrintDuplexMode.TwoSidedShortEdge);
+                }
+
+                var colorModes = new List<PrintColorMode> { PrintColorMode.PrinterDefault };
+                if (capabilities.OutputColorCapability.Contains(OutputColor.Color))
+                {
+                    colorModes.Add(PrintColorMode.Color);
+                }
+                if (capabilities.OutputColorCapability.Contains(OutputColor.Monochrome))
+                {
+                    colorModes.Add(PrintColorMode.Monochrome);
+                }
+
+                var collationModes = new List<PrintCollationMode> { PrintCollationMode.PrinterDefault };
+                if (capabilities.CollationCapability.Contains(Collation.Collated))
+                {
+                    collationModes.Add(PrintCollationMode.Collated);
+                }
+                if (capabilities.CollationCapability.Contains(Collation.Uncollated))
+                {
+                    collationModes.Add(PrintCollationMode.Uncollated);
+                }
+
+                return new PrintJobCapabilities(
+                    IsKnown: true,
+                    DuplexModes: duplexModes,
+                    ColorModes: colorModes,
+                    CollationModes: collationModes);
+            });
+        }
+        catch
+        {
+            return PrintJobCapabilities.Unknown;
+        }
+    }
+
     private void EnsurePrinterCache()
     {
         if (_availablePrinters is not null)
@@ -95,20 +157,63 @@ public sealed class PrintDispatcher : IPrintDispatcher
     public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)
         => _renderer.GeneratePageImages(options, dpi);
 
-    public bool PrintToPrinter(PrintDocumentOptions options, string printerName)
+    public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options)
     {
-        if (string.IsNullOrWhiteSpace(printerName)) return false;
+        ArgumentNullException.ThrowIfNull(options);
 
-        var pages = _renderer.GeneratePageImages(options, imageDpi: PrintImageDpi);
-        if (pages.Count == 0) return false;
+        var pages = new List<byte[]>();
+        foreach (var option in options)
+        {
+            if (option is null) continue;
+            pages.AddRange(_renderer.GeneratePageImages(option, imageDpi: PrintImageDpi));
+        }
+
+        return pages;
+    }
+
+    public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return PrintToPrinter([options], printerName, settings);
+    }
+
+    public bool PrintToPrinter(
+        IReadOnlyList<PrintDocumentOptions> options,
+        string printerName,
+        PrintJobSettings? settings = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (string.IsNullOrWhiteSpace(printerName)) return false;
+        if (options.Count == 0) return false;
+
+        var pages = GeneratePrintPageImages(options);
+        return PrintRenderedPages(pages, printerName, settings);
+    }
+
+    public bool PrintRenderedPages(
+        IReadOnlyList<byte[]> pageImages,
+        string printerName,
+        PrintJobSettings? settings = null)
+    {
+        ArgumentNullException.ThrowIfNull(pageImages);
+        if (string.IsNullOrWhiteSpace(printerName)) return false;
+        if (pageImages.Count == 0) return false;
 
         return RunOnSta(() =>
         {
             using var server = new LocalPrintServer();
             using var queue = server.GetPrintQueue(printerName);
-            var doc = BuildFixedDocument(pages);
+            var doc = BuildFixedDocument(pageImages);
             var writer = PrintQueue.CreateXpsDocumentWriter(queue);
-            writer.Write(doc);
+            var ticket = TryBuildPrintTicket(queue, settings ?? PrintJobSettings.Default);
+            if (ticket is null)
+            {
+                writer.Write(doc);
+            }
+            else
+            {
+                writer.Write(doc, ticket);
+            }
             return true;
         });
     }
@@ -122,6 +227,70 @@ public sealed class PrintDispatcher : IPrintDispatcher
         File.WriteAllBytes(fullPath, bytes);
         return fullPath;
     }
+
+    private static PrintTicket? TryBuildPrintTicket(PrintQueue queue, PrintJobSettings settings)
+    {
+        if (settings.IsPrinterDefault)
+        {
+            return null;
+        }
+
+        try
+        {
+            var delta = new PrintTicket();
+            var hasSettings = false;
+
+            if (MapDuplex(settings.Duplex) is { } duplex)
+            {
+                delta.Duplexing = duplex;
+                hasSettings = true;
+            }
+            if (MapColor(settings.Color) is { } color)
+            {
+                delta.OutputColor = color;
+                hasSettings = true;
+            }
+            if (MapCollation(settings.Collation) is { } collation)
+            {
+                delta.Collation = collation;
+                hasSettings = true;
+            }
+
+            if (!hasSettings)
+            {
+                return null;
+            }
+
+            var baseTicket = queue.UserPrintTicket ?? queue.DefaultPrintTicket ?? new PrintTicket();
+            return queue.MergeAndValidatePrintTicket(baseTicket, delta).ValidatedPrintTicket;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Duplexing? MapDuplex(PrintDuplexMode mode) => mode switch
+    {
+        PrintDuplexMode.OneSided => Duplexing.OneSided,
+        PrintDuplexMode.TwoSidedLongEdge => Duplexing.TwoSidedLongEdge,
+        PrintDuplexMode.TwoSidedShortEdge => Duplexing.TwoSidedShortEdge,
+        _ => null,
+    };
+
+    private static OutputColor? MapColor(PrintColorMode mode) => mode switch
+    {
+        PrintColorMode.Color => OutputColor.Color,
+        PrintColorMode.Monochrome => OutputColor.Monochrome,
+        _ => null,
+    };
+
+    private static Collation? MapCollation(PrintCollationMode mode) => mode switch
+    {
+        PrintCollationMode.Collated => Collation.Collated,
+        PrintCollationMode.Uncollated => Collation.Uncollated,
+        _ => null,
+    };
 
     private static FixedDocument BuildFixedDocument(IReadOnlyList<byte[]> pageImages)
     {

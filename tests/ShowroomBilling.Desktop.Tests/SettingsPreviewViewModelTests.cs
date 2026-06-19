@@ -205,7 +205,17 @@ public class SettingsPreviewViewModelTests
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
         public IReadOnlyList<string> AvailablePrinters() => Array.Empty<string>();
         public string? DefaultPrinter() => null;
-        public bool PrintToPrinter(PrintDocumentOptions options, string printerName) => false;
+        public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
+        public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options) => Array.Empty<byte[]>();
+        public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null) => false;
+        public bool PrintToPrinter(
+            IReadOnlyList<PrintDocumentOptions> options,
+            string printerName,
+            PrintJobSettings? settings = null) => false;
+        public bool PrintRenderedPages(
+            IReadOnlyList<byte[]> pageImages,
+            string printerName,
+            PrintJobSettings? settings = null) => false;
         public string SavePdfToDisk(PrintDocumentOptions options, string directory, string fileName) => string.Empty;
 
         public async Task WaitForRenderCountAsync(int target, int timeoutMs = 3000)

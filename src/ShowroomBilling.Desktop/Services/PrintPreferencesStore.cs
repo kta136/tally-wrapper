@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ShowroomBilling.Desktop.Services;
 
@@ -8,6 +9,11 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
     private const double DefaultZoomPercent = 100;
     private const double MinZoomPercent = 50;
     private const double MaxZoomPercent = 200;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     private readonly string _filePath;
     private PrintPreferencesData _data;
@@ -28,6 +34,7 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
     public string? LastPdfDirectory => string.IsNullOrWhiteSpace(_data.LastPdfDirectory) ? null : _data.LastPdfDirectory;
     public bool DirectPrintAfterSave => _data.DirectPrintAfterSave;
     public double PrintPreviewZoomPercent => NormalizeZoom(_data.PrintPreviewZoomPercent);
+    public PrintJobSettings PrintJobSettings => _data.PrintJobSettings;
 
     public void SaveLastPrinter(string printerName)
     {
@@ -57,13 +64,21 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
         PrintPreviewZoomPercentChanged?.Invoke(this, normalized);
     }
 
+    public void SavePrintJobSettings(PrintJobSettings settings)
+    {
+        if (_data.PrintJobSettings == settings) return;
+
+        _data = _data with { PrintJobSettings = settings };
+        Persist();
+    }
+
     private PrintPreferencesData? Load()
     {
         try
         {
             if (!File.Exists(_filePath)) return null;
             var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<PrintPreferencesData>(json);
+            return JsonSerializer.Deserialize<PrintPreferencesData>(json, JsonOptions);
         }
         catch
         {
@@ -75,7 +90,7 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
     {
         try
         {
-            var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(_data, JsonOptions);
             File.WriteAllText(_filePath, json);
         }
         catch
@@ -96,5 +111,6 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
         public string? LastPdfDirectory { get; init; }
         public bool DirectPrintAfterSave { get; init; }
         public double PrintPreviewZoomPercent { get; init; } = DefaultZoomPercent;
+        public PrintJobSettings PrintJobSettings { get; init; } = PrintJobSettings.Default;
     }
 }
