@@ -88,6 +88,28 @@ public sealed class PrintPreviewViewModelPrintTests
     }
 
     [Fact]
+    public async Task Persisted_supported_print_settings_survive_capability_refresh()
+    {
+        var dispatcher = new FakePrintDispatcher("Counter Printer");
+        var preferences = new FakePrintPreferencesStore
+        {
+            LastPrinterName = "Counter Printer",
+            PrintJobSettings = NonDefaultSettings,
+        };
+        var vm = new PrintPreviewViewModel(dispatcher, preferences);
+
+        vm.Initialize(Content("INV/004"));
+
+        await dispatcher.WaitForPreviewRenderAsync();
+        await WaitForAsync(() =>
+            vm.SelectedPrinter == "Counter Printer"
+            && vm.DuplexOptions.Any(x => x.Value == PrintDuplexMode.TwoSidedLongEdge));
+
+        Assert.Equal(NonDefaultSettings, vm.CurrentPrintJobSettings);
+        Assert.Equal(NonDefaultSettings, preferences.PrintJobSettings);
+    }
+
+    [Fact]
     public async Task Unsupported_printer_settings_fall_back_to_printer_defaults()
     {
         var dispatcher = new FakePrintDispatcher("Counter Printer")
@@ -116,6 +138,33 @@ public sealed class PrintPreviewViewModelPrintTests
             && vm.SelectedCollationMode == PrintCollationMode.PrinterDefault);
 
         Assert.Equal(PrintJobSettings.Default, preferences.PrintJobSettings);
+    }
+
+    [Fact]
+    public async Task Unknown_printer_capabilities_do_not_overwrite_saved_print_settings()
+    {
+        var dispatcher = new FakePrintDispatcher("Counter Printer")
+        {
+            Capabilities = PrintJobCapabilities.Unknown,
+        };
+        var preferences = new FakePrintPreferencesStore
+        {
+            LastPrinterName = "Counter Printer",
+            PrintJobSettings = NonDefaultSettings,
+        };
+        var vm = new PrintPreviewViewModel(dispatcher, preferences);
+
+        vm.Initialize(Content("INV/005"));
+
+        await dispatcher.WaitForPreviewRenderAsync();
+        await WaitForAsync(() =>
+            vm.SelectedPrinter == "Counter Printer"
+            && vm.DuplexOptions.Count == 1
+            && vm.SelectedDuplexMode == PrintDuplexMode.PrinterDefault
+            && vm.SelectedColorMode == PrintColorMode.PrinterDefault
+            && vm.SelectedCollationMode == PrintCollationMode.PrinterDefault);
+
+        Assert.Equal(NonDefaultSettings, preferences.PrintJobSettings);
     }
 
     private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 2000)

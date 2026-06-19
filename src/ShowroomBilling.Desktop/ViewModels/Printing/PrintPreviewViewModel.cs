@@ -34,6 +34,8 @@ public partial class PrintPreviewViewModel : ObservableObject
     private Task<IReadOnlyList<byte[]>>? _printPrepareTask;
     private IReadOnlyList<byte[]>? _preparedPrintPages;
     private bool _suppressZoomPersist;
+    private bool _suppressPrintSettingsPersist;
+    private PrintJobSettings _preferredPrintJobSettings = PrintJobSettings.Default;
     private Action? _onPrintSucceeded;
 
     public PrintPreviewViewModel() : this(null, null) { }
@@ -48,15 +50,16 @@ public partial class PrintPreviewViewModel : ObservableObject
         DuplexOptions = new ObservableCollection<PrintSettingOption<PrintDuplexMode>>();
         ColorOptions = new ObservableCollection<PrintSettingOption<PrintColorMode>>();
         CollationOptions = new ObservableCollection<PrintSettingOption<PrintCollationMode>>();
-        ApplyPrinterCapabilities(PrintJobCapabilities.Unknown);
+        ApplyPendingPrintSettingOptions();
 
         if (preferences is not null)
         {
+            _preferredPrintJobSettings = preferences.PrintJobSettings;
             directPrintAfterSave = preferences.DirectPrintAfterSave;
             previewZoomPercent = preferences.PrintPreviewZoomPercent;
-            selectedDuplexMode = preferences.PrintJobSettings.Duplex;
-            selectedColorMode = preferences.PrintJobSettings.Color;
-            selectedCollationMode = preferences.PrintJobSettings.Collation;
+            selectedDuplexMode = _preferredPrintJobSettings.Duplex;
+            selectedColorMode = _preferredPrintJobSettings.Color;
+            selectedCollationMode = _preferredPrintJobSettings.Collation;
             preferences.PrintPreviewZoomPercentChanged += OnStoredZoomChanged;
         }
 
@@ -395,36 +398,96 @@ public partial class PrintPreviewViewModel : ObservableObject
 
     private void ApplyPrinterCapabilities(PrintJobCapabilities capabilities)
     {
-        ReplaceOptions(DuplexOptions, BuildDuplexOptions(capabilities.DuplexModes));
-        ReplaceOptions(ColorOptions, BuildColorOptions(capabilities.ColorModes));
-        ReplaceOptions(CollationOptions, BuildCollationOptions(capabilities.CollationModes));
+        var duplexOptions = BuildDuplexOptions(capabilities.DuplexModes).ToArray();
+        var colorOptions = BuildColorOptions(capabilities.ColorModes).ToArray();
+        var collationOptions = BuildCollationOptions(capabilities.CollationModes).ToArray();
+        var desired = capabilities.IsKnown ? _preferredPrintJobSettings : PrintJobSettings.Default;
+        var resolved = ResolveSupportedSettings(desired, duplexOptions, colorOptions, collationOptions);
 
-        var changed = false;
-        if (!DuplexOptions.Any(x => x.Value == SelectedDuplexMode))
-        {
-            SelectedDuplexMode = PrintDuplexMode.PrinterDefault;
-            changed = true;
-        }
-        if (!ColorOptions.Any(x => x.Value == SelectedColorMode))
-        {
-            SelectedColorMode = PrintColorMode.PrinterDefault;
-            changed = true;
-        }
-        if (!CollationOptions.Any(x => x.Value == SelectedCollationMode))
-        {
-            SelectedCollationMode = PrintCollationMode.PrinterDefault;
-            changed = true;
-        }
+        ApplyPrintSettingOptions(duplexOptions, colorOptions, collationOptions, resolved);
 
-        if (changed)
+        if (capabilities.IsKnown && resolved != _preferredPrintJobSettings)
         {
-            SavePrintJobSettings();
+            _preferredPrintJobSettings = resolved;
+            _preferences?.SavePrintJobSettings(resolved);
         }
     }
 
     private void SavePrintJobSettings()
     {
-        _preferences?.SavePrintJobSettings(CurrentPrintJobSettings);
+        if (_suppressPrintSettingsPersist)
+        {
+            return;
+        }
+
+        _preferredPrintJobSettings = CurrentPrintJobSettings;
+        _preferences?.SavePrintJobSettings(_preferredPrintJobSettings);
+    }
+
+    private void ApplyPendingPrintSettingOptions()
+    {
+        ApplyPrintSettingOptions(
+            BuildDuplexOptions(
+            [
+                PrintDuplexMode.PrinterDefault,
+                PrintDuplexMode.OneSided,
+                PrintDuplexMode.TwoSidedLongEdge,
+                PrintDuplexMode.TwoSidedShortEdge,
+            ]).ToArray(),
+            BuildColorOptions(
+            [
+                PrintColorMode.PrinterDefault,
+                PrintColorMode.Color,
+                PrintColorMode.Monochrome,
+            ]).ToArray(),
+            BuildCollationOptions(
+            [
+                PrintCollationMode.PrinterDefault,
+                PrintCollationMode.Collated,
+                PrintCollationMode.Uncollated,
+            ]).ToArray(),
+            _preferredPrintJobSettings);
+    }
+
+    private void ApplyPrintSettingOptions(
+        IReadOnlyList<PrintSettingOption<PrintDuplexMode>> duplexOptions,
+        IReadOnlyList<PrintSettingOption<PrintColorMode>> colorOptions,
+        IReadOnlyList<PrintSettingOption<PrintCollationMode>> collationOptions,
+        PrintJobSettings selectedSettings)
+    {
+        _suppressPrintSettingsPersist = true;
+        try
+        {
+            ReplaceOptions(DuplexOptions, duplexOptions);
+            ReplaceOptions(ColorOptions, colorOptions);
+            ReplaceOptions(CollationOptions, collationOptions);
+
+            SelectedDuplexMode = selectedSettings.Duplex;
+            SelectedColorMode = selectedSettings.Color;
+            SelectedCollationMode = selectedSettings.Collation;
+        }
+        finally
+        {
+            _suppressPrintSettingsPersist = false;
+        }
+    }
+
+    private static PrintJobSettings ResolveSupportedSettings(
+        PrintJobSettings desired,
+        IReadOnlyList<PrintSettingOption<PrintDuplexMode>> duplexOptions,
+        IReadOnlyList<PrintSettingOption<PrintColorMode>> colorOptions,
+        IReadOnlyList<PrintSettingOption<PrintCollationMode>> collationOptions)
+    {
+        return new PrintJobSettings(
+            duplexOptions.Any(x => x.Value == desired.Duplex)
+                ? desired.Duplex
+                : PrintDuplexMode.PrinterDefault,
+            colorOptions.Any(x => x.Value == desired.Color)
+                ? desired.Color
+                : PrintColorMode.PrinterDefault,
+            collationOptions.Any(x => x.Value == desired.Collation)
+                ? desired.Collation
+                : PrintCollationMode.PrinterDefault);
     }
 
     private static void ReplaceOptions<T>(
