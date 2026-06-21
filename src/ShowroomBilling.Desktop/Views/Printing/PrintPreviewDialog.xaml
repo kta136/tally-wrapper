@@ -131,26 +131,32 @@
                             <StackPanel Margin="0,6,0,14">
                                 <TextBlock Style="{StaticResource AdminFieldLabel}" Text="DUPLEX" />
                                 <ComboBox Margin="0,4,0,10"
+                                          Tag="Duplex"
                                           ItemsSource="{Binding DuplexOptions}"
                                           DisplayMemberPath="DisplayName"
                                           SelectedValuePath="Value"
-                                          SelectedValue="{Binding SelectedDuplexMode}"
+                                          SelectedValue="{Binding SelectedDuplexMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectionChanged="OnPrintSettingSelectionChanged"
                                           IsEnabled="{Binding HasSelectedPrinter}" />
 
                                 <TextBlock Style="{StaticResource AdminFieldLabel}" Text="COLOR" />
                                 <ComboBox Margin="0,4,0,10"
+                                          Tag="Color"
                                           ItemsSource="{Binding ColorOptions}"
                                           DisplayMemberPath="DisplayName"
                                           SelectedValuePath="Value"
-                                          SelectedValue="{Binding SelectedColorMode}"
+                                          SelectedValue="{Binding SelectedColorMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectionChanged="OnPrintSettingSelectionChanged"
                                           IsEnabled="{Binding HasSelectedPrinter}" />
 
                                 <TextBlock Style="{StaticResource AdminFieldLabel}" Text="COLLATION" />
                                 <ComboBox Margin="0,4,0,0"
+                                          Tag="Collation"
                                           ItemsSource="{Binding CollationOptions}"
                                           DisplayMemberPath="DisplayName"
                                           SelectedValuePath="Value"
-                                          SelectedValue="{Binding SelectedCollationMode}"
+                                          SelectedValue="{Binding SelectedCollationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          SelectionChanged="OnPrintSettingSelectionChanged"
                                           IsEnabled="{Binding HasSelectedPrinter}" />
                             </StackPanel>
 
