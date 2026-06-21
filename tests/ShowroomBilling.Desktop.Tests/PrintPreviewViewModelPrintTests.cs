@@ -65,6 +65,23 @@ public sealed class PrintPreviewViewModelPrintTests
     }
 
     [Fact]
+    public void Collation_selection_saves_local_preferences()
+    {
+        var preferences = new FakePrintPreferencesStore();
+        var vm = new PrintPreviewViewModel(dispatcher: null, preferences)
+        {
+            SelectedCollationMode = PrintCollationMode.Uncollated,
+        };
+
+        var expected = new PrintJobSettings(
+            PrintDuplexMode.PrinterDefault,
+            PrintColorMode.PrinterDefault,
+            PrintCollationMode.Uncollated);
+        Assert.Equal(expected, vm.CurrentPrintJobSettings);
+        Assert.Equal(expected, preferences.PrintJobSettings);
+    }
+
+    [Fact]
     public async Task PrintCommand_passes_selected_print_settings_to_dispatcher()
     {
         var dispatcher = new FakePrintDispatcher("Counter Printer");
@@ -110,7 +127,7 @@ public sealed class PrintPreviewViewModelPrintTests
     }
 
     [Fact]
-    public async Task Unsupported_printer_settings_fall_back_to_printer_defaults()
+    public async Task Unsupported_printer_settings_fall_back_to_printer_defaults_without_erasing_preferences()
     {
         var dispatcher = new FakePrintDispatcher("Counter Printer")
         {
@@ -137,7 +154,7 @@ public sealed class PrintPreviewViewModelPrintTests
             && vm.SelectedColorMode == PrintColorMode.PrinterDefault
             && vm.SelectedCollationMode == PrintCollationMode.PrinterDefault);
 
-        Assert.Equal(PrintJobSettings.Default, preferences.PrintJobSettings);
+        Assert.Equal(NonDefaultSettings, preferences.PrintJobSettings);
     }
 
     [Fact]

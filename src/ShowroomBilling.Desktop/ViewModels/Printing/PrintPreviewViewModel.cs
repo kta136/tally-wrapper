@@ -405,12 +405,6 @@ public partial class PrintPreviewViewModel : ObservableObject
         var resolved = ResolveSupportedSettings(desired, duplexOptions, colorOptions, collationOptions);
 
         ApplyPrintSettingOptions(duplexOptions, colorOptions, collationOptions, resolved);
-
-        if (capabilities.IsKnown && resolved != _preferredPrintJobSettings)
-        {
-            _preferredPrintJobSettings = resolved;
-            _preferences?.SavePrintJobSettings(resolved);
-        }
     }
 
     private void SavePrintJobSettings()
