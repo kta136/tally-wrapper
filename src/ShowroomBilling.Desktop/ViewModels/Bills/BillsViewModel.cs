@@ -189,15 +189,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     [ObservableProperty] private string tallyPushBlockReason = "Tally connection has not been checked yet.";
     [ObservableProperty] private string statusMessage = string.Empty;
     [ObservableProperty] private BillSummaryItem? selectedBill;
-    [ObservableProperty] private int countPending;
-    [ObservableProperty] private int countPosting;
-    [ObservableProperty] private int countPosted;
-    [ObservableProperty] private int countFailed;
-    [ObservableProperty] private int countTotal;
-    [ObservableProperty] private decimal amountTotal;
-    [ObservableProperty] private decimal amountPending;
-    [ObservableProperty] private decimal amountPosted;
-    [ObservableProperty] private decimal amountFailed;
 
     /// <summary>
     /// When true, date groups in which every bill is already <c>posted</c> are dropped from
@@ -397,7 +388,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
             ResetRows(list.Items);
             Total = list.Total;
-            RecountSummary();
 
             SelectedBill = BillsSelectionRestorer.Restore(Items, priorSelectedIds, priorFocusedId);
             RecalculateSelectedCount();
@@ -541,55 +531,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         MarkPendingSelectedCommand.NotifyCanExecuteChanged();
         DeleteRowCommand.NotifyCanExecuteChanged();
         DeleteSelectedCommand.NotifyCanExecuteChanged();
-    }
-
-    private void RecountSummary()
-    {
-        var pendingCount = 0;
-        var postingCount = 0;
-        var postedCount = 0;
-        var failedCount = 0;
-        var totalAmount = 0m;
-        var pendingAmount = 0m;
-        var postedAmount = 0m;
-        var failedAmount = 0m;
-
-        foreach (var item in Items)
-        {
-            totalAmount += item.GrandTotal;
-
-            switch (item.State)
-            {
-                case BillStates.Pending:
-                case BillStates.Draft:
-                    pendingCount++;
-                    pendingAmount += item.GrandTotal;
-                    break;
-                case BillStates.Posting:
-                    pendingCount++;
-                    postingCount++;
-                    pendingAmount += item.GrandTotal;
-                    break;
-                case BillStates.Posted:
-                    postedCount++;
-                    postedAmount += item.GrandTotal;
-                    break;
-                case BillStates.Failed:
-                    failedCount++;
-                    failedAmount += item.GrandTotal;
-                    break;
-            }
-        }
-
-        CountTotal = Total > 0 ? Total : Items.Count;
-        CountPending = pendingCount;
-        CountPosting = postingCount;
-        CountPosted = postedCount;
-        CountFailed = failedCount;
-        AmountTotal = totalAmount;
-        AmountPending = pendingAmount;
-        AmountPosted = postedAmount;
-        AmountFailed = failedAmount;
     }
 
     private bool CanRefresh() => _billsApi is not null && !IsLoading && !IsActing;

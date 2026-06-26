@@ -122,7 +122,7 @@ Every class above has a direct WPF translation — most become a `Style` keyed i
 | App shell (titlebar, banners, nav, F-key strip, status bar, health cluster, shortcuts dialog, system-health dialog) | [app.jsx](design/app/app.jsx), [shell.jsx](design/app/shell.jsx) |
 | Limited-mode view | [app.jsx LimitedModeView](design/app/app.jsx) |
 | Invoice screen (header grid, line-entry table with autocomplete + locked tab order, totals column, side picker, toolbar, actions bar, post-save dialog) | [invoice.jsx](design/app/invoice.jsx), [dialogs.jsx PostSaveDialog](design/app/dialogs.jsx) |
-| Bills screen (4 summary tiles, filter bar, batch action bar, table with status chips + context menu + multi-select, footer) | [screens.jsx BillsScreen](design/app/screens.jsx) |
+| Bills screen (filter bar, batch action bar, table with status chips + context menu + multi-select, footer) | [screens.jsx BillsScreen](design/app/screens.jsx) |
 | Bill details dialog (summary, commercial breakdown, numbering, sync timeline) | [dialogs.jsx BillDetailsDialog](design/app/dialogs.jsx) |
 | Print preview dialog (estimate/final toggle, watermark, copy checkboxes, thermal mock) | [dialogs.jsx PrintPreviewDialog](design/app/dialogs.jsx) |
 | Settings screen (sectioned nav, Connection / Invoice Content / Advanced with full treatment; Numbering / Ledgers / Items / Karat / Invoice Layout / Company as styled scaffolds) | [screens.jsx SettingsScreen](design/app/screens.jsx) |
