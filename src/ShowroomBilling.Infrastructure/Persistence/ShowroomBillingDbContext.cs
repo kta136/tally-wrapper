@@ -58,6 +58,16 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.Host).HasMaxLength(256);
             entity.Property(x => x.ActiveCompanyName).HasMaxLength(256);
             entity.Property(x => x.PrintCompanyName).HasMaxLength(256);
+            entity.Property(x => x.CompanyGstin).HasMaxLength(32);
+            entity.Property(x => x.CompanyPhone).HasMaxLength(64);
+            entity.Property(x => x.CompanyAddress).HasMaxLength(2000);
+            entity.Property(x => x.CompanyState).HasMaxLength(128);
+            entity.Property(x => x.CompanyCountry).HasMaxLength(128);
+            entity.Property(x => x.BankName).HasMaxLength(256);
+            entity.Property(x => x.BankAccount).HasMaxLength(128);
+            entity.Property(x => x.BankIfsc).HasMaxLength(32);
+            entity.Property(x => x.BankUpi).HasMaxLength(256);
+            entity.Property(x => x.TermsAndConditions).HasMaxLength(10000);
             entity.Property(x => x.InvoicePrefix).HasMaxLength(64);
             entity.Property(x => x.InvoiceSuffix).HasMaxLength(64);
             entity.Property(x => x.InvoicePadding).HasDefaultValue(4);
@@ -92,7 +102,8 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
         modelBuilder.Entity<TallyMasterSnapshotBatchEntity>(entity =>
         {
-            entity.ToTable("tally_master_snapshot_batches");
+            entity.ToTable("tally_master_snapshot_batches", table =>
+                table.HasCheckConstraint("CK_tally_master_snapshot_batches_status", "\"Status\" IN ('active', 'superseded')"));
             entity.HasKey(x => x.Id);
             entity.Property(x => x.MasterType).HasMaxLength(64);
             entity.Property(x => x.Status).HasMaxLength(32);
@@ -170,7 +181,8 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
         modelBuilder.Entity<InvoiceSequenceEntity>(entity =>
         {
-            entity.ToTable("invoice_sequences");
+            entity.ToTable("invoice_sequences", table =>
+                table.HasCheckConstraint("CK_invoice_sequences_next_value", "\"NextValue\" > 0"));
             entity.HasKey(x => new { x.ShowroomId, x.FiscalYear, x.DocumentType });
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
             entity.Property(x => x.DocumentType).HasMaxLength(32);
@@ -191,7 +203,10 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
         modelBuilder.Entity<BillEntity>(entity =>
         {
-            entity.ToTable("bills");
+            entity.ToTable("bills", table =>
+                table.HasCheckConstraint(
+                    "CK_bills_state",
+                    "\"State\" IN ('draft', 'pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')"));
             entity.HasKey(x => x.Id);
             entity.Property(x => x.BillType).HasMaxLength(32);
             entity.Property(x => x.State).HasMaxLength(32);
@@ -207,7 +222,11 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
         modelBuilder.Entity<BillRevisionEntity>(entity =>
         {
-            entity.ToTable("bill_revisions");
+            entity.ToTable("bill_revisions", table =>
+            {
+                table.HasCheckConstraint("CK_bill_revisions_revision_no", "\"RevisionNo\" > 0");
+                table.HasCheckConstraint("CK_bill_revisions_grand_total", "\"GrandTotal\" >= 0");
+            });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.SnapshotJson).HasColumnType("jsonb");
             entity.Property(x => x.TotalsJson).HasColumnType("jsonb");
@@ -247,7 +266,8 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
         modelBuilder.Entity<AdminSessionEntity>(entity =>
         {
-            entity.ToTable("admin_sessions");
+            entity.ToTable("admin_sessions", table =>
+                table.HasCheckConstraint("CK_admin_sessions_expiry", "\"ExpiresAtUtc\" > \"IssuedAtUtc\""));
             entity.HasKey(x => x.Id);
             entity.Property(x => x.TokenHash).HasMaxLength(256);
             entity.Property(x => x.ActorLabel).HasMaxLength(128);
@@ -258,7 +278,11 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
         modelBuilder.Entity<PrintAssetEntity>(entity =>
         {
-            entity.ToTable("print_assets");
+            entity.ToTable("print_assets", table =>
+            {
+                table.HasCheckConstraint("CK_print_assets_kind", "\"AssetKind\" IN ('logo', 'signature')");
+                table.HasCheckConstraint("CK_print_assets_byte_length", "\"ByteLength\" > 0");
+            });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AssetKind).HasMaxLength(32);
             entity.Property(x => x.FileName).HasMaxLength(256);

@@ -67,9 +67,9 @@ The API owns all durable business state. The Desktop is a rich client; it does n
 Tally communication is synchronous and operator-initiated:
 
 - Save Bill creates/updates the bill in PostgreSQL only.
-- Push / Retry / Repost sends one HTTP XML request to Tally and returns the posted-or-failed result.
+- Push / Retry / Repost sends one voucher HTTP request to Tally and returns `posted`, a definite `failed`, or `reconciliation_required` when the write outcome is uncertain.
 - Refresh from Tally fetches masters on demand and writes the snapshot.
-- If the API crashes while a bill is in `posting`, startup recovery moves it back to `pending` on the next boot.
+- If the API crashes while a bill is in `posting`, startup recovery moves it to `reconciliation_required`; the operator verifies Tally before marking it posted or pending.
 
 See [docs/05_tally_integration_contract.md](docs/05_tally_integration_contract.md) for the full contract.
 
@@ -108,7 +108,7 @@ Development currently targets Windows because the desktop host is WPF.
 |---|---|
 | Windows 10/11 | Required for WPF, printing, DPAPI, and Windows Service/server tray behavior |
 | .NET SDK `10.0.202` | Pinned by [global.json](global.json) |
-| PostgreSQL 17+ | Local Postgres, Docker, or a managed provider such as Neon |
+| PostgreSQL 17+ | Local Postgres, Docker, or a managed provider such as Aiven |
 | TallyPrime | Required for real posting and master refresh workflows |
 | PowerShell | Required for publish and server install scripts |
 
@@ -363,6 +363,15 @@ Run the full suite:
 dotnet test ShowroomBilling.sln
 ```
 
+Run formatting, warning, dependency, and coverage gates:
+
+```powershell
+dotnet list ShowroomBilling.sln package --vulnerable --include-transitive
+dotnet format style ShowroomBilling.sln --verify-no-changes --no-restore
+dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
+.\tools\Test-Coverage.ps1 -MinimumLinePercent 27 -NoBuild
+```
+
 Run API contract tests only:
 
 ```powershell
@@ -397,7 +406,7 @@ What the tests cover:
 - WPF ViewModel workflows
 - printing/rendering helpers
 
-The test DB provider is EF Core InMemory for most DB-backed unit tests. It validates behavior shape, not Postgres locking, unique-index enforcement, or real race semantics. Use a real Postgres harness before shipping changes to numbering, sequence locking, or unique-index-backed invariants.
+The test DB provider is EF Core InMemory for most DB-backed unit tests. It validates behavior shape, not Postgres locking, unique-index enforcement, or real race semantics. CI therefore runs `Category=Postgres` separately against PostgreSQL 17; that job is required for numbering, locking, conditional-transition, or unique-index changes.
 
 ## Troubleshooting
 
@@ -406,7 +415,7 @@ The test DB provider is EF Core InMemory for most DB-backed unit tests. It valid
 | Build fails copying Desktop DLLs | Desktop EXE is still running | Close `TallyWrapper.exe` / the Desktop process and rebuild |
 | API starts but DB is not ready | Missing or invalid Postgres connection string | Configure DB from Settings or server tray, then restart API |
 | Desktop says cloud/API down | API child process not started or wrong port | Check `%APPDATA%\ShowroomBilling\logs` and `ChildProcesses` settings |
-| Tally push is blocked or fails | TallyPrime closed, wrong company open, wrong endpoint, or XML error | Open TallyPrime, verify active company/settings, retry from Bills tab. Preflight blocks leave bill state unchanged. |
+| Tally push is blocked, fails, or needs reconciliation | TallyPrime closed, wrong company open, business XML rejection, or the write response was lost | Preflight blocks leave state unchanged; definite rejections can be retried after correction. For `reconciliation_required`, verify the voucher in Tally and use admin Mark as Pushed or Mark as Pending before another push. |
 | Workstation cannot reach server | Firewall/CIDR/API URL mismatch | Re-run server installer and verify `http://<server>:5107/api/health/live` |
 | Admin action returns 401 | Admin token expired or not unlocked | Press `~` in Desktop and unlock again |
 | Server tray DB save fails | Maintenance token missing or API not running locally | Run Install / Repair Server from the tray dashboard |

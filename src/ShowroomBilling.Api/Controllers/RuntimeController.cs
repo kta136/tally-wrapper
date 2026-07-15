@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
@@ -26,7 +27,8 @@ public sealed class RuntimeController(
     IHostEnvironment hostEnvironment,
     IOptions<ApiRuntimeOptions> runtimeOptions,
     IOptions<DeviceAuthOptions> deviceAuthOptions,
-    MaintenanceTokenStore maintenanceTokenStore) : ControllerBase
+    MaintenanceTokenStore maintenanceTokenStore,
+    ClientPresenceRegistry clientPresenceRegistry) : ControllerBase
 {
     [HttpGet("bootstrap")]
     public async Task<ActionResult<RuntimeBootstrapResponse>> GetBootstrap(CancellationToken cancellationToken)
@@ -233,15 +235,39 @@ public sealed class RuntimeController(
     }
 
     [HttpGet("health")]
-    public async Task<ActionResult<RuntimeHealthResponse>> GetHealth(CancellationToken cancellationToken)
+    public async Task<ActionResult<RuntimeHealthResponse>> GetHealth(
+        [FromQuery] bool forceDatabase = false,
+        CancellationToken cancellationToken = default)
     {
+        var activeClientCount = clientPresenceRegistry.ActiveCount;
+        var databaseConfigured = !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Postgres"));
+        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
+        if (!forceDatabase)
+        {
+            const string reason = "PostgreSQL health check skipped for cheap background health probe.";
+            return Ok(new RuntimeHealthResponse(
+                Status: "Skipped",
+                ApiAvailable: true,
+                DatabaseConfigured: databaseConfigured,
+                DatabaseReachable: false,
+                SettingsLoadedFromApi: false,
+                Message: activeClientCount == 0
+                    ? $"{reason} No active billing clients are registered."
+                    : $"{reason} Active clients: {activeClientCount}.",
+                DatabaseIdentity: null,
+                ExpectedDatabaseIdentity: expectedDatabaseIdentity,
+                DatabaseIdentityMatches: null,
+                DatabaseHealthSkipped: true,
+                DatabaseHealthSkipReason: reason,
+                ActiveClientCount: activeClientCount));
+        }
+
         var healthReport = await healthCheckService.CheckHealthAsync(_ => true, cancellationToken);
         var postgresReachable = healthReport.Entries.TryGetValue("postgres", out var databaseEntry)
             && databaseEntry.Status == HealthStatus.Healthy;
         var databaseIdentity = postgresReachable
             ? await TryGetDatabaseIdentityAsync(cancellationToken)
             : null;
-        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
         bool? databaseIdentityMatches = postgresReachable
             ? DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity)
             : null;
@@ -256,13 +282,16 @@ public sealed class RuntimeController(
         var response = new RuntimeHealthResponse(
             healthReport.Status.ToString(),
             ApiAvailable: true,
-            DatabaseConfigured: !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Postgres")),
+            DatabaseConfigured: databaseConfigured,
             DatabaseReachable: databaseReachable,
             SettingsLoadedFromApi: true,
             Message: message,
             DatabaseIdentity: databaseIdentity,
             ExpectedDatabaseIdentity: expectedDatabaseIdentity,
-            DatabaseIdentityMatches: databaseIdentityMatches);
+            DatabaseIdentityMatches: databaseIdentityMatches,
+            DatabaseHealthSkipped: false,
+            DatabaseHealthSkipReason: null,
+            ActiveClientCount: activeClientCount);
 
         return Ok(response);
     }
@@ -388,18 +417,6 @@ public sealed class RuntimeController(
 
     private static string NormalizeConnectionString(string connectionString)
     {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            return string.Empty;
-        }
-
-        try
-        {
-            return new NpgsqlConnectionStringBuilder(connectionString).ConnectionString;
-        }
-        catch
-        {
-            return connectionString.Trim();
-        }
+        return DatabaseConnectionStringConfiguration.NormalizeOrOriginal(connectionString);
     }
 }

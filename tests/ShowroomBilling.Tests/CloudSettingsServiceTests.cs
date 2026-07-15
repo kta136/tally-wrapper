@@ -120,6 +120,43 @@ public sealed class CloudSettingsServiceTests
         Assert.Equal("127.0.0.1", effectiveResponse.Settings.Connection.Host);
     }
 
+    [Fact]
+    public async Task SaveEffectiveSettingsAsync_RejectsOutOfRangeAndMalformedValues()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+        var seeded = await service.GetEffectiveSettingsAsync();
+
+        var invalidPort = new UpdateEffectiveSettingsRequest(seeded.Settings with
+        {
+            Connection = seeded.Settings.Connection with { Port = 0 }
+        });
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SaveEffectiveSettingsAsync(invalidPort));
+
+        var invalidJson = new UpdateEffectiveSettingsRequest(seeded.Settings with
+        {
+            Masters = seeded.Settings.Masters with { ItemMasterDataJson = "not-json" }
+        });
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SaveEffectiveSettingsAsync(invalidJson));
+    }
+
+    [Fact]
+    public async Task UpdatePrintLayoutAsync_RejectsNonFiniteOrOversizedGeometry()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.UpdatePrintLayoutAsync(
+            new UpdatePrintLayoutRequest(new PrintLayoutSettings(
+                double.NaN, 1, 1, 1, null, null))));
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.UpdatePrintLayoutAsync(
+            new UpdatePrintLayoutRequest(new PrintLayoutSettings(
+                1, 1, 1, 1,
+                new PrintLayoutAssetPlacement(null, 0, 0, 25, 2),
+                null))));
+    }
+
     private static ShowroomBillingDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()

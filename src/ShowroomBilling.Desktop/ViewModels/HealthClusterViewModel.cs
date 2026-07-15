@@ -106,6 +106,14 @@ public partial class HealthClusterViewModel : ObservableObject
             ? "DB ?"
             : $"DB {identity}";
 
+        if (runtime.DatabaseHealthSkipped)
+        {
+            DatabaseDot = "neutral";
+            DatabaseLabel = "DB IDLE";
+            DatabaseTooltip = runtime.Message;
+            return;
+        }
+
         if (!runtime.DatabaseReachable)
         {
             DatabaseDot = "err";

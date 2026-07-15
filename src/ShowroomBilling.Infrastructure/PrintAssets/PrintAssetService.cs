@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.PrintAssets;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -8,10 +10,13 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.PrintAssets;
 
-public sealed class PrintAssetService(ShowroomBillingDbContext dbContext) : IPrintAssetService
+public sealed class PrintAssetService(
+    ShowroomBillingDbContext dbContext,
+    IAuditActorContext? actorContext = null) : IPrintAssetService
 {
     private const string DefaultShowroomCode = "default";
     private const long MaxBytes = 2 * 1024 * 1024;
+    private const int MaxBase64Characters = 2_800_000;
 
     public async Task<PrintAssetListResponse> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -46,9 +51,22 @@ public sealed class PrintAssetService(ShowroomBillingDbContext dbContext) : IPri
         {
             throw new ArgumentException("FileName is required.", nameof(request));
         }
+        var fileName = request.FileName.Trim();
+        if (fileName.Length > 256 || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
+        {
+            throw new ArgumentException("FileName must be a plain file name of at most 256 characters.", nameof(request));
+        }
+        if (request.ContentType?.Length > 128)
+        {
+            throw new ArgumentException("ContentType cannot exceed 128 characters.", nameof(request));
+        }
         if (string.IsNullOrWhiteSpace(request.Base64Content))
         {
             throw new ArgumentException("Base64Content is required.", nameof(request));
+        }
+        if (request.Base64Content.Length > MaxBase64Characters)
+        {
+            throw new ArgumentException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.", nameof(request));
         }
 
         byte[] bytes;
@@ -70,9 +88,8 @@ public sealed class PrintAssetService(ShowroomBillingDbContext dbContext) : IPri
             throw new ArgumentException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.", nameof(request));
         }
 
-        var contentType = string.IsNullOrWhiteSpace(request.ContentType)
-            ? "application/octet-stream"
-            : request.ContentType.Trim();
+        var contentType = DetectImageContentType(bytes)
+            ?? throw new ArgumentException("Asset must be a valid PNG or JPEG image.", nameof(request));
 
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
         var now = DateTimeOffset.UtcNow;
@@ -81,21 +98,23 @@ public sealed class PrintAssetService(ShowroomBillingDbContext dbContext) : IPri
             Id = Guid.NewGuid(),
             ShowroomId = showroomId,
             AssetKind = request.AssetKind,
-            FileName = request.FileName,
+            FileName = fileName,
             ContentType = contentType,
             ByteLength = bytes.LongLength,
             Bytes = bytes,
             CreatedAtUtc = now
         };
         dbContext.PrintAssets.Add(entity);
+        var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
             Id = Guid.NewGuid(),
             EntityType = "print_asset",
             EntityId = entity.Id.ToString(),
             EventType = "print_asset.uploaded",
-            ActorType = "system",
-            PayloadJson = $"{{\"kind\":\"{entity.AssetKind}\",\"size\":{entity.ByteLength}}}",
+            ActorType = actor.ActorType,
+            ActorId = actor.ActorId,
+            PayloadJson = JsonSerializer.Serialize(new { kind = entity.AssetKind, size = entity.ByteLength }),
             CreatedAtUtc = now
         });
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -137,14 +156,16 @@ public sealed class PrintAssetService(ShowroomBillingDbContext dbContext) : IPri
             return false;
         }
         dbContext.PrintAssets.Remove(entity);
+        var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
             Id = Guid.NewGuid(),
             EntityType = "print_asset",
             EntityId = id.ToString(),
             EventType = "print_asset.deleted",
-            ActorType = "system",
-            PayloadJson = $"{{\"kind\":\"{entity.AssetKind}\"}}",
+            ActorType = actor.ActorType,
+            ActorId = actor.ActorId,
+            PayloadJson = JsonSerializer.Serialize(new { kind = entity.AssetKind }),
             CreatedAtUtc = DateTimeOffset.UtcNow
         });
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -156,5 +177,13 @@ public sealed class PrintAssetService(ShowroomBillingDbContext dbContext) : IPri
         var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
         var hash = MD5.HashData(bytes);
         return new Guid(hash);
+    }
+
+    private static string? DetectImageContentType(ReadOnlySpan<byte> bytes)
+    {
+        ReadOnlySpan<byte> png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        if (bytes.StartsWith(png)) return "image/png";
+        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return "image/jpeg";
+        return null;
     }
 }

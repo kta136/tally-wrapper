@@ -12,7 +12,7 @@ public sealed class PrintAssetServiceTests
     {
         await using var db = CreateDbContext();
         var service = new PrintAssetService(db);
-        var bytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 };
+        var bytes = PngBytes(1);
 
         var response = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
@@ -30,7 +30,7 @@ public sealed class PrintAssetServiceTests
     {
         await using var db = CreateDbContext();
         var service = new PrintAssetService(db);
-        var bytes = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 };
+        var bytes = PngBytes(2);
         var uploaded = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Signature,
             "sign.png",
@@ -67,7 +67,7 @@ public sealed class PrintAssetServiceTests
             PrintAssetKinds.Logo,
             "logo.png",
             "image/png",
-            Convert.ToBase64String(new byte[] { 1, 2, 3 })));
+            Convert.ToBase64String(PngBytes(3))));
 
         var deleted = await service.DeleteAsync(uploaded.Id);
 
@@ -82,14 +82,50 @@ public sealed class PrintAssetServiceTests
         await using var db = CreateDbContext();
         var service = new PrintAssetService(db);
         await service.UploadAsync(new PrintAssetUploadRequest(
-            PrintAssetKinds.Logo, "a.png", "image/png", Convert.ToBase64String(new byte[] { 1 })));
+            PrintAssetKinds.Logo, "a.png", "image/png", Convert.ToBase64String(PngBytes(4))));
         await service.UploadAsync(new PrintAssetUploadRequest(
-            PrintAssetKinds.Signature, "b.png", "image/png", Convert.ToBase64String(new byte[] { 2 })));
+            PrintAssetKinds.Signature, "b.png", "image/png", Convert.ToBase64String(PngBytes(5))));
 
         var list = await service.ListAsync();
 
         Assert.Equal(2, list.Assets.Count);
     }
+
+    [Fact]
+    public async Task UploadAsync_RejectsUnsupportedContentEvenWhenMimeTypeClaimsPng()
+    {
+        await using var db = CreateDbContext();
+        var service = new PrintAssetService(db);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.UploadAsync(new PrintAssetUploadRequest(
+            PrintAssetKinds.Logo,
+            "logo.png",
+            "image/png",
+            Convert.ToBase64String([1, 2, 3, 4]))));
+    }
+
+    [Fact]
+    public async Task UploadAsync_UsesDetectedContentTypeAndRejectsPathFileNames()
+    {
+        await using var db = CreateDbContext();
+        var service = new PrintAssetService(db);
+
+        var response = await service.UploadAsync(new PrintAssetUploadRequest(
+            PrintAssetKinds.Logo,
+            "logo.png",
+            "application/octet-stream",
+            Convert.ToBase64String(PngBytes(6))));
+        Assert.Equal("image/png", response.ContentType);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.UploadAsync(new PrintAssetUploadRequest(
+            PrintAssetKinds.Logo,
+            "..\\logo.png",
+            "image/png",
+            Convert.ToBase64String(PngBytes(7)))));
+    }
+
+    private static byte[] PngBytes(byte payload) =>
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, payload];
 
     private static ShowroomBillingDbContext CreateDbContext()
     {

@@ -39,10 +39,10 @@ internal sealed class BillLifecycleWorkflow(
         BillValidator.Validate(request.Payload);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is IBillService.StatePosting)
+        if (bill.State is IBillService.StatePosting or IBillService.StateReconciliationRequired)
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is being posted to Tally right now; wait for the current job to settle before editing.");
+                $"Bill '{billId}' cannot be edited while its Tally outcome is unresolved.");
         }
         if (bill.State is IBillService.StateVoided or IBillService.StateRevised)
         {

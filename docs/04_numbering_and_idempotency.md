@@ -234,6 +234,10 @@ Recommended operation types:
 - `repost`
 - later, if needed: `cancel`, `credit_note`, `reversal`
 
+### 6.4 Repost key contract
+
+Normal push/retry uses `post:{billId:N}:{revisionId:N}`. `POST /api/bills/{billId}/repost` instead requires a caller-supplied, non-blank key of at most 128 characters and passes that exact trimmed value into the create/import voucher as `REMOTEID`. The posted bill transitions directly to `posting`; there is no persisted `posted → pending` hop. Alter requests continue to target Tally by `MASTER ID` and do not emit `REMOTEID`.
+
 ---
 
 ## 7. `REMOTEID` linkage rules
@@ -251,6 +255,7 @@ The XML golden path must be preserved:
 Implemented Tally Wrapper `REMOTEID` content:
 
 - create/import requests use the posting idempotency key: `post:{billId:N}:{revisionId:N}`
+- explicit repost create/import requests use the caller-supplied repost idempotency key
 - stable for the lifetime of that bill revision post attempt
 - edited-after-push alter requests do not send `REMOTEID`; they use `TAGNAME="MASTER ID"` + the old Tally master id from pre-edit `tally.posted` audit
 - if that old master id is unavailable, the edited push fails safely with `TALLY_ALTER_TARGET_MISSING` and does not create a fallback voucher
@@ -267,14 +272,9 @@ Invoice number alone is not enough because:
 
 ## 8. Replay / retry / ambiguity handling
 
-### 8.1 Retryable failures
+### 8.1 Transport failures on voucher writes
 
-Retry when `ITallyPoster` sees:
-
-- Tally host unreachable
-- timeout
-- connection refused
-- unreadable transport response with no reliable business outcome
+Voucher writes are never automatically retried. Host-unreachable, timeout, connection-refused, HTTP-error, and unreadable-response cases may occur after Tally accepted the voucher, so `ITallyPoster` returns `Unknown` and the bill moves to `reconciliation_required`. The Polly retry pipeline applies only to safe Tally reads.
 
 ### 8.2 Non-retryable failures
 
@@ -292,8 +292,9 @@ Fail immediately for:
 If the request may have reached Tally but success is uncertain:
 
 1. do not blindly resend immediately
-2. reconcile first using deterministic lookup rules
-3. only retry if the voucher is not found
+2. keep the bill in `reconciliation_required`, blocking normal mutation/retry/delete paths
+3. verify the voucher in Tally
+4. use admin **Mark as Pushed** if found, or **Mark as Pending** if absent
 
 ### 8.4 Reconciliation lookup order
 
@@ -301,8 +302,8 @@ Recommended order:
 
 1. lookup by `REMOTEID` if available in Tally-side inspection path
 2. lookup by invoice number + voucher type + company
-3. if found, mark job as posted and store reconciliation note
-4. if not found, leave the job failed and require an explicit operator retry/repost
+3. if found, mark the bill posted with a required audit reason
+4. if not found, mark the bill pending with a required audit reason, then push again
 
 ---
 

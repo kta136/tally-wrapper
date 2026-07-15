@@ -91,10 +91,11 @@ No local durable business cache is allowed.
 
 - structured logging to rolling log files (`%APPDATA%\ShowroomBilling\logs` for embedded mode; `C:\ProgramData\ShowroomBilling\logs` for server-service installs)
 - `/api/health/live` and `/api/health/ready` endpoints
-- `StuckPostingRecoveryHostedService` runs once on boot — any bill stranded in `posting` from a prior crash is flipped back to `pending` with a `bill.posting.recovered` audit event
+- `StuckPostingRecoveryHostedService` runs once on boot — any bill stranded in `posting` from a prior crash moves to `reconciliation_required` with a `bill.posting.recovered` audit event
+- `OperationalDataRetentionHostedService` runs once after DB readiness and purges only admin sessions plus expired/released draft leases older than 30 days; accounting and audit records are excluded
 - API errors are returned as RFC 7807 `application/problem+json` via a global `IExceptionHandler`. The only typed-body exception is `POST /api/draft-leases/acquire` (409 returns `DraftLeaseConflictResponse`). See [`09_api_spec.md`](./09_api_spec.md) §1.
 - API admin endpoints are gated via ASP.NET Core authentication/authorization — scheme `AdminToken` + policy `Admin`. No framework-wide authentication is required for non-admin routes.
-- `ITallyXmlClient` has a Polly retry pipeline (2 attempts, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx). Total timeout still comes from `Connection.TimeoutSeconds`.
+- Safe `ITallyXmlClient` reads have a Polly retry pipeline (2 attempts, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx). Voucher writes are excluded to prevent duplicate Tally imports; their total timeout still comes from `Connection.TimeoutSeconds`.
 
 ### Windows Service server mode
 
@@ -130,7 +131,7 @@ Tray features:
 
 - show service state, API liveness, DB health, and recently seen workstation clients
 - install/repair the server, start/stop/restart the API Windows Service, open the local health page, open logs/config/install-log folders, and copy the workstation server URL from either the tray menu or the main dashboard window
-- configure/test/save DB settings through localhost-only maintenance endpoints using `maintenance_token.txt`
+- configure/test/save DB settings through localhost-only maintenance endpoints using `maintenance_token.txt`; DB maintenance result dialogs include a **Copy** action for supportable error messages
 - exit the tray by stopping the API Windows Service first, then closing the companion UI
 - no Tally polling; Tally is checked only by operator-triggered push/refresh/System Health flows
 
@@ -139,9 +140,11 @@ The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windo
 ### Startup hosted services
 
 - `DatabaseInitializationHostedService` — applies EF migrations.
-- `StuckPostingRecoveryHostedService` — one-shot recovery of stuck `posting` bills.
+- `StuckPostingRecoveryHostedService` — one-shot classification of stuck `posting` bills as reconciliation-required.
+- `OperationalDataRetentionHostedService` — bounded purge of stale auth-session and draft-lease rows.
+- `SequenceSelfHealHostedService` and `DatabaseWarmupHostedService` — bounded sequence repair and read-path warmup after database readiness.
 
-Both are single-pass on boot. There is no background worker after startup completes.
+These are bounded, single-pass startup tasks. There is no recurring posting, Tally polling, or retention worker after startup completes.
 
 ---
 
@@ -214,7 +217,7 @@ Should capture:
 - bill finalization failures
 - numbering allocation failures
 - state transitions (bill.* audit events are also on disk via DB)
-- Tally call outcomes (`tally.posted`, `tally.failed`, `TALLY_HTTP`, `TALLY_TIMEOUT`, etc.) and any Polly retry attempts emitted by `Microsoft.Extensions.Http.Resilience`
+- Tally call outcomes (`tally.posted`, `tally.failed`, `tally.outcome.unknown`, `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, etc.) and safe-read retry attempts emitted by `Microsoft.Extensions.Http.Resilience`
 - admin and recovery actions
 - `StuckPostingRecoveryHostedService` startup report
 
@@ -230,7 +233,10 @@ Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\P
 - `/api/health/ready` — DB connectivity + migration readiness
 - `/api/health/masters` — freshness of companies/ledgers/stock-items/voucher-types snapshots
 - `/api/health/tally-company` — operator-triggered Tally reachability + active-company check
+- `/api/runtime/health` — cheap runtime status by default; pass `?forceDatabase=true` for a PostgreSQL-backed DB/identity probe
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
+
+Desktop background health polling uses cheap runtime probes so it does not wake managed PostgreSQL on every tick. Full DB health, Tally-company health, and master freshness are requested on startup, explicit System Health refreshes, database setup waits, and a slower scheduled probe. With all workstations closed and the server dashboard closed, the API has no recurring DB health loop, so providers with inactivity behavior can suspend the database after their inactivity window.
 
 ### What's NOT a health check anymore
 
@@ -242,7 +248,7 @@ Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\P
 
 Tally reachability is only verified when the operator clicks Push/Retry/Repost, Push All Pending, Refresh from Tally, or Refresh in the System Health dialog. Push-family endpoints run a Tally company preflight before any bill moves to `posting`; if Tally is unreachable or the configured active company is not open, the API returns `503 Tally unavailable` and leaves bill state unchanged.
 
-If Tally becomes unavailable after preflight, the normal posting failure path can still settle the bill in `failed` with `TALLY_HTTP`, `TALLY_TIMEOUT`, or the parsed Tally rejection details. The architecture still forbids background Tally polling.
+If Tally becomes unavailable after preflight, a timeout/transport/unreadable-response outcome settles the bill in `reconciliation_required`; an explicit Tally business rejection settles it in `failed`. The architecture still forbids background Tally polling and voucher-write retries.
 
 ### Master freshness
 
@@ -262,14 +268,14 @@ If Tally becomes unavailable after preflight, the normal posting failure path ca
 ### API restart
 
 - safe
-- `StuckPostingRecoveryHostedService` reconciles any bill stranded in `posting` back to `pending` for operator retry
+- `StuckPostingRecoveryHostedService` moves any bill stranded in `posting` to `reconciliation_required`; the operator verifies Tally and chooses admin Mark as Pushed or Mark as Pending
 - data is in PostgreSQL; nothing lost
 
 ### Tally outage recovery
 
 - bills continue to be saved (numbering, saving, audit all live in the API + DB)
-- clicking Push surfaces `TALLY_HTTP` until Tally is back
-- when Tally returns, operator clicks Retry on failed bills
+- preflight blocks Push with `503 Tally unavailable` while Tally is down and leaves the bill unchanged
+- if connectivity is lost after a voucher request begins, the bill requires reconciliation rather than an automatic retry
 
 ---
 

@@ -101,7 +101,7 @@ public sealed class BillsController(
     {
         var response = await billService.PushAsync(
             billId,
-            request ?? new PushBillRequest(null, null),
+            request ?? new PushBillRequest(null),
             cancellationToken);
         return Ok(response);
     }
@@ -128,7 +128,7 @@ public sealed class BillsController(
         CancellationToken cancellationToken)
     {
         var response = await billService.PushPendingAsync(
-            request ?? new PushPendingBillsRequest(null, null, null),
+            request ?? new PushPendingBillsRequest(null, null),
             cancellationToken);
         return Ok(response);
     }

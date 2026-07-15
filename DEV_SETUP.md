@@ -8,9 +8,9 @@
 
 ## Database
 
-Primary development database is PostgreSQL 17+. Use a local Postgres instance, Docker, or a managed Postgres provider such as Neon. Real connection strings are intentionally not committed. Keep environment-specific values in ignored files (`src/ShowroomBilling.Api/appsettings.Development.json`, `src/ShowroomBilling.Api/appsettings.Production.json`), user-secrets, or local environment variables.
+Primary development database is PostgreSQL 17+. Use a local Postgres instance, Docker, or a managed Postgres provider such as Aiven. Real connection strings are intentionally not committed. Keep environment-specific values in ignored files (`src/ShowroomBilling.Api/appsettings.Development.json`, `src/ShowroomBilling.Api/appsettings.Production.json`), user-secrets, local environment variables, or the DPAPI-protected override written by `tools/configure-local-db.ps1`.
 
-For Neon, use the **direct** endpoint host (`ep-<id>.<region>.aws.neon.tech`) rather than the `-pooler` host because EF Core migrations and warmup can hold long-lived connections. Set `Database:AutoMigrateOnStartup=true` only in private local environment files.
+For Aiven, paste the PostgreSQL service URI from `avn service connection-info pg uri <service> --sslmode require` directly into the Database setup/server-tray field, or use an Npgsql key/value connection string. If Aiven returns `/defaultdb`, replace it with this app's target database, for example `/tally_wrapper_prod` for server production. Aiven Free is single-node and not HA; it is suitable for development, pilots, and low-traffic showroom use, but not high-traffic production. Set `Database:AutoMigrateOnStartup=true` only in private local environment files.
 
 Manual migration command:
 
@@ -56,10 +56,21 @@ dotnet build ShowroomBilling.sln
 dotnet test ShowroomBilling.sln
 ```
 
+Run the same local quality gates used by the Windows CI job:
+
+```powershell
+dotnet list ShowroomBilling.sln package --vulnerable --include-transitive
+dotnet format style ShowroomBilling.sln --verify-no-changes --no-restore
+dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
+.\tools\Test-Coverage.ps1 -MinimumLinePercent 27 -NoBuild
+```
+
+`Test-Coverage.ps1` builds by default when used on its own; pass `-NoBuild` only after building the same configuration. CI publishes TRX and Cobertura artifacts, enforces a 27% aggregate line floor, and runs the Postgres category in a separate Ubuntu/Docker job. Package versions are centrally pinned in `Directory.Packages.props`; the package-audit command must stay clean before dependency updates are merged.
+
 Postgres integration tests are opt-in because they require either a local Docker
 endpoint reachable by Testcontainers or an explicit remote Postgres test
 connection string. They create isolated test databases; they do not read local
-or Neon connection strings.
+or Aiven connection strings.
 
 ```powershell
 .\tools\run-postgres-tests.ps1
@@ -75,6 +86,8 @@ $env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database
 dotnet test tests/ShowroomBilling.Tests --filter "Category=Postgres"
 ```
 
+If Docker Desktop is configured to use a remote SSH context, Testcontainers may still look for a local named pipe. Use `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION` or switch to a local Docker context in that case. The CI Postgres job is the authoritative relational check for `FOR UPDATE`, conditional updates, and unique-index-backed behavior.
+
 ## Run the API
 
 ```powershell
@@ -85,7 +98,8 @@ Key endpoints:
 
 - `http://localhost:5108/swagger`
 - `http://localhost:5108/api/health/live`
-- `http://localhost:5108/api/health/masters` (per-type snapshot freshness)
+- `http://localhost:5108/api/health/masters` (per-type snapshot freshness; DB-backed, not part of cheap background polling)
+- `http://localhost:5108/api/runtime/health` (cheap by default; add `?forceDatabase=true` for DB-backed health)
 - `http://localhost:5108/api/runtime/bootstrap`
 - `http://localhost:5108/api/masters/companies` (desktop read; also `ledgers`, `stock-items`, `voucher-types`)
 - `http://localhost:5108/api/masters/refresh` (synchronously fetches from Tally and writes the snapshot — the only way masters get updated; there is no background polling)
@@ -109,6 +123,8 @@ The standalone LAN deployment is a single server EXE. It embeds the API, install
 ```
 
 Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. On first run it prompts for the trusted LAN CIDR, extracts the API service binary to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API service as automatic startup, sets `SHOWROOM_BILLING_APPDATA=C:\ProgramData\ShowroomBilling`, generates `C:\ProgramData\ShowroomBilling\maintenance_token.txt`, and creates a firewall rule scoped to that LAN CIDR. Running it again is idempotent: it repairs missing service/env/firewall/startup pieces and starts the service if needed.
+
+Database maintenance results in the tray use a copyable dialog. If a DB test/save fails, use **Copy** in the dialog to capture the exact message for support or migration troubleshooting.
 
 Configure workstations from **Billing → Settings → Database → API Connection Mode**. Choose `Server`, enter `http://<tally-server>:5107`, and click **Save and restart**. The UI writes the typed local bootstrap override at `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json`:
 
@@ -136,11 +152,11 @@ The desktop owns the API lifecycle: on startup `ChildProcessSupervisor` spawns t
 
 When `DesktopBootstrap:ConnectionMode` is `Server`, the desktop uses `ServerApiBaseUrl`, skips embedded API startup, and does not create/send the local `X-Device-Token`. Server API installs use `DeviceAuth:Mode=TrustedLan` plus trusted CIDRs/firewall scope for normal workstation writes; admin endpoints still require `X-Admin-Token`.
 
-**Tally integration** — the API talks to Tally XML directly (in-process). There is no separate bridge process, no background job queue, and no polling. When the operator clicks **Push** on a bill, `BillService.PushAsync` first checks that Tally is reachable and the configured active company is open. If not, the API returns `503 Tally unavailable` and leaves the bill state unchanged. If preflight passes, the bill transitions to `posting`, calls `ITallyPoster` (which builds voucher XML, sends it via HTTP to the configured Tally endpoint, and parses the response), and settles in `posted` or `failed`. First pushes create vouchers; edited-after-push bills alter the original Tally voucher by `MASTER ID` and fail safely if that old voucher cannot be identified. Master-data refresh (`/api/masters/refresh`) follows the same pattern: click → fetch → write → return. If the API crashes mid-post, `StuckPostingRecoveryHostedService` flips stranded `posting` rows back to `pending` on the next startup.
+**Tally integration** — the API talks to Tally XML directly (in-process). There is no bridge, posting queue, or polling. Push first checks that Tally is reachable and the configured company is open. If preflight fails, the API returns `503` and leaves the state unchanged. After the bill enters `posting`, the API makes exactly one voucher HTTP attempt: explicit Tally acceptance/rejection settles in `posted`/`failed`; a timeout, transport error, unreadable response, or API crash settles in `reconciliation_required`. First pushes create vouchers; edited-after-push bills alter the original by `MASTER ID`. Safe master/health reads retain a two-retry transport pipeline, but voucher writes do not. Reconciliation requires checking Tally and using admin Mark as Pushed or Mark as Pending.
 
 ### Desktop shell at a glance
 
-The desktop starts from local bootstrap config, then calls the API for the runtime bootstrap and kicks off a 15-second health poll against `/api/health/live` + `/api/health/masters` through `HealthApiClient`. The banner + status bar are driven off the snapshot: API down → red banner "Limited mode — cloud unavailable…" + `CLOUD DOWN`; otherwise `READY`. The status bar also shows `DB DEV`, `DB PROD`, or `DB UNSET` from the DB-owned identity marker. The window renders with custom chrome (32px caption, our own min/max/close); `Ctrl+1/2/3` switch Invoice/Bills/Settings, `?` opens the shortcuts overlay, `Esc` closes dialogs, and the F-key strip updates per tab. When `SystemState` is Limited, the screen region is replaced by `LimitedModeView` with a still-works / blocked split.
+The desktop starts from local bootstrap config, then calls the API for runtime bootstrap and kicks off a 15-second cheap health poll through `HealthApiClient`. Routine ticks hit `/api/health/live` and `/api/runtime/health` without `forceDatabase`, so they do **not** touch PostgreSQL; DB health, Tally-company health, and `/api/health/masters` are requested on startup, explicit health refreshes, database setup waits, and a slower 30-minute scheduled probe. The banner + status bar are driven off the snapshot: API down → red banner "Limited mode — cloud unavailable…" + `CLOUD DOWN`; otherwise `READY`. The status bar also shows `DB DEV`, `DB PROD`, `DB UNSET`, or `DB IDLE` when DB health was intentionally skipped. The window renders with custom chrome (32px caption, our own min/max/close); `Ctrl+1/2/3` switch Invoice/Bills/Settings, `?` opens the shortcuts overlay, `Esc` closes dialogs, and the F-key strip updates per tab. When `SystemState` is Limited, the screen region is replaced by `LimitedModeView` with a still-works / blocked split.
 
 The header health-cluster (Cloud / Tally) also opens a full **System Health** dialog driven by the same `SystemHealthSnapshot`. Three cards render off real data: Cloud API (reachability), Tally (reachability + configured active company), and Master Data (overall freshness + per-type rows for companies / ledgers / stock-items / voucher-types with freshness / item count / fetched-at). Opening the dialog triggers a fresh poll; the footer shows last-checked timestamp plus **Refresh** and **Close**.
 

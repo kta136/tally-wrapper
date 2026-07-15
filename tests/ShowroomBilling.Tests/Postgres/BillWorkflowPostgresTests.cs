@@ -69,10 +69,10 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
             var firstService = PostgresBillTestSupport.BuildService(firstDb, poster);
             var secondService = PostgresBillTestSupport.BuildService(secondDb, poster);
 
-            var firstPush = firstService.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+            var firstPush = firstService.PushAsync(bill.Id, new PushBillRequest("first"));
             await poster.FirstRequest.WaitAsync(TimeSpan.FromSeconds(10));
 
-            var secondPush = await secondService.PushAsync(bill.Id, new PushBillRequest(null, "second"));
+            var secondPush = await secondService.PushAsync(bill.Id, new PushBillRequest("second"));
             Assert.Equal(BillStates.Posting, secondPush.State);
             Assert.Equal(1, poster.CallCount);
 
@@ -90,7 +90,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
 
     [PostgresFact]
     [Trait("Category", "Postgres")]
-    public async Task PushAsync_EditAfterPush_PurgesPreEditAuditUsingExecuteDelete()
+    public async Task PushAsync_EditAfterPush_PreservesAppendOnlyAuditHistory()
     {
         await using var database = await fixture.CreateDatabaseAsync();
         await using var db = database.CreateContext();
@@ -100,20 +100,21 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         var service = PostgresBillTestSupport.BuildService(db, poster);
 
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)));
-        await service.PushAsync(bill.Id, new PushBillRequest(null, "first"));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(
             bill.Id,
             new UpdateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A edited", 150m)));
 
-        var pushed = await service.PushAsync(bill.Id, new PushBillRequest(null, "repush-edited"));
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
         var audit = await service.GetAuditAsync(bill.Id);
 
         Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(2, poster.CallCount);
         Assert.NotNull(audit);
+        Assert.Equal(2, audit!.Events.Count(x => x.EventType == "tally.posted"));
         Assert.Equal(
             ["bill.edit.reopened", "bill.push.requested", "tally.posted"],
-            audit!.Events.Select(static x => x.EventType).ToArray());
+            audit.Events.TakeLast(3).Select(static x => x.EventType).ToArray());
         Assert.Equal(TallyPostOperation.Alter, poster.Requests.Last().Operation);
     }
 }

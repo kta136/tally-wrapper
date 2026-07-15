@@ -280,6 +280,8 @@ public sealed class DatabaseSettingsViewModelTests
     {
         public Task<SystemHealthSnapshot> GetSnapshotAsync(
             bool includeTallyCompany,
+            bool includeMasterFreshness = true,
+            bool forceDatabaseHealth = false,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(snapshot);
     }

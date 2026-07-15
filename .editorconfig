@@ -1,0 +1,23 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_style = space
+indent_size = 4
+dotnet_sort_system_directives_first = true
+csharp_new_line_before_open_brace = all
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+[*.{csproj,props,targets,xaml,xml,yml,yaml,md,json}]
+indent_style = space
+indent_size = 2
+
+[tests/**/*.cs]
+# xUnit v3 can identify every optional CancellationToken call in legacy tests.
+# Keep it visible to IDE users without turning the migration into hundreds of
+# build warnings; new or edited tests should pass TestContext.Current.CancellationToken.
+dotnet_diagnostic.xUnit1051.severity = suggestion

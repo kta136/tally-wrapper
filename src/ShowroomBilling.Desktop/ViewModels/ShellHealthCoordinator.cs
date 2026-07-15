@@ -23,9 +23,13 @@ internal sealed class ShellHealthCoordinator(
     IMastersApiClient mastersApiClient,
     IShellHealthHost host)
 {
-    private static readonly TimeSpan TallyHealthPollInterval = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan TallyHealthPollInterval = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan DatabaseHealthPollInterval = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan MasterFreshnessPollInterval = TimeSpan.FromMinutes(30);
 
     private int _healthPollInFlight;
+    private DateTimeOffset? _lastDatabaseHealthCheckedAtUtc;
+    private DateTimeOffset? _lastMasterFreshnessCheckedAtUtc;
     private DateTimeOffset? _lastTallyHealthCheckedAtUtc;
 
     public void ApplySystemState(SystemState value)
@@ -82,13 +86,28 @@ internal sealed class ShellHealthCoordinator(
         {
             SystemHealthSnapshot snapshot;
             var checkTallyCompany = ShouldCheckTallyCompany(forceTallyCompany);
+            var checkDatabase = forceTallyCompany || ShouldCheckDatabaseHealth();
+            var checkMasterFreshness = forceTallyCompany || ShouldCheckMasterFreshness();
             try
             {
-                snapshot = await healthApiClient.GetSnapshotAsync(checkTallyCompany, cancellationToken);
+                snapshot = await healthApiClient.GetSnapshotAsync(
+                    checkTallyCompany,
+                    checkMasterFreshness,
+                    checkDatabase,
+                    cancellationToken);
             }
             catch
             {
                 snapshot = SystemHealthSnapshot.Unreachable();
+            }
+
+            if (snapshot.ApiReachable && !checkMasterFreshness && host.LastHealthSnapshot?.Masters is { } previousMasters)
+            {
+                snapshot = snapshot with { Masters = previousMasters };
+            }
+            else if (snapshot.Masters is not null)
+            {
+                _lastMasterFreshnessCheckedAtUtc = DateTimeOffset.UtcNow;
             }
 
             if (snapshot.ApiReachable && !checkTallyCompany && host.LastHealthSnapshot?.TallyCompany is { } previousTally)
@@ -98,6 +117,11 @@ internal sealed class ShellHealthCoordinator(
             else if (snapshot.TallyCompany is not null)
             {
                 _lastTallyHealthCheckedAtUtc = DateTimeOffset.UtcNow;
+            }
+
+            if (snapshot.Runtime is { DatabaseHealthSkipped: false })
+            {
+                _lastDatabaseHealthCheckedAtUtc = DateTimeOffset.UtcNow;
             }
 
             host.LastHealthSnapshot = snapshot;
@@ -114,7 +138,7 @@ internal sealed class ShellHealthCoordinator(
     private void ApplyHealthSnapshot(SystemHealthSnapshot snapshot)
     {
         host.Health.Apply(snapshot);
-        if (snapshot.Runtime is { } runtime)
+        if (snapshot.Runtime is { DatabaseHealthSkipped: false } runtime)
         {
             host.StatusBar.ApplyDatabaseIdentity(runtime.DatabaseIdentity, null);
         }
@@ -132,6 +156,14 @@ internal sealed class ShellHealthCoordinator(
             host.SystemState = SystemState.Degraded;
             host.BannerText = snapshot.Runtime.Message;
             host.StatusBar.StatusText = "DB MISMATCH";
+            return;
+        }
+
+        if (snapshot.Runtime?.DatabaseHealthSkipped == true)
+        {
+            host.SystemState = SystemState.Healthy;
+            host.BannerText = string.Empty;
+            host.StatusBar.StatusText = "READY";
             return;
         }
 
@@ -154,5 +186,17 @@ internal sealed class ShellHealthCoordinator(
         if (forceTallyCompany) return true;
         if (_lastTallyHealthCheckedAtUtc is null) return true;
         return DateTimeOffset.UtcNow - _lastTallyHealthCheckedAtUtc.Value >= TallyHealthPollInterval;
+    }
+
+    private bool ShouldCheckDatabaseHealth()
+    {
+        if (_lastDatabaseHealthCheckedAtUtc is null) return true;
+        return DateTimeOffset.UtcNow - _lastDatabaseHealthCheckedAtUtc.Value >= DatabaseHealthPollInterval;
+    }
+
+    private bool ShouldCheckMasterFreshness()
+    {
+        if (_lastMasterFreshnessCheckedAtUtc is null) return true;
+        return DateTimeOffset.UtcNow - _lastMasterFreshnessCheckedAtUtc.Value >= MasterFreshnessPollInterval;
     }
 }

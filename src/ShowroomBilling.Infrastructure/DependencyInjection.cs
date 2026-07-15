@@ -11,7 +11,6 @@ using ShowroomBilling.Application.Leases;
 using ShowroomBilling.Application.Masters;
 using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Application.PrintAssets;
-using ShowroomBilling.Application.Printing;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Infrastructure.Admin;
@@ -23,7 +22,6 @@ using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.PrintAssets;
-using ShowroomBilling.Infrastructure.Printing;
 using ShowroomBilling.Infrastructure.Settings;
 using ShowroomBilling.Infrastructure.Tally;
 
@@ -46,8 +44,7 @@ public static class DependencyInjection
         var connectionBuilder = new NpgsqlConnectionStringBuilder(connectionString)
         {
             MinPoolSize = 2,
-            KeepAlive = 30,
-            NoResetOnClose = true
+            KeepAlive = 30
         };
         var dataSource = new NpgsqlDataSourceBuilder(connectionBuilder.ConnectionString).Build();
         services.AddSingleton(dataSource);
@@ -58,7 +55,6 @@ public static class DependencyInjection
         services.AddScoped<IBillService, BillService>();
         services.AddScoped<ILatestBillTimestampProvider, LatestBillTimestampProvider>();
         services.AddScoped<ISyntheticBatchExecutor, SyntheticBatchExecutor>();
-        services.AddScoped<IInvoiceDocumentRenderer, QuestPdfFoundationDocumentRenderer>();
         services.AddScoped<ICloudSettingsService, CloudSettingsService>();
         services.AddScoped<IDraftLeaseService, DraftLeaseService>();
         services.AddScoped<IAdminAuthService, AdminAuthService>();
@@ -67,8 +63,8 @@ public static class DependencyInjection
         services.AddScoped<ITallyCompanyHealthService, TallyCompanyHealthService>();
 
         // Tally (sync, operator-initiated only — no background workers).
-        // Short retry handles transient XMLHTTP blips; the total timeout still
-        // comes from the cloud-settings-configured CTS inside TallyXmlClient.
+        // Safe XML reads retry transient transport blips. Voucher writes are
+        // marked and excluded because replaying an uncertain write can duplicate it.
         services.AddHttpClient<ITallyXmlClient, TallyXmlClient>()
             .AddResilienceHandler("tally", pipeline =>
             {
@@ -78,9 +74,21 @@ public static class DependencyInjection
                     Delay = TimeSpan.FromMilliseconds(200),
                     BackoffType = DelayBackoffType.Exponential,
                     UseJitter = true,
-                    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                        .Handle<HttpRequestException>()
-                        .HandleResult(r => (int)r.StatusCode >= 500)
+                    ShouldHandle = args =>
+                    {
+                        var request = args.Context.GetRequestMessage();
+                        var isVoucherWrite = request?.Options.TryGetValue(
+                            TallyXmlClient.VoucherWriteRequestKey,
+                            out var markedWrite) == true && markedWrite;
+                        if (isVoucherWrite)
+                        {
+                            return ValueTask.FromResult(false);
+                        }
+
+                        return ValueTask.FromResult(
+                            args.Outcome.Exception is HttpRequestException
+                            || args.Outcome.Result is { } response && (int)response.StatusCode >= 500);
+                    }
                 });
             });
         services.AddScoped<ITallyMasterSource, TallyXmlMasterSource>();
@@ -90,6 +98,7 @@ public static class DependencyInjection
         services.AddSingleton<IStartupStatus, StartupStatus>();
         services.AddHostedService<DatabaseInitializationHostedService>();
         services.AddHostedService<StuckPostingRecoveryHostedService>();
+        services.AddHostedService<OperationalDataRetentionHostedService>();
         // One-shot reconcile of InvoiceSequences.NextValue against actual
         // remaining bills, so a sequence that fell out of sync under older
         // code (rename-without-rollback) self-heals on the next boot.

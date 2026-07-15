@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace ShowroomBilling.Tests.Postgres;
 
 public sealed class PostgresFactAttribute : FactAttribute
@@ -5,7 +7,10 @@ public sealed class PostgresFactAttribute : FactAttribute
     private const string EnabledValue = "1";
     private const string EnvironmentVariable = "SHOWROOM_BILLING_RUN_POSTGRES_TESTS";
 
-    public PostgresFactAttribute()
+    public PostgresFactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!string.Equals(
                 Environment.GetEnvironmentVariable(EnvironmentVariable),

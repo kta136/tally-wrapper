@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -7,7 +8,9 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Settings;
 
-public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : ICloudSettingsService
+public sealed class CloudSettingsService(
+    ShowroomBillingDbContext dbContext,
+    IAuditActorContext? actorContext = null) : ICloudSettingsService
 {
     private static readonly object EffectiveSettingsCacheLock = new();
     private static readonly TimeSpan EffectiveSettingsCacheTtl = TimeSpan.FromSeconds(5);
@@ -41,6 +44,7 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        CloudSettingsValidator.Validate(request);
 
         var entity = await GetOrCreateAsync(cancellationToken);
 
@@ -102,6 +106,7 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(companyName);
+        CloudSettingsValidator.ValidateCompanyName(companyName);
 
         var entity = await GetOrCreateAsync(cancellationToken);
         entity.ActiveCompanyName = companyName.Trim();
@@ -130,7 +135,7 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(request.Layout);
+        CloudSettingsValidator.ValidatePrintLayout(request);
 
         var entity = await GetOrCreateAsync(cancellationToken);
         entity.PrintLayoutJson = JsonSerializer.Serialize(request.Layout, PrintLayoutJsonOptions);
@@ -276,13 +281,15 @@ public sealed class CloudSettingsService(ShowroomBillingDbContext dbContext) : I
 
     private async Task WriteAuditEventAsync(string eventType, string entityId, CancellationToken cancellationToken)
     {
+        var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
             Id = Guid.NewGuid(),
             EntityType = "settings",
             EntityId = entityId,
             EventType = eventType,
-            ActorType = "system",
+            ActorType = actor.ActorType,
+            ActorId = actor.ActorId,
             PayloadJson = "{}",
             CreatedAtUtc = DateTimeOffset.UtcNow
         });

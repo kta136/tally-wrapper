@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Services.ProcessSupervision;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels;
 
 namespace ShowroomBilling.Desktop;
@@ -61,14 +62,26 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
-        await WaitForApiReadinessAsync();
-        // Unblocks any consumer awaiting IApiReadinessSignal (e.g. the
-        // InvoiceViewModel preview-fetch on first tab activation). We mark
-        // ready unconditionally — callers are responsible for capping their
-        // own wait, and the worst case is they fall through to a request
-        // that surfaces a clearer error than the preview ever could.
-        _apiReadiness.MarkReady();
-        await _viewModel.InitializeAsync();
+        try
+        {
+            await WaitForApiReadinessAsync();
+            await _viewModel.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            _viewModel.SystemState = SystemState.Limited;
+            _viewModel.BannerText = $"Startup initialization failed: {ex.Message}";
+            MessageBox.Show(
+                $"Billing opened in limited mode because startup initialization failed.\n\n{ex.Message}",
+                "Startup warning",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        finally
+        {
+            // Unblocks consumers waiting to attempt their own bounded API call.
+            _apiReadiness.MarkReady();
+        }
     }
 
     private async Task WaitForApiReadinessAsync()

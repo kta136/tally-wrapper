@@ -7,6 +7,9 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Options;
+using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Masters;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Shell;
@@ -18,9 +21,6 @@ using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Desktop.ViewModels.Setup;
 using ShowroomBilling.Desktop.ViewModels.SyntheticBatch;
 using ShowroomBilling.Desktop.Views.Bills;
-using ShowroomBilling.Contracts.Bills;
-using ShowroomBilling.Contracts.Masters;
-using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels;
 
@@ -292,7 +292,14 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     private async void OnInvoiceSaveCompletedReadyForPrint(object? sender, Guid billId)
     {
-        await _printCoordinator.HandleInvoiceSaveCompletedAsync();
+        try
+        {
+            await _printCoordinator.HandleInvoiceSaveCompletedAsync();
+        }
+        catch (Exception ex)
+        {
+            Invoice.SaveStatus = $"Bill saved, but print preparation failed: {ex.Message}";
+        }
     }
 
     private void OnInvoicePropertyChangedForStatusBar(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -451,7 +458,14 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     private async Task OpenSelectedBillsPrintPreviewAsync(CancellationToken cancellationToken)
     {
-        await _printCoordinator.OpenSelectedBillsPrintPreviewAsync(cancellationToken);
+        try
+        {
+            await _printCoordinator.OpenSelectedBillsPrintPreviewAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Bills.StatusMessage = $"Print preview failed: {ex.Message}";
+        }
     }
 
     public async Task InitializeAsync()
@@ -529,10 +543,18 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     private async void OnSetupWizardCompleted(object? sender, EventArgs e)
     {
-        ActiveDialog = null;
-        _databaseConfigurationAttentionRequired = false;
-        await ApplySettingsAsync();
-        await RefreshHealthAsync(forceTallyCompany: true);
+        try
+        {
+            ActiveDialog = null;
+            _databaseConfigurationAttentionRequired = false;
+            await ApplySettingsAsync();
+            await RefreshHealthAsync(forceTallyCompany: true);
+        }
+        catch (Exception ex)
+        {
+            BannerText = $"Setup completed, but refresh failed: {ex.Message}";
+            SystemState = SystemState.Degraded;
+        }
     }
 
     private void OpenDatabaseSettings()

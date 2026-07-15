@@ -49,6 +49,7 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
         BillStates.Posting => "Posting in progress",
         BillStates.Posted => EditedAfterPush ? "Edited after push" : "—",
         BillStates.Failed => "Requires retry or repost",
+        BillStates.ReconciliationRequired => "Verify the voucher in Tally before another write",
         BillStates.Voided => "Voided locally",
         BillStates.Revised => "Revision created",
         _ => "—"
@@ -69,6 +70,7 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
                 BillStates.Posting => "◐ Posting",
                 BillStates.Posted => "● Posted",
                 BillStates.Failed => "✕ Failed",
+                BillStates.ReconciliationRequired => "! Reconcile",
                 BillStates.Revised => "↻ Revised",
                 BillStates.Voided => "— Voided",
                 _ => State

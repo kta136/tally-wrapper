@@ -98,7 +98,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShowroomId", "ExpiresAtUtc");
 
-                    b.ToTable("admin_sessions", "public");
+                    b.ToTable("admin_sessions", "public", t =>
+                        {
+                            t.HasCheckConstraint("CK_admin_sessions_expiry", "\"ExpiresAtUtc\" > \"IssuedAtUtc\"");
+                        });
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.AuditEventEntity", b =>
@@ -212,7 +215,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShowroomId", "State", "CreatedAtUtc", "Id");
 
-                    b.ToTable("bills", "public");
+                    b.ToTable("bills", "public", t =>
+                        {
+                            t.HasCheckConstraint("CK_bills_state", "\"State\" IN ('draft', 'pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')");
+                        });
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.BillRevisionEntity", b =>
@@ -268,7 +274,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.HasIndex("BillId", "RevisionNo")
                         .IsUnique();
 
-                    b.ToTable("bill_revisions", "public");
+                    b.ToTable("bill_revisions", "public", t =>
+                        {
+                            t.HasCheckConstraint("CK_bill_revisions_grand_total", "\"GrandTotal\" >= 0");
+
+                            t.HasCheckConstraint("CK_bill_revisions_revision_no", "\"RevisionNo\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.CloudSettingsEntity", b =>
@@ -283,16 +294,20 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.Property<string>("BankAccount")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("BankIfsc")
-                        .HasColumnType("text");
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("BankName")
-                        .HasColumnType("text");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("BankUpi")
-                        .HasColumnType("text");
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("CashLedger")
                         .IsRequired()
@@ -305,19 +320,24 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.Property<string>("CompanyAddress")
-                        .HasColumnType("text");
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<string>("CompanyCountry")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<string>("CompanyGstin")
-                        .HasColumnType("text");
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<string>("CompanyPhone")
-                        .HasColumnType("text");
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("CompanyState")
-                        .HasColumnType("text");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<bool>("CopyDuplicateDefault")
                         .HasColumnType("boolean");
@@ -405,7 +425,8 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.Property<string>("TermsAndConditions")
-                        .HasColumnType("text");
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
 
                     b.Property<int>("TimeoutSeconds")
                         .HasColumnType("integer");
@@ -560,7 +581,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasKey("ShowroomId", "FiscalYear", "DocumentType");
 
-                    b.ToTable("invoice_sequences", "public");
+                    b.ToTable("invoice_sequences", "public", t =>
+                        {
+                            t.HasCheckConstraint("CK_invoice_sequences_next_value", "\"NextValue\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.PrintAssetEntity", b =>
@@ -601,7 +625,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShowroomId", "AssetKind");
 
-                    b.ToTable("print_assets", "public");
+                    b.ToTable("print_assets", "public", t =>
+                        {
+                            t.HasCheckConstraint("CK_print_assets_byte_length", "\"ByteLength\" > 0");
+
+                            t.HasCheckConstraint("CK_print_assets_kind", "\"AssetKind\" IN ('logo', 'signature')");
+                        });
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyCompanySnapshotEntity", b =>
@@ -717,7 +746,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShowroomId", "MasterType", "Status");
 
-                    b.ToTable("tally_master_snapshot_batches", "public");
+                    b.ToTable("tally_master_snapshot_batches", "public", t =>
+                        {
+                            t.HasCheckConstraint("CK_tally_master_snapshot_batches_status", "\"Status\" IN ('active', 'superseded')");
+                        });
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyStockItemSnapshotEntity", b =>

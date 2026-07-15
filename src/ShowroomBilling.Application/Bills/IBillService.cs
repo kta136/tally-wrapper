@@ -10,6 +10,7 @@ public interface IBillService
     public const string StatePosting = BillStates.Posting;
     public const string StatePosted = BillStates.Posted;
     public const string StateFailed = BillStates.Failed;
+    public const string StateReconciliationRequired = BillStates.ReconciliationRequired;
     public const string StateRevised = BillStates.Revised;
     public const string StateVoided = BillStates.Voided;
 

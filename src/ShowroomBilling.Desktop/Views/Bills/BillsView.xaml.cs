@@ -52,7 +52,9 @@ public partial class BillsView : UserControl
     {
         if (ViewModel?.PushSelectedCommand.CanExecute(null) == true)
         {
-            await ViewModel.PushSelectedCommand.ExecuteAsync(null);
+            await ExecuteSafelyAsync(
+                () => ViewModel.PushSelectedCommand.ExecuteAsync(null),
+                "Push selected");
         }
     }
 
@@ -60,7 +62,9 @@ public partial class BillsView : UserControl
     {
         if (ViewModel?.RetrySelectedCommand.CanExecute(null) == true)
         {
-            await ViewModel.RetrySelectedCommand.ExecuteAsync(null);
+            await ExecuteSafelyAsync(
+                () => ViewModel.RetrySelectedCommand.ExecuteAsync(null),
+                "Retry selected");
         }
     }
 
@@ -68,7 +72,9 @@ public partial class BillsView : UserControl
     {
         if (ShellViewModel?.OpenSelectedBillsPrintPreviewCommand.CanExecute(null) == true)
         {
-            await ShellViewModel.OpenSelectedBillsPrintPreviewCommand.ExecuteAsync(null);
+            await ExecuteSafelyAsync(
+                () => ShellViewModel.OpenSelectedBillsPrintPreviewCommand.ExecuteAsync(null),
+                "Print preview");
         }
     }
 
@@ -84,7 +90,9 @@ public partial class BillsView : UserControl
         // and otherwise narrows to just this row. Don't collapse it back here.
         if (ShellViewModel.OpenSelectedBillsPrintPreviewCommand.CanExecute(null))
         {
-            await ShellViewModel.OpenSelectedBillsPrintPreviewCommand.ExecuteAsync(null);
+            await ExecuteSafelyAsync(
+                () => ShellViewModel.OpenSelectedBillsPrintPreviewCommand.ExecuteAsync(null),
+                "Print preview");
         }
     }
 
@@ -102,7 +110,9 @@ public partial class BillsView : UserControl
         var row = RowFrom(sender);
         if (ViewModel is not null && row is not null && ViewModel.EditRowCommand.CanExecute(row))
         {
-            await ViewModel.EditRowCommand.ExecuteAsync(row);
+            await ExecuteSafelyAsync(
+                () => ViewModel.EditRowCommand.ExecuteAsync(row),
+                "Edit bill");
         }
     }
 
@@ -111,7 +121,9 @@ public partial class BillsView : UserControl
         var row = RowFrom(sender);
         if (ViewModel is not null && row is not null && ViewModel.ChangeNumberRowCommand.CanExecute(row))
         {
-            await ViewModel.ChangeNumberRowCommand.ExecuteAsync(row);
+            await ExecuteSafelyAsync(
+                () => ViewModel.ChangeNumberRowCommand.ExecuteAsync(row),
+                "Change bill number");
         }
     }
 
@@ -119,7 +131,24 @@ public partial class BillsView : UserControl
     {
         if (ViewModel?.DeleteSelectedCommand.CanExecute(null) == true)
         {
-            await ViewModel.DeleteSelectedCommand.ExecuteAsync(null);
+            await ExecuteSafelyAsync(
+                () => ViewModel.DeleteSelectedCommand.ExecuteAsync(null),
+                "Delete selected");
+        }
+    }
+
+    private async Task ExecuteSafelyAsync(Func<Task> action, string operation)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            if (ViewModel is not null)
+            {
+                ViewModel.StatusMessage = $"{operation} failed: {ex.Message}";
+            }
         }
     }
 }

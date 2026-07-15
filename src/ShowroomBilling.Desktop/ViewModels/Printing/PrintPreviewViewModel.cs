@@ -337,14 +337,7 @@ public partial class PrintPreviewViewModel : ObservableObject
             PreviewPages.Clear();
             foreach (var bytes in pages)
             {
-                var bmp = new BitmapImage();
-                using var stream = new MemoryStream(bytes);
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.StreamSource = stream;
-                bmp.EndInit();
-                bmp.Freeze();
-                PreviewPages.Add(bmp);
+                PreviewPages.Add(PreviewBitmapDecoder.Decode(bytes));
             }
             StatusMessage = string.Empty;
             SchedulePrintPagePreparation(options);

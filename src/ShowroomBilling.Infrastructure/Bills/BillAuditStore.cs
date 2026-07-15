@@ -1,12 +1,15 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-internal sealed class BillAuditStore(ShowroomBillingDbContext dbContext)
+internal sealed class BillAuditStore(
+    ShowroomBillingDbContext dbContext,
+    IAuditActorContext? actorContext = null)
 {
     internal void Write(
         Guid billId,
@@ -18,13 +21,15 @@ internal sealed class BillAuditStore(ShowroomBillingDbContext dbContext)
         var payload = details is null
             ? JsonSerializer.Serialize(new { state }, BillSerialization.JsonOptions)
             : JsonSerializer.Serialize(new { state, details }, BillSerialization.JsonOptions);
+        var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
             Id = Guid.NewGuid(),
             EntityType = "bill",
             EntityId = billId.ToString(),
             EventType = eventType,
-            ActorType = "system",
+            ActorType = actor.ActorType,
+            ActorId = actor.ActorId,
             PayloadJson = payload,
             CreatedAtUtc = at
         });
@@ -32,16 +37,13 @@ internal sealed class BillAuditStore(ShowroomBillingDbContext dbContext)
 
     internal async Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
     {
-        var billExists = await dbContext.Bills.AsNoTracking()
-            .AnyAsync(b => b.Id == billId, cancellationToken);
-        if (!billExists) return null;
-
         var billIdText = billId.ToString();
         var raw = await dbContext.AuditEvents.AsNoTracking()
             .Where(e => e.EntityType == "bill" && e.EntityId == billIdText)
             .OrderBy(e => e.CreatedAtUtc)
             .ThenBy(e => e.Id)
             .ToListAsync(cancellationToken);
+        if (raw.Count == 0) return null;
 
         var events = raw.Select(e => new BillAuditEventDto(
             e.Id,
@@ -68,23 +70,26 @@ internal sealed class BillAuditStore(ShowroomBillingDbContext dbContext)
         // (EntityType, EntityId, EventType, CreatedAtUtc DESC) index from
         // PerformanceReadOptimizations, so the union returns at most two rows.
         var billIdText = billId.ToString();
-        var lastFailQuery = dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill" && e.EntityId == billIdText && e.EventType == "tally.failed")
+        var lastProblemQuery = dbContext.AuditEvents.AsNoTracking()
+            .Where(e => e.EntityType == "bill"
+                && e.EntityId == billIdText
+                && (e.EventType == "tally.failed" || e.EventType == "tally.outcome.unknown"))
             .OrderByDescending(e => e.CreatedAtUtc)
             .Take(1);
         var lastSuccessQuery = dbContext.AuditEvents.AsNoTracking()
             .Where(e => e.EntityType == "bill" && e.EntityId == billIdText && e.EventType == "tally.posted")
             .OrderByDescending(e => e.CreatedAtUtc)
             .Take(1);
-        var combined = await lastFailQuery.Concat(lastSuccessQuery).ToListAsync(cancellationToken);
-        var lastFail = combined.FirstOrDefault(e => e.EventType == "tally.failed");
+        var combined = await lastProblemQuery.Concat(lastSuccessQuery).ToListAsync(cancellationToken);
+        var lastProblem = combined.FirstOrDefault(e =>
+            e.EventType is "tally.failed" or "tally.outcome.unknown");
         var lastSuccess = combined.FirstOrDefault(e => e.EventType == "tally.posted");
 
         string? lastErrorCode = null, lastErrorMessage = null, lastRemoteId = null;
-        if (lastFail is not null)
+        if (lastProblem is not null)
         {
-            lastErrorCode = ReadDetailsString(lastFail.PayloadJson, "errorCode");
-            lastErrorMessage = ReadDetailsString(lastFail.PayloadJson, "errorMessage");
+            lastErrorCode = ReadDetailsString(lastProblem.PayloadJson, "errorCode");
+            lastErrorMessage = ReadDetailsString(lastProblem.PayloadJson, "errorMessage");
         }
         if (lastSuccess is not null)
         {
@@ -94,13 +99,9 @@ internal sealed class BillAuditStore(ShowroomBillingDbContext dbContext)
         return new BillPostingStatusResponse(
             BillId: billId,
             BillState: bill.State,
-            ActiveJobId: null,
-            JobState: null,
-            AttemptCount: 0,
             LastErrorCode: lastErrorCode,
             LastErrorMessage: lastErrorMessage,
-            LastRemoteId: lastRemoteId,
-            NextAttemptAtUtc: null);
+            LastRemoteId: lastRemoteId);
     }
 
     private static string? ReadDetailsString(string? payloadJson, string propertyName)

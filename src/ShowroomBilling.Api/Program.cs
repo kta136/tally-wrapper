@@ -1,17 +1,16 @@
 using Microsoft.AspNetCore.Authentication;
-using QuestPDF.Infrastructure;
 using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Middleware;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Infrastructure;
 
-QuestPDF.Settings.License = LicenseType.Community;
-
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 5 * 1024 * 1024);
 var windowsServiceName = Environment.GetEnvironmentVariable("SHOWROOM_BILLING_SERVICE_NAME");
 builder.Host.UseWindowsService(options =>
 {
@@ -42,11 +41,12 @@ if (!string.IsNullOrWhiteSpace(overrideConnectionString))
         ["ConnectionStrings:Postgres"] = overrideConnectionString
     });
 }
+DatabaseConnectionStringConfiguration.NormalizePostgresConnectionString(builder.Configuration);
 
 builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "api");
 
 builder.Services.AddSingleton(new AppliedDatabaseConfiguration(
-    builder.Configuration.GetConnectionString("Postgres") ?? string.Empty));
+    DatabaseConnectionStringConfiguration.GetPostgresConnectionString(builder.Configuration)));
 builder.Services.Configure<ApiRuntimeOptions>(builder.Configuration.GetSection(ApiRuntimeOptions.SectionName));
 builder.Services.Configure<DeviceAuthOptions>(builder.Configuration.GetSection(DeviceAuthOptions.SectionName));
 builder.Services.AddSingleton<IDatabaseConnectionVerifier, DatabaseConnectionVerifier>();
@@ -58,6 +58,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuditActorContext, HttpAuditActorContext>();
 
 builder.Services.AddSingleton<DeviceTokenStore>();
 builder.Services.AddSingleton<MaintenanceTokenStore>();

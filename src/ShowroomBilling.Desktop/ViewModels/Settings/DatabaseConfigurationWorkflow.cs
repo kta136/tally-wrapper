@@ -225,7 +225,11 @@ internal sealed class DatabaseConfigurationWorkflow(
         var deadline = DateTimeOffset.UtcNow + DatabaseReadyTimeout;
         while (DateTimeOffset.UtcNow < deadline)
         {
-            var snapshot = await healthApi.GetSnapshotAsync(includeTallyCompany: false, cancellationToken);
+            var snapshot = await healthApi.GetSnapshotAsync(
+                includeTallyCompany: false,
+                includeMasterFreshness: false,
+                forceDatabaseHealth: true,
+                cancellationToken);
             if (snapshot.ApiReachable
                 && snapshot.Runtime is { DatabaseConfigured: true, DatabaseReachable: true }
                 && snapshot.Runtime.DatabaseIdentityMatches != false)

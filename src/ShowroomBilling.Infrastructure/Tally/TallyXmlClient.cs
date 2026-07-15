@@ -16,6 +16,7 @@ namespace ShowroomBilling.Infrastructure.Tally;
 public interface ITallyXmlClient
 {
     Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default);
+    Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default);
     string EndpointDescription { get; }
 }
 
@@ -23,6 +24,9 @@ public sealed class TallyXmlClient(
     HttpClient httpClient,
     ICloudSettingsService cloudSettings) : ITallyXmlClient
 {
+    internal static readonly HttpRequestOptionsKey<bool> VoucherWriteRequestKey =
+        new("ShowroomBilling.TallyVoucherWrite");
+
     private static readonly Regex ControlChars = new(
         @"[\x00-\x08\x0B\x0C\x0E-\x1F]",
         RegexOptions.Compiled);
@@ -33,13 +37,22 @@ public sealed class TallyXmlClient(
 
     public string EndpointDescription => "Tally XML endpoint resolved from cloud settings.";
 
-    public async Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default)
+    public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
+        SendCoreAsync(request, isVoucherWrite: false, cancellationToken);
+
+    public Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default) =>
+        SendCoreAsync(request, isVoucherWrite: true, cancellationToken);
+
+    private async Task<XElement> SendCoreAsync(
+        XElement request,
+        bool isVoucherWrite,
+        CancellationToken cancellationToken)
     {
         var settings = await cloudSettings.GetEffectiveSettingsAsync(cancellationToken);
         var conn = settings.Settings.Connection;
         if (string.IsNullOrWhiteSpace(conn.Host) || conn.Port <= 0)
         {
-            throw new InvalidOperationException(
+            throw new TallyConfigurationException(
                 "Tally connection is not configured. Set Connection.Host and Connection.Port in Settings.");
         }
 
@@ -50,8 +63,13 @@ public sealed class TallyXmlClient(
         cts.CancelAfter(timeout);
 
         var xml = request.ToString(SaveOptions.DisableFormatting);
-        using var content = new StringContent(xml, Encoding.UTF8, "text/xml");
-        using var response = await httpClient.PostAsync(endpoint, content, cts.Token);
+        using var message = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = new StringContent(xml, Encoding.UTF8, "text/xml"),
+        };
+        message.Options.Set(VoucherWriteRequestKey, isVoucherWrite);
+
+        using var response = await httpClient.SendAsync(message, cts.Token);
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadAsStringAsync(cts.Token);
@@ -90,3 +108,5 @@ public sealed class TallyXmlClient(
         return codePoint <= 0x10FFFF;
     }
 }
+
+public sealed class TallyConfigurationException(string message) : InvalidOperationException(message);

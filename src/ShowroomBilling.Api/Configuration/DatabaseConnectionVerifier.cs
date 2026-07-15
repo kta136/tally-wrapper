@@ -65,7 +65,7 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
         }
         catch (Exception ex) when (ex is NpgsqlException or TimeoutException or InvalidOperationException)
         {
-            return DatabaseConnectionVerificationResult.Failed($"Connection failed: {ex.Message}");
+            return DatabaseConnectionVerificationResult.Failed($"Connection failed: {FormatConnectionFailure(ex)}");
         }
     }
 
@@ -84,4 +84,19 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
         !string.IsNullOrWhiteSpace(databaseIdentity)
         && !databaseIdentity.Trim().Equals("UNSET", StringComparison.OrdinalIgnoreCase)
         && databaseIdentity.Trim().Equals(expectedDatabaseIdentity, StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatConnectionFailure(Exception exception)
+    {
+        if (exception is PostgresException postgresException
+            && postgresException.SqlState == PostgresErrorCodes.UndefinedTable
+            && (string.Equals(postgresException.TableName, "database_identity", StringComparison.OrdinalIgnoreCase)
+                || postgresException.MessageText.Contains("database_identity", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "connected to PostgreSQL, but this database has no Tally Wrapper schema. "
+                + "If you pasted an Aiven service URI, replace '/defaultdb' with '/tally_wrapper_prod'. "
+                + "Otherwise run EF migrations and set public.database_identity before saving this database.";
+        }
+
+        return exception.Message;
+    }
 }

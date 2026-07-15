@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
@@ -12,9 +13,9 @@ namespace ShowroomBilling.Infrastructure.Tally;
 /// <summary>
 /// Runs once at API startup. In the sync-post model a bill is flipped to <c>posting</c>
 /// just before the HTTP call to Tally. If the API process is killed mid-call, the bill
-/// is left stranded in <c>posting</c>. This service heals that on boot by flipping any
-/// such bills back to <c>pending</c> with a warning audit entry, so the operator can
-/// retry (or check Tally to see whether the previous attempt actually landed).
+/// is left stranded in <c>posting</c>. The write outcome is inherently ambiguous, so
+/// this service moves such bills to <c>reconciliation_required</c> and requires an
+/// operator to verify Tally before permitting another write.
 ///
 /// Recovery is best-effort: any failure is logged + recorded on
 /// <see cref="IStartupStatus"/> but never throws, so a transient DB hiccup can't
@@ -76,7 +77,7 @@ public sealed class StuckPostingRecoveryHostedService(
             var now = DateTimeOffset.UtcNow;
             foreach (var bill in stuck)
             {
-                bill.State = IBillService.StatePending;
+                bill.State = BillStates.ReconciliationRequired;
                 bill.UpdatedAtUtc = now;
                 db.AuditEvents.Add(new AuditEventEntity
                 {
@@ -85,7 +86,7 @@ public sealed class StuckPostingRecoveryHostedService(
                     EntityId = bill.Id.ToString(),
                     EventType = "bill.posting.recovered",
                     ActorType = "system",
-                    PayloadJson = "{\"reason\":\"API restarted while bill was mid-post; flipped back to pending for manual retry.\"}",
+                    PayloadJson = "{\"reason\":\"API restarted while bill was mid-post; Tally may have accepted the voucher. Reconciliation is required before another write.\"}",
                     CreatedAtUtc = now,
                 });
             }
@@ -93,7 +94,7 @@ public sealed class StuckPostingRecoveryHostedService(
 
             startupStatus.RecordRecoveryComplete(stuck.Count);
             logger.LogWarning(
-                "Startup recovery: {Count} bill(s) were stuck in 'posting' and have been flipped back to 'pending' for manual retry.",
+                "Startup recovery: {Count} bill(s) were stuck in 'posting' and now require Tally reconciliation.",
                 stuck.Count);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)

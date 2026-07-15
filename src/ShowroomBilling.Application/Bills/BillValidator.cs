@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ShowroomBilling.Contracts.Bills;
 
 namespace ShowroomBilling.Application.Bills;
@@ -28,6 +29,8 @@ public static class BillValidator
     private const decimal LineSumTolerancePerLine = 0.05m;
     private const decimal GrandTotalTolerance = 1.00m;
     private const decimal RoundOffCap = 1.00m;
+    private const int MaxLineItems = 500;
+    private const int MaxRawJsonLength = 64 * 1024;
 
     public static void Validate(BillPayloadDto payload)
     {
@@ -37,12 +40,26 @@ public static class BillValidator
         {
             throw new BillValidationException(new[] { "Bill must have at least one line item." });
         }
+        if (payload.Lines.Count > MaxLineItems)
+        {
+            throw new BillValidationException(new[] { $"Bill cannot contain more than {MaxLineItems} line items." });
+        }
         if (payload.Totals is null)
         {
             throw new BillValidationException(new[] { "Totals block is required." });
         }
 
         var errors = new List<string>();
+        AddMaxLength(errors, "PartyName", payload.PartyName, 256);
+        AddMaxLength(errors, "PartyGstin", payload.PartyGstin, 32);
+        AddMaxLength(errors, "PartyPhone", payload.PartyPhone, 64);
+        AddMaxLength(errors, "PartyAddress", payload.PartyAddress, 1_000);
+        AddMaxLength(errors, "Notes", payload.Notes, 4_000);
+        AddMaxLength(errors, "Payment", payload.Payment, 64);
+        if (payload.Rate24Kt < 0m)
+        {
+            errors.Add($"Rate24Kt must be non-negative (got {payload.Rate24Kt}).");
+        }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         if (payload.BillDate < today.AddYears(-1) || payload.BillDate > today.AddDays(1))
@@ -65,6 +82,14 @@ public static class BillValidator
             {
                 errors.Add($"{prefix}: ItemName is required.");
             }
+            AddMaxLength(errors, $"{prefix}.ItemName", line.ItemName, 256);
+            AddMaxLength(errors, $"{prefix}.StockName", line.StockName, 256);
+            AddMaxLength(errors, $"{prefix}.HsnCode", line.HsnCode, 32);
+            AddMaxLength(errors, $"{prefix}.Unit", line.Unit, 64);
+            AddMaxLength(errors, $"{prefix}.Karat", line.Karat, 32);
+            AddMaxLength(errors, $"{prefix}.ItemCategory", line.ItemCategory, 64);
+            AddMaxLength(errors, $"{prefix}.PricingMode", line.PricingMode, 64);
+            ValidateRawJson(errors, prefix, line.RawJson);
             if (line.Quantity <= 0m)
             {
                 errors.Add($"{prefix}: Quantity must be positive (got {line.Quantity}).");
@@ -81,12 +106,22 @@ public static class BillValidator
             {
                 runningSubtotal += line.LineTotal;
             }
+            AddNonNegative(errors, prefix, nameof(line.GrossWeight), line.GrossWeight);
+            AddNonNegative(errors, prefix, nameof(line.LessWeight), line.LessWeight);
+            AddNonNegative(errors, prefix, nameof(line.WastagePercent), line.WastagePercent);
+            AddNonNegative(errors, prefix, nameof(line.LabourPerUnit), line.LabourPerUnit);
+            AddNonNegative(errors, prefix, nameof(line.DiamondRate), line.DiamondRate);
+            AddNonNegative(errors, prefix, nameof(line.Extra), line.Extra);
         }
 
         var totals = payload.Totals;
         if (totals.DiscountTotal < 0m)
         {
             errors.Add($"DiscountTotal must be non-negative (got {totals.DiscountTotal}).");
+        }
+        if (totals.Subtotal < 0m)
+        {
+            errors.Add($"Subtotal must be non-negative (got {totals.Subtotal}).");
         }
         if (totals.TaxTotal < 0m)
         {
@@ -127,6 +162,48 @@ public static class BillValidator
         if (errors.Count > 0)
         {
             throw new BillValidationException(errors);
+        }
+    }
+
+    private static void AddMaxLength(List<string> errors, string field, string? value, int maxLength)
+    {
+        if (value?.Length > maxLength)
+        {
+            errors.Add($"{field} cannot exceed {maxLength} characters.");
+        }
+    }
+
+    private static void AddNonNegative(
+        List<string> errors,
+        string prefix,
+        string field,
+        decimal? value)
+    {
+        if (value < 0m)
+        {
+            errors.Add($"{prefix}: {field} must be non-negative (got {value}).");
+        }
+    }
+
+    private static void ValidateRawJson(List<string> errors, string prefix, string? rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson))
+        {
+            return;
+        }
+        if (rawJson.Length > MaxRawJsonLength)
+        {
+            errors.Add($"{prefix}: RawJson cannot exceed {MaxRawJsonLength} characters.");
+            return;
+        }
+
+        try
+        {
+            using var _ = JsonDocument.Parse(rawJson);
+        }
+        catch (JsonException)
+        {
+            errors.Add($"{prefix}: RawJson must contain valid JSON.");
         }
     }
 }

@@ -1,6 +1,6 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http;
-using System.Diagnostics;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -281,7 +281,11 @@ public partial class SetupWizardViewModel : ObservableObject
         var deadline = DateTimeOffset.UtcNow + DatabaseReadyTimeout;
         while (DateTimeOffset.UtcNow < deadline)
         {
-            var snapshot = await _healthApi.GetSnapshotAsync(includeTallyCompany: false, cancellationToken);
+            var snapshot = await _healthApi.GetSnapshotAsync(
+                includeTallyCompany: false,
+                includeMasterFreshness: false,
+                forceDatabaseHealth: true,
+                cancellationToken);
             if (snapshot.ApiReachable
                 && snapshot.Runtime is { DatabaseConfigured: true, DatabaseReachable: true }
                 && snapshot.Runtime.DatabaseIdentityMatches != false)

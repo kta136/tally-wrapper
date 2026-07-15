@@ -28,7 +28,7 @@ internal sealed class BillDetailsActionWorkflow(
         host.StatusMessage = "Pushing to Tally…";
         try
         {
-            host.Bill = await billsApi.PushAsync(billId, new PushBillRequest(null, null), cancellationToken);
+            host.Bill = await billsApi.PushAsync(billId, new PushBillRequest(null), cancellationToken);
             await host.ReloadSupportingStateAsync(billId, cancellationToken);
             host.StatusMessage = "Pushed to Tally.";
             host.BillMutated?.Invoke();

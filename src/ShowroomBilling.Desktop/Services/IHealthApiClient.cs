@@ -1,5 +1,5 @@
-using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Health;
+using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Runtime;
 
 namespace ShowroomBilling.Desktop.Services;
@@ -8,6 +8,8 @@ public interface IHealthApiClient
 {
     Task<SystemHealthSnapshot> GetSnapshotAsync(
         bool includeTallyCompany,
+        bool includeMasterFreshness = true,
+        bool forceDatabaseHealth = false,
         CancellationToken cancellationToken = default);
 }
 

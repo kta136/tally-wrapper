@@ -51,6 +51,19 @@ public sealed class ClientPresenceRegistry
         }
     }
 
+    public int ActiveCount
+    {
+        get
+        {
+            var now = DateTimeOffset.UtcNow;
+            lock (_gate)
+            {
+                PruneExpired(now);
+                return _entries.Count;
+            }
+        }
+    }
+
     public ClientPresenceListResponse Snapshot()
     {
         var now = DateTimeOffset.UtcNow;

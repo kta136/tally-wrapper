@@ -25,6 +25,7 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly SettingsViewModel? _settings;
     private readonly IApiReadinessSignal? _apiReadiness;
     private readonly InvoiceQuickAddWorkflow _quickAdd;
+    private readonly InvoiceLineCollectionObserver _lineCollectionObserver;
     private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
     private Dictionary<string, ItemMasterRowVm>? _itemMasterByName;
     private bool _deferLineCollectionRecompute;
@@ -57,17 +58,16 @@ public partial class InvoiceViewModel : ObservableObject
         Lines = new ObservableCollection<BillLineViewModel>();
         AddTrailingBlankRow();
 
-        Lines.CollectionChanged += OnLinesChanged;
-        foreach (var line in Lines)
-            AttachLine(line);
-        RefreshLineRowNumbers();
-
         AddRowCommand = new RelayCommand(() => AddTrailingBlankRow(deferCollectionRecompute: true));
         RemoveFocusedRowCommand = new RelayCommand(RemoveFocusedRow, () => Lines.Count > 1);
         RemoveLineCommand = new RelayCommand<BillLineViewModel?>(RemoveLine, line => line is not null && Lines.Count > 1);
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, CanSaveDraft);
         ClearCommand = new RelayCommand(ClearInvoice);
         PrintPreviewCommand = new RelayCommand(PrintPreview);
+        _lineCollectionObserver = new InvoiceLineCollectionObserver(
+            Lines,
+            OnLineMutated,
+            OnLineCollectionChanged);
         QuickAddResults = new ObservableCollection<ItemMasterRowVm>();
         _quickAdd = new InvoiceQuickAddWorkflow(
             () => ItemMasters,
@@ -192,33 +192,14 @@ public partial class InvoiceViewModel : ObservableObject
         ApplyFinalAmount(value);
     }
 
-    private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnLineCollectionChanged()
     {
-        if (e.NewItems is not null)
-            foreach (BillLineViewModel line in e.NewItems)
-                AttachLine(line);
-
-        if (e.OldItems is not null)
-            foreach (BillLineViewModel line in e.OldItems)
-                DetachLine(line);
-
-        RefreshLineRowNumbers();
         RemoveFocusedRowCommand.NotifyCanExecuteChanged();
         RemoveLineCommand.NotifyCanExecuteChanged();
         SaveDraftCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasMultipleRows));
         if (!_deferLineCollectionRecompute)
             Recompute();
-    }
-
-    private void AttachLine(BillLineViewModel line) => line.MutationOccurred += OnLineMutated;
-
-    private void DetachLine(BillLineViewModel line) => line.MutationOccurred -= OnLineMutated;
-
-    private void RefreshLineRowNumbers()
-    {
-        for (var i = 0; i < Lines.Count; i++)
-            Lines[i].RowNumber = i + 1;
     }
 
     private void OnLineMutated(object? sender, EventArgs e)
@@ -379,7 +360,6 @@ public partial class InvoiceViewModel : ObservableObject
             _deferLineCollectionRecompute = false;
         }
 
-        RefreshLineRowNumbers();
         Recompute();
     }
 

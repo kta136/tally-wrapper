@@ -102,6 +102,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             BillStates.Posting,
             BillStates.Posted,
             BillStates.Failed,
+            BillStates.ReconciliationRequired,
             BillStates.Revised,
             BillStates.Voided,
         ];

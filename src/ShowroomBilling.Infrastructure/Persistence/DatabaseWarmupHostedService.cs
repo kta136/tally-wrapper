@@ -8,7 +8,7 @@ namespace ShowroomBilling.Infrastructure.Persistence;
 
 /// <summary>
 /// Pre-pays the cold costs of the FIRST DB-backed request after API boot:
-/// Neon TLS handshake, EF Core model build, query-plan JIT, and PG buffer-cache
+/// managed-Postgres TLS handshake, EF Core model build, query-plan JIT, and PG buffer-cache
 /// warmup for the bills/numbering tables. Without this, the operator's first
 /// SaveDraft of the session blocks for ~0.5–2 s while the connection pool warms
 /// and EF builds its model on the request thread.

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using ShowroomBilling.Contracts.Clients;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
@@ -281,6 +282,12 @@ public sealed class StatusForm : Form
                 return;
             }
 
+            if (runtime.DatabaseHealthSkipped)
+            {
+                SetStatus(_databaseStatus, "idle", Muted);
+                return;
+            }
+
             SetStatus(
                 _databaseStatus,
                 runtime.DatabaseReachable ? "ready" : "not ready",
@@ -352,17 +359,21 @@ public sealed class StatusForm : Form
         {
             using var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
-            MessageBox.Show(
+            var report = BuildOperationReport(label, response, body);
+            CopyableMessageDialog.ShowMessage(
                 this,
-                response.IsSuccessStatusCode ? $"{label} succeeded.\n\n{body}" : $"{label} failed: HTTP {(int)response.StatusCode}\n\n{body}",
                 "Tally Wrapper Server",
-                MessageBoxButtons.OK,
-                response.IsSuccessStatusCode ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+                report.Message,
+                report.Icon);
             await RefreshAsync();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"{label} failed: {ex.Message}", "Tally Wrapper Server", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            CopyableMessageDialog.ShowMessage(
+                this,
+                "Tally Wrapper Server",
+                $"{label} failed: {ex.Message}",
+                MessageBoxIcon.Error);
         }
     }
 
@@ -374,14 +385,129 @@ public sealed class StatusForm : Form
             return File.ReadAllText(path).Trim();
         }
 
-        MessageBox.Show(
+        CopyableMessageDialog.ShowMessage(
             this,
-            $"Maintenance token was not found at {path}. Run Install / Repair Server first.",
             "Tally Wrapper Server",
-            MessageBoxButtons.OK,
+            $"Maintenance token was not found at {path}. Run Install / Repair Server first.",
             MessageBoxIcon.Error);
         return null;
     }
+
+    private static OperationReport BuildOperationReport(
+        string label,
+        HttpResponseMessage response,
+        string body)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            return new OperationReport(
+                $"{label} failed: HTTP {(int)response.StatusCode}\r\n\r\n{FormatErrorBody(body)}",
+                MessageBoxIcon.Error);
+        }
+
+        if (TryReadSuccessEnvelope(body, out var success, out var responseMessage))
+        {
+            var message = string.IsNullOrWhiteSpace(responseMessage)
+                ? body
+                : responseMessage;
+
+            return success
+                ? new OperationReport($"{label} succeeded.\r\n\r\n{message}", MessageBoxIcon.Information)
+                : new OperationReport($"{label} failed.\r\n\r\n{message}", MessageBoxIcon.Error);
+        }
+
+        return new OperationReport($"{label} succeeded.\r\n\r\n{body}", MessageBoxIcon.Information);
+    }
+
+    private static string FormatErrorBody(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            var title = root.TryGetProperty("title", out var titleElement)
+                && titleElement.ValueKind == JsonValueKind.String
+                ? titleElement.GetString()
+                : null;
+            var detail = root.TryGetProperty("detail", out var detailElement)
+                && detailElement.ValueKind == JsonValueKind.String
+                ? detailElement.GetString()
+                : null;
+            var message = root.TryGetProperty("message", out var messageElement)
+                && messageElement.ValueKind == JsonValueKind.String
+                ? messageElement.GetString()
+                : null;
+
+            if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(detail))
+            {
+                return $"{title}: {detail}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                return detail;
+            }
+
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                return title;
+            }
+
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                return message;
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall through to raw body.
+        }
+
+        return body;
+    }
+
+    private static bool TryReadSuccessEnvelope(
+        string body,
+        out bool success,
+        out string? message)
+    {
+        success = false;
+        message = null;
+
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("success", out var successElement)
+                || successElement.ValueKind is not JsonValueKind.True and not JsonValueKind.False)
+            {
+                return false;
+            }
+
+            success = successElement.GetBoolean();
+            message = root.TryGetProperty("message", out var messageElement)
+                && messageElement.ValueKind == JsonValueKind.String
+                ? messageElement.GetString()
+                : null;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private sealed record OperationReport(string Message, MessageBoxIcon Icon);
 
     private void HandleActionStatusChanged(object? sender, EventArgs e) => _ = RefreshAsync();
 

@@ -21,9 +21,13 @@ internal sealed class BillsBatchActionWorkflow(
         {
             host.StatusMessage = $"Pushing {selectedIds.Count} selected bill(s)…";
             var response = await billsApi.PushSelectedAsync(
-                new PushSelectedBillsRequest(selectedIds, null, "Selected push from Bills tab"),
+                new PushSelectedBillsRequest(selectedIds, "Selected push from Bills tab"),
                 cancellationToken);
             host.StatusMessage = BillsStatusFormatter.FormatBatchPushStatus(response);
+        }
+        catch (Exception ex)
+        {
+            host.StatusMessage = $"Push selected failed: {ex.Message}";
         }
         finally
         {
@@ -51,7 +55,7 @@ internal sealed class BillsBatchActionWorkflow(
         {
             host.StatusMessage = "Pushing all pending bills (oldest first)…";
             var response = await billsApi.PushPendingAsync(
-                new PushPendingBillsRequest(null, "Push all pending from Bills tab", null),
+                new PushPendingBillsRequest("Push all pending from Bills tab", null),
                 cancellationToken);
             host.StatusMessage = response.Matched == 0
                 ? "No pending bills to push."

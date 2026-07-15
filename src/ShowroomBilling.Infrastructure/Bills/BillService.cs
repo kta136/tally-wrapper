@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Numbering;
@@ -22,11 +23,12 @@ public sealed class BillService : IBillService
         INumberingService numberingService,
         ITallyPoster tallyPoster,
         ITallyCompanyHealthService? tallyCompanyHealthService = null,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        IAuditActorContext? auditActorContext = null)
     {
         var postingLogger = loggerFactory?.CreateLogger<BillPostingWorkflow>()
             ?? NullLogger<BillPostingWorkflow>.Instance;
-        _audit = new BillAuditStore(dbContext);
+        _audit = new BillAuditStore(dbContext, auditActorContext);
         _read = new BillReadWorkflow(dbContext);
         _lifecycle = new BillLifecycleWorkflow(dbContext, numberingService, _audit);
         _posting = new BillPostingWorkflow(dbContext, tallyPoster, _audit, postingLogger, tallyCompanyHealthService);

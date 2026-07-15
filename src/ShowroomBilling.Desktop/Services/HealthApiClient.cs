@@ -10,6 +10,8 @@ public sealed class HealthApiClient(HttpClient httpClient) : IHealthApiClient
 {
     public async Task<SystemHealthSnapshot> GetSnapshotAsync(
         bool includeTallyCompany,
+        bool includeMasterFreshness = true,
+        bool forceDatabaseHealth = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -21,8 +23,13 @@ public sealed class HealthApiClient(HttpClient httpClient) : IHealthApiClient
             return SystemHealthSnapshot.Unreachable();
         }
 
-        var runtime = await TryGetAsync<RuntimeHealthResponse>("/api/runtime/health", cancellationToken);
-        var masters = await TryGetAsync<MasterFreshnessSummaryResponse>("/api/health/masters", cancellationToken);
+        var runtimeUri = forceDatabaseHealth
+            ? "/api/runtime/health?forceDatabase=true"
+            : "/api/runtime/health";
+        var runtime = await TryGetAsync<RuntimeHealthResponse>(runtimeUri, cancellationToken);
+        var masters = includeMasterFreshness
+            ? await TryGetAsync<MasterFreshnessSummaryResponse>("/api/health/masters", cancellationToken)
+            : null;
         var tallyCompany = includeTallyCompany
             ? await TryGetAsync<TallyCompanyHealthResponse>("/api/health/tally-company", cancellationToken)
             : null;

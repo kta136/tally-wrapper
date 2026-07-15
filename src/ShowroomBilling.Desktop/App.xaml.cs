@@ -1,15 +1,16 @@
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Diagnostics;
-using System.Threading.Tasks;
-using System.Windows;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Desktop.Configuration;
-using System.Collections.Generic;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Services.ProcessSupervision;
 using ShowroomBilling.Desktop.ViewModels;
@@ -26,10 +27,30 @@ namespace ShowroomBilling.Desktop;
 public partial class App : System.Windows.Application
 {
     private IHost? _host;
+    private ILogger<App>? _logger;
+
+    public App()
+    {
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        try
+        {
+            await StartAsync();
+        }
+        catch (Exception ex)
+        {
+            ReportFatal("Billing could not start.", ex);
+        }
+    }
+
+    private async Task StartAsync()
+    {
 
         // Phase timings are emitted at Information level. Run a `dotnet-trace`
         // alongside or just `Get-Content` the rolling log to see exactly where
@@ -207,6 +228,7 @@ public partial class App : System.Windows.Application
         builder.Services.AddSingleton<MainWindow>();
 
         _host = builder.Build();
+        _logger = _host.Services.GetRequiredService<ILogger<App>>();
         var hostBuildMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
 
@@ -242,6 +264,37 @@ public partial class App : System.Windows.Application
             apiChildStartup.SupervisorMs,
             apiChildStartup.Succeeded,
             windowVisibleMs);
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        e.Handled = true;
+        ReportFatal("Billing encountered an unexpected error and must close.", e.Exception);
+    }
+
+    private void OnAppDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception exception)
+        {
+            _logger?.LogCritical(exception, "Unhandled AppDomain exception. Terminating={IsTerminating}.", e.IsTerminating);
+        }
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        _logger?.LogError(e.Exception, "Unobserved background task exception.");
+        e.SetObserved();
+    }
+
+    private void ReportFatal(string message, Exception exception)
+    {
+        _logger?.LogCritical(exception, "{Message}", message);
+        MessageBox.Show(
+            $"{message}\n\n{exception.Message}\n\nDetails were written to the application log.",
+            "Tally Wrapper",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        Shutdown(-1);
     }
 
     private static Task<ApiChildStartupTiming> StartApiChildAsync(IServiceProvider services)

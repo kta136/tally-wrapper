@@ -20,7 +20,7 @@ public sealed class BillPushContractTests
 
         var pushResponse = await client.PostAsJsonAsync(
             $"/api/bills/{Guid.NewGuid()}/push",
-            new PushBillRequest(null, "contract-test"));
+            new PushBillRequest("contract-test"));
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, pushResponse.StatusCode);
         using var problem = JsonDocument.Parse(await pushResponse.Content.ReadAsStringAsync());

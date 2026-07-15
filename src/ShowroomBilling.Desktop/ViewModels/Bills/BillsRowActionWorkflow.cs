@@ -16,7 +16,7 @@ internal sealed class BillsRowActionWorkflow(
         try
         {
             host.StatusMessage = $"Pushing {row.InvoiceNumberDisplay}…";
-            await billsApi.PushAsync(row.Id, new PushBillRequest(null, "Context menu push"), cancellationToken);
+            await billsApi.PushAsync(row.Id, new PushBillRequest("Context menu push"), cancellationToken);
             host.StatusMessage = $"Pushed {row.InvoiceNumberDisplay}.";
         }
         catch (Exception ex)

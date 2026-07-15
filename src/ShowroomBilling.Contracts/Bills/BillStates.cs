@@ -15,6 +15,7 @@ public static class BillStates
     public const string Posting = "posting";
     public const string Posted = "posted";
     public const string Failed = "failed";
+    public const string ReconciliationRequired = "reconciliation_required";
     public const string Revised = "revised";
     public const string Voided = "voided";
 

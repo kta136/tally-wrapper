@@ -62,6 +62,9 @@
                                             <DataTrigger Binding="{Binding Bill.State}" Value="failed">
                                                 <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding Bill.State}" Value="reconciliation_required">
+                                                <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
+                                            </DataTrigger>
                                             <DataTrigger Binding="{Binding Bill.State}" Value="voided">
                                                 <Setter Property="Background" Value="{StaticResource NeutralChipBrush}" />
                                             </DataTrigger>
@@ -87,6 +90,9 @@
                                                     <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Bill.State}" Value="failed">
+                                                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Bill.State}" Value="reconciliation_required">
                                                     <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding Bill.State}" Value="draft">

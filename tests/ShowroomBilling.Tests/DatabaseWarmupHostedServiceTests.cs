@@ -11,7 +11,7 @@ namespace ShowroomBilling.Tests;
 /// Contract tests for <see cref="DatabaseWarmupHostedService"/>.
 ///
 /// The warmup service exists so the FIRST user-facing request after API boot
-/// doesn't pay the Neon TLS handshake + EF model-build + bills index plan
+/// doesn't pay the managed-Postgres TLS handshake + EF model-build + bills index plan
 /// costs. The contract it must uphold:
 ///
 ///   1. StartAsync is non-blocking (must not wait on the warmup queries).

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Controllers;
 using ShowroomBilling.Api.Options;
@@ -146,18 +147,40 @@ public sealed class DatabaseConfigurationTests
 
             var result = await controller.BootstrapDatabaseConfiguration(
                 new UpdateDatabaseConfigurationRequest(
-                    "psql 'postgresql://db_user:db_secret@example.neon.tech/showroom?sslmode=require&channel_binding=require'"),
+                    "psql 'postgresql://db_user:db_secret@example.aivencloud.com/showroom?sslmode=require&channel_binding=require'"),
                 CancellationToken.None);
 
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
-            Assert.Contains("Host=example.neon.tech", response.MaskedConnectionString);
+            Assert.Contains("Host=example.aivencloud.com", response.MaskedConnectionString);
             Assert.Contains("Username=db_user", verifier.LastConnectionString);
             Assert.Contains("Database=showroom", verifier.LastConnectionString);
             Assert.Contains("SSL Mode=Require", verifier.LastConnectionString);
             Assert.Contains("Channel Binding=Require", verifier.LastConnectionString);
             Assert.DoesNotContain("psql", verifier.LastConnectionString, StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public void StartupConfiguration_NormalizesPostgresUriBeforeInfrastructureReadsIt()
+    {
+        var configuration = new ConfigurationManager();
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Postgres"] =
+                "postgres://avnadmin:db_secret@example.aivencloud.com:19001/tally_wrapper_prod?sslmode=require"
+        });
+
+        DatabaseConnectionStringConfiguration.NormalizePostgresConnectionString(configuration);
+
+        var normalized = configuration.GetConnectionString("Postgres")!;
+        Assert.Contains("Host=example.aivencloud.com", normalized);
+        Assert.Contains("Port=19001", normalized);
+        Assert.Contains("Database=tally_wrapper_prod", normalized);
+        Assert.Contains("Username=avnadmin", normalized);
+        Assert.Contains("Password=db_secret", normalized);
+        Assert.Contains("SSL Mode=Require", normalized);
+        Assert.DoesNotContain("postgres://", normalized, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -341,7 +364,8 @@ public sealed class DatabaseConfigurationTests
             new FakeHostEnvironment(environmentName),
             Options.Create(new ApiRuntimeOptions()),
             Options.Create(deviceAuthOptions ?? new DeviceAuthOptions()),
-            new MaintenanceTokenStore());
+            new MaintenanceTokenStore(),
+            new ClientPresenceRegistry());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()

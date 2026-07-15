@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -41,6 +42,7 @@ namespace ShowroomBilling.Tests.Contracts;
 public sealed class TestApiFactory : WebApplicationFactory<Program>
 {
     private readonly IReadOnlyDictionary<string, string?> _extraConfiguration;
+    private readonly string _databaseName = $"contract-test-{Guid.NewGuid():N}";
     private readonly string _deviceTokenRoot = Path.Combine(
         Path.GetTempPath(),
         $"tally-wrapper-contract-{Guid.NewGuid():N}");
@@ -71,9 +73,11 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<ShowroomBillingDbContext>();
             services.RemoveAll<DbContextOptions<ShowroomBillingDbContext>>();
+            services.RemoveAll<IDbContextOptionsConfiguration<ShowroomBillingDbContext>>();
             services.AddDbContext<ShowroomBillingDbContext>(options =>
-                options.UseInMemoryDatabase($"contract-test-{Guid.NewGuid():N}"));
+                options.UseInMemoryDatabase(_databaseName));
 
             services.RemoveAll<ITallyMasterRefresher>();
             services.AddScoped<ITallyMasterRefresher, StubTallyMasterRefresher>();

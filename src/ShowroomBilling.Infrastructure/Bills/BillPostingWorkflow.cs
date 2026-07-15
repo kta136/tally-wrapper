@@ -33,10 +33,10 @@ internal sealed class BillPostingWorkflow(
         ArgumentNullException.ThrowIfNull(request);
         return PushInternalAsync(
             billId,
-            request.FiscalYear,
             request.Reason,
-            broadcastHint: true,
             requireTallyPreflight: true,
+            allowPostedSource: false,
+            idempotencyKeyOverride: null,
             cancellationToken);
     }
 
@@ -46,7 +46,7 @@ internal sealed class BillPostingWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
         var orderedIds = NormalizeOrderedIds(request.BillIds);
-        return PushBatchAsync(orderedIds, request.FiscalYear, request.Reason, cancellationToken);
+        return PushBatchAsync(orderedIds, request.Reason, cancellationToken);
     }
 
     internal async Task<BillBatchPushResponse> PushPendingAsync(
@@ -65,7 +65,7 @@ internal sealed class BillPostingWorkflow(
             .Take(maxBills)
             .ToListAsync(cancellationToken);
 
-        return await PushBatchAsync(targetIds, request.FiscalYear, request.Reason, cancellationToken);
+        return await PushBatchAsync(targetIds, request.Reason, cancellationToken);
     }
 
     internal async Task<BillPostingStatusResponse> RetryAsync(
@@ -82,10 +82,10 @@ internal sealed class BillPostingWorkflow(
         await EnsureTallyReadyAsync(cancellationToken);
         await PushInternalAsync(
             billId,
-            fiscalYearInput: null,
             reason: request?.Reason ?? "retry",
-            broadcastHint: false,
             requireTallyPreflight: false,
+            allowPostedSource: false,
+            idempotencyKeyOverride: null,
             cancellationToken);
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
@@ -96,6 +96,12 @@ internal sealed class BillPostingWorkflow(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.IdempotencyKey);
+        if (request.IdempotencyKey.Trim().Length > 128)
+        {
+            throw new ArgumentException("Repost idempotency key must be 128 characters or fewer.", nameof(request));
+        }
+
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is not (IBillService.StatePosted or IBillService.StateFailed))
         {
@@ -105,34 +111,24 @@ internal sealed class BillPostingWorkflow(
 
         await EnsureTallyReadyAsync(cancellationToken);
 
-        if (bill.State == IBillService.StatePosted)
-        {
-            // Briefly flip to pending so PushInternalAsync accepts it.
-            bill.State = IBillService.StatePending;
-            bill.UpdatedAtUtc = DateTimeOffset.UtcNow;
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
         await PushInternalAsync(
             billId,
-            fiscalYearInput: null,
             reason: request.Reason ?? "repost",
-            broadcastHint: false,
             requireTallyPreflight: false,
+            allowPostedSource: true,
+            idempotencyKeyOverride: request.IdempotencyKey.Trim(),
             cancellationToken);
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
 
     private async Task<BillResponse> PushInternalAsync(
         Guid billId,
-        string? fiscalYearInput,
         string? reason,
-        bool broadcastHint,
         bool requireTallyPreflight,
+        bool allowPostedSource,
+        string? idempotencyKeyOverride,
         CancellationToken cancellationToken)
     {
-        _ = broadcastHint;
-        _ = fiscalYearInput;
-
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
         var currentRevision = bill.CurrentRevisionId is Guid id
             ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
@@ -144,11 +140,14 @@ internal sealed class BillPostingWorkflow(
             return BillSerialization.MapResponse(bill, currentRevision);
         }
 
-        // Allowed: pending / draft / failed (retry goes through here too).
-        if (bill.State is not (IBillService.StatePending or BillStates.Draft or IBillService.StateFailed))
+        // Allowed: pending / draft / failed (retry goes through here too), plus
+        // posted only for the explicit repost path.
+        var sourceStateAllowed = bill.State is IBillService.StatePending or BillStates.Draft or IBillService.StateFailed
+            || allowPostedSource && bill.State == IBillService.StatePosted;
+        if (!sourceStateAllowed)
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is in state '{bill.State}'; only pending/draft/failed bills can be pushed.");
+                $"Bill '{billId}' is in state '{bill.State}' and cannot be pushed by this operation.");
         }
 
         if (currentRevision is null)
@@ -192,7 +191,8 @@ internal sealed class BillPostingWorkflow(
                 .Where(b => b.Id == billId
                     && (b.State == IBillService.StatePending
                         || b.State == BillStates.Draft
-                        || b.State == IBillService.StateFailed))
+                        || b.State == IBillService.StateFailed
+                        || allowPostedSource && b.State == IBillService.StatePosted))
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(b => b.State, IBillService.StatePosting)
                     .SetProperty(b => b.UpdatedAtUtc, now),
@@ -244,7 +244,7 @@ internal sealed class BillPostingWorkflow(
 
         // Call Tally synchronously. No queue, no retry.
         var payload = BillSerialization.DeserializePayload(currentRevision);
-        var idempotencyKey = $"post:{bill.Id:N}:{currentRevision.Id:N}";
+        var idempotencyKey = idempotencyKeyOverride ?? $"post:{bill.Id:N}:{currentRevision.Id:N}";
         TallyPostRequest? postRequest = null;
 
         TallyPostResponse tallyResult;
@@ -280,9 +280,10 @@ internal sealed class BillPostingWorkflow(
             }
             catch (Exception ex)
             {
-                // Treat anything that leaks out as a failed post; the bill settles on `failed`.
+                // Once the poster has been invoked, an unexpected exception may have
+                // happened after Tally accepted the voucher. Require reconciliation.
                 tallyResult = new TallyPostResponse(
-                    Outcome: TallyPostOutcome.Failed,
+                    Outcome: TallyPostOutcome.Unknown,
                     RemoteId: null,
                     ErrorCode: "TALLY_UNEXPECTED",
                     ErrorMessage: ex.Message,
@@ -319,7 +320,7 @@ internal sealed class BillPostingWorkflow(
                 "Tally push succeeded. Invoice {InvoiceNumber} (bill {BillId}) accepted as remote {RemoteId}.",
                 bill.InvoiceNumber, bill.Id, tallyResult.RemoteId);
         }
-        else
+        else if (tallyResult.Outcome == TallyPostOutcome.Failed)
         {
             bill.State = IBillService.StateFailed;
             bill.UpdatedAtUtc = settleAt;
@@ -346,20 +347,41 @@ internal sealed class BillPostingWorkflow(
                 tallyResult.ErrorMessage,
                 tallyResult.ResponseExcerpt);
         }
+        else
+        {
+            bill.State = BillStates.ReconciliationRequired;
+            bill.UpdatedAtUtc = settleAt;
+            auditStore.Write(
+                bill.Id,
+                "tally.outcome.unknown",
+                bill.State,
+                settleAt,
+                new
+                {
+                    errorCode = tallyResult.ErrorCode,
+                    errorMessage = tallyResult.ErrorMessage,
+                    idempotencyKey,
+                    tallyAction = operation.ToString(),
+                    targetTagName,
+                    targetTagValue,
+                    requestExcerpt = tallyResult.RequestExcerpt,
+                    responseExcerpt = tallyResult.ResponseExcerpt
+                });
+            logger.LogWarning(
+                "Tally outcome is unknown. Invoice {InvoiceNumber} (bill {BillId}) requires reconciliation: {ErrorCode} {ErrorMessage}",
+                bill.InvoiceNumber,
+                bill.Id,
+                tallyResult.ErrorCode,
+                tallyResult.ErrorMessage);
+        }
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        if (tallyResult.Outcome == TallyPostOutcome.Posted && operation == TallyPostOperation.Alter)
-        {
-            await PurgePreEditAuditAsync(bill.Id, cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
 
         return BillSerialization.MapResponse(bill, currentRevision);
     }
 
     private async Task<BillBatchPushResponse> PushBatchAsync(
         IReadOnlyList<Guid> orderedBillIds,
-        string? fiscalYear,
         string? reason,
         CancellationToken cancellationToken)
     {
@@ -381,11 +403,27 @@ internal sealed class BillPostingWorkflow(
             {
                 var response = await PushInternalAsync(
                     billId,
-                    fiscalYear,
                     reason,
-                    broadcastHint: false,
                     requireTallyPreflight: false,
+                    allowPostedSource: false,
+                    idempotencyKeyOverride: null,
                     cancellationToken);
+                if (response.State != BillStates.Posted)
+                {
+                    var status = await auditStore.GetPostingStatusAsync(billId, cancellationToken);
+                    failedBillId = billId;
+                    failureMessage = status?.LastErrorMessage
+                        ?? (response.State == BillStates.Posting
+                            ? "Another posting attempt is already in progress."
+                            : $"Bill settled in '{response.State}' instead of 'posted'.");
+                    items.Add(new BillBatchPushItemResult(
+                        response.Id,
+                        false,
+                        response.State,
+                        response.InvoiceNumber,
+                        failureMessage));
+                    break;
+                }
                 items.Add(new BillBatchPushItemResult(
                     response.Id,
                     true,
@@ -494,47 +532,6 @@ internal sealed class BillPostingWorkflow(
 
         return NormalizePositiveInteger(ReadDetailsString(lastPreEditSuccess.PayloadJson, "tallyMasterId"))
             ?? NormalizePositiveInteger(ReadDetailsString(lastPreEditSuccess.PayloadJson, "remoteId"));
-    }
-
-    private async Task PurgePreEditAuditAsync(Guid billId, CancellationToken cancellationToken)
-    {
-        var billIdText = billId.ToString();
-        var lastReopen = await dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && e.EventType == "bill.edit.reopened")
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .ThenByDescending(e => e.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (lastReopen is null)
-        {
-            return;
-        }
-
-        var cutoff = lastReopen.CreatedAtUtc;
-
-        if (UsesInMemoryProvider())
-        {
-            // ExecuteDeleteAsync is unreliable on the InMemory provider used in unit tests.
-            // Fall back to load-and-RemoveRange for that path only.
-            var stale = await dbContext.AuditEvents
-                .Where(e => e.EntityType == "bill"
-                    && e.EntityId == billIdText
-                    && e.CreatedAtUtc < cutoff)
-                .ToListAsync(cancellationToken);
-            if (stale.Count > 0)
-            {
-                dbContext.AuditEvents.RemoveRange(stale);
-            }
-            return;
-        }
-
-        await dbContext.AuditEvents
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && e.CreatedAtUtc < cutoff)
-            .ExecuteDeleteAsync(cancellationToken);
     }
 
     private async Task<BillEntity> LoadTrackedBillAsync(Guid billId, CancellationToken cancellationToken)

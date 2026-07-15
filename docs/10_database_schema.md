@@ -37,6 +37,7 @@ Business document lineage. Present as of the `BillsAndRevisions` migration; `ten
 Constraints / indexes:
 
 - PK on `id`
+- check `state IN ('draft','pending','posting','posted','failed','reconciliation_required','revised','voided')`
 - index `(showroom_id, state, created_at_utc desc)` for history/list queries
 - unique partial index `(showroom_id, fiscal_year, invoice_number) WHERE invoice_number IS NOT NULL` — hard duplicate-number guard on finalized bills
 
@@ -62,6 +63,7 @@ Immutable snapshots of bill content. Present as of the `BillsAndRevisions` migra
 Constraints / indexes:
 
 - unique `(bill_id, revision_no)`
+- checks `revision_no > 0` and `grand_total >= 0`
 - index `(bill_id, created_at_utc)`
 - FK `bill_id -> bills.id` with `ON DELETE CASCADE`
 - GIN index on `snapshot_json` only if needed later
@@ -81,6 +83,7 @@ Cloud-owned numbering state. Present as of the `InvoiceNumbering` migration; `te
 Constraints / indexes:
 
 - PK `(showroom_id, fiscal_year, document_type)`
+- check `next_value > 0`
 - row-lock via `SELECT ... FOR UPDATE` during allocation (Npgsql path); InMemory test path uses a plain fetch
 
 ### 1.3a `invoice_number_reservations`
@@ -106,11 +109,11 @@ Constraints / indexes:
 
 ### 1.4 ~~`tally_posting_jobs`~~ (removed — dropped by the `DropPostingJobsAndBridgeSession` migration)
 
-Tally Wrapper posting is synchronous and inline inside `BillService.PushAsync`. There is no queue, no outbox, no lease, no claim loop. Post outcomes are recorded as `tally.posted` / `tally.failed` audit events on the bill itself. Retry and repost re-run the same synchronous push path; edited-after-push bills alter the prior Tally voucher using the pre-edit `tally.posted.details.tallyMasterId` (or numeric legacy `remoteId`) instead of creating a new voucher.
+Tally Wrapper posting is synchronous and inline inside `BillService.PushAsync`. There is no queue, no outbox, no lease, no claim loop. Post outcomes are recorded as `tally.posted`, `tally.failed`, or `tally.outcome.unknown`; the last maps the bill to `reconciliation_required`. Retry and repost re-run the same synchronous push path; edited-after-push bills alter the prior Tally voucher using the latest prior `tally.posted.details.tallyMasterId` (or numeric legacy `remoteId`) instead of creating a new voucher.
 
 ### 1.5 ~~`tally_posting_attempts`~~ (removed — dropped alongside `tally_posting_jobs`)
 
-Per-attempt forensics now live in the audit trail. `BillPostingStatusResponse` reconstructs the fields the desktop needs (`LastErrorCode`, `LastErrorMessage`, `LastRemoteId`) by reading the most recent `tally.failed` / `tally.posted` audit events for the bill. New successful Tally posts include `details.tallyAction` (`Create` or `Alter`) and `details.tallyMasterId` when available so future edit pushes can target the old voucher safely.
+Per-attempt forensics now live in the append-only audit trail. `BillPostingStatusResponse` reconstructs the fields the desktop needs (`LastErrorCode`, `LastErrorMessage`, `LastRemoteId`) from the most recent `tally.failed` / `tally.outcome.unknown` and `tally.posted` events. Successful posts include `details.tallyAction` (`Create` or `Alter`) and `details.tallyMasterId` when available.
 
 ### 1.6 `audit_events`
 
@@ -119,19 +122,20 @@ General audit/event trail.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | |
-| `tenant_id` | UUID | |
 | `entity_type` | text | `bill`, `job`, `settings`, `admin_unlock`, etc. |
 | `entity_id` | UUID or text | |
 | `event_type` | text | |
-| `actor_type` | text | `desktop_user`, `api`, `system`, `admin` |
-| `actor_id` | UUID or text nullable | |
+| `actor_type` | text | `device`, `admin`, or `system` |
+| `actor_id` | UUID or text nullable | Desktop mutations use `desktop`; admin mutations use the actor label/session identity |
 | `payload_json` | jsonb | |
-| `created_at` | timestamptz | |
+| `created_at_utc` | timestamptz | |
 
 Indexes:
 
 - index `(entity_type, entity_id, created_at desc)`
 - index `(event_type, created_at desc)`
+
+Audit rows are never cascade-deleted with bills and are not purged during edit-and-repush. Hard deletion appends `bill.deleted`, leaving the complete history queryable by the deleted bill ID.
 
 ### 1.7 `tally_master_snapshot_batches`
 
@@ -185,17 +189,19 @@ Server-owned replacement for current local edit locks.
 |---|---|---|
 | `id` | UUID PK | Lease ID |
 | `bill_id` | UUID FK | Draft being edited |
-| `revision_id` | UUID FK nullable | Optional current draft revision |
-| `owner_device_id` | UUID | Desktop/counter claiming edit |
-| `owner_user_id` | UUID nullable | |
-| `lease_expires_at` | timestamptz | |
-| `created_at` | timestamptz | |
-| `updated_at` | timestamptz | |
+| `showroom_id` | UUID | Showroom scope |
+| `owner_actor_id` | text | Desktop/device identity holding the lease |
+| `owner_counter_name` | text nullable | Operator-visible counter name |
+| `acquired_at_utc` | timestamptz | |
+| `expires_at_utc` | timestamptz | |
+| `renewed_at_utc` | timestamptz | |
+| `released_at_utc` | timestamptz nullable | Set on normal/admin release |
 
 Indexes:
 
-- unique partial index on active lease per `bill_id`
-- index `(lease_expires_at)`
+- unique partial index on `bill_id` where `released_at_utc IS NULL`
+- index `(showroom_id, bill_id)`
+- index `(expires_at_utc)`
 
 ### 1.10 `admin_passcodes`
 
@@ -223,6 +229,8 @@ One row per admin unlock. Token is returned once at unlock time; the DB only sto
 | `expires_at_utc` | timestamptz | 30 minutes after issue |
 | `revoked_at_utc` | timestamptz nullable | Set by `/api/admin/logout` |
 
+Constraint: `expires_at_utc > issued_at_utc`. A bounded startup retention job deletes sessions whose expiry is more than 30 days old.
+
 ### 1.12 `print_assets`
 
 Logo / signature images uploaded by the operator. Content stored inline (bytea) with a 2 MB cap.
@@ -237,6 +245,8 @@ Logo / signature images uploaded by the operator. Content stored inline (bytea) 
 | `content` | bytea | raw bytes |
 | `byte_length` | bigint | |
 | `created_at_utc` | timestamptz | |
+
+Constraints: `asset_kind IN ('logo','signature')` and `byte_length > 0`. Upload validation accepts only PNG/JPEG content whose file signature matches the declared image, with a 2 MiB decoded-byte cap.
 
 Also: `cloud_settings.print_layout_json` (jsonb, default `{}`) holds margins + logo/signature `PrintLayoutAssetPlacement` records referring to `print_assets.id`.
 
@@ -277,7 +287,11 @@ The table was part of the original bridge design. It was dropped once the API ab
 
 ### 3.2 ~~Posting job leases~~ (removed)
 
-Tally Wrapper has no posting jobs and no leases on the Tally side. Push is synchronous — the API holds the Tally connection for the duration of one HTTP request. If the API crashes mid-call, `StuckPostingRecoveryHostedService` flips any bill stranded in `posting` back to `pending` on the next API boot with a `bill.posting.recovered` audit event.
+Tally Wrapper has no posting jobs and no leases on the Tally side. Push is synchronous — the API holds the Tally connection for one HTTP request. If the API crashes mid-call, `StuckPostingRecoveryHostedService` moves any bill stranded in `posting` to `reconciliation_required` with a `bill.posting.recovered` audit event.
+
+### 3.3 Operational retention
+
+`OperationalDataRetentionHostedService` runs once after database readiness with a 15-second budget. It deletes only admin sessions and expired/released draft leases older than 30 days. Bills, revisions, numbering records, posting outcomes, print assets, settings, and audit history are excluded.
 
 ---
 

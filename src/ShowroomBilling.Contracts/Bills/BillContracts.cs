@@ -72,18 +72,14 @@ public sealed record CreateBillDraftRequest(
 public sealed record UpdateBillDraftRequest(
     BillPayloadDto Payload);
 
-public sealed record PushBillRequest(
-    string? FiscalYear,
-    string? Reason);
+public sealed record PushBillRequest(string? Reason);
 
 public sealed record PushPendingBillsRequest(
-    string? FiscalYear,
     string? Reason,
     int? MaxBills);
 
 public sealed record PushSelectedBillsRequest(
     IReadOnlyList<Guid> BillIds,
-    string? FiscalYear,
     string? Reason);
 
 public sealed record BillBatchPushItemResult(
@@ -118,13 +114,9 @@ public sealed record RepostBillRequest(
 public sealed record BillPostingStatusResponse(
     Guid BillId,
     string BillState,
-    Guid? ActiveJobId,
-    string? JobState,
-    int AttemptCount,
     string? LastErrorCode,
     string? LastErrorMessage,
-    string? LastRemoteId,
-    DateTimeOffset? NextAttemptAtUtc);
+    string? LastRemoteId);
 
 public sealed record BillSearchFilter(
     string? State,

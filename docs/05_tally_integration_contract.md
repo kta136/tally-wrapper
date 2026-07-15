@@ -142,7 +142,7 @@ When the operator clicks Push on the Bills tab, the desktop calls `POST /api/bil
 2. Atomically transitions the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If 0 rows are affected — another concurrent push already won the flip, or the state drifted — the request short-circuits and returns the current bill without a second Tally call. Closes a double-click / duplicate-request race that would otherwise produce two vouchers.
 3. Chooses Tally operation: normal pushes/retries/reposts use create XML; bills reopened after a prior successful push (`EditedAfterPush=true`) use alter XML against the old Tally voucher `MASTER ID`.
 4. Calls `ITallyPoster.PostAsync` — this builds voucher XML, sends it to Tally via HTTP, parses the response, and returns an outcome.
-5. Writes `tally.posted` or `tally.failed` audit and transitions the bill to `posted` or `failed`.
+5. Writes `tally.posted`, `tally.failed`, or `tally.outcome.unknown` and transitions the bill to `posted`, `failed`, or `reconciliation_required`.
 6. Returns the resulting `BillResponse` to the desktop.
 
 If an edited-after-push bill cannot resolve the prior Tally `MASTER ID` from its pre-edit `tally.posted` audit, the API settles the attempt as `failed` with `TALLY_ALTER_TARGET_MISSING` and does not call Tally. It never falls back to creating a second voucher for that edited bill.
@@ -158,23 +158,26 @@ The desktop's button stays "busy" for the duration of the call (typically 1–10
 - If Tally is down, the click fails loudly; the operator sees the error immediately and tries again later. No silent queueing.
 - If the API is down, the desktop surfaces "Cloud unavailable"; no work is lost — bills stay in `pending`.
 
-### Crash recovery
+### Crash recovery and uncertain writes
 
-If the API process dies mid-call, any bill stuck in `posting` is flipped back to `pending` by `StuckPostingRecoveryHostedService` on the next API boot, with a `bill.posting.recovered` audit event. The operator retries.
+If the API process dies mid-call, any bill stuck in `posting` moves to `reconciliation_required` on the next API boot, with a `bill.posting.recovered` audit event. Because Tally may already have accepted the voucher, the operator must verify Tally and then use admin **Mark as Pushed** or **Mark as Pending**. Recovery never automatically requeues an uncertain write.
 
 ---
 
 ## 5. Failure classification
 
-### 5.1 Retryable failures (bill lands in `failed`, operator clicks Retry)
+### 5.1 Ambiguous transport outcomes (bill lands in `reconciliation_required`)
 
 - Tally transport failure after a successful preflight
 - DNS/LAN connectivity issue after a successful preflight
 - timeout after a successful preflight
 - connection refused after a successful preflight
-- transient HTTP transport failure
+- HTTP error after the voucher request was sent
+- empty, malformed, or otherwise unreadable Tally response
 
-### 5.2 Non-retryable failures (bill lands in `failed`, operator fixes config/data then Retry or Revise)
+These outcomes are not auto-retried: a retry could create a duplicate voucher. The operator verifies Tally first, then resolves the state explicitly.
+
+### 5.2 Definite failures (bill lands in `failed`, operator fixes config/data then Retry or Revise)
 
 - missing ledger, stock item, voucher type
 - company mismatch
@@ -182,14 +185,14 @@ If the API process dies mid-call, any bill stuck in `posting` is flipped back to
 - malformed business payload
 - Tally business rejection
 
-Because there is no automatic retry, the desktop's classification is informational only — the operator decides what to do next. `BillPostingStatusResponse.LastErrorCode` / `LastErrorMessage` carry enough detail to tell retryable and non-retryable apart.
+Explicit Tally business rejections (`LINEERROR`, import errors, and classified configuration/data failures) are definite failures. `BillPostingStatusResponse.LastErrorCode` / `LastErrorMessage` surface the latest definite or ambiguous problem.
 
 ### 5.3 Ambiguous outcome
 
-If Tally may have accepted the voucher but the HTTP response is unreadable, the bill lands in `failed`. The operator verifies in Tally itself, then either:
+If Tally may have accepted the voucher but the HTTP response is unreadable, the bill lands in `reconciliation_required`. Normal edit, retry, repost, renumber, void, and delete actions are blocked. The operator verifies in Tally itself, then either:
 
 - clicks **Mark as Pushed** (with a reason ≥4 chars) — transitions the bill to `posted` without re-calling Tally, or
-- clicks **Retry** — re-posts, which may succeed (Tally deduplicates via `REMOTEID`) or surface a duplicate error.
+- clicks **Mark as Pending** (with a reason ≥4 chars) after confirming no voucher exists, then pushes again.
 
 There is no automatic reconciliation path; the operator is the reconciler.
 
@@ -201,9 +204,9 @@ There is no automatic reconciliation path; the operator is the reconciler.
 |---|---|
 | Tally down or wrong active company, API up | Push is blocked by preflight with `503 Tally unavailable`; the bill remains `pending`/`failed`/`posted` as it was. Operator opens Tally or the correct company, then retries. |
 | API down | Desktop shows "Cloud unavailable"; bills stay in `pending` on whatever was last persisted; clicking Push is disabled. |
-| API crashes mid-post | Bill is stuck in `posting` until API restart; `StuckPostingRecoveryHostedService` flips it back to `pending` on boot with an audit breadcrumb. Operator retries. |
+| API crashes mid-post | Bill is stuck in `posting` until API restart; `StuckPostingRecoveryHostedService` moves it to `reconciliation_required` with an audit breadcrumb. Operator verifies Tally before resolving it. |
 | Desktop down during a push | That push fails; no correctness lost (the API either completed the post or crashed; either way recovery is deterministic). |
-| Network partitions after preflight / mid-post | Timeout → bill in `failed` → operator verifies in Tally → Mark as Pushed or Retry. |
+| Network partitions after preflight / mid-post | Timeout → `reconciliation_required` → operator verifies in Tally → Mark as Pushed or Mark as Pending. |
 
 ---
 
@@ -254,5 +257,5 @@ There is no automatic reconciliation path; the operator is the reconciler.
 - Edited-after-push bills alter the existing Tally voucher by `MASTER ID`; plain first push, retry, and unedited repost keep create/import semantics.
 - Push, retry, repost, selected push, and push-all-pending must run a Tally company preflight before any bill is moved to `posting`. Batch push probes once before iterating.
 - **No business-level retry loop.** Every bill-level retry is an explicit operator click — `/retry`, `/repost`, re-pushing after fixing config. The state machine is not "eventually consistent".
-- The HTTP client under `ITallyXmlClient` has a **transport-layer** Polly pipeline (2 retries, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx) to absorb single transient blips. This does not re-run Tally body errors (`LINEERROR`, `EXCEPTIONS > 0`) — those flow straight to `failed` and wait for the operator. Treat this as a connect-fail smoother, not a retry strategy.
+- The HTTP client under `ITallyXmlClient` has a **read-only transport** Polly pipeline (2 retries, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx) for safe master/health reads. Voucher writes are marked and excluded from that pipeline, so one operator action makes at most one voucher HTTP attempt. Tally body errors (`LINEERROR`, `EXCEPTIONS > 0`) flow straight to `failed`.
 - Do not re-introduce a queue, polling loop, or second process as an "optimization." The architecture was explicitly collapsed from two-process to single-process; reversing it would re-open the whole class of bugs we removed.

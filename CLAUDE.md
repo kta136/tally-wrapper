@@ -4,7 +4,7 @@ Notes for Claude (or any AI coding agent) working in this repo. Read [README.md]
 
 ## What this repo is
 
-Two-process Windows desktop billing app for a jewellery showroom. Desktop (WPF, `net10.0-windows`) drives a local ASP.NET Core API (`net10.0`), which owns Postgres (Neon) and dials TallyPrime's local XML endpoint. The Desktop owns the API lifecycle via a Job Object so orphaned processes aren't a class of bug.
+Two-process Windows desktop billing app for a jewellery showroom. Desktop (WPF, `net10.0-windows`) drives a local ASP.NET Core API (`net10.0`), which owns Postgres (Aiven-managed PostgreSQL) and dials TallyPrime's local XML endpoint. The Desktop owns the API lifecycle via a Job Object so orphaned processes aren't a class of bug.
 
 - **Solution:** `ShowroomBilling.sln` · target framework is **`.NET 10`** across every project (Desktop is `net10.0-windows`).
 - **Hosts:** `src/ShowroomBilling.Api`, `src/ShowroomBilling.Desktop`.
@@ -15,7 +15,7 @@ Two-process Windows desktop billing app for a jewellery showroom. Desktop (WPF, 
 
 | Topic | File |
 |---|---|
-| Dev prerequisites, build, run, Neon connection strings | [DEV_SETUP.md](DEV_SETUP.md) |
+| Dev prerequisites, build, run, Aiven connection strings | [DEV_SETUP.md](DEV_SETUP.md) |
 | Bill state machine (draft → pending → posting → posted/failed/voided) | [docs/03_bill_state_machine.md](docs/03_bill_state_machine.md) |
 | Numbering & idempotency (reservation, `idempotency_key`, `draft:{billId}`) | [docs/04_numbering_and_idempotency.md](docs/04_numbering_and_idempotency.md) |
 | Tally integration responsibility split (sync, operator-initiated) | [docs/05_tally_integration_contract.md](docs/05_tally_integration_contract.md) |
@@ -52,10 +52,10 @@ The design target is the hi-fi prototype in [docs/design/](docs/design/), distil
 
 ## EF migration gotcha
 
-When running migrations against Neon, pass the connection string explicitly:
+When running migrations against Aiven or any managed PostgreSQL database, pass the connection string explicitly:
 
 ```powershell
-dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<neon-direct-conn-string>"
+dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<postgres-connection-string>"
 ```
 
 `ASPNETCORE_ENVIRONMENT` is **silently ignored** by the EF tools and falls back to the localhost default in `appsettings.json` — which will either fail loudly or (worse) quietly migrate a local dev DB you didn't mean to touch. Always supply `--connection`.
@@ -74,8 +74,8 @@ dotnet test ShowroomBilling.sln
 ## Tally integration reality check
 
 - **Synchronous, operator-initiated.** No queue, no background worker, no retry timer. Push = one HTTP round-trip to Tally. Master refresh = one HTTP round-trip to Tally. If an operation isn't user-triggered, it shouldn't be talking to Tally.
-- **Retry pipeline:** `ITallyXmlClient`'s `HttpClient` has a Polly v8 retry (2 attempts, ~200 ms jittered exponential backoff) wired via `Microsoft.Extensions.Http.Resilience` in `DependencyInjection.cs`. It covers `HttpRequestException` + 5xx responses only — not 4xx, not Tally `LINEERROR` body content. Total budget is still the cloud-settings `Connection.TimeoutSeconds` (the CTS inside `TallyXmlClient` is linked to the HTTP client's CT, so Polly retries share that budget). This retry is **transport-layer only** — it does not turn Tally into an "eventually consistent" system.
-- **Recovery:** `StuckPostingRecoveryHostedService` flips any bill stuck in `posting` on the next API boot (crash while mid-push). That's the entire recovery model.
+- **Retry pipeline:** safe `ITallyXmlClient` reads have a Polly v8 retry (2 attempts, ~200 ms jittered exponential backoff) for `HttpRequestException` + 5xx. Voucher writes are marked and explicitly excluded: one operator action makes at most one voucher HTTP attempt. A transport timeout/error/unreadable response after the write begins is ambiguous and moves the bill to `reconciliation_required`; explicit Tally `LINEERROR` content moves it to `failed`.
+- **Recovery:** `StuckPostingRecoveryHostedService` moves any bill stuck in `posting` to `reconciliation_required` on the next API boot. The operator must verify Tally and use admin Mark as Pushed or Mark as Pending before another write.
 - **The only write actions:** Save Bill (Invoice tab) and Push / Retry / Repost / Revise / Void / Edit (Bills tab). Printing never mutates bill state.
 
 ## Error response contract
@@ -101,7 +101,7 @@ Server side, the token is validated by `AdminAuthenticationHandler` (registered 
 
 ## Server-side payload validation
 
-`BillValidator` (Application layer) runs on every client-supplied `BillPayloadDto` before persistence on `CreateDraft*`, `UpdateDraft`, and `Revise` (the latter only when `InitialPayload` is non-null — a replay from a prior revision skips re-validation). It enforces the summation-level invariants a client cannot forge: non-empty lines, positive quantity, non-negative rate/line-total, `|RoundOff| ≤ ₹1`, `GrandTotal > 0`, non-negative discount/tax, `BillDate` within `today − 1 year` to `today + 1 day`. The two money-path invariants: (a) `Σ LineTotal ≈ GrandTotal + Discount − RoundOff` — because line totals in this domain are **GST-inclusive**, they sum to the billed amount after discount/round-off, not to `Subtotal`; (b) `GrandTotal ≈ Subtotal − Discount + Tax + RoundOff` catches a client that sends a forged grand total without matching tax math. Failure throws `BillValidationException`, mapped to `400 Bill payload invalid` in `DomainExceptionHandler`. **Do not validate `Subtotal == Σ LineTotal`** — that invariant holds only for ex-GST line totals and would break every real bill in this codebase. **Do not validate `LineTotal == Rate × Quantity`** — jewellery pricing modes (wastage %, labour per unit, gross/less weight, diamond rate) make the line total a function of many fields; the Desktop is the authority on that math. If you need a new invariant, add it to `BillValidator.Validate` rather than sprinkling checks across services.
+`BillValidator` (Application layer) runs on every client-supplied `BillPayloadDto` before persistence on `CreateDraft*`, `UpdateDraft`, and `Revise` (the latter only when `InitialPayload` is non-null — a replay from a prior revision skips re-validation). It caps payloads at 500 lines, bounds text and per-line `RawJson` (valid JSON, ≤64 KiB), rejects negative optional jewellery inputs, and enforces the summation-level invariants a client cannot forge: positive quantity, non-negative rate/line-total, `|RoundOff| ≤ ₹1`, `GrandTotal > 0`, non-negative discount/tax, `BillDate` within `today − 1 year` to `today + 1 day`. The two money-path invariants remain: (a) `Σ LineTotal ≈ GrandTotal + Discount − RoundOff`; (b) `GrandTotal ≈ Subtotal − Discount + Tax + RoundOff`. **Do not validate `Subtotal == Σ LineTotal`** or `LineTotal == Rate × Quantity`; jewellery pricing makes both invalid assumptions. Add new invariants to `BillValidator.Validate`, not controllers/services.
 
 ## Startup hosted-service resilience
 
@@ -109,15 +109,13 @@ Server side, the token is validated by `AdminAuthenticationHandler` (registered 
 
 **Recovery is fire-and-forget.** `StuckPostingRecoveryHostedService.StartAsync` does **not** await the scan — it kicks the work onto a `Task.Run` and returns `Task.CompletedTask` immediately, so it doesn't add to API boot. Inside the background task it first awaits `IStartupStatus.WaitForDatabaseReadyAsync(ct)` so a freshly-bootstrapped API doesn't hit an unmigrated schema. The wait faults if `RecordDatabaseFailure` was called; recovery treats that as "skip this boot" rather than logging the same DB error twice. `StopAsync` cancels and waits up to 2s for the in-flight task to drain. If you add another startup hosted service that depends on the database being migrated, await `IStartupStatus.WaitForDatabaseReadyAsync` rather than relying on registration order. Otherwise follow the same pattern: bound the work, never throw, write to `IStartupStatus`.
 
-## Audit log purge on edit-then-repush
+## Audit history is append-only
 
-When a bill is edited after a prior post (`EditedAfterPush == true` is set by `BillLifecycleWorkflow.UpdateForEditAsync`, alongside a `bill.edit.reopened` audit row), the next push through `BillPostingWorkflow.PushInternalAsync` deletes every prior `bill_audits` row for that bill whose `CreatedAtUtc` is **older than the most recent `bill.edit.reopened` event**. The reopen event itself is preserved as the cutoff so the timeline still shows where the edit happened, but earlier entries (original push, prior `tally.posted`/`tally.failed`, etc.) are gone. Plain reposts without an intervening edit are no-ops because `EditedAfterPush` is false.
-
-`PurgePreEditAuditAsync` uses `ExecuteDeleteAsync` against Postgres and forks to a tracked `RemoveRange` for the InMemory provider used in unit tests. The purge runs in its own implicit transaction, *before* the new `bill.push.requested` audit is written and committed; if the API crashes between the purge and the new write you lose old audits but data is still consistent.
+Bill audit rows are never purged during edit-and-repush and are not cascade-deleted with the bill. Each edit, push, definite failure, ambiguous outcome, manual resolution, and hard delete appends another event. `BillAuditStore.GetAuditAsync` reads by entity ID even after the bill row is gone, so the `bill.deleted` tombstone and full prior history remain queryable. Request-scoped audit writers use `IAuditActorContext`: device-authenticated mutations record `device/desktop`, admin mutations record `admin/<actor>`, and startup/background work records `system`.
 
 ## Push concurrency guard
 
-`BillPostingWorkflow.PushInternalAsync` flips the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')` (via `ExecuteUpdateAsync`), not a tracked-entity mutate + `SaveChanges`. If 0 rows are affected the request short-circuits and returns the current bill without a second Tally call, closing a double-click / duplicate-request race. The flip is deliberately **not** transactional with the Tally call — `posting` must be visible in the DB for `StuckPostingRecoveryHostedService` to heal a crashed row. InMemory provider (used in unit tests) doesn't support `ExecuteUpdateAsync` reliably and doesn't simulate real concurrency anyway, so the code forks on `UsesInMemoryProvider()` and falls back to the tracked-entity pattern for tests only. If you add another method that transitions bill state through `posting`, use the same conditional-UPDATE pattern.
+`BillPostingWorkflow.PushInternalAsync` flips the bill to `posting` via a conditional `UPDATE` gated on `pending`/`draft`/`failed` (plus `posted` only for explicit repost), not a tracked-entity mutate + `SaveChanges`. If 0 rows are affected the request short-circuits without a second Tally call. The flip is deliberately **not** transactional with Tally so a crash leaves visible evidence for reconciliation. InMemory tests use a tracked fallback; Postgres integration tests cover the relational path.
 
 **Desktop admin-gating pattern: hide admin-only affordances when locked.** Don't show buttons that will fail auth — the operator gets no feedback. Two VM-side flags drive visibility:
 
@@ -141,7 +139,7 @@ Audit payloads are built via the typed `WriteAudit(billId, eventType, state, at,
 
 ## Shared constants and helpers you must use
 
-- **Bill states:** [`ShowroomBilling.Contracts.Bills.BillStates`](src/ShowroomBilling.Contracts/Bills/BillStates.cs) is the canonical source (`Pending`, `Posted`, `Posting`, `Failed`, `Revised`, `Voided`, `Draft`, plus the `OpenForPush = [Pending, Draft]` bucket). `IBillService.State*` consts forward to it for compatibility. **Do not compare `bill.State` to string literals** — a typo will silently break workflow sort, filters, or state gates. Both the server (BillService comparisons, SearchAsync workflow sort) and Desktop (BillsViewModel filters, RecountSummary) reference `BillStates.*`.
+- **Bill states:** [`ShowroomBilling.Contracts.Bills.BillStates`](src/ShowroomBilling.Contracts/Bills/BillStates.cs) is canonical, including `ReconciliationRequired`. Normal retry/edit/renumber/void/delete paths must not bypass that state; only admin Mark as Pushed/Mark as Pending resolve it. **Do not compare `bill.State` to string literals.**
 - **Invoice number formatting:** [`ShowroomBilling.Contracts.Numbering.InvoiceNumberFormatter`](src/ShowroomBilling.Contracts/Numbering/InvoiceNumberFormatter.cs) is the single formatter used by server-side reservation (`NumberingService.ReserveAsync`), server-side change-number auto-format (`BillService.ChangeInvoiceNumberAsync`), and the Desktop `ChangeNumberDialog` preview. If you need to render or compare an invoice number, go through this helper — never hand-build `{prefix}{year}/{NNNN}{suffix}`.
 
 ## Numbering behavior worth knowing
@@ -164,9 +162,9 @@ Tests in both `ShowroomBilling.Tests` and `ShowroomBilling.Desktop.Tests` use `M
 
 - Concurrency properties (e.g. "two `CreateDraftAsync` calls on different threads produce distinct invoice numbers") cannot be verified here — they need a real Postgres test harness (Testcontainers or a CI-side service).
 - Unique-index violations (`(ShowroomId, FiscalYear, InvoiceNumber)`, etc.) silently pass in-memory.
-- `NumberingService.ReserveAsync` short-circuits its transaction/`FOR UPDATE` path when `Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory"`. The Postgres-only code path is therefore untested in unit tests.
+- `NumberingService.ReserveAsync` short-circuits its transaction/`FOR UPDATE` path under InMemory. The separate `Category=Postgres` suite exercises relational behavior in CI against PostgreSQL 17; run `tools/run-postgres-tests.ps1` locally when Docker is available.
 
-Treat green unit tests as "shape-correct", not "race-safe". If you're touching numbering, locking, or a unique-index-backed invariant, exercise it against real Postgres before shipping.
+Treat green InMemory tests as "shape-correct", not "race-safe". Changes to numbering, locking, or unique-index-backed invariants must also pass the Postgres category suite.
 
 **HTTP contract tests** (`tests/ShowroomBilling.Tests/Contracts/`) use `Microsoft.AspNetCore.Mvc.Testing` to boot the real API in-process via `TestApiFactory : WebApplicationFactory<Program>`. The factory swaps the DbContext to InMemory, forces `Database:AutoMigrateOnStartup = false`, and replaces `ITallyMasterRefresher` with `StubTallyMasterRefresher` so boot doesn't need real infrastructure. The real `DeviceTokenStore` is left in place — tests read the generated token via `factory.GetDeviceToken()`. When you add a new public-API endpoint or change a response shape, **add or update a contract test in this folder**: this is where the slice 1 master-refresh drift would have been caught at build time. `MasterRefreshContractTests` is the canonical example. To run them isolated: `dotnet test --filter "FullyQualifiedName~Contracts"`.
 

@@ -29,6 +29,7 @@ public enum TallyPostOutcome
 {
     Posted,
     Failed,
+    Unknown,
 }
 
 public sealed record TallyPostResponse(

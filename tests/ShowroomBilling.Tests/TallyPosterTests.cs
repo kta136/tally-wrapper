@@ -88,6 +88,20 @@ public sealed class TallyPosterTests
         Assert.Equal("Yes", partyEntry.Element("ISPARTYLEDGER")?.Value);
     }
 
+    [Fact]
+    public async Task PostAsync_TransportFailureAfterWriteAttempt_ReturnsUnknownOutcome()
+    {
+        var poster = new TallyPoster(
+            new ThrowingXmlClient(new HttpRequestException("connection reset")),
+            new FakeCloudSettingsService(),
+            NullLogger<TallyPoster>.Instance);
+
+        var response = await poster.PostAsync(Request());
+
+        Assert.Equal(TallyPostOutcome.Unknown, response.Outcome);
+        Assert.Equal("TALLY_TRANSPORT_UNKNOWN", response.ErrorCode);
+    }
+
     private static TallyPoster BuildPoster(XElement response) =>
         BuildPosterWithClient(response).Poster;
 
@@ -159,6 +173,20 @@ public sealed class TallyPosterTests
             LastRequest = request;
             return Task.FromResult(response);
         }
+
+        public Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default) =>
+            SendAsync(request, cancellationToken);
+    }
+
+    private sealed class ThrowingXmlClient(Exception exception) : ITallyXmlClient
+    {
+        public string EndpointDescription => "fake";
+
+        public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
+            Task.FromException<XElement>(exception);
+
+        public Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default) =>
+            Task.FromException<XElement>(exception);
     }
 
     private sealed class FakeCloudSettingsService(string? companyState = null, string? companyCountry = null) : ICloudSettingsService

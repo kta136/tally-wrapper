@@ -115,6 +115,26 @@ public sealed class HealthClusterViewModelTests
         Assert.Equal("Database identity mismatch.", vm.DatabaseTooltip);
     }
 
+    [Fact]
+    public void Apply_MapsSkippedDatabaseHealthToIdle()
+    {
+        var vm = new HealthClusterViewModel();
+
+        vm.Apply(Snapshot(new RuntimeHealthResponse(
+            "Skipped",
+            ApiAvailable: true,
+            DatabaseConfigured: true,
+            DatabaseReachable: false,
+            SettingsLoadedFromApi: false,
+            Message: "PostgreSQL health check skipped for cheap background health probe.",
+            DatabaseHealthSkipped: true,
+            DatabaseHealthSkipReason: "cheap background health probe")));
+
+        Assert.Equal("neutral", vm.DatabaseDot);
+        Assert.Equal("DB IDLE", vm.DatabaseLabel);
+        Assert.Contains("skipped", vm.DatabaseTooltip);
+    }
+
     private static SystemHealthSnapshot Snapshot(TallyCompanyHealthResponse tally) =>
         new(ApiReachable: true, Masters: null, TallyCompany: tally);
 

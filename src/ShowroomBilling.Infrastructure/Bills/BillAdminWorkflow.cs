@@ -36,10 +36,10 @@ internal sealed class BillAdminWorkflow(
         }
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is IBillService.StatePosting)
+        if (bill.State is IBillService.StatePosting or IBillService.StateReconciliationRequired)
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is being posted to Tally right now; wait for the current job to settle before changing its number.");
+                $"Bill '{billId}' cannot change number while its Tally outcome is unresolved.");
         }
 
         if (!BillNumberChangeRules.IsDigitsOnly(newNumber)
@@ -203,10 +203,10 @@ internal sealed class BillAdminWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (IBillService.StatePending or BillStates.Draft or IBillService.StateFailed))
+        if (bill.State is not (IBillService.StatePending or BillStates.Draft or IBillService.StateFailed or IBillService.StateReconciliationRequired))
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is in state '{bill.State}'; mark-as-pushed is only allowed from pending/draft/failed.");
+                $"Bill '{billId}' is in state '{bill.State}'; mark-as-pushed is not allowed.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -238,10 +238,10 @@ internal sealed class BillAdminWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (IBillService.StatePosted or IBillService.StateFailed))
+        if (bill.State is not (IBillService.StatePosted or IBillService.StateFailed or IBillService.StateReconciliationRequired))
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is in state '{bill.State}'; mark-as-pending is only allowed from posted/failed.");
+                $"Bill '{billId}' is in state '{bill.State}'; mark-as-pending is not allowed.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -272,14 +272,15 @@ internal sealed class BillAdminWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is IBillService.StatePosting)
+        if (bill.State is IBillService.StatePosting or IBillService.StateReconciliationRequired)
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is being posted to Tally right now; wait for the current job to settle before deleting.");
+                $"Bill '{billId}' cannot be deleted while its Tally outcome is unresolved.");
         }
 
         bool tallyDiverges = bill.State is IBillService.StatePosted
-            or IBillService.StateFailed;
+            or IBillService.StateFailed
+            or IBillService.StateReconciliationRequired;
 
         if (request.DryRun)
         {

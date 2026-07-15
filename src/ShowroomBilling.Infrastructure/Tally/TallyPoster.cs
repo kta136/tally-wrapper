@@ -46,29 +46,28 @@ public sealed class TallyPoster(
         XElement response;
         try
         {
-            response = await xmlClient.SendAsync(xml, cancellationToken);
+            response = await xmlClient.SendWriteAsync(xml, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
             logger.LogWarning(ex, "Tally HTTP call failed for bill {BillId}.", request.BillId);
             return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
+                Outcome: TallyPostOutcome.Unknown,
                 RemoteId: null,
-                ErrorCode: "TALLY_HTTP",
-                ErrorMessage: Truncate(ex.Message, 1024),
+                ErrorCode: "TALLY_TRANSPORT_UNKNOWN",
+                ErrorMessage: $"Tally may have processed the voucher before the transport failed: {Truncate(ex.Message, 900)}",
                 XmlShape: "voucher-import-v1",
                 RequestExcerpt: requestExcerpt,
                 ResponseExcerpt: null);
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // Outer caller didn't cancel us — so this came from the inner CTS
-            // timer in TallyXmlClient (TimeoutSeconds elapsed) or from a Polly
-            // retry that exceeded that same budget. If the caller DID cancel,
-            // we let the exception propagate so cancellation stays fair.
+            // Outer caller didn't cancel us — this came from the TimeoutSeconds
+            // budget inside TallyXmlClient. Voucher writes are not retried. If the
+            // caller DID cancel, let the exception propagate so cancellation stays fair.
             logger.LogWarning(ex, "Tally call timed out for bill {BillId}.", request.BillId);
             return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
+                Outcome: TallyPostOutcome.Unknown,
                 RemoteId: null,
                 ErrorCode: "TALLY_TIMEOUT",
                 ErrorMessage: "Tally did not respond before the configured timeout.",
@@ -76,15 +75,27 @@ public sealed class TallyPoster(
                 RequestExcerpt: requestExcerpt,
                 ResponseExcerpt: null);
         }
-        catch (InvalidOperationException ex)
+        catch (TallyConfigurationException ex)
         {
-            // Config missing (Host/Port not set) or Tally returned empty body
+            // Configuration was rejected before any voucher request was sent.
             logger.LogWarning(ex, "Tally call rejected for bill {BillId}.", request.BillId);
             return new TallyPostResponse(
                 Outcome: TallyPostOutcome.Failed,
                 RemoteId: null,
                 ErrorCode: "TALLY_NOT_CONFIGURED",
                 ErrorMessage: Truncate(ex.Message, 1024),
+                XmlShape: "voucher-import-v1",
+                RequestExcerpt: requestExcerpt,
+                ResponseExcerpt: null);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
+        {
+            logger.LogWarning(ex, "Tally returned an unusable response for bill {BillId}.", request.BillId);
+            return new TallyPostResponse(
+                Outcome: TallyPostOutcome.Unknown,
+                RemoteId: null,
+                ErrorCode: "TALLY_RESPONSE_UNKNOWN",
+                ErrorMessage: "Tally may have processed the voucher, but its response could not be verified.",
                 XmlShape: "voucher-import-v1",
                 RequestExcerpt: requestExcerpt,
                 ResponseExcerpt: null);

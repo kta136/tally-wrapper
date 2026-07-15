@@ -563,9 +563,9 @@ Edited-after-push alter requests do not send `REMOTEID`; they target the old vou
 
 `RemoteId` on alter success: `LASTVCHID ?? LASTMID ?? request.TargetTagValue`; `tallyMasterId` is `LASTVCHID` when positive numeric, otherwise the alter target.
 
-Transport failures (`HttpRequestException`, `TaskCanceledException` outside the caller token, `InvalidOperationException` from missing config) are classified as `Failed` with error codes `TALLY_HTTP` / `TALLY_TIMEOUT` / `TALLY_NOT_CONFIGURED`. The `BillPostingStatusResponse` returns the last audit event's `errorCode` + `errorMessage` so the operator sees what happened without digging through logs.
+Transport failures after a voucher write begins are classified as `Unknown`: `TALLY_TRANSPORT_UNKNOWN` for HTTP/transport errors, `TALLY_TIMEOUT` for the configured timeout, and `TALLY_RESPONSE_UNKNOWN` for an unusable response. They move the bill to `reconciliation_required`. Missing configuration is known before sending and remains `Failed` with `TALLY_NOT_CONFIGURED`. `BillPostingStatusResponse` returns the latest problem's `errorCode` + `errorMessage`.
 
-Success and failure audit events both carry truncated `RequestExcerpt` and `ResponseExcerpt` (≤4000 chars each) for diagnosis.
+Success, failure, and unknown-outcome audit events carry truncated `RequestExcerpt` and `ResponseExcerpt` (≤4000 chars each) for diagnosis.
 
 ### 8.6 Terminal vs transient categorisation
 
@@ -573,9 +573,10 @@ Since Tally Wrapper has no auto-retry, "terminal" vs "transient" is informationa
 
 - **Config errors → fix Settings, then Retry:** `CONFIG_MISSING_SALES_LEDGER`, `CONFIG_MISSING_CGST_LEDGER`, `CONFIG_MISSING_SGST_LEDGER`, `CONFIG_MISSING_ROUNDOFF_LEDGER`, `CONFIG_MISSING_DISCOUNT_LEDGER`, `CONFIG_MISSING_COMPANY`, `TALLY_NOT_CONFIGURED`.
 - **Bill-content errors → Revise, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`.
-- **Transient Tally/network errors → just Retry:** `TALLY_HTTP`, `TALLY_TIMEOUT`, `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`.
+- **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`.
+- **Definite Tally rejection → correct data/config, then Retry or Revise:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`.
 
-Every click is a fresh attempt — there is no automatic backoff or next-attempt clock.
+Every voucher click makes one HTTP attempt — there is no automatic voucher retry, backoff, or next-attempt clock. Safe XML reads retain the short transport retry pipeline.
 
 ---
 
@@ -583,10 +584,6 @@ Every click is a fresh attempt — there is no automatic backoff or next-attempt
 
 Current focused regression command:
 
-```bash
-python3 -m pytest -q tests/test_client.py tests/test_xml_builder.py tests/test_tally_contract.py
+```powershell
+dotnet test tests/ShowroomBilling.Tests --filter "FullyQualifiedName~TallyPosterTests|FullyQualifiedName~TallyXmlRetryPolicyTests|FullyQualifiedName~TallyXmlVoucherBuilderTests"
 ```
-
-Expected result after the April 11, 2026 fix:
-
-- `30 passed`

@@ -1,8 +1,8 @@
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace ShowroomBilling.Desktop.Tests;
 

@@ -109,6 +109,7 @@ This current behavior wins over older requirement-doc wording.
 | `posting` | API is mid-call to Tally right now (typically seconds; briefly visible while the HTTP post is in flight) |
 | `posted` | Tally accepted the voucher |
 | `failed` | Latest post attempt failed; operator must click Retry |
+| `reconciliation_required` | The write may have reached Tally, but the API cannot prove success or failure; an admin must verify Tally and explicitly mark the bill posted or pending |
 | `revised` | Old pending lineage superseded by a newer pending revision |
 | `voided` | Bill cancelled/closed |
 
@@ -119,16 +120,16 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 | Event | From | To | Notes |
 |---|---|---|---|
 | Save bill | new / `revised` lineage | `pending` | Mutable working state; invoice number reserved at creation |
-| **Manual push** (operator click) | `pending`, `draft`, `failed` | `posting` → `posted` \| `failed` | API calls Tally XML synchronously via `ITallyPoster`; first pushes create a voucher, edited-after-push bills alter the prior Tally voucher. |
-| Manual retry | `failed` | `posting` → `posted` \| `failed` | Same sync path as push. |
-| Manual repost | `posted`, `failed` | `posting` → `posted` \| `failed` | Same sync path; plain reposts keep the create/import behavior unless the bill was reopened with `EditedAfterPush=true`. |
+| **Manual push** (operator click) | `pending`, `draft`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | API calls Tally XML synchronously via `ITallyPoster`; first pushes create a voucher, edited-after-push bills alter the prior Tally voucher. Transport timeouts/unreadable responses are ambiguous, not ordinary failures. |
+| Manual retry | `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | Same sync path as push. |
+| Manual repost | `posted`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | Same sync path; the caller-supplied repost idempotency key becomes the Tally `REMOTEID` for create/import. |
 | Revise bill content | `pending` only in normal flow | `revised` + new `pending` | Old pending bill becomes superseded |
 | **Edit in place** (admin-gated) | `pending`, `draft`, `failed`, `posted` | `pending` (with `EditedAfterPush=true` if reopened from non-pending) | Appends revision; invoice number unchanged. Blocked on `posting`. |
-| **Mark as Pushed** (admin-gated) | `pending`, `draft`, `failed` | `posted` | Local-only attestation — does not call Tally. Requires reason ≥ 4 chars. |
-| **Mark as Pending** (admin-gated) | `posted`, `failed` | `pending` | Local-only revert — does not touch Tally. Clears `EditedAfterPush`. |
-| **Change bill number** (admin-gated) | any except `posting` | (same state) | Updates `bill.InvoiceNumber`. Warnings: `LeavesGap`, `TallyDiverges`, `ReservationOrphaned`. 409 on uniqueness conflict. |
+| **Mark as Pushed** (admin-gated) | `pending`, `draft`, `failed`, `reconciliation_required` | `posted` | Local-only attestation — does not call Tally. This is one of the two explicit reconciliation exits. Requires reason ≥ 4 chars. |
+| **Mark as Pending** (admin-gated) | `posted`, `failed`, `reconciliation_required` | `pending` | Local-only revert — does not touch Tally. This is the other explicit reconciliation exit. Clears `EditedAfterPush`. |
+| **Change bill number** (admin-gated) | any except `posting`, `reconciliation_required` | (same state) | Updates `bill.InvoiceNumber`. Warnings: `LeavesGap`, `TallyDiverges`, `ReservationOrphaned`. 409 on uniqueness conflict. |
 | Void before posting | `pending`, `draft`, `failed` | `voided` | |
-| **Delete local** (admin-gated, hard-delete) | any except `posting` | (row removed) | Cascades bill_revisions. Keeps a `bill.deleted` tombstone in audit_events. |
+| **Delete local** (admin-gated, hard-delete) | any except `posting`, `reconciliation_required` | (row removed) | Cascades bill_revisions. Keeps the append-only audit history and a final `bill.deleted` tombstone. |
 
 ### 3.3 Target editability rules
 
@@ -136,6 +137,7 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 |---|---:|---|
 | `pending` | Yes | Normal editing state |
 | `posting` | No | Active Tally call — never editable |
+| `reconciliation_required` | No | Verify the voucher in Tally, then use admin Mark as Pushed or Mark as Pending |
 | `posted` | **Admin-only reopen** | Reopens to `pending`; sets `EditedAfterPush=true` |
 | `failed` | **Admin-only reopen** | Same as posted reopen |
 | `revised` | No | Historical superseded record |
@@ -148,9 +150,9 @@ There is no `tally_posting_jobs` table or queue. On push/retry/repost, `BillServ
 1. Transitions the bill to `posting` and saves.
 2. If `EditedAfterPush=true`, resolves the previous Tally `MASTER ID` from the pre-edit `tally.posted` audit. If it cannot, the push fails with `TALLY_ALTER_TARGET_MISSING` without creating a fallback voucher.
 3. Calls `ITallyPoster.PostAsync` synchronously (builds create XML, or alter XML for edited-after-push, sends via HTTP to Tally, parses response).
-4. Writes `tally.posted` or `tally.failed` audit event and transitions the bill to `posted` or `failed`. Successful alter clears `EditedAfterPush` and only then purges pre-edit audit rows.
+4. Writes `tally.posted`, `tally.failed`, or `tally.outcome.unknown` and transitions the bill to `posted`, `failed`, or `reconciliation_required`. The audit trail is append-only, including across edit-and-repush flows.
 
-If the API crashes mid-post, `StuckPostingRecoveryHostedService` runs on startup and flips any stranded `posting` bill back to `pending` with a `bill.posting.recovered` audit event for operator retry.
+If the API crashes mid-post, `StuckPostingRecoveryHostedService` moves any stranded `posting` bill to `reconciliation_required` with a `bill.posting.recovered` audit event. It never makes a potentially duplicate write safe merely by restarting the API.
 
 ---
 

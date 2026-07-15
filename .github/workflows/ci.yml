@@ -33,11 +33,22 @@ jobs:
       - name: Restore
         run: dotnet restore ShowroomBilling.sln
 
-      - name: Build
-        run: dotnet build ShowroomBilling.sln --configuration Release --no-restore
+      - name: Audit NuGet packages
+        shell: pwsh
+        run: |
+          $output = dotnet list ShowroomBilling.sln package --vulnerable --include-transitive | Out-String
+          $output
+          if ($LASTEXITCODE -ne 0 -or $output -match 'has the following vulnerable packages') { exit 1 }
 
-      - name: Test
-        run: dotnet test ShowroomBilling.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+      - name: Verify formatting
+        run: dotnet format style ShowroomBilling.sln --verify-no-changes --no-restore
+
+      - name: Build
+        run: dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
+
+      - name: Test and enforce coverage
+        shell: pwsh
+        run: ./tools/Test-Coverage.ps1 -MinimumLinePercent 27 -NoBuild
 
       - name: Upload test results
         if: always()
@@ -46,3 +57,40 @@ jobs:
           name: test-results
           path: '**/TestResults/*.trx'
           if-no-files-found: ignore
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage
+          path: artifacts/coverage/**/coverage.cobertura.xml
+          if-no-files-found: error
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore integration-test project
+        run: dotnet restore tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj
+
+      - name: Run Docker-backed Postgres tests
+        env:
+          SHOWROOM_BILLING_RUN_POSTGRES_TESTS: '1'
+        run: dotnet test tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --configuration Release --filter "Category=Postgres" --logger "trx;LogFileName=postgres-test-results.trx"
+
+      - name: Upload Postgres test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: postgres-test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: error

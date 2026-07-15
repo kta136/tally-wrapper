@@ -9,4 +9,7 @@ public sealed record RuntimeHealthResponse(
     string Message,
     string? DatabaseIdentity = null,
     string? ExpectedDatabaseIdentity = null,
-    bool? DatabaseIdentityMatches = null);
+    bool? DatabaseIdentityMatches = null,
+    bool DatabaseHealthSkipped = false,
+    string? DatabaseHealthSkipReason = null,
+    int ActiveClientCount = 0);

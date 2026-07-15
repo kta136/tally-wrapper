@@ -18,7 +18,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private PostgreSqlContainer? container;
     private string? externalConnectionString;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         externalConnectionString = Environment.GetEnvironmentVariable(ExternalConnectionStringVariable);
         if (!string.IsNullOrWhiteSpace(externalConnectionString))
@@ -32,7 +32,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         await container.StartAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         databaseGate.Dispose();
 
