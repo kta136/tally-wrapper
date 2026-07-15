@@ -226,6 +226,57 @@ public sealed class BillsViewModelSelectionTests
         Assert.False(vm.MarkPostedRowCommand.CanExecute(vm.Items[0]));
     }
 
+    [Fact]
+    public async Task LoadAsync_ForwardsSearchQueryToApi()
+    {
+        var api = new FakeBillsApi
+        {
+            Response = new BillListResponse(
+                Total: 0,
+                Skip: 0,
+                Take: 50,
+                Items: [])
+        };
+        var vm = new BillsViewModel(api)
+        {
+            SearchQuery = "Walk-in"
+        };
+
+        await vm.LoadAsync();
+
+        Assert.Equal("Walk-in", api.LastFilter?.Search);
+    }
+
+    [Fact]
+    public async Task HideFullyPostedDays_ReportsVisibleAndHiddenCounts()
+    {
+        var api = new FakeBillsApi
+        {
+            Response = new BillListResponse(
+                Total: 2,
+                Skip: 0,
+                Take: 50,
+                Items:
+                [
+                    Summary(Guid.NewGuid(), "SR/25-26/0001", BillStates.Posted),
+                    Summary(Guid.NewGuid(), "SR/25-26/0002", BillStates.Posted)
+                ])
+        };
+        var vm = new BillsViewModel(api);
+
+        await vm.LoadAsync();
+
+        Assert.Equal(0, vm.Showing);
+        Assert.Equal(2, vm.HiddenByPostedDaysCount);
+        Assert.True(vm.IsFilteredEmpty);
+
+        vm.ShowPostedDaysCommand.Execute(null);
+
+        Assert.Equal(2, vm.Showing);
+        Assert.Equal(0, vm.HiddenByPostedDaysCount);
+        Assert.False(vm.IsFilteredEmpty);
+    }
+
     private static BillSummaryItem Summary(
         Guid id,
         string invoiceNumber,
@@ -267,13 +318,17 @@ public sealed class BillsViewModelSelectionTests
     private sealed class FakeBillsApi : IBillsApiClient
     {
         public BillListResponse Response { get; set; } = new(0, 0, 50, []);
+        public BillSearchFilter? LastFilter { get; private set; }
         public List<Guid> MarkPostedIds { get; } = [];
         public List<string?> MarkPostedReasons { get; } = [];
         public List<Guid> MarkPendingIds { get; } = [];
         public List<string?> MarkPendingReasons { get; } = [];
 
-        public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Response);
+        public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
+        {
+            LastFilter = filter;
+            return Task.FromResult(Response);
+        }
 
         public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();

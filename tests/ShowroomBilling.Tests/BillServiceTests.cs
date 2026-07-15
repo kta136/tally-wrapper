@@ -725,6 +725,22 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task Search_FiltersByInvoiceNumberOrPartyName()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+
+        var alpha = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Alpha Jewels", 100m)));
+        var beta = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Beta Customer", 200m)));
+
+        var byParty = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "Alpha"));
+        var byInvoice = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: beta.InvoiceNumber![^4..]));
+
+        Assert.Equal(alpha.Id, Assert.Single(byParty.Items).Id);
+        Assert.Equal(beta.Id, Assert.Single(byInvoice.Items).Id);
+    }
+
+    [Fact]
     public async Task Push_WritesAuditWithInvoiceNumber()
     {
         await using var db = CreateDbContext();

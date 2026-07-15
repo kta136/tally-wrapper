@@ -130,7 +130,7 @@
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="260" />
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
         <!--  Main pane  -->
@@ -234,6 +234,11 @@
                         <TextBlock Text="LINE ITEMS" Style="{StaticResource TxtSectionTitle}" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <CheckBox x:Name="QuickAddToggle"
+                                  Margin="0,0,8,0"
+                                  VerticalAlignment="Center"
+                                  IsChecked="True"
+                                  Content="Quick Add" />
                         <Button Style="{StaticResource BtnSm}" Command="{Binding AddRowCommand}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="+ Add Row" VerticalAlignment="Center" />
@@ -268,7 +273,7 @@
             <!--  Line-item table  -->
             <Border Grid.Row="2" Background="{StaticResource BgPanelBrush}">
                 <ScrollViewer VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto">
-                    <Grid MinWidth="1378">
+                    <Grid MinWidth="1120">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -278,17 +283,17 @@
                         <Grid Grid.Row="0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="32" />
-                                <ColumnDefinition Width="*" MinWidth="240" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="96" />
-                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="*" MinWidth="190" />
                                 <ColumnDefinition Width="82" />
-                                <ColumnDefinition Width="102" />
-                                <ColumnDefinition Width="112" />
-                                <ColumnDefinition Width="128" />
+                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="62" />
+                                <ColumnDefinition Width="70" />
+                                <ColumnDefinition Width="82" />
+                                <ColumnDefinition Width="88" />
                                 <ColumnDefinition Width="104" />
-                                <ColumnDefinition Width="122" />
-                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="120" />
                                 <ColumnDefinition Width="32" />
                             </Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="#" /></Border>
@@ -327,17 +332,17 @@
                                     <Grid Style="{StaticResource EntryRowGrid}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="32" />
-                                            <ColumnDefinition Width="*" MinWidth="240" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="96" />
-                                            <ColumnDefinition Width="78" />
+                                            <ColumnDefinition Width="*" MinWidth="190" />
                                             <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="102" />
-                                            <ColumnDefinition Width="112" />
-                                            <ColumnDefinition Width="128" />
+                                            <ColumnDefinition Width="78" />
+                                            <ColumnDefinition Width="62" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="88" />
                                             <ColumnDefinition Width="104" />
-                                            <ColumnDefinition Width="122" />
-                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="78" />
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="120" />
                                             <ColumnDefinition Width="32" />
                                         </Grid.ColumnDefinitions>
 
@@ -665,9 +670,11 @@
 
         <!--  Side picker (stub for next pass)  -->
         <Border Grid.Column="1"
+                Width="260"
                 Background="{StaticResource BgSunkenBrush}"
                 BorderBrush="{StaticResource BorderBrushTok}"
-                BorderThickness="1,0,0,0">
+                BorderThickness="1,0,0,0"
+                Visibility="{Binding IsChecked, ElementName=QuickAddToggle, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

@@ -133,11 +133,14 @@ public partial class SettingsViewModel : ObservableObject,
         OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
         OpenInstallFolderCommand = new RelayCommand(OpenInstallFolder);
         OpenAppDataFolderCommand = new RelayCommand(OpenAppDataFolder);
+        DensityOptions = [UiDensityManager.Compact, UiDensityManager.Comfortable];
+        UiDensity = UiDensityManager.CurrentDensity;
     }
 
     public IRelayCommand OpenLogFolderCommand { get; }
     public IRelayCommand OpenInstallFolderCommand { get; }
     public IRelayCommand OpenAppDataFolderCommand { get; }
+    public IReadOnlyList<string> DensityOptions { get; }
 
     public Func<CancellationToken, Task>? AdminUnlockHandler
     {
@@ -228,6 +231,7 @@ public partial class SettingsViewModel : ObservableObject,
     [ObservableProperty] private string summary = string.Empty;
     [ObservableProperty] private DateTimeOffset? updatedAtUtc;
     [ObservableProperty] private EffectiveCloudSettingsDto? settings;
+    [ObservableProperty] private string uiDensity = UiDensityManager.Compact;
 
     public IReadOnlyList<string> CloudOwnedCategories { get; private set; } = Array.Empty<string>();
     public IReadOnlyList<string> LocalOnlyCategories { get; private set; } = Array.Empty<string>();
@@ -257,6 +261,7 @@ public partial class SettingsViewModel : ObservableObject,
         MasterData.NotifyShellStateChanged();
     }
     partial void OnIsDirtyChanged(bool value) => SaveAllCommand.NotifyCanExecuteChanged();
+    partial void OnUiDensityChanged(string value) => UiDensityManager.ApplyDensity(value);
 
     partial void OnSettingsChanged(EffectiveCloudSettingsDto? value)
     {

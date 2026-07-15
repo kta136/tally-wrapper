@@ -111,6 +111,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         NextPageCommand = new AsyncRelayCommand(NextPageAsync, CanNextPage);
         PrevPageCommand = new AsyncRelayCommand(PrevPageAsync, CanPrevPage);
         ClearFiltersCommand = new RelayCommand(ClearFilters);
+        ShowPostedDaysCommand = new RelayCommand(() => HideFullyPostedDays = false, () => HideFullyPostedDays);
         PushSelectedCommand = new AsyncRelayCommand(PushSelectedAsync, CanPushSelected);
         PushAllPendingCommand = new AsyncRelayCommand(PushAllPendingAsync, CanPushAllPending);
         RetrySelectedCommand = new AsyncRelayCommand(RetrySelectedAsync, CanRetrySelected);
@@ -151,6 +152,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public IAsyncRelayCommand NextPageCommand { get; }
     public IAsyncRelayCommand PrevPageCommand { get; }
     public IRelayCommand ClearFiltersCommand { get; }
+    public IRelayCommand ShowPostedDaysCommand { get; }
     public IAsyncRelayCommand PushSelectedCommand { get; }
     public IAsyncRelayCommand PushAllPendingCommand { get; }
 
@@ -181,6 +183,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     [ObservableProperty] private string stateFilter = "All";
     [ObservableProperty] private DateTime? fromDate;
     [ObservableProperty] private DateTime? toDate;
+    [ObservableProperty] private string searchQuery = string.Empty;
     [ObservableProperty] private int skip;
     [ObservableProperty] private int total;
     [ObservableProperty] private bool isLoading;
@@ -206,7 +209,11 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public bool HasNext => Skip + PageSize < Total;
     public int PageTake => PageSize;
-    public int Showing => Items.Count;
+    public int VisibleCount => GroupedItems.Cast<object>().Count();
+    public int Showing => VisibleCount;
+    public int HiddenByPostedDaysCount => Math.Max(0, Items.Count - VisibleCount);
+    public bool HasHiddenPostedDays => HideFullyPostedDays && HiddenByPostedDaysCount > 0;
+    public bool IsFilteredEmpty => Items.Count > 0 && VisibleCount == 0;
     public int SelectedCount => _selectedCount;
     public bool HasSelection => SelectedCount > 0;
     public bool HasSingleSelection => SelectedCount == 1;
@@ -236,6 +243,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     partial void OnIsRetryingSelectedChanged(bool value) => RefreshComputed();
     partial void OnIsTallyPushAllowedChanged(bool value) => RefreshComputed();
     partial void OnStateFilterChanged(string value) => RefreshComputed();
+    partial void OnSearchQueryChanged(string value) => RefreshComputed();
 
     public void ApplyTallyHealthSnapshot(SystemHealthSnapshot? snapshot)
     {
@@ -384,7 +392,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             var priorFocusedId = SelectedBill?.Id;
 
             var list = await _billsApi.SearchAsync(
-                new BillSearchFilter(state, from, to, Skip, PageSize, SortWorkflow, IncludeTotal: false),
+                new BillSearchFilter(state, from, to, Skip, PageSize, SortWorkflow, IncludeTotal: false, SearchQuery),
                 cancellationToken);
 
             ResetRows(list.Items);
@@ -456,7 +464,11 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         }
     }
 
-    partial void OnHideFullyPostedDaysChanged(bool value) => GroupedItems.Refresh();
+    partial void OnHideFullyPostedDaysChanged(bool value)
+    {
+        GroupedItems.Refresh();
+        RefreshComputed();
+    }
 
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -494,11 +506,16 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     {
         OnPropertyChanged(nameof(HasNext));
         OnPropertyChanged(nameof(Showing));
+        OnPropertyChanged(nameof(VisibleCount));
+        OnPropertyChanged(nameof(HiddenByPostedDaysCount));
+        OnPropertyChanged(nameof(HasHiddenPostedDays));
+        OnPropertyChanged(nameof(IsFilteredEmpty));
         RefreshSelectionState();
         RefreshCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
         PrevPageCommand.NotifyCanExecuteChanged();
         PushAllPendingCommand.NotifyCanExecuteChanged();
+        ShowPostedDaysCommand.NotifyCanExecuteChanged();
     }
 
     private void RefreshSelectionState()
@@ -620,6 +637,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         StateFilter = "All";
         FromDate = null;
         ToDate = null;
+        SearchQuery = string.Empty;
         Skip = 0;
     }
 

@@ -142,7 +142,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Print invoice" />
+                                <TextBlock Grid.Column="0" Text="Print estimate" />
                                 <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="F9" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">
@@ -150,7 +150,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Save &amp; post" />
+                                <TextBlock Grid.Column="0" Text="Save bill" />
                                 <Border Grid.Column="1" Style="{StaticResource KbdHint}"><TextBlock Text="Ctrl+S" FontFamily="{StaticResource MonoFontFamily}" FontSize="10" /></Border>
                             </Grid>
                             <Grid Style="{StaticResource KbdRow}">

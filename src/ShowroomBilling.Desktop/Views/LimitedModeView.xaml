@@ -70,25 +70,25 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="✓ STILL WORKS"
+                            <TextBlock Text="✓ AVAILABLE NOW"
                                        Style="{StaticResource TxtSectionTitle}"
                                        Foreground="{StaticResource OkBrush}"
                                        Margin="0,0,0,6" />
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Creating new bills &amp; estimates (in memory)" />
+                                <TextBlock Margin="8,0,0,0" Text="Retrying cloud/API and Tally health checks" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Printing estimates from unsaved work" />
+                                <TextBlock Margin="8,0,0,0" Text="Opening Database Settings to change recovery mode" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Quick-add picker using last synced masters" />
+                                <TextBlock Margin="8,0,0,0" Text="Switching between Server and Local Fallback when configured" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Viewing bills loaded before disconnect" />
+                                <TextBlock Margin="8,0,0,0" Text="Viewing recovery checklist and current failure reason" />
                             </StackPanel>
                         </StackPanel>
 
@@ -99,15 +99,15 @@
                                        Margin="0,0,0,6" />
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Posting to Tally" />
+                                <TextBlock Margin="8,0,0,0" Text="Creating, saving, or printing bills" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Final tax invoice numbers (cloud-allocated)" />
+                                <TextBlock Margin="8,0,0,0" Text="Final tax invoice numbers" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />
-                                <TextBlock Margin="8,0,0,0" Text="Master-data changes (ledgers, items, karat)" />
+                                <TextBlock Margin="8,0,0,0" Text="Master-data changes and Tally refresh" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource ErrBrush}" />

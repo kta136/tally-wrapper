@@ -338,14 +338,15 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         CanBootstrapDatabaseWithoutAdmin = false;
         if (snapshot.ConnectionString is { Length: > 0 } connectionString)
         {
-            DatabaseConnectionString = connectionString;
             DatabaseMaskedConnectionString = DesktopLocalDatabaseOverrideStore.MaskConnectionString(connectionString);
             DatabaseConfigStatus = IsRunningServerMode
                 ? "Loaded this workstation's LocalEmbedded fallback DB override. Server DB is configured from the server tray."
                 : "Loaded local embedded DB override.";
+            DatabaseConnectionString = IsRunningServerMode ? string.Empty : connectionString;
             return;
         }
 
+        DatabaseConnectionString = string.Empty;
         DatabaseMaskedConnectionString = "—";
         if (IsRunningServerMode)
         {

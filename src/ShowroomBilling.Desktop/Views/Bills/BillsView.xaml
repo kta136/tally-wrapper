@@ -164,17 +164,17 @@
                     </Button>
                     <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Retry Sync" />
+                            <TextBlock Text="Retry Push" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="R" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Ctrl+R" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Post to Tally" />
+                            <TextBlock Text="{Binding TallyPushButtonLabel}" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="P" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Button" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -185,9 +185,9 @@
                             ToolTip="Push every pending/draft bill to Tally, oldest first. Stops on the first failure." />
                     <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RepostSelectedCommand}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Repost" />
+                            <TextBlock Text="Repost to Tally" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Shift+P" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Ctrl+Shift+R" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -198,7 +198,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="Edit" />
                             <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="E" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
+                                <TextBlock Text="Ctrl+Shift+E" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
                             </Border>
                         </StackPanel>
                     </Button>
@@ -227,6 +227,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="220" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -252,7 +253,16 @@
                     <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RefreshCommand}" Content="Apply" />
                     <Button Style="{StaticResource BtnSm}" Command="{Binding ClearFiltersCommand}" Content="Clear" />
                 </StackPanel>
-                <CheckBox Grid.Column="5"
+                <StackPanel Grid.Column="5" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="Search" />
+                    <TextBox Width="160"
+                             Height="26"
+                             FontFamily="{StaticResource MonoFontFamily}"
+                             FontSize="11.5"
+                             ToolTip="Search invoice number or party name. Click Apply to reload."
+                             Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+                <CheckBox Grid.Column="6"
                           Margin="14,0,0,0"
                           VerticalAlignment="Center"
                           HorizontalAlignment="Left"
@@ -261,7 +271,7 @@
                           ToolTip="Hide date groups in which every bill is already posted to Tally. Leaves only days that still have unposted work.">
                     <TextBlock Text="Hide fully posted days" Foreground="{StaticResource InkMutedBrush}" />
                 </CheckBox>
-                <TextBlock Grid.Column="6"
+                <TextBlock Grid.Column="7"
                            VerticalAlignment="Center"
                            FontSize="{StaticResource FontSizeXs}"
                            Foreground="{StaticResource InkSoftBrush}">
@@ -270,6 +280,9 @@
                     <Run Text=" of " />
                     <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
                     <Run Text=" bills" />
+                    <Run Text=" · " />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
+                    <Run Text=" hidden" />
                 </TextBlock>
             </Grid>
         </Border>
@@ -290,7 +303,7 @@
                 </Border>
                 <Button Style="{StaticResource BtnSm}" Margin="8,0,0,0" Command="{Binding ClearSelectionCommand}" Content="Clear" />
                 <Rectangle Width="1" Height="18" Margin="10,0" Fill="{StaticResource DividerBrush}" />
-                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry All" />
+                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry Push" />
                 <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}" Content="{Binding TallyPushButtonLabel}" />
                 <Button Style="{StaticResource BtnSm}"
                         Margin="0,0,6,0"
@@ -430,19 +443,19 @@
                                 <Border.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="Open Details" InputGestureText="Enter" Click="OnOpenDetailsMenuItemClick" />
-                                        <MenuItem Header="Edit" InputGestureText="E"
+                                        <MenuItem Header="Edit" InputGestureText="Ctrl+Shift+E"
                                                   Visibility="{Binding CanBeEdited, Converter={StaticResource BoolToVis}}"
                                                   Click="OnEditRowMenuItemClick" />
                                         <Separator />
-                                        <MenuItem Header="Retry Sync" InputGestureText="R"
+                                        <MenuItem Header="Retry Push" InputGestureText="Ctrl+R"
                                                   Visibility="{Binding CanBeRetried, Converter={StaticResource BoolToVis}}"
                                                   Command="{Binding PlacementTarget.Tag.RetryRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}" />
-                                        <MenuItem Header="Post to Tally" InputGestureText="P"
+                                        <MenuItem Header="Push to Tally"
                                                   Visibility="{Binding CanBePushed, Converter={StaticResource BoolToVis}}"
                                                   Command="{Binding PlacementTarget.Tag.PushRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}" />
-                                        <MenuItem Header="Repost to Tally" InputGestureText="Shift+P"
+                                        <MenuItem Header="Repost to Tally" InputGestureText="Ctrl+Shift+R"
                                                   Visibility="{Binding CanBeReposted, Converter={StaticResource BoolToVis}}"
                                                   Command="{Binding PlacementTarget.Tag.RepostRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}" />
@@ -555,6 +568,29 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                <Border Margin="28"
+                        Padding="16"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Background="{StaticResource InfoSoftBrush}"
+                        BorderBrush="{StaticResource InfoBrush}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource Radius}"
+                        Visibility="{Binding IsFilteredEmpty, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource InfoInkBrush}"
+                                   Text="Only posted days are hidden" />
+                        <TextBlock Margin="0,6,0,10"
+                                   Foreground="{StaticResource InfoInkBrush}"
+                                   Text="Turn off Hide fully posted days to show the rows on this page." />
+                        <Button Style="{StaticResource BtnSm}"
+                                HorizontalAlignment="Left"
+                                Command="{Binding ShowPostedDaysCommand}"
+                                Content="Show posted days" />
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
 
@@ -575,7 +611,9 @@
                     <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
                     <Run Text=" of " />
                     <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
-                    <Run Text=" bills · Right-click row for actions" />
+                    <Run Text=" bills · " />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
+                    <Run Text=" hidden by posted-day filter · Right-click row for actions" />
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <!--  Change Bill Number is admin-only server-side; hide when locked.  -->

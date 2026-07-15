@@ -68,7 +68,7 @@
                                Text="{Binding UpdatedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
                     <Border Margin="12,0,0,0"
                             Padding="6,2"
-                            Background="{StaticResource WarnBrush}"
+                            Background="{StaticResource WarnSoftBrush}"
                             CornerRadius="2"
                             VerticalAlignment="Center"
                             Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}">

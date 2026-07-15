@@ -69,14 +69,16 @@
                         <ColumnDefinition Width="260" />
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0"
+                    <Border x:Name="PreviewViewport"
+                            Grid.Column="0"
                             Background="{StaticResource BgSunkenBrush}"
                             BorderBrush="{StaticResource BorderBrushTok}"
                             BorderThickness="1"
                             CornerRadius="4"
                             Padding="12"
                             MinHeight="480">
-                        <ListBox ItemsSource="{Binding PreviewPages}"
+                        <ListBox x:Name="PreviewList"
+                                 ItemsSource="{Binding PreviewPages}"
                                  BorderThickness="0"
                                  Background="Transparent"
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -172,7 +174,7 @@
                                 <TextBlock FontSize="11"
                                            TextWrapping="Wrap"
                                            Foreground="{StaticResource InkMutedBrush}"
-                                           Text="The invoice is saved and pending. Pushing to Tally happens only when you hit Push on the Bills tab." />
+                                           Text="Printing does not change bill state. Push to Tally from the Bills tab." />
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
@@ -209,6 +211,12 @@
                                     Command="{Binding ZoomInCommand}"
                                     Content="+"
                                     ToolTip="Zoom in" />
+                            <Button Margin="4,0,0,0"
+                                    Style="{StaticResource BtnGhost}"
+                                    Padding="8,0"
+                                    Click="OnFitWidthClick"
+                                    Content="Fit Width"
+                                    ToolTip="Fit preview to available width" />
                             <Button Margin="12,0,0,0"
                                     Style="{StaticResource BtnBase}"
                                     Command="{Binding SavePdfCommand}"

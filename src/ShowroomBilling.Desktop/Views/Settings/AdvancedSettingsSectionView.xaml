@@ -17,6 +17,31 @@
     <StackPanel>
         <TextBlock Text="Advanced" Style="{StaticResource SectionHeader}" Margin="0,0,0,16" />
 
+        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Display" Margin="0,0,0,10" />
+        <Border Margin="0,0,0,18"
+                Padding="10,7"
+                Background="{StaticResource BgSunkenBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource Radius}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="180" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="UI DENSITY" />
+                    <TextBlock FontSize="11"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               TextWrapping="Wrap"
+                               Text="Compact fits more billing rows; Comfortable increases touch targets and row height on this workstation." />
+                </StackPanel>
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding DensityOptions}"
+                          SelectedItem="{Binding UiDensity, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+        </Border>
+
         <!--  Logs & Diagnostics  -->
         <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Logs &amp; Diagnostics" Margin="0,0,0,10" />
 

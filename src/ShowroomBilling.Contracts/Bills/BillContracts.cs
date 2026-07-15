@@ -125,7 +125,8 @@ public sealed record BillSearchFilter(
     int? Skip,
     int? Take,
     string? Sort,
-    bool? IncludeTotal = true);
+    bool? IncludeTotal = true,
+    string? Search = null);
 
 public sealed record BillSummaryItem(
     Guid Id,

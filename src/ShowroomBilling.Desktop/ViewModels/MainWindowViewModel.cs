@@ -134,6 +134,14 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             ActiveDialog = "health";
             _ = RefreshHealthAsync(forceTallyCompany: true);
         });
+        SaveActiveCommand = new AsyncRelayCommand(SaveActiveAsync);
+        AddInvoiceRowCommand = new RelayCommand(
+            () => Invoice.AddRowCommand.Execute(null),
+            () => ActiveTab == NavTab.Invoice && Invoice.AddRowCommand.CanExecute(null));
+        RemoveInvoiceRowCommand = new RelayCommand(
+            () => Invoice.RemoveFocusedRowCommand.Execute(null),
+            () => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null));
+        PrintEstimateCommand = new AsyncRelayCommand(PrintEstimateAsync);
         OpenDatabaseSettingsCommand = new RelayCommand(() =>
         {
             OpenDatabaseSettings();
@@ -149,7 +157,17 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             // hanging forever.
             if (ActiveDialog == "changeNumber") OnChangeNumberDialogClosed((false, string.Empty, null));
             else if (ActiveDialog == "reasonPrompt") OnReasonPromptDialogClosed(null);
-            ActiveDialog = null;
+
+            if (ActiveDialog is not null)
+            {
+                ActiveDialog = null;
+                return;
+            }
+
+            if (ActiveTab == NavTab.Settings && Settings.DiscardChangesCommand.CanExecute(null))
+            {
+                Settings.DiscardChangesCommand.Execute(null);
+            }
         });
         OpenBillDetailsCommand = new RelayCommand(OpenSelectedBillDetails, () => Bills.SelectedBill is not null);
         OpenInvoicePreviewCommand = new AsyncRelayCommand(OpenInvoicePreviewAsync);
@@ -344,6 +362,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IAsyncRelayCommand SwitchToServerModeCommand { get; }
     public IAsyncRelayCommand RefreshHealthCommand { get; }
     public IAsyncRelayCommand RefreshAllMastersCommand { get; }
+    public IAsyncRelayCommand SaveActiveCommand { get; }
+    public IRelayCommand AddInvoiceRowCommand { get; }
+    public IRelayCommand RemoveInvoiceRowCommand { get; }
+    public IAsyncRelayCommand PrintEstimateCommand { get; }
     public IRelayCommand CloseDialogCommand { get; }
     public IRelayCommand OpenBillDetailsCommand { get; }
     public IAsyncRelayCommand OpenInvoicePreviewCommand { get; }
@@ -402,6 +424,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     partial void OnActiveTabChanged(NavTab value)
     {
         FKeys.SetTab(value);
+        AddInvoiceRowCommand.NotifyCanExecuteChanged();
+        RemoveInvoiceRowCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsInvoiceVisible));
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
@@ -437,6 +461,31 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     }
 
     public void SwitchTab(NavTab tab) => ActiveTab = tab;
+
+    private async Task SaveActiveAsync(CancellationToken cancellationToken)
+    {
+        if (ActiveDialog is not null)
+        {
+            return;
+        }
+
+        if (ActiveTab == NavTab.Invoice && Invoice.SaveDraftCommand.CanExecute(null))
+        {
+            await Invoice.SaveDraftCommand.ExecuteAsync(null);
+        }
+        else if (ActiveTab == NavTab.Settings && Settings.SaveAllCommand.CanExecute(null))
+        {
+            await Settings.SaveAllCommand.ExecuteAsync(null);
+        }
+    }
+
+    private async Task PrintEstimateAsync(CancellationToken cancellationToken)
+    {
+        if (ActiveDialog is null && ActiveTab == NavTab.Invoice)
+        {
+            await OpenInvoicePreviewAsync(cancellationToken);
+        }
+    }
 
     private void OpenSelectedBillDetails()
     {

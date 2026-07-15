@@ -22,7 +22,33 @@ public partial class PrintPreviewDialog : UserControl
         Dispatcher.BeginInvoke(new Action(() =>
         {
             PrintButton.Focus();
+            FitPreviewToWidth();
         }));
+    }
+
+    private void OnFitWidthClick(object sender, RoutedEventArgs e) => FitPreviewToWidth();
+
+    private void FitPreviewToWidth()
+    {
+        if (PreviewList.DataContext is not PrintPreviewViewModel preview)
+        {
+            return;
+        }
+
+        var firstPage = preview.PreviewPages.FirstOrDefault();
+        if (firstPage is null)
+        {
+            return;
+        }
+
+        var pageWidth = firstPage.Width;
+        var availableWidth = Math.Max(240, PreviewViewport.ActualWidth - 42);
+        if (pageWidth <= 0 || availableWidth <= 0)
+        {
+            return;
+        }
+
+        preview.PreviewZoomPercent = Math.Clamp(availableWidth / pageWidth * 100.0, 50, 200);
     }
 
     private void OnResizeThumbDragDelta(object sender, DragDeltaEventArgs e)

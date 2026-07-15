@@ -85,10 +85,11 @@ public sealed class BillsController(
         [FromQuery] int? take,
         [FromQuery] string? sort,
         [FromQuery] bool? includeTotal,
+        [FromQuery] string? search,
         CancellationToken cancellationToken)
     {
         var response = await billService.SearchAsync(
-            new BillSearchFilter(state, fromDate, toDate, skip, take, sort, includeTotal), cancellationToken);
+            new BillSearchFilter(state, fromDate, toDate, skip, take, sort, includeTotal, search), cancellationToken);
         return Ok(response);
     }
 

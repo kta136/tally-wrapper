@@ -113,6 +113,14 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         {
             query = query.Where(x => x.rev != null && x.rev.BillDate <= to);
         }
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var search = filter.Search.Trim();
+            var pattern = $"%{search}%";
+            query = query.Where(x =>
+                (x.bill.InvoiceNumber != null && EF.Functions.Like(x.bill.InvoiceNumber, pattern))
+                || (x.rev != null && x.rev.PartyName != null && EF.Functions.Like(x.rev.PartyName, pattern)));
+        }
 
         var includeTotal = filter.IncludeTotal ?? true;
         var total = includeTotal ? await query.CountAsync(cancellationToken) : 0;

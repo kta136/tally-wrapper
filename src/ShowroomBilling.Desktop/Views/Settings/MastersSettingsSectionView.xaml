@@ -46,23 +46,44 @@
                 BorderThickness="1"
                 CornerRadius="3"
                 MaxHeight="320">
-            <ListBox ItemsSource="{Binding Draft.ItemMasterRows}"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Focusable" Value="False" />
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        <Setter Property="Padding" Value="0" />
-                        <Setter Property="Background" Value="Transparent" />
-                        <Setter Property="BorderThickness" Value="0" />
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
+            <DockPanel LastChildFill="True">
+                <Grid DockPanel.Dock="Top" Margin="10,6,10,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="1.2*" />
+                        <ColumnDefinition Width="1.2*" />
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="1.5*" />
+                        <ColumnDefinition Width="32" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="NAME" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="UNIT" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="CATEGORY" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource FieldLabel}" Text="PRICING MODE" />
+                    <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="WASTAGE %" />
+                    <TextBlock Grid.Column="5" Style="{StaticResource FieldLabel}" Text="LAB/GM" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource FieldLabel}" Text="STOCK MAPPING LABEL" />
+                    <TextBlock Grid.Column="7" Style="{StaticResource FieldLabel}" Text="ACTIONS" />
+                </Grid>
+                <ListBox ItemsSource="{Binding Draft.ItemMasterRows}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Focusable" Value="False" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
                         <Grid Margin="8,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="2*" />
@@ -117,28 +138,10 @@
                                     Visibility="{Binding DataContext.IsEditing, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BoolToVis}}" />
                         </Grid>
                     </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
         </Border>
-        <Grid Margin="10,4,10,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*" />
-                <ColumnDefinition Width="70" />
-                <ColumnDefinition Width="1.2*" />
-                <ColumnDefinition Width="1.2*" />
-                <ColumnDefinition Width="80" />
-                <ColumnDefinition Width="80" />
-                <ColumnDefinition Width="1.5*" />
-                <ColumnDefinition Width="32" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="NAME" />
-            <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="UNIT" />
-            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="CATEGORY" />
-            <TextBlock Grid.Column="3" Style="{StaticResource FieldLabel}" Text="PRICING MODE" />
-            <TextBlock Grid.Column="4" Style="{StaticResource FieldLabel}" Text="WASTAGE %" />
-            <TextBlock Grid.Column="5" Style="{StaticResource FieldLabel}" Text="LAB/GM" />
-            <TextBlock Grid.Column="6" Style="{StaticResource FieldLabel}" Text="STOCK MAPPING LABEL" />
-        </Grid>
 
         <TextBlock Text="Masters · Karats" Style="{StaticResource SectionHeader}" />
         <Grid Margin="0,0,0,6">
@@ -171,12 +174,25 @@
                 BorderThickness="1"
                 CornerRadius="3"
                 MaxHeight="240">
-            <ListBox ItemsSource="{Binding Draft.KaratRows}"
-                     BorderThickness="0"
-                     Background="Transparent"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     VirtualizingPanel.IsVirtualizing="True"
-                     VirtualizingPanel.VirtualizationMode="Recycling">
+            <DockPanel LastChildFill="True">
+                <Grid DockPanel.Dock="Top" Margin="10,6,10,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.2*" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="2.5*" />
+                        <ColumnDefinition Width="32" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="LABEL" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="PURITY %" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="TALLY STOCK ITEM" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource FieldLabel}" Text="ACTIONS" />
+                </Grid>
+                <ListBox ItemsSource="{Binding Draft.KaratRows}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling">
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Focusable" Value="False" />
@@ -220,19 +236,9 @@
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-            </ListBox>
+                </ListBox>
+            </DockPanel>
         </Border>
-        <Grid Margin="10,4,10,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="1.2*" />
-                <ColumnDefinition Width="100" />
-                <ColumnDefinition Width="2.5*" />
-                <ColumnDefinition Width="32" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Style="{StaticResource FieldLabel}" Text="LABEL" />
-            <TextBlock Grid.Column="1" Style="{StaticResource FieldLabel}" Text="PURITY %" />
-            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="TALLY STOCK ITEM" />
-        </Grid>
         <TextBlock Margin="0,8,0,0"
                    FontSize="11"
                    TextWrapping="Wrap"

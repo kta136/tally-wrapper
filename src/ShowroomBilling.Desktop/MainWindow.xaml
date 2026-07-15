@@ -52,10 +52,10 @@
         <KeyBinding Key="OemQuestion" Modifiers="Shift" Command="{Binding OpenShortcutsCommand}" />
         <KeyBinding Key="OemTilde" Command="{Binding OpenAdminUnlockCommand}" />
         <KeyBinding Key="Escape" Command="{Binding CloseDialogCommand}" />
-        <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding Invoice.AddRowCommand}" />
-        <KeyBinding Key="Delete" Modifiers="Ctrl" Command="{Binding Invoice.RemoveFocusedRowCommand}" />
-        <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding Invoice.SaveDraftCommand}" />
-        <KeyBinding Key="F9" Command="{Binding OpenInvoicePreviewCommand}" />
+        <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddInvoiceRowCommand}" />
+        <KeyBinding Key="Delete" Modifiers="Ctrl" Command="{Binding RemoveInvoiceRowCommand}" />
+        <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveActiveCommand}" />
+        <KeyBinding Key="F9" Command="{Binding PrintEstimateCommand}" />
     </Window.InputBindings>
 
     <!--

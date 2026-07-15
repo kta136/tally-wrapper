@@ -50,7 +50,7 @@ In `TrustedLan` server mode, DB override metadata, anonymous DB bootstrap, DB te
 | `POST` | `/api/bills/drafts` | Create a saved bill (serial reserved here) | bill ID, current revision, state `pending`, assigned `InvoiceNumber` |
 | `PUT` | `/api/bills/drafts/{billId}` | Update saved bill (appends new revision) | updated bill with new revision number |
 | `GET` | `/api/bills/{billId}` | Load one bill with current revision and state | bill header, revision snapshot, state |
-| `GET` | `/api/bills` | Search bill history (paged) | `{ total, skip, take, items[] }` |
+| `GET` | `/api/bills` | Search bill history (paged). Query: `state`, `fromDate`, `toDate`, `skip`, `take`, `sort`, `includeTotal`, `search` (invoice number or party name). | `{ total, skip, take, items[] }` |
 | `POST` | `/api/bills/{billId}/push` | **Synchronously** post one pending bill to Tally | bill with state `posted`, `failed`, or `reconciliation_required` |
 | `POST` | `/api/bills/push-pending` | Loop over currently pending bills, pushing each synchronously | `{ matched, succeeded, failed, stoppedOnFailure, failedBillId, failureMessage, items[] }` |
 | `POST` | `/api/bills/push-selected` | Sync-push a specific set of bills | same batch response shape |

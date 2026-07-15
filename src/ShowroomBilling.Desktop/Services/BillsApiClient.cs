@@ -52,6 +52,7 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
         if (filter.Take is not null) qp.Add($"take={filter.Take}");
         if (!string.IsNullOrWhiteSpace(filter.Sort)) qp.Add($"sort={Uri.EscapeDataString(filter.Sort!)}");
         if (filter.IncludeTotal is not null) qp.Add($"includeTotal={filter.IncludeTotal.Value.ToString().ToLowerInvariant()}");
+        if (!string.IsNullOrWhiteSpace(filter.Search)) qp.Add($"search={Uri.EscapeDataString(filter.Search!)}");
         var url = qp.Count == 0 ? "/api/bills" : $"/api/bills?{string.Join('&', qp)}";
         var body = await httpClient.GetFromJsonAsync<BillListResponse>(url, cancellationToken);
         return body ?? throw new InvalidOperationException("Bills API returned an empty list payload.");

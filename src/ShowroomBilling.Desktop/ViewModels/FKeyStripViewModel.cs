@@ -25,7 +25,7 @@ public partial class FKeyStripViewModel : ObservableObject
         new("F3", "Item Picker"),
         new("F4", "Party"),
         new("F9", "Est. Print"),
-        new("Ctrl+S", "Save & Post"),
+        new("Ctrl+S", "Save Bill"),
         new("Ctrl+N", "New Row"),
         new("Ctrl+Del", "Remove Row"),
         new("Esc", "Cancel"),
@@ -35,14 +35,14 @@ public partial class FKeyStripViewModel : ObservableObject
     private static readonly IReadOnlyList<FKeyItem> BillsKeys =
     [
         new("Enter", "Details"),
-        new("P", "Push Selected"),
+        new("Button", "Push to Tally"),
         new("Ctrl+P", "Print Selected"),
-        new("Ctrl+R", "Retry Selected"),
+        new("Ctrl+R", "Retry Push"),
         new("F5", "Refresh"),
         new("PgDn", "Next Page"),
         new("PgUp", "Prev Page"),
-        new("Ctrl+S", "Push (details)"),
-        new("Ctrl+⇧+R", "Repost (details)"),
+        new("Ctrl+⇧+E", "Edit"),
+        new("Ctrl+⇧+R", "Repost to Tally"),
         new("Esc", "Close Dialog"),
     ];
 

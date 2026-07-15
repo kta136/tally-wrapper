@@ -425,6 +425,7 @@ public partial class InvoiceView : UserControl
                 e.Handled = true;
                 break;
             case Key.F3:
+                QuickAddToggle.IsChecked = true;
                 QuickAddBox.Focus();
                 e.Handled = true;
                 break;

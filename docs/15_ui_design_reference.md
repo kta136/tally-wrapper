@@ -137,12 +137,12 @@ Global (registered in the app shell):
 - `?` open shortcuts overlay
 - `Esc` close top-most dialog
 - `F9` print estimate (Invoice screen active)
-- `Ctrl+S` save (Invoice and Settings)
+- `Ctrl+S` saves the active screen: Save Bill on Invoice, Save in Settings.
 
 Per-screen F-key strip content (from [shell.jsx FKeyStrip](design/app/shell.jsx)):
 
-- Invoice: `F2 Edit Rate · F3 Item Picker · F4 Party · F9 Est. Print · Ctrl+S Save & Post · Ctrl+N New Row · Ctrl+Del Remove Row · Esc Cancel · ? Shortcuts`
-- Bills: `Enter Details · R Retry Sync · P Post · ⇧P Repost · E Edit · Ctrl+P Print · / Search · Del Void/Delete · ? Shortcuts`
+- Invoice: `F2 Edit Rate · F3 Item Picker · F4 Party · F9 Est. Print · Ctrl+S Save Bill · Ctrl+N New Row · Ctrl+Del Remove Row · Esc Cancel · ? Shortcuts`
+- Bills: `Enter Details · Button Push to Tally · Ctrl+R Retry Push · Ctrl+Shift+R Repost to Tally · Ctrl+Shift+E Edit · Ctrl+P Print · Search field · Shift+Del Delete · ? Shortcuts`
 - Settings: `Ctrl+S Save · Esc Cancel · Tab Next Field · ? Shortcuts`
 
 Invoice line-entry tab-order (from [invoice.jsx handleCellKey](design/app/invoice.jsx)):
@@ -169,9 +169,9 @@ Two operating states, driven by whether the API is reachable. Tally itself is on
 | State | Banner | Titlebar treatment | Nav/health cluster |
 |---|---|---|---|
 | `healthy` | none | default | green dot on Cloud; neutral dot on Tally |
-| `limited` | err banner: *"Limited mode — cloud unavailable. Working in memory only."* | titlebar background = warn-soft | err dot on Cloud; err dot on Tally (API can't reach Tally either) |
+| `limited` | err banner: *"Limited mode — cloud unavailable."* | titlebar background = warn-soft | err dot on Cloud; err dot on Tally (API can't reach Tally either) |
 
-In `limited`, the main region replaces Invoice/Bills/Settings with the `LimitedModeView` card ([app.jsx](design/app/app.jsx)) — split of "Still works" vs "Blocked until recovery" + a recovery-checklist timeline.
+In `limited`, Invoice and Bills are hidden. The main region shows the `LimitedModeView` recovery card; Settings remains available so an operator can retry health checks or change Database recovery mode.
 
 The design's Tweaks panel lets a reviewer toggle system state for preview purposes. In production the state is derived from real API health signals.
 
