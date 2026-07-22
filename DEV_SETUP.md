@@ -48,6 +48,8 @@ set value = excluded.value,
 
 The desktop status bar displays this DB-owned marker (`DB DEV`, `DB PROD`, or `DB UNSET`). Runtime health treats a `Development` API connected to a non-`DEV` database, or a `Production` API connected to a non-`PROD` database, as a `DB MISMATCH` warning while still reporting PostgreSQL as reachable.
 
+Settings -> Database shows the active runtime path as Desktop app -> API -> PostgreSQL. The Desktop never opens a PostgreSQL connection directly. In `Server` mode, configure the active database from the Tally Wrapper server tray; any LocalEmbedded override shown on the workstation is a fallback and is labelled **NOT IN USE**. In `LocalEmbedded` mode, the same page can test, save, and restart the embedded API with a DPAPI-protected database override.
+
 ## Build
 
 ```powershell

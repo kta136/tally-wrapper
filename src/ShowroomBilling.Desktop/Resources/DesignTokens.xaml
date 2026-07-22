@@ -74,6 +74,7 @@
     <!--  The design's Inter/JetBrains Mono aren't bundled on Windows, so earlier config fell through to these anyway; making it explicit.  -->
     <FontFamily x:Key="UiFontFamily">Segoe UI Variable Display, Segoe UI Variable, Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFontFamily">Cascadia Mono, Consolas</FontFamily>
+    <FontFamily x:Key="IconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
     <!--  Focus-ring thicknesses  -->
     <Thickness x:Key="FocusOutlineThickness">2</Thickness>

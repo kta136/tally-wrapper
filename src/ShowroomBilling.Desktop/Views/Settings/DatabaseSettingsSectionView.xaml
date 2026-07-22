@@ -11,78 +11,308 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="SettingsViewResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="DbIcon" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="DbIconButton" TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+                <Setter Property="Width" Value="26" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            </Style>
+            <Style x:Key="StatusChipText" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+                <Setter Property="FontSize" Value="10" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="CardValue" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="CardDetail" TargetType="TextBlock">
+                <Setter Property="Margin" Value="0,3,0,0" />
+                <Setter Property="FontSize" Value="10.5" />
+                <Setter Property="LineHeight" Value="15" />
+                <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="TableHeaderText" TargetType="TextBlock">
+                <Setter Property="Margin" Value="10,0" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="FontSize" Value="{StaticResource FontSizeSectionTitle}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            </Style>
+            <Style x:Key="TableCellText" TargetType="TextBlock">
+                <Setter Property="Margin" Value="10,6" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="TableRowBorder" TargetType="Border">
+                <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
+                <Setter Property="BorderThickness" Value="0,0,0,1" />
+                <Setter Property="MinHeight" Value="35" />
+            </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
     <StackPanel>
-        <TextBlock Text="Database" Style="{StaticResource SectionHeader}" Margin="0,0,0,12" />
-
-        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="API Connection Mode" Margin="0,0,0,8" />
-        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="CURRENT API" />
-                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11.5"
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource InkBrush}"
-                               Text="{Binding CurrentApiBaseUrl}" />
-                    <TextBlock Margin="0,6,0,0"
-                               FontSize="11"
-                               Foreground="{StaticResource InkMutedBrush}"
-                               Text="{Binding ApiConnectionModeSummary}" />
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="RUNNING MODE" />
-                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11.5"
-                               Foreground="{StaticResource InkBrush}"
-                               Text="{Binding RunningConnectionModeText}" />
-                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="BOOTSTRAP FILE" />
-                    <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11.5"
-                               TextWrapping="Wrap"
-                               Foreground="{StaticResource AccentBrush}"
-                               Text="{Binding DesktopBootstrapConfigPath}" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210" />
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0">
-                <TextBlock Style="{StaticResource FieldLabel}" Text="MODE" />
-                <ComboBox ItemsSource="{Binding ApiConnectionModeOptions}"
-                          SelectedItem="{Binding ApiConnectionMode, UpdateSourceTrigger=PropertyChanged}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2">
-                <TextBlock Style="{StaticResource FieldLabel}" Text="SERVER API URL" />
-                <TextBox Text="{Binding ServerApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
-                         IsEnabled="{Binding IsServerApiUrlEnabled}"
-                         FontFamily="{StaticResource MonoFontFamily}"
-                         FontSize="11.5" />
-            </StackPanel>
-            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="10,17,0,0" VerticalAlignment="Top">
-                <Button Style="{StaticResource BtnSm}" Command="{Binding TestServerConnectionCommand}" Content="Test server" Margin="0,0,6,0" />
-                <Button Style="{StaticResource BtnSm}" Command="{Binding FindServerCommand}" Content="Find server" Margin="0,0,6,0" />
-                <Button Style="{StaticResource BtnPrimary}" Command="{Binding SaveApiConnectionModeCommand}" Content="Save and restart" />
-            </StackPanel>
-        </Grid>
-        <TextBlock FontSize="11.5"
+        <TextBlock Text="Database"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource InkBrush}"
+                   Margin="0,0,0,3" />
+        <TextBlock Margin="0,0,0,12"
+                   FontSize="11.5"
                    Foreground="{StaticResource InkMutedBrush}"
                    TextWrapping="Wrap"
-                   Margin="0,0,0,8"
-                   Text="{Binding SelectedConnectionModeHelp}" />
+                   Text="Manage where Billing sends data and how it connects to the database." />
+
+        <!--  The table describes the configured route. Explicit Test/Refresh actions own live health checks.  -->
+        <Border Style="{StaticResource Panel}" Padding="14,12" Margin="0,0,0,18">
+            <StackPanel>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource FieldLabel}"
+                               Margin="0"
+                               VerticalAlignment="Center"
+                               Text="CURRENT CONNECTION" />
+                    <Border Grid.Column="1"
+                            Style="{StaticResource Chip}"
+                            Background="{StaticResource AccentSoftBrush}">
+                        <TextBlock Style="{StaticResource StatusChipText}"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   Text="API ONLY" />
+                    </Border>
+                </Grid>
+
+                <Border BorderBrush="{StaticResource BorderBrushTok}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource Radius}"
+                        Background="{StaticResource BgPanelBrush}">
+                    <StackPanel>
+                        <Border Background="{StaticResource BgSunkenBrush}"
+                                BorderBrush="{StaticResource DividerBrush}"
+                                BorderThickness="0,0,0,1"
+                                Height="29">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="27*" />
+                                    <ColumnDefinition Width="23*" />
+                                    <ColumnDefinition Width="35*" />
+                                    <ColumnDefinition Width="15*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource TableHeaderText}" Text="COMPONENT" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderText}" Text="MODE" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource TableHeaderText}" Text="DETAILS" />
+                                <TextBlock Grid.Column="3" Style="{StaticResource TableHeaderText}" Text="STATUS" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TableRowBorder}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="27*" />
+                                    <ColumnDefinition Width="23*" />
+                                    <ColumnDefinition Width="35*" />
+                                    <ColumnDefinition Width="15*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" Margin="10,5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource DbIcon}" Text="&#xE7F8;" />
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               FontSize="{StaticResource FontSizeUi}"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Text="Desktop App (This workstation)" />
+                                </Grid>
+                                <TextBlock Grid.Column="1" Style="{StaticResource TableCellText}" Text="Sends billing requests over HTTP" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource TableCellText}" Text="No database credentials are used here." />
+                                <StackPanel Grid.Column="3" Margin="10,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" BorderBrush="{StaticResource OkBrush}" BorderThickness="1" CornerRadius="6">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{StaticResource UiFontFamily}"
+                                                   FontSize="8"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource OkBrush}"
+                                                   Text="&#x2713;" />
+                                    </Border>
+                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}" Text="OK" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource TableRowBorder}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="27*" />
+                                    <ColumnDefinition Width="23*" />
+                                    <ColumnDefinition Width="35*" />
+                                    <ColumnDefinition Width="15*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" Margin="10,5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource DbIcon}" Text="&#xE753;" />
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               FontSize="{StaticResource FontSizeUi}"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding ActiveApiComponentText}" />
+                                </Grid>
+                                <TextBlock Grid.Column="1" Style="{StaticResource TableCellText}" Text="{Binding ActiveApiLocationText}" />
+                                <TextBlock Grid.Column="2"
+                                           Style="{StaticResource TableCellText}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           Text="{Binding CurrentApiBaseUrl}" />
+                                <StackPanel Grid.Column="3" Margin="10,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" BorderBrush="{StaticResource OkBrush}" BorderThickness="1" CornerRadius="6">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{StaticResource UiFontFamily}"
+                                                   FontSize="8"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource OkBrush}"
+                                                   Text="&#x2713;" />
+                                    </Border>
+                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}" Text="{Binding ActiveApiStatusText}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border MinHeight="35">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="27*" />
+                                    <ColumnDefinition Width="23*" />
+                                    <ColumnDefinition Width="35*" />
+                                    <ColumnDefinition Width="15*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" Margin="10,5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource DbIcon}" Text="&#xEDA2;" />
+                                    <TextBlock Grid.Column="1"
+                                               VerticalAlignment="Center"
+                                               FontSize="{StaticResource FontSizeUi}"
+                                               FontWeight="SemiBold"
+                                               Text="PostgreSQL" />
+                                </Grid>
+                                <TextBlock Grid.Column="1" Style="{StaticResource TableCellText}" Text="{Binding ActiveDatabaseOwnerText}" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource TableCellText}" Text="{Binding ActiveDatabaseSourceText}" />
+                                <StackPanel Grid.Column="3" Margin="10,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Border Width="12" Height="12" BorderBrush="{StaticResource OkBrush}" BorderThickness="1" CornerRadius="6">
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{StaticResource UiFontFamily}"
+                                                   FontSize="8"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource OkBrush}"
+                                                   Text="&#x2713;" />
+                                    </Border>
+                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}" Text="{Binding ActiveDatabaseStatusText}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <TextBlock FontSize="13"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource InkBrush}"
+                   Text="Change where the API runs"
+                   Margin="0,0,0,3" />
+        <TextBlock FontSize="{StaticResource FontSizeLabel}"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,9"
+                   Text="Choose the shared API on the Tally server, or let this workstation run its own embedded API. Saving restarts Billing." />
+
+        <Border Style="{StaticResource Panel}" Padding="14,11" Margin="0,0,0,8">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3*" MinWidth="300" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="7*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="API LOCATION AFTER RESTART" />
+                        <ComboBox ItemsSource="{Binding ApiConnectionModeOptions}"
+                                  DisplayMemberPath="Label"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding ApiConnectionMode, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="SERVER API URL" />
+                        <TextBox Text="{Binding ServerApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 IsEnabled="{Binding IsServerApiUrlEnabled}"
+                                 FontFamily="{StaticResource MonoFontFamily}"
+                                 FontSize="{StaticResource FontSizeMono}" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock FontSize="{StaticResource FontSizeSm}"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,7,0,9"
+                           Text="{Binding SelectedConnectionModeHelp}" />
+
+                <WrapPanel>
+                    <Button Style="{StaticResource BtnSm}"
+                            Command="{Binding TestServerConnectionCommand}"
+                            Margin="0,0,7,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE713;" />
+                            <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Test server" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource BtnSm}"
+                            Command="{Binding FindServerCommand}"
+                            Margin="0,0,7,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE721;" />
+                            <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Find server" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource BtnPrimary}"
+                            Command="{Binding SaveApiConnectionModeCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="12" Foreground="{StaticResource InkInverseBrush}" Text="&#xE895;" />
+                            <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="Save and restart Billing" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
 
         <Border Margin="0,0,0,18"
                 Padding="10,7"
@@ -103,230 +333,358 @@
                     </Style.Triggers>
                 </Style>
             </Border.Style>
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource InfoBrush}" />
-                <TextBlock VerticalAlignment="Center"
-                           FontSize="11.5"
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="18" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Foreground="{StaticResource InfoBrush}" Text="&#xE946;" />
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           FontSize="{StaticResource FontSizeLabel}"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource InfoInkBrush}"
                            Text="{Binding ApiConnectionStatus}" />
-            </StackPanel>
+            </Grid>
         </Border>
 
-        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Local Embedded Database" Margin="0,0,0,8" />
-        <TextBlock FontSize="12"
-                   LineHeight="19"
+        <Grid Margin="0,0,0,3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource InkBrush}"
+                       Text="{Binding LocalDatabaseSectionTitle}" />
+            <Border Grid.Column="1"
+                    Style="{StaticResource Chip}"
+                    Background="{StaticResource WarnSoftBrush}"
+                    Visibility="{Binding IsRunningServerMode, Converter={StaticResource BoolToVis}}">
+                <TextBlock Style="{StaticResource StatusChipText}"
+                           Foreground="{StaticResource WarnInkBrush}"
+                           Text="{Binding LocalDatabaseUsageChipText}" />
+            </Border>
+            <Border Grid.Column="1"
+                    Style="{StaticResource Chip}"
+                    Background="{StaticResource OkSoftBrush}"
+                    Visibility="{Binding IsRunningLocalEmbeddedMode, Converter={StaticResource BoolToVis}}">
+                <TextBlock Style="{StaticResource StatusChipText}"
+                           Foreground="{StaticResource OkInkBrush}"
+                           Text="{Binding LocalDatabaseUsageChipText}" />
+            </Border>
+        </Grid>
+        <TextBlock FontSize="{StaticResource FontSizeLabel}"
+                   LineHeight="16"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
-                   Margin="0,0,0,14"
-                   Text="Used only when this workstation runs LocalEmbedded mode. Server mode database configuration is maintained from the server tray." />
+                   Margin="0,0,0,9"
+                   Text="{Binding LocalDatabaseSectionDescription}" />
 
-        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,10">
-            <StackPanel>
-                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="LOCAL EMBEDDED API" />
-                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11.5"
-                           Foreground="{StaticResource InkBrush}"
-                           Text="{Binding LocalEmbeddedApiBaseUrl}" />
-            </StackPanel>
-        </Border>
-
-        <Border Margin="0,0,0,16"
-                Padding="10,8"
+        <Border Margin="0,0,0,9"
+                Padding="10,7"
                 Background="{StaticResource WarnSoftBrush}"
                 BorderBrush="{StaticResource WarnBrush}"
                 BorderThickness="1"
                 CornerRadius="{StaticResource Radius}"
                 Visibility="{Binding IsRunningServerMode, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="11.5"
-                       TextWrapping="Wrap"
-                       Foreground="{StaticResource WarnInkBrush}"
-                       Text="This workstation is currently using Server mode. Switch to LocalEmbedded and restart before editing this workstation's local fallback DB override." />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource DbIcon}" FontSize="14" Foreground="{StaticResource WarnBrush}" Text="&#xE814;" />
+                <StackPanel Grid.Column="1">
+                    <TextBlock FontSize="{StaticResource FontSizeLabel}"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource WarnInkBrush}"
+                               Text="The active server database is not configured from this workstation." />
+                    <TextBlock Margin="0,2,0,0"
+                               FontSize="{StaticResource FontSizeSm}"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource WarnInkBrush}"
+                               Text="Use the Tally Wrapper server tray on the Tally server to view, test, or change its PostgreSQL connection." />
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <Border Margin="0,0,0,16"
-                Padding="10,8"
+        <Grid Margin="0,0,0,9">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.1*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource DbStateCard}" Padding="12,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="LOCAL EMBEDDED API ENDPOINT" />
+                        <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                   FontSize="{StaticResource FontSizeMono}"
+                                   Foreground="{StaticResource InkBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding LocalEmbeddedApiBaseUrl}" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Style="{StaticResource DbIconButton}"
+                            Command="{Binding CopyLocalEmbeddedApiBaseUrlCommand}"
+                            Content="&#xE8C8;"
+                            ToolTip="Copy local embedded API endpoint"
+                            AutomationProperties.Name="Copy local embedded API endpoint" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2"
+                    Padding="10,7"
+                    Background="{StaticResource InfoSoftBrush}"
+                    BorderBrush="{StaticResource InfoBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Radius}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Visible" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DatabaseConfigStatus}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DatabaseConfigStatus}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource DbIcon}" FontSize="14" Foreground="{StaticResource InfoBrush}" Text="&#xE946;" />
+                    <TextBlock Grid.Column="1"
+                               VerticalAlignment="Center"
+                               FontSize="{StaticResource FontSizeSm}"
+                               LineHeight="15"
+                               TextWrapping="Wrap"
+                               Foreground="{StaticResource InfoInkBrush}"
+                               Text="{Binding DatabaseConfigStatus}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Margin="0,0,0,9"
+                Padding="10,7"
                 Background="{StaticResource WarnSoftBrush}"
                 BorderBrush="{StaticResource WarnBrush}"
                 BorderThickness="1"
                 CornerRadius="{StaticResource Radius}"
                 Visibility="{Binding CanBootstrapDatabaseWithoutAdmin, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="11.5"
+            <TextBlock FontSize="10.5"
                        TextWrapping="Wrap"
                        Foreground="{StaticResource WarnInkBrush}"
                        Text="{Binding DatabaseSetupModeText}" />
         </Border>
 
-        <StackPanel IsEnabled="{Binding IsDatabaseOverrideEditorEnabled}">
-            <TextBlock Style="{StaticResource FieldLabel}" Text="POSTGRES CONNECTION STRING" />
-            <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True"
-                     TextWrapping="Wrap"
-                     MinHeight="64"
-                     VerticalScrollBarVisibility="Auto"
-                     VerticalContentAlignment="Top"
-                     Padding="10,8"
-                     FontFamily="{StaticResource MonoFontFamily}"
-                     FontSize="11.5"
-                     ToolTip="Only available in LocalEmbedded mode after Load. Server mode database configuration is maintained from the server tray." />
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Button Style="{StaticResource BtnSm}" Command="{Binding LoadDatabaseConfigCommand}" Content="Load" Margin="0,0,6,0" />
-                <Button Style="{StaticResource BtnSm}" Command="{Binding TestDatabaseConnectionCommand}" Content="Test connection" Margin="0,0,6,0" />
-                <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Content="{Binding SaveDatabaseConfigButtonText}" Margin="0,0,6,0" />
-                <Rectangle Width="1" Margin="4,0" Fill="{StaticResource DividerBrush}" />
-                <Button Style="{StaticResource BtnSm}" Command="{Binding RestartApiCommand}" Content="Restart API" Margin="6,0,0,0" />
-            </StackPanel>
-        </StackPanel>
-
-        <!--  Inline status strip — only renders when there's a message  -->
-        <Border Margin="0,14,0,0"
-                Padding="10,7"
-                Background="{StaticResource InfoSoftBrush}"
-                BorderBrush="{StaticResource InfoBrush}"
-                BorderThickness="1"
-                CornerRadius="{StaticResource Radius}">
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Visibility" Value="Visible" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding DatabaseConfigStatus}" Value="">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding DatabaseConfigStatus}" Value="{x:Null}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{StaticResource InfoBrush}" />
-                <TextBlock VerticalAlignment="Center"
-                           FontSize="11.5"
-                           TextWrapping="Wrap"
-                           Foreground="{StaticResource InfoInkBrush}"
-                           Text="{Binding DatabaseConfigStatus}" />
-            </StackPanel>
-        </Border>
-
-        <!--  Current State  -->
-        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Current State" Margin="0,24,0,10" />
-
-        <!--  Masked current value card  -->
-        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,8">
+        <!--  The connection editor remains part of LocalEmbedded mode only.  -->
+        <Border Style="{StaticResource Panel}"
+                Padding="12,10"
+                Margin="0,0,0,10"
+                Visibility="{Binding IsRunningLocalEmbeddedMode, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="MASKED CURRENT VALUE" />
-                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11.5"
+                <TextBlock Style="{StaticResource FieldLabel}" Text="NEW POSTGRES CONNECTION STRING" />
+                <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MinHeight="58"
+                         VerticalScrollBarVisibility="Auto"
+                         VerticalContentAlignment="Top"
+                         Padding="9,7"
+                         FontFamily="{StaticResource MonoFontFamily}"
+                         FontSize="11"
+                         ToolTip="The embedded API uses this value after it is tested, saved, and restarted." />
+                <TextBlock Margin="0,4,0,8"
+                           FontSize="10.5"
+                           Foreground="{StaticResource InkMutedBrush}"
                            TextWrapping="Wrap"
-                           Foreground="{StaticResource InkBrush}"
-                           Text="{Binding DatabaseMaskedConnectionString}" />
+                           Text="Credentials are sent to the local API for testing and saved in a Windows-encrypted override file. They are never used by the desktop to connect directly." />
+                <WrapPanel>
+                    <Button Style="{StaticResource BtnSm}" Command="{Binding LoadDatabaseConfigCommand}" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE72C;" />
+                            <TextBlock Margin="6,0,0,0" Text="Reload current state" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource BtnSm}" Command="{Binding TestDatabaseConnectionCommand}" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE713;" />
+                            <TextBlock Margin="6,0,0,0" Text="Test connection" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource BtnSm}" Command="{Binding SaveDatabaseConfigCommand}" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE74E;" />
+                            <TextBlock Margin="6,0,0,0" Text="{Binding SaveDatabaseConfigButtonText}" />
+                        </StackPanel>
+                    </Button>
+                    <Rectangle Width="1" Margin="4,0" Fill="{StaticResource DividerBrush}" />
+                    <Button Style="{StaticResource BtnSm}" Command="{Binding RestartApiCommand}" Margin="6,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE895;" />
+                            <TextBlock Margin="6,0,0,0" Text="Restart API" />
+                        </StackPanel>
+                    </Button>
+                </WrapPanel>
             </StackPanel>
         </Border>
 
-        <!--  Local override file card  -->
-        <Border Style="{StaticResource DbStateCard}" Margin="0,0,0,8">
-            <StackPanel>
-                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="LOCAL OVERRIDE FILE" />
-                <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11.5"
-                           TextWrapping="Wrap"
-                           Foreground="{StaticResource AccentBrush}"
-                           Text="{Binding DatabaseConfigPath}" />
-            </StackPanel>
-        </Border>
+        <TextBlock FontSize="12.5"
+                   FontWeight="SemiBold"
+                   Foreground="{StaticResource InkBrush}"
+                   Text="Configuration details"
+                   Margin="0,0,0,8" />
 
-        <!--  Override + Restart side-by-side  -->
-        <Grid Margin="0,0,0,4">
+        <Grid Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="2.2*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="1.25*" />
             </Grid.ColumnDefinitions>
-
-            <!--  Override present  -->
-            <Border Grid.Column="0" Style="{StaticResource DbStateCard}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,6" Text="LOCAL OVERRIDE" />
-                    <StackPanel Orientation="Horizontal">
-                        <!--  Active (override file present)  -->
-                        <Border Padding="7,0"
-                                Height="18"
-                                CornerRadius="2"
-                                VerticalAlignment="Center"
-                                Background="{StaticResource AccentSoftBrush}"
-                                Visibility="{Binding IsLocalDatabaseOverridePresent, Converter={StaticResource BoolToVis}}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource AccentBrush}" />
-                                <TextBlock Text="ACTIVE"
-                                           FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource AccentBrush}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Border>
-                        <!--  Not present  -->
-                        <Border Padding="7,0"
-                                Height="18"
-                                CornerRadius="2"
-                                VerticalAlignment="Center"
-                                Background="{StaticResource NeutralChipBrush}"
-                                Visibility="{Binding IsLocalDatabaseOverridePresent, Converter={StaticResource InverseBoolToVis}}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource InkDisabledBrush}" />
-                                <TextBlock Text="NONE"
-                                           FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource InkMutedBrush}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Border>
+            <Border Grid.Column="0" Style="{StaticResource DbStateCard}" Padding="12,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="18" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="CONNECTION VALUE (MASKED)" />
+                        <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                   FontSize="10.5"
+                                   LineHeight="14"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource InkBrush}"
+                                   Text="{Binding DatabaseMaskedConnectionString}" />
                     </StackPanel>
-                </StackPanel>
+                    <TextBlock Grid.Column="1" Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE72E;" />
+                </Grid>
             </Border>
-
-            <!--  Restart required  -->
-            <Border Grid.Column="2" Style="{StaticResource DbStateCard}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,6" Text="RESTART REQUIRED" />
-                    <StackPanel Orientation="Horizontal">
-                        <!--  Yes, restart pending  -->
-                        <Border Padding="7,0"
-                                Height="18"
-                                CornerRadius="2"
-                                VerticalAlignment="Center"
+            <Border Grid.Column="2" Style="{StaticResource DbStateCard}" Padding="12,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="18" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="SOURCE" />
+                        <TextBlock Style="{StaticResource CardValue}" FontSize="10.5" Text="{Binding DatabaseSourceText}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE72E;" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="4" Style="{StaticResource DbStateCard}" Padding="12,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="18" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="API ENVIRONMENT" />
+                        <TextBlock Style="{StaticResource CardValue}" FontSize="10.5" Text="{Binding DatabaseEnvironmentName}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE774;" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="6" Style="{StaticResource DbStateCard}" Padding="12,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="18" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,5" Text="RESTART STATE" />
+                        <Border Style="{StaticResource Chip}"
+                                HorizontalAlignment="Left"
                                 Background="{StaticResource WarnSoftBrush}"
                                 Visibility="{Binding DatabaseConfigRequiresRestart, Converter={StaticResource BoolToVis}}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource WarnBrush}" />
-                                <TextBlock Text="PENDING"
-                                           FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource WarnInkBrush}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
+                            <TextBlock Style="{StaticResource StatusChipText}" Foreground="{StaticResource WarnInkBrush}" Text="RESTART PENDING" />
                         </Border>
-                        <!--  No  -->
-                        <Border Padding="7,0"
-                                Height="18"
-                                CornerRadius="2"
-                                VerticalAlignment="Center"
+                        <Border Style="{StaticResource Chip}"
+                                HorizontalAlignment="Left"
                                 Background="{StaticResource OkSoftBrush}"
                                 Visibility="{Binding DatabaseConfigRequiresRestart, Converter={StaticResource InverseBoolToVis}}">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
-                                <TextBlock Text="IN SYNC"
-                                           FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource OkInkBrush}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
+                            <TextBlock Style="{StaticResource StatusChipText}" Foreground="{StaticResource OkInkBrush}" Text="IN SYNC" />
                         </Border>
                     </StackPanel>
-                </StackPanel>
+                    <TextBlock Grid.Column="1" Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE895;" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.1*" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="1.8*" />
+            </Grid.ColumnDefinitions>
+            <Border Grid.Column="0" Style="{StaticResource DbStateCard}" Padding="12,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="ENCRYPTED OVERRIDE FILE" />
+                        <TextBlock FontFamily="{StaticResource MonoFontFamily}"
+                                   FontSize="10.5"
+                                   TextWrapping="Wrap"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   Text="{Binding DatabaseConfigPath}" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Style="{StaticResource DbIconButton}"
+                            Command="{Binding CopyDatabaseConfigPathCommand}"
+                            Content="&#xE8C8;"
+                            ToolTip="Copy encrypted override path"
+                            AutomationProperties.Name="Copy encrypted override path" />
+                </Grid>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource DbStateCard}" Padding="12,9">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="30" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="LOCAL OVERRIDE FILE" />
+                        <TextBlock Style="{StaticResource CardDetail}"
+                                   Margin="0"
+                                   Text="When present, the local API reads this encrypted file during startup unless an environment override takes precedence." />
+                    </StackPanel>
+                    <Border Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource Chip}"
+                            Background="{StaticResource AccentSoftBrush}"
+                            Visibility="{Binding IsLocalDatabaseOverridePresent, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource StatusChipText}" Foreground="{StaticResource AccentBrush}" Text="PRESENT" />
+                    </Border>
+                    <Border Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource Chip}"
+                            Visibility="{Binding IsLocalDatabaseOverridePresent, Converter={StaticResource InverseBoolToVis}}">
+                        <TextBlock Style="{StaticResource StatusChipText}" Foreground="{StaticResource InkMutedBrush}" Text="NONE" />
+                    </Border>
+                    <Button Grid.Column="2"
+                            Style="{StaticResource DbIconButton}"
+                            Command="{Binding CopyDatabaseConfigPathCommand}"
+                            Content="&#xE8C8;"
+                            ToolTip="Copy local override path"
+                            AutomationProperties.Name="Copy local override path" />
+                </Grid>
             </Border>
         </Grid>
     </StackPanel>

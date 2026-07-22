@@ -29,6 +29,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 - server-mode bootstrap overrides are typed and narrow: the local JSON file can switch between `LocalEmbedded` and `Server`, and can set the server API URL, but it cannot override `ChildProcesses`, DB settings, Tally settings, or shared business behavior
 - the desktop writes those two bootstrap fields through **Settings -> Database -> API Connection Mode**; saving restarts Billing so startup mode changes take effect; the last non-localhost server URL is preserved for switching back to server mode
 - the desktop Database section may edit the local embedded DB override only while running in `LocalEmbedded`; server-service DB configuration remains owned by the Tally server tray
+- the Database section presents the runtime path as Desktop -> API -> PostgreSQL. The Desktop never uses the PostgreSQL connection string directly. In `Server` mode, any LocalEmbedded override shown on the workstation is fallback state only and is explicitly labelled not in use.
 - **there is no separate bridge process** — its config has been removed. Tally connection details (host, port, active company) live in cloud settings and are read by the API's `ITallyPoster` on each posting call.
 - API exposes settings ownership through `/api/settings` and `/api/settings/storage-contract`
 - shared settings are represented as API-owned, not as local files or a local settings database

@@ -25,6 +25,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     private readonly Action _restartApplication;
     private readonly Func<bool> _confirmConnectionModeRestart;
     private readonly Func<bool> _hasUnsavedSettingsEdits;
+    private readonly Action<string> _copyToClipboard;
     private string _lastServerApiBaseUrl;
 
     public DatabaseSettingsViewModel(
@@ -35,12 +36,14 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
         Func<bool>? confirmConnectionModeRestart = null,
-        Func<bool>? hasUnsavedSettingsEdits = null)
+        Func<bool>? hasUnsavedSettingsEdits = null,
+        Action<string>? copyToClipboard = null)
     {
         _bootstrapOptions = bootstrapOptions ?? new DesktopBootstrapOptions();
         _restartApplication = restartApplication ?? RestartCurrentProcess;
         _confirmConnectionModeRestart = confirmConnectionModeRestart ?? ConfirmConnectionModeRestart;
         _hasUnsavedSettingsEdits = hasUnsavedSettingsEdits ?? (static () => false);
+        _copyToClipboard = copyToClipboard ?? Clipboard.SetText;
         _databaseWorkflow = new DatabaseConfigurationWorkflow(runtimeApi, healthApi, adminTokenStore, childProcessSupervisor, this);
 
         LoadDatabaseConfigCommand = new AsyncRelayCommand(LoadDatabaseConfigAsync, () => !IsDatabaseConfigBusy);
@@ -50,6 +53,12 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         SaveApiConnectionModeCommand = new AsyncRelayCommand(SaveApiConnectionModeAsync, CanSaveApiConnectionMode);
         TestServerConnectionCommand = new AsyncRelayCommand(TestServerConnectionAsync, CanUseServerUrlCommands);
         FindServerCommand = new AsyncRelayCommand(FindServerAsync, () => !IsFindingServer && !IsTestingServerConnection);
+        CopyLocalEmbeddedApiBaseUrlCommand = new RelayCommand(
+            () => CopyValue(LocalEmbeddedApiBaseUrl),
+            () => !string.IsNullOrWhiteSpace(LocalEmbeddedApiBaseUrl));
+        CopyDatabaseConfigPathCommand = new RelayCommand(
+            () => CopyValue(DatabaseConfigPath),
+            () => !string.IsNullOrWhiteSpace(DatabaseConfigPath) && DatabaseConfigPath != "—");
 
         _lastServerApiBaseUrl = PreferNonLocalhost(_bootstrapOptions.ServerApiBaseUrl, _bootstrapOptions.EffectiveApiBaseUrl);
         ApiConnectionMode = _bootstrapOptions.IsServerMode
@@ -66,6 +75,8 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     public IAsyncRelayCommand SaveApiConnectionModeCommand { get; }
     public IAsyncRelayCommand TestServerConnectionCommand { get; }
     public IAsyncRelayCommand FindServerCommand { get; }
+    public IRelayCommand CopyLocalEmbeddedApiBaseUrlCommand { get; }
+    public IRelayCommand CopyDatabaseConfigPathCommand { get; }
 
     public Func<CancellationToken, Task>? AdminUnlockHandler { get; set; }
 
@@ -73,6 +84,9 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     [ObservableProperty] private string databaseMaskedConnectionString = "—";
     [ObservableProperty] private string databaseConfigPath = "—";
     [ObservableProperty] private string databaseConfigStatus = string.Empty;
+    [ObservableProperty] private string databaseProvider = "PostgreSQL";
+    [ObservableProperty] private string databaseEnvironmentName = "—";
+    [ObservableProperty] private string databaseStorageProtection = "—";
     [ObservableProperty] private string apiConnectionMode = DesktopConnectionModes.LocalEmbedded;
     [ObservableProperty] private string serverApiBaseUrl = string.Empty;
     [ObservableProperty] private string apiConnectionStatus = string.Empty;
@@ -83,24 +97,83 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     [ObservableProperty] private bool isSavingDatabaseConfig;
     [ObservableProperty] private bool isRestartingApi;
     [ObservableProperty] private bool isLocalDatabaseOverridePresent;
+    [ObservableProperty] private bool isEnvironmentDatabaseOverridePresent;
     [ObservableProperty] private bool databaseConfigRequiresRestart;
     [ObservableProperty] private bool canBootstrapDatabaseWithoutAdmin;
 
-    public IReadOnlyList<string> ApiConnectionModeOptions { get; } =
+    public IReadOnlyList<ApiConnectionModeOption> ApiConnectionModeOptions { get; } =
     [
-        DesktopConnectionModes.Server,
-        DesktopConnectionModes.LocalEmbedded
+        new(DesktopConnectionModes.Server, "Server (API on the Tally server)"),
+        new(DesktopConnectionModes.LocalEmbedded, "Local embedded (API on this PC)")
     ];
 
     public bool CanRestartApi => _databaseWorkflow.CanRestartApi;
     public string CurrentApiBaseUrl => _bootstrapOptions.EffectiveApiBaseUrl;
     public string DesktopBootstrapConfigPath => DesktopBootstrapLocalOverrideStore.ConfigPath;
     public bool IsRunningServerMode => _bootstrapOptions.IsServerMode;
+    public bool IsRunningLocalEmbeddedMode => !IsRunningServerMode;
     public bool IsDatabaseOverrideEditorEnabled => !IsRunningServerMode;
     public bool IsServerApiUrlEnabled =>
         string.Equals(ApiConnectionMode, DesktopConnectionModes.Server, StringComparison.OrdinalIgnoreCase);
     public string LocalEmbeddedApiBaseUrl => _bootstrapOptions.ApiBaseUrl;
     public string RunningConnectionModeText => _bootstrapOptions.IsServerMode ? "Server" : "LocalEmbedded";
+    public string ActiveModeChipText => IsRunningServerMode ? "SERVER" : "LOCAL EMBEDDED";
+    public string ActiveApiTitle => IsRunningServerMode ? "Server API" : "Embedded API";
+    public string ActiveApiComponentText => $"API ({ActiveApiTitle})";
+    public string ActiveApiStatusText => "ACTIVE";
+    public string ActiveDatabaseStatusText => "CONFIGURED";
+    public string ActiveApiLocationText => IsRunningServerMode
+        ? "Runs on the Tally server"
+        : "Runs on this workstation";
+    public string ActiveDatabaseOwnerText => IsRunningServerMode
+        ? "Owned by the server API"
+        : "Owned by the embedded API";
+    public string ActiveDatabaseSourceText
+    {
+        get
+        {
+            if (IsRunningServerMode)
+            {
+                return "Configured from the server tray";
+            }
+
+            if (DatabaseConfigRequiresRestart)
+            {
+                return "Saved change waiting for API restart";
+            }
+
+            if (IsEnvironmentDatabaseOverridePresent)
+            {
+                return "Environment override";
+            }
+
+            return IsLocalDatabaseOverridePresent
+                ? "Encrypted local override"
+                : "API appsettings configuration";
+        }
+    }
+
+    public string LocalDatabaseSectionTitle => IsRunningServerMode
+        ? "Local fallback database"
+        : "Database used by the embedded API";
+    public string LocalDatabaseSectionDescription => IsRunningServerMode
+        ? "This workstation is currently using the server API. The details below belong only to this PC's LocalEmbedded fallback and are not the live server database."
+        : "The embedded API on this workstation owns this PostgreSQL connection. The desktop application still accesses data only through the API.";
+    public string LocalDatabaseUsageChipText => IsRunningServerMode ? "NOT IN USE" : "ACTIVE PATH";
+    public string DatabaseSourceText
+    {
+        get
+        {
+            if (IsEnvironmentDatabaseOverridePresent)
+            {
+                return "Environment variable";
+            }
+
+            return IsLocalDatabaseOverridePresent
+                ? "Encrypted local override"
+                : "API appsettings";
+        }
+    }
     public string ApiConnectionModeSummary => _bootstrapOptions.IsServerMode
         ? $"Current mode: Server ({_bootstrapOptions.EffectiveApiBaseUrl})"
         : $"Current mode: Local embedded API ({_bootstrapOptions.EffectiveApiBaseUrl})";
@@ -116,6 +189,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         : "Save override";
 
     partial void OnDatabaseConnectionStringChanged(string value) => NotifyDatabaseConfigCommandsChanged();
+    partial void OnDatabaseConfigPathChanged(string value) => CopyDatabaseConfigPathCommand.NotifyCanExecuteChanged();
 
     partial void OnApiConnectionModeChanged(string value)
     {
@@ -177,6 +251,21 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         OnPropertyChanged(nameof(SaveDatabaseConfigButtonText));
     }
 
+    partial void OnIsLocalDatabaseOverridePresentChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ActiveDatabaseSourceText));
+        OnPropertyChanged(nameof(DatabaseSourceText));
+    }
+
+    partial void OnIsEnvironmentDatabaseOverridePresentChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ActiveDatabaseSourceText));
+        OnPropertyChanged(nameof(DatabaseSourceText));
+    }
+
+    partial void OnDatabaseConfigRequiresRestartChanged(bool value)
+        => OnPropertyChanged(nameof(ActiveDatabaseSourceText));
+
     public async Task LoadDatabaseConfigAsync(CancellationToken cancellationToken = default)
     {
         if (IsRunningServerMode)
@@ -196,6 +285,24 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
 
     private async Task RestartApiAsync(CancellationToken cancellationToken)
         => await _databaseWorkflow.RestartApiAsync(cancellationToken);
+
+    private void CopyValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value == "—")
+        {
+            return;
+        }
+
+        try
+        {
+            _copyToClipboard(value);
+            DatabaseConfigStatus = "Copied to clipboard.";
+        }
+        catch (Exception ex)
+        {
+            DatabaseConfigStatus = $"Copy failed: {ex.Message}";
+        }
+    }
 
     private void NotifyDatabaseConfigCommandsChanged()
     {
@@ -332,6 +439,10 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     private void RefreshLocalEmbeddedDatabaseOverride()
     {
         var snapshot = DesktopLocalDatabaseOverrideStore.Load();
+        DatabaseProvider = "PostgreSQL";
+        DatabaseEnvironmentName = "Local fallback";
+        DatabaseStorageProtection = snapshot.Exists ? "Windows DPAPI CurrentUser" : "—";
+        IsEnvironmentDatabaseOverridePresent = false;
         DatabaseConfigPath = snapshot.ConfigPath;
         IsLocalDatabaseOverridePresent = snapshot.Exists;
         DatabaseConfigRequiresRestart = false;
@@ -534,3 +645,5 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
 }
 
 internal sealed record ServerProbeResult(string StatusMessage);
+
+public sealed record ApiConnectionModeOption(string Value, string Label);

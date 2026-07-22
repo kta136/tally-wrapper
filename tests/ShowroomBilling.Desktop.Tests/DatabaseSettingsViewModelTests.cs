@@ -1,10 +1,12 @@
 using System.IO;
 using ShowroomBilling.Contracts.Admin;
+using ShowroomBilling.Contracts.Leases;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Services.ProcessSupervision;
+using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests;
@@ -78,6 +80,112 @@ public sealed class DatabaseSettingsViewModelTests
         Assert.False(vm.IsDatabaseOverrideEditorEnabled);
         Assert.False(vm.TestDatabaseConnectionCommand.CanExecute(null));
         Assert.False(vm.SaveDatabaseConfigCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ServerMode_LabelsTheServerApiAsDatabaseOwner_AndLocalConfigAsFallback()
+    {
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.Server,
+                ServerApiBaseUrl = "http://192.168.0.10:5107"
+            });
+
+        Assert.Equal("Server API", vm.ActiveApiTitle);
+        Assert.Equal("API (Server API)", vm.ActiveApiComponentText);
+        Assert.Equal("ACTIVE", vm.ActiveApiStatusText);
+        Assert.Equal("Owned by the server API", vm.ActiveDatabaseOwnerText);
+        Assert.Equal("Configured from the server tray", vm.ActiveDatabaseSourceText);
+        Assert.Equal("CONFIGURED", vm.ActiveDatabaseStatusText);
+        Assert.Equal("Local fallback database", vm.LocalDatabaseSectionTitle);
+        Assert.Equal("NOT IN USE", vm.LocalDatabaseUsageChipText);
+        Assert.Contains("not the live server database", vm.LocalDatabaseSectionDescription);
+    }
+
+    [Fact]
+    public async Task LocalMode_ReportsTheAppliedDatabaseConfigurationSource()
+    {
+        var runtime = new FakeRuntimeApiClient
+        {
+            DatabaseConfiguration = Response(canBootstrap: false, localOverride: true, requiresRestart: false)
+        };
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: runtime,
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.LocalEmbedded,
+                ApiBaseUrl = "http://localhost:5107"
+            });
+
+        await vm.LoadDatabaseConfigCommand.ExecuteAsync(null);
+
+        Assert.Equal("Embedded API", vm.ActiveApiTitle);
+        Assert.Equal("API (Embedded API)", vm.ActiveApiComponentText);
+        Assert.Equal("ACTIVE", vm.ActiveApiStatusText);
+        Assert.Equal("Owned by the embedded API", vm.ActiveDatabaseOwnerText);
+        Assert.Equal("Encrypted local override", vm.ActiveDatabaseSourceText);
+        Assert.Equal("Encrypted local override", vm.DatabaseSourceText);
+        Assert.Equal("Development", vm.DatabaseEnvironmentName);
+        Assert.Equal("ACTIVE PATH", vm.LocalDatabaseUsageChipText);
+    }
+
+    [Fact]
+    public void CopyCommands_CopyOnlyTheEndpointAndConfigurationPath()
+    {
+        var copied = new List<string>();
+        var vm = new DatabaseSettingsViewModel(
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.LocalEmbedded,
+                ApiBaseUrl = "http://localhost:5107"
+            },
+            copyToClipboard: copied.Add);
+        const string secretConnection = "Host=db;Database=showroom;Username=user;Password=secret";
+        const string configPath = @"C:\Users\operator\AppData\Roaming\ShowroomBilling\database.Production.local.json";
+        vm.DatabaseConnectionString = secretConnection;
+        vm.DatabaseConfigPath = configPath;
+
+        vm.CopyLocalEmbeddedApiBaseUrlCommand.Execute(null);
+        vm.CopyDatabaseConfigPathCommand.Execute(null);
+
+        Assert.Equal(["http://localhost:5107", configPath], copied);
+        Assert.DoesNotContain(secretConnection, copied);
+        Assert.Equal("Copied to clipboard.", vm.DatabaseConfigStatus);
+    }
+
+    [Fact]
+    public void AdminSidebarEntry_AppearsOnlyWhileUnlocked_AndFallsBackToDatabaseWhenRemoved()
+    {
+        var tokenStore = new AdminTokenStore();
+        var settings = new SettingsViewModel(
+            settingsApi: null,
+            mastersApi: null,
+            printAssetApi: null,
+            printDispatcher: null,
+            printPreferences: null,
+            adminTokenStore: tokenStore);
+        settings.AdminVm = new AdminUnlockViewModel(
+            new StubAdminApiClient(),
+            new StubDraftLeaseApiClient(),
+            tokenStore);
+
+        Assert.DoesNotContain(SettingsSectionKey.Admin, settings.Sections);
+
+        tokenStore.Set(new AdminUnlockResponse(
+            "admin-token",
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow.AddMinutes(30),
+            "admin"));
+
+        Assert.Contains(SettingsSectionKey.Admin, settings.Sections);
+        settings.SelectedSection = SettingsSectionKey.Admin;
+
+        tokenStore.Clear();
+
+        Assert.DoesNotContain(SettingsSectionKey.Admin, settings.Sections);
+        Assert.Equal(SettingsSectionKey.Database, settings.SelectedSection);
     }
 
     [Fact]
@@ -284,6 +392,46 @@ public sealed class DatabaseSettingsViewModelTests
             bool forceDatabaseHealth = false,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(snapshot);
+    }
+
+    private sealed class StubAdminApiClient : IAdminApiClient
+    {
+        public Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new AdminPasscodeStatusResponse(true));
+
+        public Task SetPasscodeAsync(AdminSetPasscodeRequest request, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<AdminUnlockResponse> UnlockAsync(AdminUnlockRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task LogoutAsync(AdminLogoutRequest request, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+    }
+
+    private sealed class StubDraftLeaseApiClient : IDraftLeaseApiClient
+    {
+        public Task<DraftLeaseAcquireResult> AcquireAsync(DraftLeaseAcquireRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DraftLeaseResponse> RenewAsync(Guid leaseId, DraftLeaseRenewRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DraftLeaseResponse> ReleaseAsync(Guid leaseId, DraftLeaseReleaseRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DraftLeaseResponse?> GetActiveForBillAsync(Guid billId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<DraftLeaseListResponse> ListActiveAsync(string adminToken, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DraftLeaseListResponse(Array.Empty<DraftLeaseResponse>()));
+
+        public Task<DraftLeaseResponse> ForceReleaseAsync(
+            Guid leaseId,
+            DraftLeaseForceReleaseRequest request,
+            string adminToken,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private static DatabaseConfigurationResponse Response(

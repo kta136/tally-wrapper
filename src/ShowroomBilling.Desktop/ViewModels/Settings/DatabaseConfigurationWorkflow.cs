@@ -12,11 +12,15 @@ internal interface IDatabaseConfigurationWorkflowHost
     string DatabaseMaskedConnectionString { get; set; }
     string DatabaseConfigPath { get; set; }
     string DatabaseConfigStatus { get; set; }
+    string DatabaseProvider { get; set; }
+    string DatabaseEnvironmentName { get; set; }
+    string DatabaseStorageProtection { get; set; }
     bool IsDatabaseConfigBusy { get; set; }
     bool IsTestingDatabaseConnection { get; set; }
     bool IsSavingDatabaseConfig { get; set; }
     bool IsRestartingApi { get; set; }
     bool IsLocalDatabaseOverridePresent { get; set; }
+    bool IsEnvironmentDatabaseOverridePresent { get; set; }
     bool DatabaseConfigRequiresRestart { get; set; }
     bool CanBootstrapDatabaseWithoutAdmin { get; set; }
     Func<CancellationToken, Task>? AdminUnlockHandler { get; }
@@ -250,7 +254,17 @@ internal sealed class DatabaseConfigurationWorkflow(
             ? "—"
             : response.MaskedConnectionString;
         host.DatabaseConfigPath = response.ConfigPath;
+        host.DatabaseProvider = string.IsNullOrWhiteSpace(response.Provider)
+            ? "PostgreSQL"
+            : response.Provider;
+        host.DatabaseEnvironmentName = string.IsNullOrWhiteSpace(response.EnvironmentName)
+            ? "—"
+            : response.EnvironmentName;
+        host.DatabaseStorageProtection = string.IsNullOrWhiteSpace(response.StorageProtection)
+            ? "—"
+            : response.StorageProtection;
         host.IsLocalDatabaseOverridePresent = response.IsLocalOverridePresent;
+        host.IsEnvironmentDatabaseOverridePresent = response.IsEnvironmentOverridePresent;
         host.DatabaseConfigRequiresRestart = response.RequiresApiRestart;
         host.CanBootstrapDatabaseWithoutAdmin = response.CanBootstrapWithoutAdmin;
     }

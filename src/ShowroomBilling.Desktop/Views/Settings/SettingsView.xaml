@@ -127,7 +127,57 @@
                          ItemContainerStyle="{StaticResource NavItem}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" FontSize="12.5" />
+                            <Grid Height="48">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="SectionIcon"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{StaticResource IconFontFamily}"
+                                           FontSize="16"
+                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
+                                <TextBlock x:Name="SectionLabel"
+                                           Grid.Column="1"
+                                           Margin="8,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontSize="12.5"
+                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Database}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xEDA2;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Database" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Connection}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71B;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Connection" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Invoice}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE8A5;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Invoice" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.PrintLayout}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE749;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Print Layout" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Ledgers}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE736;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Ledgers" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Masters}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71D;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Masters" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Advanced}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE713;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Advanced" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Admin}">
+                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE7EF;" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Admin" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
