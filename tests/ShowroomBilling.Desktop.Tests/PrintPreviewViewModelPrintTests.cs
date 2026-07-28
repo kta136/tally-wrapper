@@ -127,6 +127,30 @@ public sealed class PrintPreviewViewModelPrintTests
     }
 
     [Fact]
+    public async Task Capability_refresh_notifies_WPF_to_redisplay_unchanged_remembered_settings()
+    {
+        var dispatcher = new FakePrintDispatcher("Counter Printer");
+        var preferences = new FakePrintPreferencesStore
+        {
+            LastPrinterName = "Counter Printer",
+            PrintJobSettings = NonDefaultSettings,
+        };
+        var vm = new PrintPreviewViewModel(dispatcher, preferences);
+        var changedProperties = new List<string?>();
+        vm.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
+
+        vm.Initialize(Content("INV/004"));
+
+        await dispatcher.WaitForPreviewRenderAsync();
+        await WaitForAsync(() =>
+            changedProperties.Contains(nameof(PrintPreviewViewModel.SelectedDuplexMode))
+            && changedProperties.Contains(nameof(PrintPreviewViewModel.SelectedColorMode))
+            && changedProperties.Contains(nameof(PrintPreviewViewModel.SelectedCollationMode)));
+
+        Assert.Equal(NonDefaultSettings, vm.CurrentPrintJobSettings);
+    }
+
+    [Fact]
     public async Task Unsupported_printer_settings_fall_back_to_printer_defaults_without_erasing_preferences()
     {
         var dispatcher = new FakePrintDispatcher("Counter Printer")

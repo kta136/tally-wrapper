@@ -26,6 +26,22 @@ public sealed class PrintAssetServiceTests
     }
 
     [Fact]
+    public async Task UploadAsync_accepts_watermark_kind()
+    {
+        await using var db = CreateDbContext();
+        var service = new PrintAssetService(db);
+
+        var response = await service.UploadAsync(new PrintAssetUploadRequest(
+            PrintAssetKinds.Watermark,
+            "watermark.png",
+            "image/png",
+            Convert.ToBase64String(PngBytes(8))));
+
+        Assert.Equal(PrintAssetKinds.Watermark, response.AssetKind);
+        Assert.Equal("image/png", response.ContentType);
+    }
+
+    [Fact]
     public async Task GetAsync_ReturnsOriginalBytes()
     {
         await using var db = CreateDbContext();

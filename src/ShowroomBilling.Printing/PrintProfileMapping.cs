@@ -37,12 +37,19 @@ public static class PrintProfileMapping
         PrintSettingsDto print,
         PrintLayoutSettings layout,
         byte[]? logoBytes,
-        byte[]? signatureBytes)
+        byte[]? signatureBytes,
+        byte[]? watermarkBytes = null)
     {
         ArgumentNullException.ThrowIfNull(print);
         ArgumentNullException.ThrowIfNull(layout);
         var company = ToCompanyProfile(print);
-        var options = ToPrintLayoutOptions(layout, logoBytes, signatureBytes, print.PrintFontSize, print.PrintTermsFontSize);
+        var options = ToPrintLayoutOptions(
+            layout,
+            logoBytes,
+            signatureBytes,
+            print.PrintFontSize,
+            print.PrintTermsFontSize,
+            watermarkBytes);
         var content = PreviewSampleProvider.CreateSampleContent(company);
         return PrintDocumentOptions.ForInvoice(content, new[] { CopyLabel.Original }, options);
     }
@@ -52,11 +59,15 @@ public static class PrintProfileMapping
         byte[]? logoBytes,
         byte[]? signatureBytes,
         int invoiceFontSize,
-        int termsFontSize)
+        int termsFontSize,
+        byte[]? watermarkBytes = null)
     {
         ArgumentNullException.ThrowIfNull(layout);
 
         static float ToMm(double cm) => (float)(cm * 10.0);
+
+        var pageLayout = layout.PageLayout ?? PrintLayoutDefaults.CreatePageLayout();
+        var watermark = layout.Watermark;
 
         var options = new PrintLayoutOptions(
             MarginLeftMm: ToMm(layout.LeftMarginCm),
@@ -74,7 +85,23 @@ public static class PrintProfileMapping
             SignatureWidthMm: layout.Signature is { WidthCm: > 0 } ? ToMm(layout.Signature.WidthCm) : PrintLayoutLimits.DefaultSignatureWidthMm,
             SignatureHeightMm: layout.Signature is { HeightCm: > 0 } ? ToMm(layout.Signature.HeightCm) : PrintLayoutLimits.DefaultSignatureHeightMm,
             SignatureOffsetXMm: layout.Signature is not null ? ToMm(layout.Signature.OffsetXCm) : PrintLayoutLimits.DefaultSignatureOffsetXMm,
-            SignatureOffsetYMm: layout.Signature is not null ? ToMm(layout.Signature.OffsetYCm) : PrintLayoutLimits.DefaultSignatureOffsetYMm);
+            SignatureOffsetYMm: layout.Signature is not null ? ToMm(layout.Signature.OffsetYCm) : PrintLayoutLimits.DefaultSignatureOffsetYMm,
+            WatermarkBytes: watermark is null ? null : watermarkBytes,
+            WatermarkWidthMm: watermark is not null ? ToMm(watermark.WidthCm) : PrintLayoutLimits.DefaultWatermarkWidthMm,
+            WatermarkHeightMm: watermark is not null ? ToMm(watermark.HeightCm) : PrintLayoutLimits.DefaultWatermarkHeightMm,
+            WatermarkOffsetXMm: watermark is not null ? ToMm(watermark.OffsetXCm) : PrintLayoutLimits.DefaultWatermarkOffsetXMm,
+            WatermarkOffsetYMm: watermark is not null ? ToMm(watermark.OffsetYCm) : PrintLayoutLimits.DefaultWatermarkOffsetYMm,
+            WatermarkOpacity: watermark is not null ? (float)(watermark.OpacityPercent / 100.0) : PrintLayoutLimits.DefaultWatermarkOpacity,
+            PageDensity: pageLayout.Density,
+            InvoiceBorderThicknessPt: (float)pageLayout.InvoiceBorderThicknessPt,
+            BottomPinnedFromSectionKey: pageLayout.BottomPinnedFromSectionKey,
+            Sections: pageLayout.Sections
+                .Select(section => new PrintSectionLayoutOptions(
+                    section.SectionKey,
+                    section.IsVisible,
+                    (float)section.SpacingBeforeMm,
+                    (float)section.SpacingAfterMm))
+                .ToArray());
 
         return options.Clamped();
     }

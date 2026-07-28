@@ -214,9 +214,9 @@
                             <Button Margin="4,0,0,0"
                                     Style="{StaticResource BtnGhost}"
                                     Padding="8,0"
-                                    Click="OnFitWidthClick"
-                                    Content="Fit Width"
-                                    ToolTip="Fit preview to available width" />
+                                    Click="OnFitPageClick"
+                                    Content="Fit Page"
+                                    ToolTip="Fit the whole page in the preview" />
                             <Button Margin="12,0,0,0"
                                     Style="{StaticResource BtnBase}"
                                     Command="{Binding SavePdfCommand}"

@@ -1,4 +1,5 @@
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Printing;
 
@@ -59,6 +60,7 @@ public static class PrintLayoutLimits
     public const float LogoMinHeightMm = 24f * PxToMm;    // ≈6.4
     public const float SignatureMinWidthMm = 60f * PxToMm; // ≈15.9
     public const float SignatureMinHeightMm = 24f * PxToMm; // ≈6.4
+    public const float SignatureLineOverhangMm = 4f; // 2 mm beyond the configured image on each side
 
     public const float DefaultLogoWidthMm = 160f * PxToMm;  // ≈42.3
     public const float DefaultLogoHeightMm = 52f * PxToMm;  // ≈13.8
@@ -85,7 +87,31 @@ public static class PrintLayoutLimits
 
     public const int DefaultInvoiceFontSize = 11;
     public const int DefaultTermsFontSize = 9;
+
+    public static float GetSignatureLineWidthMm(float signatureImageWidthMm) =>
+        Math.Min(SignatureSlotWidthMm, signatureImageWidthMm + SignatureLineOverhangMm);
+
+    public const float A4WidthMm = 210f;
+    public const float A4HeightMm = 297f;
+    public const float WatermarkMinSizeMm = 1f;
+    public const float DefaultWatermarkWidthMm = 120f;
+    public const float DefaultWatermarkHeightMm = 120f;
+    public const float DefaultWatermarkOffsetXMm = 45f;
+    public const float DefaultWatermarkOffsetYMm = 88.5f;
+    public const float DefaultWatermarkOpacity = 0.15f;
+
+    public const float SectionSpacingMinMm = 0f;
+    public const float SectionSpacingMaxMm = 20f;
+    public const float InvoiceBorderMinPt = 0f;
+    public const float InvoiceBorderMaxPt = 4f;
+    public const float DefaultInvoiceBorderPt = 1f;
 }
+
+public sealed record PrintSectionLayoutOptions(
+    string SectionKey,
+    bool IsVisible,
+    float SpacingBeforeMm,
+    float SpacingAfterMm);
 
 public sealed record PrintLayoutOptions(
     float MarginLeftMm = PrintLayoutLimits.DefaultMarginLeftMm,
@@ -103,7 +129,17 @@ public sealed record PrintLayoutOptions(
     float SignatureWidthMm = PrintLayoutLimits.DefaultSignatureWidthMm,
     float SignatureHeightMm = PrintLayoutLimits.DefaultSignatureHeightMm,
     float SignatureOffsetXMm = PrintLayoutLimits.DefaultSignatureOffsetXMm,
-    float SignatureOffsetYMm = PrintLayoutLimits.DefaultSignatureOffsetYMm)
+    float SignatureOffsetYMm = PrintLayoutLimits.DefaultSignatureOffsetYMm,
+    byte[]? WatermarkBytes = null,
+    float WatermarkWidthMm = PrintLayoutLimits.DefaultWatermarkWidthMm,
+    float WatermarkHeightMm = PrintLayoutLimits.DefaultWatermarkHeightMm,
+    float WatermarkOffsetXMm = PrintLayoutLimits.DefaultWatermarkOffsetXMm,
+    float WatermarkOffsetYMm = PrintLayoutLimits.DefaultWatermarkOffsetYMm,
+    float WatermarkOpacity = PrintLayoutLimits.DefaultWatermarkOpacity,
+    string PageDensity = PrintPageDensity.Standard,
+    float InvoiceBorderThicknessPt = PrintLayoutLimits.DefaultInvoiceBorderPt,
+    string? BottomPinnedFromSectionKey = PrintLayoutSectionKeys.GstBreakup,
+    IReadOnlyList<PrintSectionLayoutOptions>? Sections = null)
 {
     public static PrintLayoutOptions Default { get; } = new();
 
@@ -117,6 +153,44 @@ public sealed record PrintLayoutOptions(
         var logoHeight = ClampF(LogoHeightMm, PrintLayoutLimits.LogoMinHeightMm, PrintLayoutLimits.LogoSlotHeightMm);
         var sigWidth = ClampF(SignatureWidthMm, PrintLayoutLimits.SignatureMinWidthMm, PrintLayoutLimits.SignatureSlotWidthMm);
         var sigHeight = ClampF(SignatureHeightMm, PrintLayoutLimits.SignatureMinHeightMm, PrintLayoutLimits.SignatureSlotHeightMm);
+        var watermarkWidth = ClampF(WatermarkWidthMm, PrintLayoutLimits.WatermarkMinSizeMm, PrintLayoutLimits.A4WidthMm);
+        var watermarkHeight = ClampF(WatermarkHeightMm, PrintLayoutLimits.WatermarkMinSizeMm, PrintLayoutLimits.A4HeightMm);
+
+        var normalizedSections = new List<PrintSectionLayoutOptions>();
+        var seenSections = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var section in Sections ?? Array.Empty<PrintSectionLayoutOptions>())
+        {
+            if (!PrintLayoutSectionKeys.All.Contains(section.SectionKey, StringComparer.Ordinal)
+                || !seenSections.Add(section.SectionKey))
+            {
+                continue;
+            }
+
+            normalizedSections.Add(section with
+            {
+                IsVisible = PrintLayoutSectionKeys.Mandatory.Contains(section.SectionKey) || section.IsVisible,
+                SpacingBeforeMm = ClampF(
+                    section.SpacingBeforeMm,
+                    PrintLayoutLimits.SectionSpacingMinMm,
+                    PrintLayoutLimits.SectionSpacingMaxMm),
+                SpacingAfterMm = ClampF(
+                    section.SpacingAfterMm,
+                    PrintLayoutLimits.SectionSpacingMinMm,
+                    PrintLayoutLimits.SectionSpacingMaxMm),
+            });
+        }
+        foreach (var missingKey in PrintLayoutSectionKeys.All.Where(key => !seenSections.Contains(key)))
+        {
+            normalizedSections.Add(new PrintSectionLayoutOptions(missingKey, true, 0f, 0f));
+        }
+
+        var density = PrintPageDensity.All.Contains(PageDensity, StringComparer.Ordinal)
+            ? PageDensity
+            : PrintPageDensity.Standard;
+        var pinnedFrom = BottomPinnedFromSectionKey is not null
+            && PrintLayoutSectionKeys.All.Contains(BottomPinnedFromSectionKey, StringComparer.Ordinal)
+                ? BottomPinnedFromSectionKey
+                : null;
 
         return this with
         {
@@ -134,8 +208,27 @@ public sealed record PrintLayoutOptions(
             SignatureHeightMm = sigHeight,
             SignatureOffsetXMm = ClampF(SignatureOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.SignatureSlotWidthMm - sigWidth)),
             SignatureOffsetYMm = ClampF(SignatureOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.SignatureSlotHeightMm - sigHeight)),
+            WatermarkWidthMm = watermarkWidth,
+            WatermarkHeightMm = watermarkHeight,
+            WatermarkOffsetXMm = ClampF(WatermarkOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.A4WidthMm - watermarkWidth)),
+            WatermarkOffsetYMm = ClampF(WatermarkOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.A4HeightMm - watermarkHeight)),
+            WatermarkOpacity = ClampF(WatermarkOpacity, 0f, 1f),
+            PageDensity = density,
+            InvoiceBorderThicknessPt = ClampF(
+                InvoiceBorderThicknessPt,
+                PrintLayoutLimits.InvoiceBorderMinPt,
+                PrintLayoutLimits.InvoiceBorderMaxPt),
+            BottomPinnedFromSectionKey = pinnedFrom,
+            Sections = normalizedSections,
         };
     }
+
+    public float DensityScale => PageDensity switch
+    {
+        PrintPageDensity.Compact => 0.75f,
+        PrintPageDensity.Comfortable => 1.25f,
+        _ => 1f,
+    };
 }
 
 public sealed record BillPrintContent(

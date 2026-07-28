@@ -41,6 +41,7 @@ public sealed class PrintLayoutOptionsProvider : IPrintLayoutOptionsProvider
             // still see it on print.
             byte[]? logoBytes = null;
             byte[]? signatureBytes = null;
+            byte[]? watermarkBytes = null;
             if (layout.Logo?.AssetId is { } logoId)
             {
                 logoBytes = await _assets.DownloadAsync(logoId, cancellationToken);
@@ -49,9 +50,18 @@ public sealed class PrintLayoutOptionsProvider : IPrintLayoutOptionsProvider
             {
                 signatureBytes = await _assets.DownloadAsync(sigId, cancellationToken);
             }
+            if (layout.Watermark is { AssetId: var watermarkId })
+            {
+                watermarkBytes = await _assets.DownloadAsync(watermarkId, cancellationToken);
+            }
 
             Current = PrintProfileMapping.ToPrintLayoutOptions(
-                layout, logoBytes, signatureBytes, Current.InvoiceFontSize, Current.TermsFontSize);
+                layout,
+                logoBytes,
+                signatureBytes,
+                Current.InvoiceFontSize,
+                Current.TermsFontSize,
+                watermarkBytes);
             return Current;
         }
         finally

@@ -223,6 +223,7 @@ public partial class SettingsPreviewViewModel : ObservableObject
         {
             case nameof(PrintLayoutViewModel.PendingLogoBytes):
             case nameof(PrintLayoutViewModel.PendingSignatureBytes):
+            case nameof(PrintLayoutViewModel.PendingWatermarkBytes):
                 // Unsaved local bytes; generation bump so any in-flight server
                 // download drops its result rather than overwriting these.
                 _assetCache.IncrementGeneration();
@@ -231,6 +232,7 @@ public partial class SettingsPreviewViewModel : ObservableObject
 
             case nameof(PrintLayoutViewModel.LogoAssetId):
             case nameof(PrintLayoutViewModel.SignatureAssetId):
+            case nameof(PrintLayoutViewModel.WatermarkAssetId):
             case nameof(PrintLayoutViewModel.UpdatedAtUtc):
                 // Placement changed or layout saved: refetch server bytes once.
                 _assetCache.IncrementGeneration();
@@ -413,7 +415,8 @@ public partial class SettingsPreviewViewModel : ObservableObject
             _draft!,
             _printLayout!,
             _assetCache.ServerLogoBytes,
-            _assetCache.ServerSignatureBytes);
+            _assetCache.ServerSignatureBytes,
+            _assetCache.ServerWatermarkBytes);
     }
 
     private void OnStoredZoomChanged(object? sender, double value)

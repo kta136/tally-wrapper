@@ -72,6 +72,8 @@ public static class CloudSettingsValidator
         }
         ValidatePlacement(layout.Logo, "Logo");
         ValidatePlacement(layout.Signature, "Signature");
+        ValidateWatermark(layout.Watermark);
+        ValidatePageLayout(layout.PageLayout);
     }
 
     private static void ValidatePlacement(PrintLayoutAssetPlacement? placement, string name)
@@ -81,6 +83,96 @@ public static class CloudSettingsValidator
         ValidateRange(placement.OffsetYCm, $"{name}.OffsetYCm", -30, 30);
         ValidateRange(placement.WidthCm, $"{name}.WidthCm", 0.1, 20);
         ValidateRange(placement.HeightCm, $"{name}.HeightCm", 0.1, 30);
+    }
+
+    private static void ValidateWatermark(PrintLayoutWatermarkPlacement? watermark)
+    {
+        if (watermark is null) return;
+        if (watermark.AssetId == Guid.Empty)
+        {
+            throw new ArgumentException("Watermark.AssetId is required.");
+        }
+
+        ValidateRange(watermark.OffsetXCm, "Watermark.OffsetXCm", 0, PrintLayoutDefaults.A4WidthCm);
+        ValidateRange(watermark.OffsetYCm, "Watermark.OffsetYCm", 0, PrintLayoutDefaults.A4HeightCm);
+        ValidateRange(watermark.WidthCm, "Watermark.WidthCm", 0.1, PrintLayoutDefaults.A4WidthCm);
+        ValidateRange(watermark.HeightCm, "Watermark.HeightCm", 0.1, PrintLayoutDefaults.A4HeightCm);
+        ValidateRange(watermark.OpacityPercent, "Watermark.OpacityPercent", 0, 100);
+
+        if (watermark.OffsetXCm + watermark.WidthCm > PrintLayoutDefaults.A4WidthCm)
+        {
+            throw new ArgumentException("Watermark horizontal position and width must fit within the A4 page.");
+        }
+        if (watermark.OffsetYCm + watermark.HeightCm > PrintLayoutDefaults.A4HeightCm)
+        {
+            throw new ArgumentException("Watermark vertical position and height must fit within the A4 page.");
+        }
+    }
+
+    private static void ValidatePageLayout(PrintPageLayoutSettings? pageLayout)
+    {
+        if (pageLayout is null) return;
+
+        if (!PrintPageDensity.All.Contains(pageLayout.Density, StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                $"PageLayout.Density must be one of: {string.Join(", ", PrintPageDensity.All)}.");
+        }
+        ValidateRange(pageLayout.InvoiceBorderThicknessPt, "PageLayout.InvoiceBorderThicknessPt", 0, 4);
+
+        if (pageLayout.Sections is null)
+        {
+            throw new ArgumentException("PageLayout.Sections is required.");
+        }
+
+        var suppliedKeys = pageLayout.Sections.Select(section => section.SectionKey).ToArray();
+        if (suppliedKeys.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("PageLayout section keys are required.");
+        }
+
+        var unknownKeys = suppliedKeys
+            .Where(key => !PrintLayoutSectionKeys.All.Contains(key, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (unknownKeys.Length > 0)
+        {
+            throw new ArgumentException($"Unknown PageLayout section key(s): {string.Join(", ", unknownKeys)}.");
+        }
+
+        var duplicateKeys = suppliedKeys
+            .GroupBy(key => key, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicateKeys.Length > 0)
+        {
+            throw new ArgumentException($"Duplicate PageLayout section key(s): {string.Join(", ", duplicateKeys)}.");
+        }
+
+        var missingKeys = PrintLayoutSectionKeys.All
+            .Where(key => !suppliedKeys.Contains(key, StringComparer.Ordinal))
+            .ToArray();
+        if (missingKeys.Length > 0)
+        {
+            throw new ArgumentException($"Missing PageLayout section key(s): {string.Join(", ", missingKeys)}.");
+        }
+
+        foreach (var section in pageLayout.Sections)
+        {
+            if (PrintLayoutSectionKeys.Mandatory.Contains(section.SectionKey) && !section.IsVisible)
+            {
+                throw new ArgumentException($"PageLayout section '{section.SectionKey}' is mandatory and cannot be hidden.");
+            }
+            ValidateRange(section.SpacingBeforeMm, $"PageLayout.{section.SectionKey}.SpacingBeforeMm", 0, 20);
+            ValidateRange(section.SpacingAfterMm, $"PageLayout.{section.SectionKey}.SpacingAfterMm", 0, 20);
+        }
+
+        if (pageLayout.BottomPinnedFromSectionKey is { } pinnedKey
+            && !PrintLayoutSectionKeys.All.Contains(pinnedKey, StringComparer.Ordinal))
+        {
+            throw new ArgumentException($"PageLayout.BottomPinnedFromSectionKey '{pinnedKey}' is not a known section.");
+        }
     }
 
     private static void ValidateRange(double value, string field, double min, double max)

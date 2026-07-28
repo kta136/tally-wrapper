@@ -280,7 +280,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
         {
             entity.ToTable("print_assets", table =>
             {
-                table.HasCheckConstraint("CK_print_assets_kind", "\"AssetKind\" IN ('logo', 'signature')");
+                table.HasCheckConstraint("CK_print_assets_kind", "\"AssetKind\" IN ('logo', 'signature', 'watermark')");
                 table.HasCheckConstraint("CK_print_assets_byte_length", "\"ByteLength\" > 0");
             });
             entity.HasKey(x => x.Id);

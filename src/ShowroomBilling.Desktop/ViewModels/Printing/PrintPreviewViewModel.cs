@@ -15,7 +15,7 @@ public sealed record PrintSettingOption<T>(T Value, string DisplayName);
 
 public partial class PrintPreviewViewModel : ObservableObject
 {
-    private const double MinZoomPercent = 50;
+    private const double MinZoomPercent = 25;
     private const double MaxZoomPercent = 200;
     private const double ZoomStepPercent = 10;
     private const string PreparingPrintPagesMessage = "Preparing printer-ready pages…";
@@ -182,6 +182,7 @@ public partial class PrintPreviewViewModel : ObservableObject
         _onPrintSucceeded = onPrintSucceeded;
         _contents = contents.Where(x => x is not null).ToArray();
         _layout = layout ?? PrintLayoutOptions.Default;
+        PreviewPages.Clear();
         DocumentCount = _contents.Count;
         InvoiceNumber = DocumentCount <= 1
             ? _contents.FirstOrDefault()?.InvoiceNumber ?? string.Empty
@@ -452,6 +453,15 @@ public partial class PrintPreviewViewModel : ObservableObject
             SelectedDuplexMode = selectedSettings.Duplex;
             SelectedColorMode = selectedSettings.Color;
             SelectedCollationMode = selectedSettings.Collation;
+
+            // Replacing the option collections clears each ComboBox selection.
+            // The selected enum value can still be unchanged, in which case the
+            // generated property setter does not raise PropertyChanged and WPF
+            // leaves the field visually blank. Force target refreshes after the
+            // replacement so remembered values are displayed again.
+            OnPropertyChanged(nameof(SelectedDuplexMode));
+            OnPropertyChanged(nameof(SelectedColorMode));
+            OnPropertyChanged(nameof(SelectedCollationMode));
         }
         finally
         {
@@ -721,6 +731,20 @@ public partial class PrintPreviewViewModel : ObservableObject
         finally
         {
             _suppressZoomPersist = false;
+        }
+    }
+
+    public void ApplyFittedZoomPercent(double value)
+    {
+        var priorSuppress = _suppressZoomPersist;
+        _suppressZoomPersist = true;
+        try
+        {
+            PreviewZoomPercent = NormalizeZoom(value);
+        }
+        finally
+        {
+            _suppressZoomPersist = priorSuppress;
         }
     }
 

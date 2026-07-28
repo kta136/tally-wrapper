@@ -137,16 +137,16 @@ Response per master type: `{ masterType, succeeded, itemCount, batchId?, errorMe
 | `GET` | `/api/settings` | Load effective settings catalog values | connection, print, numbering, mappings, admin flags |
 | `PUT` | `/api/settings` | Save settings payload | saved sections, validation messages, runtime impact summary |
 | `POST` | `/api/settings/company/select` | Set active company | updated runtime/settings summary |
-| `GET` | `/api/settings/print-layout` | Load print layout (margins + logo/signature placements) | `{ layout, updatedAtUtc }` |
+| `GET` | `/api/settings/print-layout` | Load margins, asset placements, watermark and structured page layout | `{ layout, updatedAtUtc }` |
 | `PUT` | `/api/settings/print-layout` | Persist print layout | `{ layout, updatedAtUtc }` |
 
-Settings writes validate required nested sections, host/company/ledger presence, port `1..65535`, timeout `1..300`, invoice padding `1..10`, print font sizes `6..24`, DB-aligned text lengths, and master JSON arrays (valid arrays, at most 2 MiB each). Print-layout values must be finite and remain inside the supported margin/placement ranges. Violations return `400 Bad request` before persistence.
+Settings writes validate required nested sections, host/company/ledger presence, port `1..65535`, timeout `1..300`, invoice padding `1..10`, print font sizes `6..24`, DB-aligned text lengths, and master JSON arrays (valid arrays, at most 2 MiB each). Print-layout values must be finite and remain inside the supported margin/placement ranges. Structured layouts require all known section keys exactly once, mandatory visibility, density in `compact|standard|comfortable`, spacing `0..20 mm`, border `0..4 pt`, and a null/known pin boundary. Watermark geometry must fit A4 and opacity is `0..100%`. Violations return `400 Bad request` before persistence.
 
 ### 2.6 Print assets
 
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|
-| `GET` | `/api/print-assets` | List uploaded assets (logo / signature) | `{ assets[] }` |
+| `GET` | `/api/print-assets` | List uploaded assets (logo / signature / watermark) | `{ assets[] }` |
 | `POST` | `/api/print-assets` | Upload asset (base64, ≤ 2 MB) | `{ id, assetKind, fileName, byteLength, ... }` |
 | `GET` | `/api/print-assets/{id}` | Stream the raw image bytes | `File(bytes, contentType, fileName)` |
 | `GET` | `/api/print-assets/{id}/metadata` | Metadata only | asset record |

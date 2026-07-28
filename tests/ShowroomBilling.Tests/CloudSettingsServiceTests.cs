@@ -157,6 +157,131 @@ public sealed class CloudSettingsServiceTests
                 null))));
     }
 
+    [Fact]
+    public async Task UpdatePrintLayoutAsync_round_trips_watermark_and_structured_page_layout()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+        var watermarkId = Guid.NewGuid();
+        var pageLayout = PrintLayoutDefaults.CreatePageLayout() with
+        {
+            Density = PrintPageDensity.Comfortable,
+            InvoiceBorderThicknessPt = 2.5,
+            BottomPinnedFromSectionKey = PrintLayoutSectionKeys.BankDetails,
+            Sections = PrintLayoutDefaults.CreatePageLayout().Sections
+                .Select(section => section.SectionKey == PrintLayoutSectionKeys.Notes
+                    ? section with { IsVisible = false, SpacingBeforeMm = 3, SpacingAfterMm = 4 }
+                    : section)
+                .Reverse()
+                .ToArray()
+        };
+        var expected = new PrintLayoutSettings(
+            0.5, 0.6, 0.7, 0.8,
+            null,
+            null,
+            new PrintLayoutWatermarkPlacement(watermarkId, 2, 3, 10, 11, 22),
+            pageLayout);
+
+        await service.UpdatePrintLayoutAsync(new UpdatePrintLayoutRequest(expected));
+        var reloaded = await service.GetPrintLayoutAsync();
+
+        Assert.Equal(expected.LeftMarginCm, reloaded.Layout.LeftMarginCm);
+        Assert.Equal(expected.BottomMarginCm, reloaded.Layout.BottomMarginCm);
+        Assert.Equal(watermarkId, reloaded.Layout.Watermark!.AssetId);
+        Assert.Equal(PrintPageDensity.Comfortable, reloaded.Layout.PageLayout!.Density);
+        Assert.Equal(PrintLayoutSectionKeys.Signature, reloaded.Layout.PageLayout.Sections[0].SectionKey);
+        Assert.False(reloaded.Layout.PageLayout.Sections
+            .Single(section => section.SectionKey == PrintLayoutSectionKeys.Notes).IsVisible);
+    }
+
+    [Fact]
+    public async Task GetPrintLayoutAsync_applies_page_defaults_to_legacy_json()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+        await service.GetPrintLayoutAsync();
+        var entity = await dbContext.CloudSettings.SingleAsync();
+        entity.PrintLayoutJson =
+            """{"LeftMarginCm":0.4,"RightMarginCm":0.5,"TopMarginCm":0.6,"BottomMarginCm":0.7,"Logo":null,"Signature":null}""";
+        await dbContext.SaveChangesAsync();
+
+        var response = await service.GetPrintLayoutAsync();
+
+        Assert.Equal(0.4, response.Layout.LeftMarginCm);
+        Assert.Null(response.Layout.Watermark);
+        Assert.NotNull(response.Layout.PageLayout);
+        Assert.Equal(PrintPageDensity.Standard, response.Layout.PageLayout!.Density);
+        Assert.Equal(PrintLayoutSectionKeys.All, response.Layout.PageLayout.Sections.Select(row => row.SectionKey).ToArray());
+    }
+
+    [Fact]
+    public async Task UpdatePrintLayoutAsync_rejects_invalid_designer_payloads()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+        var valid = ValidDesignerLayout();
+        var defaults = valid.PageLayout!;
+
+        PrintLayoutSettings[] invalidLayouts =
+        [
+            valid with { PageLayout = defaults with { Density = "dense" } },
+            valid with { PageLayout = defaults with { InvoiceBorderThicknessPt = 4.1 } },
+            valid with { PageLayout = defaults with { Sections = defaults.Sections.Skip(1).ToArray() } },
+            valid with { PageLayout = defaults with { Sections = defaults.Sections.Concat([defaults.Sections[0]]).ToArray() } },
+            valid with
+            {
+                PageLayout = defaults with
+                {
+                    Sections = defaults.Sections
+                        .Select(section => section.SectionKey == PrintLayoutSectionKeys.Logo
+                            ? section with { SectionKey = "unknown" }
+                            : section)
+                        .ToArray()
+                }
+            },
+            valid with
+            {
+                PageLayout = defaults with
+                {
+                    Sections = defaults.Sections
+                        .Select(section => section.SectionKey == PrintLayoutSectionKeys.ItemsTable
+                            ? section with { IsVisible = false }
+                            : section)
+                        .ToArray()
+                }
+            },
+            valid with
+            {
+                PageLayout = defaults with
+                {
+                    Sections = defaults.Sections
+                        .Select(section => section.SectionKey == PrintLayoutSectionKeys.Notes
+                            ? section with { SpacingAfterMm = 20.1 }
+                            : section)
+                        .ToArray()
+                }
+            },
+            valid with { PageLayout = defaults with { BottomPinnedFromSectionKey = "unknown" } },
+            valid with { Watermark = valid.Watermark! with { AssetId = Guid.Empty } },
+            valid with { Watermark = valid.Watermark! with { OffsetXCm = 10, WidthCm = 12 } },
+            valid with { Watermark = valid.Watermark! with { OpacityPercent = 101 } },
+        ];
+
+        foreach (var invalid in invalidLayouts)
+        {
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                service.UpdatePrintLayoutAsync(new UpdatePrintLayoutRequest(invalid)));
+        }
+    }
+
+    private static PrintLayoutSettings ValidDesignerLayout() =>
+        new(
+            1, 1, 1, 1,
+            null,
+            null,
+            PrintLayoutDefaults.CreateWatermark(Guid.NewGuid()),
+            PrintLayoutDefaults.CreatePageLayout());
+
     private static ShowroomBillingDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()

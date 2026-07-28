@@ -21,6 +21,18 @@ public sealed class PrintPreviewZoomPreferenceTests
     }
 
     [Fact]
+    public void PrintPreview_fitted_zoom_can_show_whole_page_without_overwriting_preference()
+    {
+        var preferences = new FakePrintPreferencesStore { PrintPreviewZoomPercent = 80 };
+        var vm = new PrintPreviewViewModel(dispatcher: null, preferences);
+
+        vm.ApplyFittedZoomPercent(38);
+
+        Assert.Equal(38, vm.PreviewZoomPercent);
+        Assert.Equal(80, preferences.PrintPreviewZoomPercent);
+    }
+
+    [Fact]
     public void SettingsPreview_uses_and_saves_shared_zoom_preference()
     {
         var preferences = new FakePrintPreferencesStore { PrintPreviewZoomPercent = 80 };

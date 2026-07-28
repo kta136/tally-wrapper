@@ -1,4 +1,5 @@
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Tests;
@@ -119,12 +120,45 @@ public class BillDocumentRenderTests
     [Fact]
     public void WriteSampleInvoicePdf_for_manual_inspection()
     {
+        var layout = StructuredLayout() with
+        {
+            WatermarkBytes = ManualWatermark(),
+            WatermarkOpacity = 0.15f,
+            WatermarkOffsetXMm = 45,
+            WatermarkOffsetYMm = 88.5f,
+            WatermarkWidthMm = 120,
+            WatermarkHeightMm = 120
+        };
         var options = PrintDocumentOptions.ForInvoice(
             RichContent(),
-            new[] { CopyLabel.Original, CopyLabel.Duplicate });
+            new[] { CopyLabel.Original, CopyLabel.Duplicate },
+            layout);
         var pdf = Renderer.GeneratePdf(options);
 
         var path = Path.Combine(AppContext.BaseDirectory, "sample_invoice.pdf");
+        File.WriteAllBytes(path, pdf);
+
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public void WriteOverflowingSampleInvoicePdf_for_manual_inspection()
+    {
+        var layout = StructuredLayout() with
+        {
+            WatermarkBytes = ManualWatermark(),
+            WatermarkOpacity = 0.15f,
+            WatermarkOffsetXMm = 45,
+            WatermarkOffsetYMm = 88.5f,
+            WatermarkWidthMm = 120,
+            WatermarkHeightMm = 120
+        };
+        var pdf = Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(
+            ContentWithLines(60),
+            [CopyLabel.Original],
+            layout));
+
+        var path = Path.Combine(AppContext.BaseDirectory, "sample_invoice_overflow.pdf");
         File.WriteAllBytes(path, pdf);
 
         Assert.True(File.Exists(path));
@@ -156,6 +190,102 @@ public class BillDocumentRenderTests
         var pdf = Renderer.GeneratePdf(options);
 
         AssertPdfMagic(pdf);
+    }
+
+    [Theory]
+    [InlineData(PrintPageDensity.Compact)]
+    [InlineData(PrintPageDensity.Standard)]
+    [InlineData(PrintPageDensity.Comfortable)]
+    public void GeneratePdf_renders_all_density_modes(string density)
+    {
+        var layout = StructuredLayout() with { PageDensity = density };
+
+        var pdf = Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(
+            RichContent(),
+            [CopyLabel.Original],
+            layout));
+
+        AssertPdfMagic(pdf);
+    }
+
+    [Fact]
+    public void GeneratePdf_renders_reordered_hidden_spaced_sections_with_zero_border()
+    {
+        var sections = PrintLayoutSectionKeys.All
+            .Reverse()
+            .Select(key => new PrintSectionLayoutOptions(
+                key,
+                IsVisible: !PrintLayoutSectionKeys.Optional.Contains(key),
+                SpacingBeforeMm: 0.5f,
+                SpacingAfterMm: 0.5f))
+            .ToArray();
+        var layout = StructuredLayout() with
+        {
+            InvoiceBorderThicknessPt = 0,
+            BottomPinnedFromSectionKey = PrintLayoutSectionKeys.Totals,
+            Sections = sections
+        };
+
+        var pdf = Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(
+            RichContent(),
+            [CopyLabel.Original],
+            layout));
+
+        AssertPdfMagic(pdf);
+    }
+
+    [Theory]
+    [MemberData(nameof(WatermarkImages))]
+    public void GeneratePdf_renders_png_and_jpeg_watermarks(string _, byte[] watermarkBytes)
+    {
+        var layout = StructuredLayout() with
+        {
+            WatermarkBytes = watermarkBytes,
+            WatermarkOpacity = 0.15f,
+            WatermarkOffsetXMm = 45,
+            WatermarkOffsetYMm = 88.5f,
+            WatermarkWidthMm = 120,
+            WatermarkHeightMm = 120
+        };
+
+        var pdf = Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(
+            RichContent(),
+            [CopyLabel.Original],
+            layout));
+
+        AssertPdfMagic(pdf);
+    }
+
+    [Fact]
+    public void Watermark_repeats_without_breaking_overflowing_multiple_copies()
+    {
+        var layout = StructuredLayout() with
+        {
+            WatermarkBytes = PngWatermark,
+            WatermarkOpacity = 0.22f
+        };
+
+        var pages = Renderer.GeneratePageImages(
+            PrintDocumentOptions.ForInvoice(
+                ContentWithLines(24),
+                [CopyLabel.Original, CopyLabel.Duplicate],
+                layout),
+            imageDpi: 72);
+
+        Assert.True(pages.Count >= 2);
+        Assert.All(pages, page => Assert.True(page.Length > 100));
+    }
+
+    [Fact]
+    public void Missing_or_zero_opacity_watermark_never_blocks_rendering()
+    {
+        var noBytes = StructuredLayout() with { WatermarkBytes = null, WatermarkOpacity = 0.2f };
+        var zeroOpacity = StructuredLayout() with { WatermarkBytes = PngWatermark, WatermarkOpacity = 0 };
+
+        AssertPdfMagic(Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(
+            MinimalContent(), [CopyLabel.Original], noBytes)));
+        AssertPdfMagic(Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(
+            MinimalContent(), [CopyLabel.Original], zeroOpacity)));
     }
 
     private static BillPrintContent MinimalContent() => new(
@@ -288,6 +418,35 @@ public class BillDocumentRenderTests
         BankIfsc: withBank ? "HDFC0000123" : null,
         BankUpi: withBank ? "acme@hdfcbank" : null,
         TermsAndConditions: "Goods once sold will not be taken back.\nE.&O.E.");
+
+    public static IEnumerable<object[]> WatermarkImages()
+    {
+        yield return ["png", PngWatermark];
+        yield return ["jpeg", JpegWatermark];
+    }
+
+    private static PrintLayoutOptions StructuredLayout() =>
+        new(
+            BottomPinnedFromSectionKey: PrintLayoutSectionKeys.GstBreakup,
+            Sections: PrintLayoutSectionKeys.All
+                .Select(key => new PrintSectionLayoutOptions(key, true, 0, 0))
+                .ToArray());
+
+    private static byte[] PngWatermark { get; } = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4x8AAAAASUVORK5CYII=");
+
+    private static byte[] JpegWatermark { get; } = Convert.FromBase64String(
+        "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=");
+
+    private static byte[] ManualWatermark()
+    {
+        var sampleWatermarkPath = Environment.GetEnvironmentVariable(
+            "SHOWROOM_BILLING_SAMPLE_WATERMARK_PATH");
+        return !string.IsNullOrWhiteSpace(sampleWatermarkPath)
+            && File.Exists(sampleWatermarkPath)
+                ? File.ReadAllBytes(sampleWatermarkPath)
+                : PngWatermark;
+    }
 
     private static void AssertPdfMagic(byte[] bytes)
     {

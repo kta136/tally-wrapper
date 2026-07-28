@@ -136,7 +136,8 @@ These settings are queried from the selected printer's `PrintCapabilities`, unsu
 options are omitted, and the selected values are merged/validated into a WPF
 `PrintTicket` before dispatch. If capabilities cannot be read, the dialog falls
 back to printer defaults. The values are stored only in the local
-`print-preferences.json` file and are reused by direct-print-after-save.
+`print-preferences.json` file, are restored visibly when the preview reopens,
+and are reused by direct-print-after-save.
 
 ---
 
@@ -148,13 +149,16 @@ Current behavior to preserve:
 
 - optional logo file
 - optional authorized signature file
+- optional page watermark file
 - clear/browse actions
 - assets affect rendered invoice output
 
 Tally Wrapper rule:
 
-- preserve logo/signature usage
+- preserve logo/signature usage and support a calibrated watermark
 - preserve ability to clear or replace assets
+- accept PNG/JPEG assets up to 2 MiB; a missing/deleted watermark or zero opacity
+  must never block printing
 
 ### 5.2 Layout controls
 
@@ -164,6 +168,10 @@ Current behavior to preserve:
 - editable font sizes
 - logo width/height/position
 - signature width/height/position
+- watermark X/Y/width/height/opacity using full-page A4 coordinates
+- ordered invoice sections with optional visibility and external before/after spacing
+- compact/standard/comfortable density, invoice-border thickness, and a
+  bottom-pinned trailing-section boundary
 - live layout calibration editor
 
 Tally Wrapper rule:
@@ -180,10 +188,33 @@ Tally Wrapper clamp ranges (ported from V1 `core/print_layout.py`; enforced by
 - logo size: within `~10.6 × 6.4 mm` minimum and the `~63.5 × 22.2 mm` slot;
   offset is clamped so size + offset never exceeds the slot bounds
 - signature size: within `~15.9 × 6.4 mm` minimum and the `~58.2 × 19.6 mm` slot;
-  offset clamped the same way
+  offset clamped the same way; the signatory rule is the configured image width
+  plus `4 mm` total overhang, capped to the slot width
+- watermark: `X 0..21 cm`, `Y 0..29.7 cm`, width `0.1..21 cm`, height
+  `0.1..29.7 cm`, opacity `0..100%`; the configured box must remain inside A4
+- section before/after spacing: `0..20 mm`
+- invoice border: `0..4 pt`
 
 Tally Wrapper default layout (operator-blank install): margins `10 / 10 / 10 / 12 mm`,
-invoice font `11`, terms font `9`, original copy on, duplicate/triplicate off.
+invoice font `11`, terms font `9`, standard density, `1 pt` invoice border,
+original copy on, duplicate/triplicate off. All sections use the historical
+order and are visible; optional sections naturally omit themselves when their
+content/asset is absent. Bottom pinning starts at GST Breakup.
+
+### 5.3 Structured page-flow designer
+
+The shared `PrintPageLayoutSettings` contract stores every known section key
+exactly once. Unknown, duplicate, or missing keys are rejected. Copy Label,
+Invoice Title, Company/Party, Items, Totals, and GST are mandatory; Logo, Notes,
+Bank, Terms, and Signature may be hidden.
+
+Rows can be reordered by native WPF drag/drop or the keyboard-accessible Move Up
+and Move Down buttons. “Pin bottom from here” stores a boundary key: that visible
+section and all visible sections after it form one contiguous trailing group.
+Reordering therefore recalculates membership from the boundary instead of
+persisting invalid per-row pin flags. “Reset defaults” restores the historical
+order, visibility, standard density, `1 pt` border, zero external spacing, and
+the GST boundary.
 
 ### 5.4 Live preview in Settings
 
@@ -195,8 +226,10 @@ The Settings screen hosts a docked live print preview pane on the right for the
   for the real print dialog.
 - Reacts to unsaved edits with a 300 ms debounce. Source observations:
   - `SettingsDraft` — company, bank, terms, invoice/terms font sizes
-  - `PrintLayoutViewModel` — margins, logo/signature placements, locally uploaded
-    bytes (`PendingLogoBytes` / `PendingSignatureBytes`)
+  - `PrintLayoutViewModel` — margins, logo/signature/watermark placements,
+    section order/visibility/spacing, density, border and bottom pin; locally
+    uploaded bytes (`PendingLogoBytes`, `PendingSignatureBytes`,
+    `PendingWatermarkBytes`)
 - Copy-default toggles are not reflected in the preview; they govern real print
   only. A header note in the pane states this.
 - Uses a tolerant `SettingsDraft.BuildPrintSettingsSnapshot()` that accepts
@@ -206,12 +239,18 @@ The Settings screen hosts a docked live print preview pane on the right for the
   finish after a newer change is enqueued are discarded without touching the
   preview. Asset downloads are gated by an independent asset-generation counter
   so a late server download cannot overwrite newer local upload bytes.
+- If the connected server rejects a watermark upload (for example, an older
+  server deployment that does not yet accept the `watermark` asset kind), the
+  selected bytes remain visible in the live preview and the UI labels them as a
+  local-only preview. Save is blocked until the matching server is installed and
+  the file is browsed again, preventing a watermark from being silently omitted.
 - Refreshes are suppressed while `SettingsViewModel.IsLoading`,
   `SettingsViewModel.IsSaving`, or `PrintLayoutViewModel.IsBusy` is true; one
   trailing-edge refresh fires when bulk-update completes.
-- Rendered at 96 DPI; the pane is a fixed 420 px column.
+- Rendered at 120 DPI; the pane starts at 420 px and participates in the
+  Settings split layout.
 
-### 5.3 What can improve internally
+### 5.5 What can improve internally
 
 Allowed improvement:
 
@@ -236,6 +275,9 @@ Not allowed to regress:
 
 - A4 portrait invoice output; printer-job settings do not change invoice page
   orientation or paper size
+- the preview opens fitted to the whole rendered page after rendering completes;
+  manual zoom remains available without a fitted view overwriting the saved zoom
+  preference
 - predictable margins under operator-configured layout
 - stable totals/footer placement
 
@@ -253,6 +295,7 @@ The document must preserve the current commercial content categories:
 - terms and conditions
 - optional copy labels
 - optional logo/signature
+- optional watermark behind all invoice content
 
 ### 6.3 Consistency
 
@@ -268,8 +311,8 @@ The following **must remain semantically identical**:
 
 ### 6.4 Tally Wrapper layout blocks (QuestPDF)
 
-The `BillDocument` composer in `src/ShowroomBilling.Printing` renders, per copy,
-a single A4 page with the following blocks (top-to-bottom):
+The `BillDocument` composer in `src/ShowroomBilling.Printing` renders A4 portrait
+pages through section dispatchers. The default order remains:
 
 1. Copy label, top-right (`Original for Recipient` / `Duplicate for Transporter` /
    `Triplicate for Supplier`) — matches V1 wording.
@@ -303,13 +346,17 @@ a single A4 page with the following blocks (top-to-bottom):
 8. Terms & Conditions block and signature block (`For {company}` + signature slot
    + `Authorised Signatory`).
 
-**Dynamic page fill**: the bordered invoice box stretches to the A4 bottom, and a
-dynamic spacer sits between block 4 (line-item table) and block 5 (summary). On
-short bills the spacer expands to push summary / GST / bank / terms / signature
-to the page bottom — producing the same full-page look V1 had. On bills where
-content already fills or exceeds the page, the spacer collapses to zero and
-QuestPDF paginates naturally, so the fill cannot cause overflow. Always on; no
-user toggle.
+Each configured section is dispatched once per copy. Density scales internal
+vertical padding (`0.75×`, `1×`, `1.25×`); per-section spacing is applied only
+outside the section. The unpinned sequence flows normally, followed by a
+collapsible spacer and the bottom-aligned pinned sequence. On content-heavy
+bills the spacer collapses and QuestPDF paginates naturally; the trailing group
+appears once at the end of the copy.
+
+The watermark is separate from section flow. QuestPDF's full-page background
+slot repeats it on every physical page behind invoice content. A single
+opacity-bearing inline SVG wrapper embeds the PNG/JPEG bytes once per document
+and preserves the source aspect ratio inside the configured bounding box.
 
 ---
 
@@ -337,7 +384,7 @@ This does not violate the no local durable business storage rule because it is w
 - copy toggles exist
 - batch print creates merged preview
 - printer selection is remembered
-- logo/signature and layout controls exist
+- logo/signature/watermark and structured layout controls exist
 
 ### Can improve in Tally Wrapper
 

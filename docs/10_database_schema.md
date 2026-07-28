@@ -233,22 +233,25 @@ Constraint: `expires_at_utc > issued_at_utc`. A bounded startup retention job de
 
 ### 1.12 `print_assets`
 
-Logo / signature images uploaded by the operator. Content stored inline (bytea) with a 2 MB cap.
+Logo, signature, and watermark images uploaded by the operator. Content is stored inline (`bytea`) with a 2 MB cap.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | |
 | `showroom_id` | UUID | |
-| `asset_kind` | text | `logo` or `signature` |
+| `asset_kind` | text | `logo`, `signature`, or `watermark` |
 | `file_name` | text | |
 | `content_type` | text | e.g. `image/png` |
 | `content` | bytea | raw bytes |
 | `byte_length` | bigint | |
 | `created_at_utc` | timestamptz | |
 
-Constraints: `asset_kind IN ('logo','signature')` and `byte_length > 0`. Upload validation accepts only PNG/JPEG content whose file signature matches the declared image, with a 2 MiB decoded-byte cap.
+Constraints: `asset_kind IN ('logo','signature','watermark')` and `byte_length > 0`. Upload validation accepts only PNG/JPEG content whose file signature matches the declared image, with a 2 MiB decoded-byte cap.
 
-Also: `cloud_settings.print_layout_json` (jsonb, default `{}`) holds margins + logo/signature `PrintLayoutAssetPlacement` records referring to `print_assets.id`.
+Also: `cloud_settings.print_layout_json` (`jsonb`, default `{}`) holds margins,
+logo/signature placements, optional watermark placement, density/border/pin
+settings, and the ordered section rows. Asset IDs refer to `print_assets.id`;
+legacy JSON without `watermark`/`pageLayout` is read with structured defaults.
 
 ### 1.13 ~~`bridge_registrations`~~ (removed — dropped by the `DropBridgeRegistrationsAndSourceBridgeId` migration)
 

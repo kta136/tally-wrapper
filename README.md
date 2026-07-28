@@ -34,7 +34,7 @@ Tally Wrapper supports the core workflow for a jewellery billing counter:
 |---|---|
 | Billing | Draft creation, invoice numbering, jewellery line math, GST-inclusive totals, edit/revise/void flows |
 | Tally | Synchronous voucher create/alter, master refresh, active company checks, failure reporting |
-| Printing | Tax invoice preview, PDF export, printer dispatch, logo/signature assets, print layout settings |
+| Printing | Tax invoice preview, PDF export, printer dispatch, logo/signature/watermark assets, structured print layout designer |
 | Operations | Health banners, startup recovery, service tray, logs, database setup, LAN server mode |
 | Admin | Passcode unlock, session tokens, bill renumbering, local state overrides, destructive actions |
 | Multi-counter | Tally-server API service with trusted LAN workstations |

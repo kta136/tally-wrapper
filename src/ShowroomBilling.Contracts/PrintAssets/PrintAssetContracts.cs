@@ -4,6 +4,14 @@ public static class PrintAssetKinds
 {
     public const string Logo = "logo";
     public const string Signature = "signature";
+    public const string Watermark = "watermark";
+
+    public static IReadOnlySet<string> All { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        Logo,
+        Signature,
+        Watermark
+    };
 }
 
 public sealed record PrintAssetResponse(

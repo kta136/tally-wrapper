@@ -41,10 +41,10 @@ public sealed class PrintAssetService(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.AssetKind is not PrintAssetKinds.Logo and not PrintAssetKinds.Signature)
+        if (!PrintAssetKinds.All.Contains(request.AssetKind))
         {
             throw new ArgumentException(
-                $"AssetKind must be '{PrintAssetKinds.Logo}' or '{PrintAssetKinds.Signature}'.",
+                $"AssetKind must be one of: {string.Join(", ", PrintAssetKinds.All)}.",
                 nameof(request));
         }
         if (string.IsNullOrWhiteSpace(request.FileName))

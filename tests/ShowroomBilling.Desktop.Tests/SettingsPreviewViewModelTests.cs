@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ShowroomBilling.Contracts.PrintAssets;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Printing;
@@ -150,6 +151,77 @@ public class SettingsPreviewViewModelTests
 
         Assert.Equal(1, assets.DownloadCount);
         Assert.NotNull(dispatcher.LastOptions?.Layout.LogoBytes);
+    }
+
+    [Fact]
+    public async Task Activation_downloads_watermark_and_pending_bytes_take_preview_precedence()
+    {
+        var (vm, dispatcher, assets, settings) = BuildVm();
+        settings.PrintLayout.WatermarkAssetId = Guid.NewGuid();
+
+        vm.SetActive(true);
+        await dispatcher.WaitForRenderCountAsync(1);
+        await Task.Delay(DebounceSettleMs);
+
+        Assert.Equal(1, assets.DownloadCount);
+        Assert.NotNull(dispatcher.LastOptions?.Layout.WatermarkBytes);
+
+        byte[] pending = [9, 8, 7];
+        settings.PrintLayout.PendingWatermarkBytes = pending;
+        await dispatcher.WaitForRenderCountAsync(2);
+
+        Assert.Same(pending, dispatcher.LastOptions!.Layout.WatermarkBytes);
+    }
+
+    [Fact]
+    public async Task Pending_watermark_without_server_asset_id_is_rendered_as_local_preview()
+    {
+        var (vm, dispatcher, _, settings) = BuildVm();
+        byte[] pending = [9, 8, 7];
+        settings.PrintLayout.PendingWatermarkBytes = pending;
+
+        vm.SetActive(true);
+        await dispatcher.WaitForRenderCountAsync(1);
+
+        Assert.Same(pending, dispatcher.LastOptions!.Layout.WatermarkBytes);
+        Assert.Equal(
+            (float)(PrintLayoutDefaults.WatermarkOffsetXCm * 10),
+            dispatcher.LastOptions.Layout.WatermarkOffsetXMm);
+        Assert.Equal(
+            (float)(PrintLayoutDefaults.WatermarkOffsetYCm * 10),
+            dispatcher.LastOptions.Layout.WatermarkOffsetYMm);
+        Assert.Equal(
+            (float)(PrintLayoutDefaults.WatermarkOpacityPercent / 100),
+            dispatcher.LastOptions.Layout.WatermarkOpacity);
+    }
+
+    [Fact]
+    public async Task Section_density_border_visibility_spacing_and_pin_changes_refresh_preview()
+    {
+        var (vm, dispatcher, _, settings) = BuildVm();
+        vm.SetActive(true);
+        await dispatcher.WaitForRenderCountAsync(1);
+
+        settings.PrintLayout.PageDensity = PrintPageDensity.Compact;
+        settings.PrintLayout.InvoiceBorderThicknessPt = 0;
+        settings.PrintLayout.BottomPinnedFromSectionKey = PrintLayoutSectionKeys.Terms;
+        var notes = settings.PrintLayout.SectionLayouts.Single(
+            row => row.SectionKey == PrintLayoutSectionKeys.Notes);
+        notes.IsVisible = false;
+        notes.SpacingBeforeMm = 4;
+        notes.SpacingAfterMm = 5;
+
+        await dispatcher.WaitForRenderCountAsync(2);
+
+        var layout = dispatcher.LastOptions!.Layout;
+        Assert.Equal(PrintPageDensity.Compact, layout.PageDensity);
+        Assert.Equal(0, layout.InvoiceBorderThicknessPt);
+        Assert.Equal(PrintLayoutSectionKeys.Terms, layout.BottomPinnedFromSectionKey);
+        var renderedNotes = layout.Sections!.Single(
+            row => row.SectionKey == PrintLayoutSectionKeys.Notes);
+        Assert.False(renderedNotes.IsVisible);
+        Assert.Equal(4, renderedNotes.SpacingBeforeMm);
+        Assert.Equal(5, renderedNotes.SpacingAfterMm);
     }
 
     private static (SettingsPreviewViewModel vm, FakePrintDispatcher dispatcher, FakeAssetsApi assets, SettingsViewModel settings)

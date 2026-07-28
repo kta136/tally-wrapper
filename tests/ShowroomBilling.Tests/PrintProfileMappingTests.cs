@@ -125,4 +125,63 @@ public class PrintProfileMappingTests
         Assert.Same(bytes, options.LogoBytes);
         Assert.Same(bytes, options.SignatureBytes);
     }
+
+    [Fact]
+    public void ToPrintLayoutOptions_maps_watermark_and_structured_page_layout()
+    {
+        var assetId = Guid.NewGuid();
+        var watermarkBytes = new byte[] { 9, 8, 7 };
+        var page = PrintLayoutDefaults.CreatePageLayout() with
+        {
+            Density = PrintPageDensity.Compact,
+            InvoiceBorderThicknessPt = 0,
+            BottomPinnedFromSectionKey = PrintLayoutSectionKeys.Terms,
+            Sections = PrintLayoutDefaults.CreatePageLayout().Sections
+                .Select(section => section.SectionKey == PrintLayoutSectionKeys.BankDetails
+                    ? section with { IsVisible = false, SpacingBeforeMm = 2, SpacingAfterMm = 3 }
+                    : section)
+                .Reverse()
+                .ToArray()
+        };
+        var settings = new PrintLayoutSettings(
+            1, 1, 1, 1,
+            null,
+            null,
+            new PrintLayoutWatermarkPlacement(assetId, 4.5, 8.85, 12, 12, 15),
+            page);
+
+        var options = PrintProfileMapping.ToPrintLayoutOptions(
+            settings,
+            logoBytes: null,
+            signatureBytes: null,
+            invoiceFontSize: 11,
+            termsFontSize: 9,
+            watermarkBytes);
+
+        Assert.Same(watermarkBytes, options.WatermarkBytes);
+        Assert.Equal(45f, options.WatermarkOffsetXMm);
+        Assert.Equal(88.5f, options.WatermarkOffsetYMm);
+        Assert.Equal(120f, options.WatermarkWidthMm);
+        Assert.Equal(0.15f, options.WatermarkOpacity, 3);
+        Assert.Equal(PrintPageDensity.Compact, options.PageDensity);
+        Assert.Equal(0f, options.InvoiceBorderThicknessPt);
+        Assert.Equal(PrintLayoutSectionKeys.Terms, options.BottomPinnedFromSectionKey);
+        Assert.Equal(PrintLayoutSectionKeys.Signature, options.Sections![0].SectionKey);
+        var bank = Assert.Single(options.Sections, row => row.SectionKey == PrintLayoutSectionKeys.BankDetails);
+        Assert.False(bank.IsVisible);
+        Assert.Equal(2f, bank.SpacingBeforeMm);
+        Assert.Equal(3f, bank.SpacingAfterMm);
+    }
+
+    [Fact]
+    public void ToPrintLayoutOptions_uses_structured_defaults_for_legacy_layout()
+    {
+        var legacy = new PrintLayoutSettings(1, 1, 1, 1, null, null);
+
+        var options = PrintProfileMapping.ToPrintLayoutOptions(legacy, null, null, 11, 9);
+
+        Assert.Equal(PrintPageDensity.Standard, options.PageDensity);
+        Assert.Equal(PrintLayoutSectionKeys.GstBreakup, options.BottomPinnedFromSectionKey);
+        Assert.Equal(PrintLayoutSectionKeys.All, options.Sections!.Select(row => row.SectionKey).ToArray());
+    }
 }

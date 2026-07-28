@@ -10,9 +10,11 @@ internal sealed class SettingsPreviewAssetCache(
     private int _generation;
     private Guid? _loadedLogoId;
     private Guid? _loadedSignatureId;
+    private Guid? _loadedWatermarkId;
 
     internal byte[]? ServerLogoBytes { get; private set; }
     internal byte[]? ServerSignatureBytes { get; private set; }
+    internal byte[]? ServerWatermarkBytes { get; private set; }
 
     internal void IncrementGeneration()
     {
@@ -26,6 +28,7 @@ internal sealed class SettingsPreviewAssetCache(
         var generation = Volatile.Read(ref _generation);
         var logoId = printLayout.LogoAssetId;
         var signatureId = printLayout.SignatureAssetId;
+        var watermarkId = printLayout.WatermarkAssetId;
 
         try
         {
@@ -44,6 +47,15 @@ internal sealed class SettingsPreviewAssetCache(
                 if (generation != Volatile.Read(ref _generation)) return;
                 _loadedSignatureId = signatureId;
                 ServerSignatureBytes = bytes;
+                enqueueRefresh();
+            }
+
+            if (watermarkId != _loadedWatermarkId)
+            {
+                var bytes = watermarkId is null ? null : await assets.DownloadAsync(watermarkId.Value);
+                if (generation != Volatile.Read(ref _generation)) return;
+                _loadedWatermarkId = watermarkId;
+                ServerWatermarkBytes = bytes;
                 enqueueRefresh();
             }
         }

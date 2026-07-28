@@ -37,6 +37,7 @@ Scope rules:
 | `copy_triplicate_default` | Invoice / Print Copies | Default triplicate copy checkbox | Boolean | Shared print setting | Seeds preview copy defaults | `Save All` |
 | `logo_path` | Invoice / Layout Assets | Optional logo source path | Optional file path | Local file selection + shared print asset reference/data | Affects rendered output | Browse, Clear, `Save All` |
 | `signature_path` | Invoice / Layout Assets | Optional signature source path | Optional file path | Local file selection + shared print asset reference/data | Affects rendered output | Browse, Clear, `Save All` |
+| `watermark_path` | Print Layout / Assets | Optional watermark source path | PNG/JPEG, ≤2 MiB | Local file selection + shared print asset reference/data | Repeats behind content on every physical page | Browse, Delete, `Save` |
 | `print_font_size` | Invoice / Layout Editor | Base print font size | Positive integer | Shared print layout setting | Affects rendered output | Layout Editor, `Save All` |
 | `print_terms_font_size` | Invoice / Layout Editor | Terms font size | Positive integer | Shared print layout setting | Affects rendered output | Layout Editor, `Save All` |
 | `margin_left_mm` | Invoice / Layout Editor | Left margin | Numeric | Shared print layout setting | Affects page composition | Layout Editor, `Save All` |
@@ -45,6 +46,11 @@ Scope rules:
 | `margin_bottom_mm` | Invoice / Layout Editor | Bottom margin | Numeric | Shared print layout setting | Affects page composition | Layout Editor, `Save All` |
 | `logo_width`, `logo_height`, `logo_left`, `logo_top` | Invoice / Layout Editor | Logo geometry | Numeric | Shared print layout setting | Affects output placement | Layout Editor, `Save All` |
 | `signature_width`, `signature_height`, `signature_left`, `signature_top` | Invoice / Layout Editor | Signature geometry | Numeric | Shared print layout setting | Affects output placement | Layout Editor, `Save All` |
+| `watermark_x_cm`, `watermark_y_cm`, `watermark_width_cm`, `watermark_height_cm`, `watermark_opacity_percent` | Print Layout | Full-page A4 watermark box and opacity | Box within 21 × 29.7 cm; opacity 0–100 | Shared print layout setting | Affects every rendered page | Live preview, `Save` |
+| `page_density` | Print Layout | Internal vertical density | `compact`, `standard`, `comfortable` | Shared print layout setting | Scales vertical padding 0.75× / 1× / 1.25× | Live preview, `Save` |
+| `invoice_border_thickness_pt` | Print Layout | Main invoice-frame border | 0–4 pt | Shared print layout setting | Affects invoice frame | Live preview, `Save` |
+| `section_order`, `section_visibility`, `section_spacing_before_mm`, `section_spacing_after_mm` | Print Layout | Structured invoice section flow | Every known key exactly once; mandatory sections visible; spacing 0–20 mm | Shared print layout setting | Reorders/hides/spaces sections | Drag/Move, live preview, `Save` |
+| `bottom_pinned_from_section_key` | Print Layout | Start of contiguous bottom group | Null or known section key | Shared print layout setting | Pins the trailing visible sequence | Pin/Clear pin, live preview, `Save` |
 | `sales_ledger` | Ledgers / Sales | Primary sales ledger mapping | Required | Shared Tally mapping | Affects posting XML builder inputs | `Fetch Ledgers`, `Save All` |
 | `cash_ledger` | Ledgers / Payment | Cash payment ledger | Required | Shared Tally mapping | Affects posting XML builder inputs | `Fetch Ledgers`, `Save All` |
 | `credit_debit_ledger` | Ledgers / Payment | Card/UPI/non-cash ledger | Required | Shared Tally mapping | Affects posting XML builder inputs | `Fetch Ledgers`, `Save All` |
@@ -69,6 +75,10 @@ Scope rules:
 | `Save Database Settings` | Connection / Database Backend | Switch backend configuration | Admin-only in remote mode | Reloads runtime/backend on success |
 | `Browse` / `Clear` logo | Invoice / Layout Assets | Manage print logo | Operator/admin | Changes local form state before save |
 | `Browse` / `Clear` signature | Invoice / Layout Assets | Manage print signature | Operator/admin | Changes local form state before save |
+| `Browse` / `Delete` watermark | Print Layout / Assets | Manage page watermark | Operator/admin | Uploads/deletes shared asset and updates live preview |
+| `Move Up` / `Move Down` / drag row | Print Layout / Invoice Sections | Reorder structured invoice blocks | Operator/admin | Reorders the shared section list |
+| `Pin from here` / `Clear pin` | Print Layout / Invoice Sections | Define the trailing bottom-aligned group | Operator/admin | Recalculates contiguous pinned rows |
+| `Reset defaults` | Print Layout | Restore historical section layout defaults | Operator/admin | Resets order, visibility, spacing, density, border and GST pin boundary before save |
 | `Open Print Layout Editor` | Invoice / Layout Assets | Open calibration editor | Operator/admin | Allows preview-driven layout adjustment |
 | `Refresh Ledgers` | Ledgers | Fetch ledger names from Tally | Operator | Updates combo sources |
 | `Fetch Voucher Types` | Ledgers | Fetch voucher types from Tally | Operator | Updates voucher type combo |

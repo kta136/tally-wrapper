@@ -27,13 +27,15 @@ internal static class SettingsPreviewDocumentBuilder
         SettingsDraft draft,
         PrintLayoutViewModel printLayout,
         byte[]? serverLogoBytes,
-        byte[]? serverSignatureBytes)
+        byte[]? serverSignatureBytes,
+        byte[]? serverWatermarkBytes)
     {
         var print = draft.BuildPrintSettingsSnapshot();
         var layout = SnapshotPrintLayoutSettings(printLayout);
         var logoBytes = printLayout.PendingLogoBytes ?? serverLogoBytes;
         var signatureBytes = printLayout.PendingSignatureBytes ?? serverSignatureBytes;
-        return PrintProfileMapping.ComposePreviewDocument(print, layout, logoBytes, signatureBytes);
+        var watermarkBytes = printLayout.PendingWatermarkBytes ?? serverWatermarkBytes;
+        return PrintProfileMapping.ComposePreviewDocument(print, layout, logoBytes, signatureBytes, watermarkBytes);
     }
 
     private static PrintLayoutSettings SnapshotPrintLayoutSettings(PrintLayoutViewModel vm)
@@ -47,5 +49,25 @@ internal static class SettingsPreviewDocumentBuilder
                 : new PrintLayoutAssetPlacement(vm.LogoAssetId, vm.LogoOffsetXCm, vm.LogoOffsetYCm, vm.LogoWidthCm, vm.LogoHeightCm),
             Signature: vm.SignatureAssetId is null
                 ? null
-                : new PrintLayoutAssetPlacement(vm.SignatureAssetId, vm.SignatureOffsetXCm, vm.SignatureOffsetYCm, vm.SignatureWidthCm, vm.SignatureHeightCm));
+                : new PrintLayoutAssetPlacement(vm.SignatureAssetId, vm.SignatureOffsetXCm, vm.SignatureOffsetYCm, vm.SignatureWidthCm, vm.SignatureHeightCm),
+            Watermark: vm.WatermarkAssetId is null && vm.PendingWatermarkBytes is null
+                ? null
+                : new PrintLayoutWatermarkPlacement(
+                    vm.WatermarkAssetId ?? Guid.Empty,
+                    vm.WatermarkOffsetXCm,
+                    vm.WatermarkOffsetYCm,
+                    vm.WatermarkWidthCm,
+                    vm.WatermarkHeightCm,
+                    vm.WatermarkOpacityPercent),
+            PageLayout: new PrintPageLayoutSettings(
+                vm.PageDensity,
+                vm.InvoiceBorderThicknessPt,
+                vm.BottomPinnedFromSectionKey,
+                vm.SectionLayouts
+                    .Select(row => new PrintLayoutSectionSettings(
+                        row.SectionKey,
+                        row.IsVisible,
+                        row.SpacingBeforeMm,
+                        row.SpacingAfterMm))
+                    .ToArray()));
 }

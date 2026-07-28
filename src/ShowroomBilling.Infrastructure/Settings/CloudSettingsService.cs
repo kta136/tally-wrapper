@@ -154,7 +154,9 @@ public sealed class CloudSettingsService(
         TopMarginCm: 1.0,
         BottomMarginCm: 1.0,
         Logo: null,
-        Signature: null);
+        Signature: null,
+        Watermark: null,
+        PageLayout: PrintLayoutDefaults.CreatePageLayout());
 
     private static readonly JsonSerializerOptions PrintLayoutJsonOptions = new()
     {
@@ -170,7 +172,10 @@ public sealed class CloudSettingsService(
 
         try
         {
-            return JsonSerializer.Deserialize<PrintLayoutSettings>(json, PrintLayoutJsonOptions) ?? DefaultPrintLayout;
+            var parsed = JsonSerializer.Deserialize<PrintLayoutSettings>(json, PrintLayoutJsonOptions);
+            return parsed is null
+                ? DefaultPrintLayout
+                : parsed with { PageLayout = parsed.PageLayout ?? PrintLayoutDefaults.CreatePageLayout() };
         }
         catch (JsonException)
         {
