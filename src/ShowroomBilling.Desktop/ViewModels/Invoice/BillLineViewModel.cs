@@ -40,9 +40,38 @@ public partial class BillLineViewModel : ObservableObject
         set => SetProperty(ref rowNumber, value);
     }
 
-    public decimal NetWeight => IsDiamond
-        ? GrossWeight ?? 0m
-        : Math.Max(0m, (GrossWeight ?? 0m) - (LessWeight ?? 0m));
+    public decimal NetWeight
+    {
+        get => IsDiamond
+            ? GrossWeight ?? 0m
+            : Math.Max(0m, (GrossWeight ?? 0m) - (LessWeight ?? 0m));
+        set
+        {
+            var normalizedNetWeight = Math.Max(0m, value);
+            if (IsDiamond)
+            {
+                if (GrossWeight != normalizedNetWeight)
+                    GrossWeight = normalizedNetWeight;
+                return;
+            }
+
+            if (GrossWeight is null)
+            {
+                GrossWeight = normalizedNetWeight;
+                return;
+            }
+
+            var calculatedLessWeight = Math.Max(0m, GrossWeight.Value - normalizedNetWeight);
+            if (LessWeight != calculatedLessWeight)
+            {
+                LessWeight = calculatedLessWeight;
+                return;
+            }
+
+            OnPropertyChanged(nameof(NetWeight));
+            Raise();
+        }
+    }
 
     public bool IsEmpty => string.IsNullOrWhiteSpace(ItemName);
     public string ResolvedItemCategory => !string.IsNullOrWhiteSpace(ItemCategory)

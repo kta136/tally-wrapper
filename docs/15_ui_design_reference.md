@@ -145,9 +145,9 @@ Per-screen F-key strip content (from [shell.jsx FKeyStrip](design/app/shell.jsx)
 - Bills: `Enter Details · Button Push to Tally · Ctrl+R Retry Push · Ctrl+Shift+R Repost to Tally · Ctrl+Shift+E Edit · Ctrl+P Print · Search field · Shift+Del Delete · ? Shortcuts`
 - Settings: `Ctrl+S Save · Esc Cancel · Tab Next Field · ? Shortcuts`
 
-Invoice line-entry tab-order (from [invoice.jsx handleCellKey](design/app/invoice.jsx)):
+Invoice line-entry tab-order (implemented in the WPF screen):
 
-- Row cell order: `name → qty → wt → unit → karat → wastage → labour → extra`
+- Row cell order: `name → gross wt → less wt → net wt → unit → karat → wastage → labour → diamond rate → extra`. All three weight cells are editable for gold lines: changing Gross or Less recalculates Net as `max(0, Gross Wt − Less Wt)`; changing Net recalculates Less as `max(0, Gross Wt − Net Wt)`.
 - `Tab` advances one cell; at the last cell on a row it wraps to cell 0 of the next row (creating a new row if needed).
 - `Shift+Tab` reverses through the same order.
 - `Enter` advances one cell (same order as `Tab`); `Shift+Enter` reverses.
