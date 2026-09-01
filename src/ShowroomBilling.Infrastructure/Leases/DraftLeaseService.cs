@@ -54,7 +54,7 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
         var lease = new DraftEditLeaseEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             BillId = request.BillId,
             ShowroomId = showroomId,
             OwnerActorId = request.OwnerActorId,
@@ -205,7 +205,7 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
             : $"{{\"billId\":\"{lease.BillId}\",\"leaseId\":\"{lease.Id}\",\"details\":{extraPayloadJson}}}";
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "draft_lease",
             EntityId = lease.Id.ToString(),
             EventType = eventType,

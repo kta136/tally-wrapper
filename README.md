@@ -2,7 +2,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Windows](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
-[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL%2017-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL%2018-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![WPF](https://img.shields.io/badge/UI-WPF-5C2D91)](https://learn.microsoft.com/dotnet/desktop/wpf/)
 [![TallyPrime](https://img.shields.io/badge/integration-TallyPrime-0F766E)](https://tallysolutions.com/)
 
@@ -48,7 +48,7 @@ flowchart LR
     Operator["Billing operator"] --> Desktop["Tally Wrapper Desktop<br/>WPF counter app"]
     Desktop --> Api["Tally Wrapper API<br/>ASP.NET Core API"]
     ServerTray["Tally Wrapper Server<br/>installer + tray UI"] --> Api
-    Api --> Postgres["PostgreSQL<br/>system of record"]
+    Api --> Postgres["PostgreSQL 18<br/>Oracle Cloud VPS"]
     Api --> Tally["TallyPrime<br/>local XML endpoint"]
     Desktop --> Printing["QuestPDF / Windows printing"]
 ```
@@ -108,7 +108,7 @@ Development currently targets Windows because the desktop host is WPF.
 |---|---|
 | Windows 10/11 | Required for WPF, printing, DPAPI, and Windows Service/server tray behavior |
 | .NET SDK `10.0.202` | Pinned by [global.json](global.json) |
-| PostgreSQL 17+ | Local Postgres, Docker, or a managed provider such as Aiven |
+| PostgreSQL 18 | Required for production, local development, and the relational test harness |
 | TallyPrime | Required for real posting and master refresh workflows |
 | PowerShell | Required for publish and server install scripts |
 
@@ -127,7 +127,7 @@ cd tally-wrapper
 
 dotnet restore ShowroomBilling.sln
 dotnet build ShowroomBilling.sln
-dotnet test ShowroomBilling.sln
+dotnet test --solution ShowroomBilling.sln
 ```
 
 Start a local Postgres fallback:
@@ -135,6 +135,8 @@ Start a local Postgres fallback:
 ```powershell
 docker compose -f docker-compose.dev.yml up -d
 ```
+
+The local Compose image is PostgreSQL 18. Existing PostgreSQL 17 volumes require dump/restore or intentional replacement before first use; see [DEV_SETUP.md](DEV_SETUP.md#database).
 
 Run the API:
 
@@ -161,10 +163,12 @@ Development API defaults to:
 
 Real connection strings are not committed. Keep them in one of these private locations:
 
+- OpenBao KV v2 at `kv/Postgres/apps/tally_wrapper/prod` (canonical production secret; authoritative structured fields plus a synchronized `connection_string`)
+- OpenBao KV v2 at `kv/Postgres/apps/tally_wrapper_test/dev`, key `connection_string` (persistent Coolify test environment)
 - `src/ShowroomBilling.Api/appsettings.Development.json`
 - `src/ShowroomBilling.Api/appsettings.Production.json`
 - user secrets
-- local environment variables
+- local environment variables (`SHOWROOM_BILLING_POSTGRES` is the API's explicit database override)
 - the in-app DPAPI-protected database override
 
 The safe placeholder in `src/ShowroomBilling.Api/appsettings.json` points to local Postgres:
@@ -172,6 +176,10 @@ The safe placeholder in `src/ShowroomBilling.Api/appsettings.json` points to loc
 ```text
 Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres
 ```
+
+Production uses PostgreSQL 18 hosted on an Oracle Cloud Infrastructure VPS. The OpenBao secret at `kv/Postgres/apps/tally_wrapper/prod` is the source of truth: its structured connection fields are authoritative and `connection_string` is the synchronized Npgsql form used for runtime injection and EF migrations. The application does not read OpenBao directly; an authorized operator retrieves the derived value with the native `bao` CLI and supplies it through the server tray or another private runtime configuration source. Never commit the credential. See [PostgreSQL deployment](docs/11_deployment_and_ops.md#4-postgresql-deployment) for the OpenBao workflow and the network, TLS, backup, and maintenance responsibilities of the self-hosted database.
+
+The persistent test deployment uses `tally_wrapper_test` inside the same Coolify `shared-postgres` PostgreSQL 18 cluster and connects through PgBouncer; it is not a separate database server. Its OpenBao path, network attachment, and role contract are documented in [Development Setup](DEV_SETUP.md#shared-persistent-test-database).
 
 Manual migration command:
 
@@ -360,7 +368,7 @@ Important deployment notes:
 Run the full suite:
 
 ```powershell
-dotnet test ShowroomBilling.sln
+dotnet test --solution ShowroomBilling.sln
 ```
 
 Run formatting, warning, dependency, and coverage gates:
@@ -375,7 +383,7 @@ dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserr
 Run API contract tests only:
 
 ```powershell
-dotnet test --filter "FullyQualifiedName~Contracts"
+dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "FullyQualifiedName~Contracts"
 ```
 
 Run the opt-in Postgres integration tests, which require a local Docker endpoint
@@ -385,14 +393,14 @@ reachable by Testcontainers or an explicit Postgres test connection string:
 .\tools\run-postgres-tests.ps1
 ```
 
-The script starts a temporary `postgres:17` container on the configured Docker
+The script starts a temporary `postgres:18` container on the configured Docker
 context, runs `Category=Postgres`, and stops the container afterward. To run the
 tests against an already-running remote Postgres instance instead:
 
 ```powershell
 $env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS='1'
 $env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=postgres'
-dotnet test tests/ShowroomBilling.Tests --filter "Category=Postgres"
+dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category=Postgres"
 ```
 
 What the tests cover:
@@ -406,7 +414,9 @@ What the tests cover:
 - WPF ViewModel workflows
 - printing/rendering helpers
 
-The test DB provider is EF Core InMemory for most DB-backed unit tests. It validates behavior shape, not Postgres locking, unique-index enforcement, or real race semantics. CI therefore runs `Category=Postgres` separately against PostgreSQL 17; that job is required for numbering, locking, conditional-transition, or unique-index changes.
+The test DB provider is EF Core InMemory for most DB-backed unit tests. It validates behavior shape, not Postgres locking, unique-index enforcement, or real race semantics. CI therefore runs `Category=Postgres` separately against PostgreSQL 18, matching production. That job is required for numbering, locking, conditional-transition, migration, or unique-index changes.
+
+The persistent `tally_wrapper_test` deployment database is not the connection for this harness: the fixture requires permission to create and drop `tw_test_<guid>` databases, while the persistent API role is intentionally restricted to its one PgBouncer mapping. See [Development Setup](DEV_SETUP.md#shared-persistent-test-database).
 
 ## Troubleshooting
 

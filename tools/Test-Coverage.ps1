@@ -17,23 +17,38 @@ if (Test-Path -LiteralPath $resolvedResults) {
 }
 New-Item -ItemType Directory -Path $resolvedResults | Out-Null
 
-$testArguments = @(
-    "test",
-    (Join-Path $repoRoot "ShowroomBilling.sln"),
-    "--configuration", $Configuration,
-    '--collect:XPlat Code Coverage',
-    "--results-directory", $resolvedResults,
-    "--logger", "trx"
+$testProjects = @(
+    (Join-Path $repoRoot "tests\ShowroomBilling.Tests\ShowroomBilling.Tests.csproj"),
+    (Join-Path $repoRoot "tests\ShowroomBilling.Desktop.Tests\ShowroomBilling.Desktop.Tests.csproj")
 )
-if ($NoBuild) {
-    $testArguments += "--no-build"
-}
-& dotnet @testArguments
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+
+foreach ($testProject in $testProjects) {
+    $projectResults = Join-Path $resolvedResults ([IO.Path]::GetFileNameWithoutExtension($testProject))
+    $testArguments = @(
+        "test",
+        "--project", $testProject,
+        "--configuration", $Configuration,
+        "--results-directory", $projectResults
+    )
+    if ($NoBuild) {
+        $testArguments += "--no-build"
+    }
+    $testArguments += @(
+        "--",
+        "--coverlet",
+        "--coverlet-output-format", "cobertura",
+        "--coverlet-include", "[ShowroomBilling.*]*",
+        "--coverlet-include", "[TallyWrapper*]*",
+        "--report-trx"
+    )
+
+    & dotnet @testArguments
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
 }
 
-$reports = Get-ChildItem -LiteralPath $resolvedResults -Recurse -Filter "coverage.cobertura.xml"
+$reports = Get-ChildItem -LiteralPath $resolvedResults -Recurse -Filter "coverage.cobertura*.xml"
 if ($reports.Count -eq 0) {
     throw "No Cobertura coverage reports were produced."
 }

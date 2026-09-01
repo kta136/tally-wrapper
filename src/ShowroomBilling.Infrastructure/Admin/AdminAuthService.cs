@@ -60,7 +60,7 @@ public sealed class AdminAuthService(
             var (salt, hash, iter) = HashPasscode(request.NewPasscode);
             dbContext.AdminPasscodes.Add(new AdminPasscodeEntity
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.CreateVersion7(),
                 ShowroomId = showroomId,
                 PasscodeSalt = salt,
                 PasscodeHash = hash,
@@ -115,7 +115,7 @@ public sealed class AdminAuthService(
 
         var session = new AdminSessionEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             ShowroomId = showroomId,
             TokenHash = tokenHash,
             ActorLabel = actorLabel,
@@ -211,7 +211,7 @@ public sealed class AdminAuthService(
     {
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "admin",
             EntityId = ResolveShowroomId(DefaultShowroomCode).ToString(),
             EventType = eventType,

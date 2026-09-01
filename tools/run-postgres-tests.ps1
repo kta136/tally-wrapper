@@ -1,11 +1,11 @@
 [CmdletBinding()]
 param(
     [string]$DockerContext = 'proxmox-docker',
-    [string]$Image = 'postgres:17',
+    [string]$Image = 'postgres:18',
     [string]$ContainerName = "tw-postgres-tests-$([Guid]::NewGuid().ToString('N').Substring(0, 12))",
     [string]$PostgresPassword = 'postgres',
     [string]$HostAddress,
-    [string]$TestProject = (Join-Path $PSScriptRoot '..\tests\ShowroomBilling.Tests'),
+    [string]$TestProject = (Join-Path $PSScriptRoot '..\tests\ShowroomBilling.Tests\ShowroomBilling.Tests.csproj'),
     [switch]$NoBuild
 )
 
@@ -135,7 +135,7 @@ try {
     $env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS = '1'
     $env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION = $connectionString
 
-    $testArgs = @('test', $TestProject, '--filter', 'Category=Postgres')
+    $testArgs = @('test', '--project', $TestProject, '--filter', 'Category=Postgres')
     if ($NoBuild) {
         $testArgs += '--no-build'
     }

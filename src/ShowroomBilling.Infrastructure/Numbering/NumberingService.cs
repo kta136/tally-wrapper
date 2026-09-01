@@ -167,7 +167,7 @@ FOR UPDATE")
 
         var reservation = new InvoiceNumberReservationEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             IdempotencyKey = idempotencyKey,
             ShowroomId = showroomId,
             FiscalYear = year,
@@ -183,7 +183,7 @@ FOR UPDATE")
 
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "numbering",
             EntityId = reservation.Id.ToString(),
             EventType = $"numbering.{normalizedType}.reserved",

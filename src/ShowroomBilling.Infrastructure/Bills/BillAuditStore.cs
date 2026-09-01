@@ -24,7 +24,7 @@ internal sealed class BillAuditStore(
         var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "bill",
             EntityId = billId.ToString(),
             EventType = eventType,

@@ -81,7 +81,7 @@ public sealed class StuckPostingRecoveryHostedService(
                 bill.UpdatedAtUtc = now;
                 db.AuditEvents.Add(new AuditEventEntity
                 {
-                    Id = Guid.NewGuid(),
+                    Id = Guid.CreateVersion7(),
                     EntityType = "bill",
                     EntityId = bill.Id.ToString(),
                     EventType = "bill.posting.recovered",

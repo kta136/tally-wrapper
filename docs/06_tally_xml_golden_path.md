@@ -585,5 +585,5 @@ Every voucher click makes one HTTP attempt — there is no automatic voucher ret
 Current focused regression command:
 
 ```powershell
-dotnet test tests/ShowroomBilling.Tests --filter "FullyQualifiedName~TallyPosterTests|FullyQualifiedName~TallyXmlRetryPolicyTests|FullyQualifiedName~TallyXmlVoucherBuilderTests"
+dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "FullyQualifiedName~TallyPosterTests|FullyQualifiedName~TallyXmlRetryPolicyTests|FullyQualifiedName~TallyXmlVoucherBuilderTests"
 ```

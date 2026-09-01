@@ -8,7 +8,9 @@ public sealed class ShowroomBillingDbContextFactory : IDesignTimeDbContextFactor
     public ShowroomBillingDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ShowroomBillingDbContext>();
-        optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres");
+        optionsBuilder.UseNpgsql(
+            "Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres",
+            npgsql => npgsql.SetPostgresVersion(18, 0));
         return new ShowroomBillingDbContext(optionsBuilder.Options);
     }
 }

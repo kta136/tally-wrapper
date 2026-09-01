@@ -331,7 +331,7 @@
                                  VirtualizingPanel.CacheLengthUnit="Page">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Style="{StaticResource EntryRowGrid}">
+                                    <Grid x:Name="LineEntryGrid" Style="{StaticResource EntryRowGrid}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="32" />
                                             <ColumnDefinition Width="*" MinWidth="190" />
@@ -370,12 +370,12 @@
                                         <Border Grid.Column="2" Style="{StaticResource BodyCell}">
                                             <TextBox Style="{StaticResource CellNumBox}"
                                                      ToolTip="Gross weight"
-                                                     Text="{Binding GrossWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=PropertyChanged}" />
+                                                     Text="{Binding GrossWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=LostFocus}" />
                                         </Border>
                                         <Border Grid.Column="3" Style="{StaticResource BodyCell}">
                                             <TextBox IsEnabled="{Binding IsGoldLine}"
                                                      ToolTip="Editable deduction. Net Wt updates automatically; editing Net Wt recalculates Less Wt."
-                                                     Text="{Binding LessWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=PropertyChanged}">
+                                                     Text="{Binding LessWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=LostFocus}">
                                                 <TextBox.Style>
                                                     <Style TargetType="TextBox" BasedOn="{StaticResource CellNumBox}">
                                                         <Style.Triggers>
@@ -391,7 +391,7 @@
                                         <Border Grid.Column="4" Style="{StaticResource BodyCell}">
                                             <TextBox Style="{StaticResource CellNumBox}"
                                                      ToolTip="Editable net weight. Less Wt = Gross Wt − Net Wt."
-                                                     Text="{Binding NetWeight, Mode=TwoWay, StringFormat=N3, UpdateSourceTrigger=PropertyChanged}" />
+                                                     Text="{Binding NetWeight, Mode=TwoWay, StringFormat=N3, UpdateSourceTrigger=LostFocus}" />
                                         </Border>
                                         <Border Grid.Column="5" Style="{StaticResource BodyCell}">
                                             <ComboBox Style="{StaticResource CellCombo}"

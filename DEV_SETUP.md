@@ -4,25 +4,70 @@
 
 - .NET SDK `10.0.202`
 - Windows for the WPF desktop project
-- PostgreSQL 17+ locally, or Docker Desktop if you want to use `docker-compose.dev.yml`
+- PostgreSQL 18, or Docker Desktop if you want to use `docker-compose.dev.yml`
+- Native OpenBao CLI (`bao`) matching the server version for shared-environment secret retrieval and rotation
 
 ## Database
 
-Primary development database is PostgreSQL 17+. Use a local Postgres instance, Docker, or a managed Postgres provider such as Aiven. Real connection strings are intentionally not committed. Keep environment-specific values in ignored files (`src/ShowroomBilling.Api/appsettings.Development.json`, `src/ShowroomBilling.Api/appsettings.Production.json`), user-secrets, local environment variables, or the DPAPI-protected override written by `tools/configure-local-db.ps1`.
+Production uses self-hosted PostgreSQL 18 on an Oracle Cloud Infrastructure VPS. Development uses PostgreSQL 18 through a local instance, Docker, or a separate remote database. Real connection strings are intentionally not committed. OpenBao KV v2 is the source of truth for shared-environment credentials: production uses `kv/Postgres/apps/tally_wrapper/prod`, and the persistent Coolify test environment uses `kv/Postgres/apps/tally_wrapper_test/dev`. In the production secret, `host`, `port`, `database`, `username`, `password`, `ssl_mode`, `minimum_pool_size`, and `maximum_pool_size` are authoritative; `connection_string` is a synchronized Npgsql representation of those fields. Private runtime copies may live in ignored environment-specific files (`src/ShowroomBilling.Api/appsettings.Development.json`, `src/ShowroomBilling.Api/appsettings.Production.json`), user secrets, the `SHOWROOM_BILLING_POSTGRES` environment variable, or the DPAPI-protected override written by `tools/configure-local-db.ps1`.
 
-For Aiven, paste the PostgreSQL service URI from `avn service connection-info pg uri <service> --sslmode require` directly into the Database setup/server-tray field, or use an Npgsql key/value connection string. If Aiven returns `/defaultdb`, replace it with this app's target database, for example `/tally_wrapper_prod` for server production. Aiven Free is single-node and not HA; it is suitable for development, pilots, and low-traffic showroom use, but not high-traffic production. Set `Database:AutoMigrateOnStartup=true` only in private local environment files.
+For the Oracle VPS database, enter an Npgsql key/value connection string in the Database setup/server-tray field. Use the actual database role and the TLS settings configured on the VPS:
 
-Manual migration command:
+```text
+Host=<oracle-vps-host>;Port=5432;Database=tally_wrapper_prod;Username=<app-role>;Password=<secret>;SSL Mode=<vps-required-mode>;Minimum Pool Size=<min>;Maximum Pool Size=<max>
+```
+
+The application does not fetch from OpenBao itself. After authenticating the native `bao` CLI, retrieve the production value into a short-lived PowerShell variable and inject it through the server tray/private runtime configuration:
 
 ```powershell
-dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<postgres-connection-string>"
+$secretPath = 'Postgres/apps/tally_wrapper/prod'
+$connection = bao kv get -mount=kv -field=connection_string $secretPath
 ```
+
+Use the native `bao` CLI rather than browser-copying credentials for this workflow, and do not use `bao kv put` for this KV v2 path. If an authoritative structured field changes, regenerate `connection_string` immediately; never rotate only one representation. The CAS-protected CLI procedure, including a stdin write that avoids shell history and trailing-newline corruption, is documented in [Deployment and Operations](docs/11_deployment_and_ops.md#openbao-production-secret).
+
+### Shared persistent test database
+
+Coolify's `shared-postgres` stack hosts one PostgreSQL 18 cluster plus PgBouncer. The persistent application test environment is a database and isolated role set inside that cluster; do **not** provision another PostgreSQL server or container for it.
+
+| Concern | Managed value |
+|---|---|
+| Database | `tally_wrapper_test` |
+| Runtime endpoint | `pgbouncer:6432` on `shared-postgres-private` |
+| Runtime role | `tally_wrapper_test_dev_api` |
+| OpenBao secret | `kv/Postgres/apps/tally_wrapper_test/dev` |
+| Database identity | `DEV` |
+| Npgsql / PgBouncer pool cap | `5` client connections / `2` backend connections |
+
+A Coolify application must join the external Docker network `shared-postgres-private` before it can resolve `pgbouncer`. Application traffic goes through PgBouncer in transaction-pooling mode; do not point the runtime at the underlying `postgres:5432` service. Retrieve the connection without printing it:
+
+```powershell
+$secretPath = 'Postgres/apps/tally_wrapper_test/dev'
+$connection = bao kv get -mount=kv -field=connection_string $secretPath
+```
+
+The secret also carries structured connection fields for operations. When rotating it, update `connection_string` and the standalone `password` field together under one CAS version. Role ownership, temporary migration access, and the PgBouncer mapping are defined in [docs/11_deployment_and_ops.md](docs/11_deployment_and_ops.md#shared-persistent-test-database).
+
+This persistent database is **not** the admin connection expected by `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`. `PostgresFixture` changes the supplied connection to `Database=postgres`, creates isolated `tw_test_<guid>` databases, and drops them after each scenario. The persistent runtime role deliberately has neither `CREATEDB` nor a wildcard PgBouncer database mapping. Keep using the disposable Docker/CI harness unless a separate, restricted test-runner administration path is explicitly provisioned.
+
+Restrict PostgreSQL port access to the API host or its trusted network in both the Oracle Cloud network rules and the VPS firewall. Because this database is self-hosted, OS/PostgreSQL patching, backups, restore testing, certificate renewal, monitoring, and storage capacity are operational responsibilities. Set `Database:AutoMigrateOnStartup=true` only in private local environment files.
+
+Production migration command (after the OpenBao retrieval above):
+
+```powershell
+dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection $connection
+Remove-Variable connection
+```
+
+For development or another explicitly selected database, pass its connection string directly with `--connection`. Never rely on EF environment-name resolution to select the target database.
 
 Local fallback (only if you want an offline Postgres):
 
 ```powershell
 docker compose -f docker-compose.dev.yml up -d
 ```
+
+The official PostgreSQL 18 container stores data under `/var/lib/postgresql/18/docker`, and this repository mounts its named volume at `/var/lib/postgresql`. A PostgreSQL 17 data directory cannot be started directly by PostgreSQL 18. If an existing local volume contains data you need, dump it with PostgreSQL 17 and restore it into a fresh PostgreSQL 18 volume. If it is disposable development data, stop Compose and intentionally remove the old named volume before starting PostgreSQL 18.
 
 Then override `ConnectionStrings:Postgres` via user-secrets or a `.env` before launching. Default placeholder (ships in `appsettings.json`): `Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres`.
 
@@ -48,15 +93,19 @@ set value = excluded.value,
 
 The desktop status bar displays this DB-owned marker (`DB DEV`, `DB PROD`, or `DB UNSET`). Runtime health treats a `Development` API connected to a non-`DEV` database, or a `Production` API connected to a non-`PROD` database, as a `DB MISMATCH` warning while still reporting PostgreSQL as reachable.
 
-Settings -> Database shows the active runtime path as Desktop app -> API -> PostgreSQL. The Desktop never opens a PostgreSQL connection directly. In `Server` mode, configure the active database from the Tally Wrapper server tray; any LocalEmbedded override shown on the workstation is a fallback and is labelled **NOT IN USE**. In `LocalEmbedded` mode, the same page can test, save, and restart the embedded API with a DPAPI-protected database override.
+Settings -> Database shows the active runtime path as Desktop app -> API -> PostgreSQL. The Desktop never opens a PostgreSQL connection directly. In `Server` mode, configure the active database from the Tally Wrapper server tray; the workstation's LocalEmbedded fallback details stay hidden unless **API location after restart** is changed to `LocalEmbedded`. In `LocalEmbedded` mode, the same page can test, save, and restart the embedded API with a DPAPI-protected database override.
 
 ## Build
 
 ```powershell
 dotnet restore ShowroomBilling.sln
 dotnet build ShowroomBilling.sln
-dotnet test ShowroomBilling.sln
+dotnet test --solution ShowroomBilling.sln
 ```
+
+`global.json` selects Microsoft Testing Platform for xUnit 4. Use the explicit
+`--solution` or `--project` form with `dotnet test`; the older positional form
+is not accepted in MTP mode.
 
 Run the same local quality gates used by the Windows CI job:
 
@@ -72,20 +121,21 @@ dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserr
 Postgres integration tests are opt-in because they require either a local Docker
 endpoint reachable by Testcontainers or an explicit remote Postgres test
 connection string. They create isolated test databases; they do not read local
-or Aiven connection strings.
+or production Oracle VPS connection strings.
 
 ```powershell
 .\tools\run-postgres-tests.ps1
 ```
 
-The script starts a temporary `postgres:17` container on the configured Docker
-context, runs `Category=Postgres`, and stops the container afterward. To run
+The script starts a temporary `postgres:18` container on the configured Docker
+context, matching production. It runs `Category=Postgres` and stops the
+container afterward. To run
 against an already-running remote Postgres instance instead:
 
 ```powershell
 $env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS='1'
 $env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=postgres'
-dotnet test tests/ShowroomBilling.Tests --filter "Category=Postgres"
+dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category=Postgres"
 ```
 
 If Docker Desktop is configured to use a remote SSH context, Testcontainers may still look for a local named pipe. Use `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION` or switch to a local Docker context in that case. The CI Postgres job is the authoritative relational check for `FOR UPDATE`, conditional updates, and unique-index-backed behavior.
@@ -139,7 +189,7 @@ Configure workstations from **Billing → Settings → Database → API Connecti
 
 `LocalEmbedded` remains the fallback mode, but it is per-PC: that workstation must have its own local DB override and Tally settings must point at the Tally server by LAN name/IP rather than `127.0.0.1`.
 
-The same Database settings section also exposes `LocalEmbedded` as the old connection method. It remembers the last non-localhost server URL, has **Test server** and **Find server** actions, and shows the local embedded API URL (`http://localhost:5107`). When the desktop is currently running in `Server` mode, the local embedded DB override editor is read-only because server DB setup is maintained from the server tray; the section still loads this workstation's saved LocalEmbedded fallback DB override so the operator can see what will be used after switching back.
+The same Database settings section also exposes `LocalEmbedded` as the old connection method. It remembers the last non-localhost server URL and has **Test server** and **Find server** actions. Local embedded API and database details stay hidden while the selected API location is `Server`; selecting `LocalEmbedded` reveals the local endpoint and saved fallback metadata. When the desktop is still running in `Server` mode, the local database editor remains unavailable until Billing restarts into `LocalEmbedded` mode because server DB setup is maintained from the server tray.
 
 ## Run the desktop shell
 

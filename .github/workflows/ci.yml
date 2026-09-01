@@ -55,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: 'artifacts/coverage/**/*.trx'
           if-no-files-found: ignore
 
       - name: Upload coverage
@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: coverage
-          path: artifacts/coverage/**/coverage.cobertura.xml
+          path: artifacts/coverage/**/coverage.cobertura*.xml
           if-no-files-found: error
 
   postgres-integration:
@@ -85,7 +85,7 @@ jobs:
       - name: Run Docker-backed Postgres tests
         env:
           SHOWROOM_BILLING_RUN_POSTGRES_TESTS: '1'
-        run: dotnet test tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --configuration Release --filter "Category=Postgres" --logger "trx;LogFileName=postgres-test-results.trx"
+        run: dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --configuration Release --filter "Category=Postgres" -- --report-trx --report-trx-filename postgres-test-results.trx
 
       - name: Upload Postgres test results
         if: always()

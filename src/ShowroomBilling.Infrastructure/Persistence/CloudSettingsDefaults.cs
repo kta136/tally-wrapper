@@ -8,7 +8,7 @@ internal static class CloudSettingsDefaults
     {
         return new CloudSettingsEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             Host = "127.0.0.1",
             Port = 9000,
             TimeoutSeconds = 30,

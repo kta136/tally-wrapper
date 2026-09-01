@@ -95,7 +95,7 @@ public sealed class PrintAssetService(
         var now = DateTimeOffset.UtcNow;
         var entity = new PrintAssetEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             ShowroomId = showroomId,
             AssetKind = request.AssetKind,
             FileName = fileName,
@@ -108,7 +108,7 @@ public sealed class PrintAssetService(
         var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "print_asset",
             EntityId = entity.Id.ToString(),
             EventType = "print_asset.uploaded",
@@ -159,7 +159,7 @@ public sealed class PrintAssetService(
         var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "print_asset",
             EntityId = id.ToString(),
             EventType = "print_asset.deleted",

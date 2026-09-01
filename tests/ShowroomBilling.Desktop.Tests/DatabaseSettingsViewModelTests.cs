@@ -99,6 +99,7 @@ public sealed class DatabaseSettingsViewModelTests
         Assert.Equal("Owned by the server API", vm.ActiveDatabaseOwnerText);
         Assert.Equal("Configured from the server tray", vm.ActiveDatabaseSourceText);
         Assert.Equal("CONFIGURED", vm.ActiveDatabaseStatusText);
+        Assert.False(vm.IsLocalDatabaseSectionVisible);
         Assert.Equal("Local fallback database", vm.LocalDatabaseSectionTitle);
         Assert.Equal("NOT IN USE", vm.LocalDatabaseUsageChipText);
         Assert.Contains("not the live server database", vm.LocalDatabaseSectionDescription);
@@ -128,6 +129,7 @@ public sealed class DatabaseSettingsViewModelTests
         Assert.Equal("Encrypted local override", vm.ActiveDatabaseSourceText);
         Assert.Equal("Encrypted local override", vm.DatabaseSourceText);
         Assert.Equal("Development", vm.DatabaseEnvironmentName);
+        Assert.True(vm.IsLocalDatabaseSectionVisible);
         Assert.Equal("ACTIVE PATH", vm.LocalDatabaseUsageChipText);
     }
 
@@ -201,12 +203,15 @@ public sealed class DatabaseSettingsViewModelTests
 
         vm.ApiConnectionMode = DesktopConnectionModes.Server;
         Assert.Equal("http://192.168.1.13:5107", vm.ServerApiBaseUrl);
+        Assert.False(vm.IsLocalDatabaseSectionVisible);
 
         vm.ApiConnectionMode = DesktopConnectionModes.LocalEmbedded;
         Assert.Contains("http://localhost:5107", vm.ApiConnectionStatus);
+        Assert.True(vm.IsLocalDatabaseSectionVisible);
 
         vm.ApiConnectionMode = DesktopConnectionModes.Server;
         Assert.Equal("http://192.168.1.13:5107", vm.ServerApiBaseUrl);
+        Assert.False(vm.IsLocalDatabaseSectionVisible);
     }
 
     [Fact]

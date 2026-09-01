@@ -11,8 +11,8 @@ Tally Wrapper is two processes on one Windows box: Desktop (WPF) + API (ASP.NET 
 - [07_printing_spec.md](./07_printing_spec.md) — operator-visible printing behavior.
 - [08_settings_catalog.md](./08_settings_catalog.md) — per-field settings catalog.
 - [09_api_spec.md](./09_api_spec.md) — backend API surface (desktop-facing, admin, health).
-- [10_database_schema.md](./10_database_schema.md) — PostgreSQL schema (bills, revisions, numbering, audit, masters, leases).
-- [11_deployment_and_ops.md](./11_deployment_and_ops.md) — deployment topology, health checks, startup recovery, upgrade flow.
+- [10_database_schema.md](./10_database_schema.md) — PostgreSQL 18 schema (bills, revisions, numbering, audit, masters, leases).
+- [11_deployment_and_ops.md](./11_deployment_and_ops.md) — deployment topology, OpenBao database-secret workflow, shared PostgreSQL/PgBouncer test environment, Oracle VPS operations, health checks, startup recovery, upgrade flow.
 - [14_settings_storage_contract.md](./14_settings_storage_contract.md) — what lives locally vs in the cloud DB.
 - [15_ui_design_reference.md](./15_ui_design_reference.md) — design tokens, component inventory, keyboard rules.
 - [17_synthetic_batch.md](./17_synthetic_batch.md) — synthetic Batch Data Scheduler (V1-ported, admin-gated).

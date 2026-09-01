@@ -32,9 +32,14 @@ public sealed class BillServiceTests
         Assert.Contains("/0001", response.InvoiceNumber);
         Assert.False(string.IsNullOrWhiteSpace(response.FiscalYear));
 
-        Assert.Single(await db.Bills.ToListAsync());
-        Assert.Single(await db.BillRevisions.ToListAsync());
-        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
+        var bill = Assert.Single(await db.Bills.ToListAsync());
+        var revision = Assert.Single(await db.BillRevisions.ToListAsync());
+        var reservation = Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
+
+        AssertVersion7(bill.Id);
+        AssertVersion7(revision.Id);
+        AssertVersion7(reservation.Id);
+        Assert.All(await db.AuditEvents.ToListAsync(), audit => AssertVersion7(audit.Id));
     }
 
     [Fact]
@@ -1071,6 +1076,9 @@ public sealed class BillServiceTests
             .Options;
         return new ShowroomBillingDbContext(options);
     }
+
+    private static void AssertVersion7(Guid id) =>
+        Assert.Equal('7', id.ToString("N")[12]);
 
     private static TallyPostResponse PostedResponse(string? remoteId = "FAKE-VCH-1", string? tallyMasterId = null) =>
         new(TallyPostOutcome.Posted, remoteId, null, null, "voucher-import-v1", null, null, tallyMasterId);

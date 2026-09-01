@@ -11,7 +11,8 @@ namespace ShowroomBilling.Desktop.Views.Invoice;
 
 public partial class InvoiceView : UserControl
 {
-    private static readonly int[] EditableLineColumns = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    private const string LineEntryGridName = "LineEntryGrid";
+    private static readonly int[] EditableLineColumns = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     public InvoiceView()
     {
@@ -396,7 +397,7 @@ public partial class InvoiceView : UserControl
     private static bool IsLineCellBorder(Border border)
         => border.DataContext is BillLineViewModel
            && VisualTreeHelper.GetParent(border) is Grid grid
-           && grid.ColumnDefinitions.Count == 13
+           && grid.Name == LineEntryGridName
            && ReferenceEquals(border.DataContext, grid.DataContext);
 
     private void OnLinesGotFocus(object sender, RoutedEventArgs e)

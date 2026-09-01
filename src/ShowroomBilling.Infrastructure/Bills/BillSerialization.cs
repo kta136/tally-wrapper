@@ -21,7 +21,7 @@ internal static class BillSerialization
     {
         return new BillRevisionEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             BillId = billId,
             RevisionNo = revisionNo,
             SnapshotJson = JsonSerializer.Serialize(payload, JsonOptions),

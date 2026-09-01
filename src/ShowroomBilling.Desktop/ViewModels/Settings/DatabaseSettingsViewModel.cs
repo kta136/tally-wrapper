@@ -115,6 +115,8 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     public bool IsDatabaseOverrideEditorEnabled => !IsRunningServerMode;
     public bool IsServerApiUrlEnabled =>
         string.Equals(ApiConnectionMode, DesktopConnectionModes.Server, StringComparison.OrdinalIgnoreCase);
+    public bool IsLocalDatabaseSectionVisible =>
+        string.Equals(ApiConnectionMode, DesktopConnectionModes.LocalEmbedded, StringComparison.OrdinalIgnoreCase);
     public string LocalEmbeddedApiBaseUrl => _bootstrapOptions.ApiBaseUrl;
     public string RunningConnectionModeText => _bootstrapOptions.IsServerMode ? "Server" : "LocalEmbedded";
     public string ActiveModeChipText => IsRunningServerMode ? "SERVER" : "LOCAL EMBEDDED";
@@ -207,6 +209,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         }
 
         OnPropertyChanged(nameof(IsServerApiUrlEnabled));
+        OnPropertyChanged(nameof(IsLocalDatabaseSectionVisible));
         OnPropertyChanged(nameof(SelectedConnectionModeHelp));
         SaveApiConnectionModeCommand.NotifyCanExecuteChanged();
         TestServerConnectionCommand.NotifyCanExecuteChanged();

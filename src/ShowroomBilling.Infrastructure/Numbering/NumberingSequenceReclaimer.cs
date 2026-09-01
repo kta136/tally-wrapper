@@ -111,7 +111,7 @@ FOR UPDATE")
 
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "numbering",
             EntityId = $"{showroomId}|{fiscalYear}|{documentType}",
             EventType = $"numbering.{documentType}.rolled_back",

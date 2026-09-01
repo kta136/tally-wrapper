@@ -348,6 +348,7 @@
             </Grid>
         </Border>
 
+        <StackPanel Visibility="{Binding IsLocalDatabaseSectionVisible, Converter={StaticResource BoolToVis}}">
         <Grid Margin="0,0,0,3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -687,5 +688,6 @@
                 </Grid>
             </Border>
         </Grid>
+        </StackPanel>
     </StackPanel>
 </UserControl>

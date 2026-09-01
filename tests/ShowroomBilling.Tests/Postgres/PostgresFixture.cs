@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using ShowroomBilling.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
@@ -26,7 +28,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             return;
         }
 
-        container = new PostgreSqlBuilder("postgres:17")
+        container = new PostgreSqlBuilder("postgres:18")
             .Build();
 
         await container.StartAsync();
@@ -43,6 +45,19 @@ public sealed class PostgresFixture : IAsyncLifetime
     }
 
     public async Task<PostgresTestDatabase> CreateDatabaseAsync(CancellationToken cancellationToken = default)
+        => await CreateDatabaseCoreAsync(targetMigration: null, cancellationToken);
+
+    public async Task<PostgresTestDatabase> CreateDatabaseAtMigrationAsync(
+        string targetMigration,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetMigration);
+        return await CreateDatabaseCoreAsync(targetMigration, cancellationToken);
+    }
+
+    private async Task<PostgresTestDatabase> CreateDatabaseCoreAsync(
+        string? targetMigration,
+        CancellationToken cancellationToken)
     {
         var databaseName = $"tw_test_{Guid.NewGuid():N}";
         await databaseGate.WaitAsync(cancellationToken);
@@ -63,7 +78,8 @@ public sealed class PostgresFixture : IAsyncLifetime
         var options = BuildOptions(connectionString);
         await using (var db = new ShowroomBillingDbContext(options))
         {
-            await db.Database.MigrateAsync(cancellationToken);
+            var migrator = db.GetService<IMigrator>();
+            await migrator.MigrateAsync(targetMigration, cancellationToken);
         }
 
         return new PostgresTestDatabase(this, databaseName, connectionString, options);
@@ -120,7 +136,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private static DbContextOptions<ShowroomBillingDbContext> BuildOptions(string connectionString) =>
         new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseNpgsql(connectionString)
+            .UseNpgsql(connectionString, npgsql => npgsql.SetPostgresVersion(18, 0))
             .Options;
 
     public sealed class PostgresTestDatabase : IAsyncDisposable

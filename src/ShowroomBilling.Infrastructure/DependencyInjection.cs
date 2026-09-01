@@ -49,7 +49,11 @@ public static class DependencyInjection
         var dataSource = new NpgsqlDataSourceBuilder(connectionBuilder.ConnectionString).Build();
         services.AddSingleton(dataSource);
         services.AddDbContextPool<ShowroomBillingDbContext>(options =>
-            options.UseNpgsql(dataSource, npgsql => npgsql.CommandTimeout(15)));
+            options.UseNpgsql(dataSource, npgsql =>
+            {
+                npgsql.SetPostgresVersion(18, 0);
+                npgsql.CommandTimeout(15);
+            }));
         services.AddScoped<IMasterSnapshotService, MasterSnapshotService>();
         services.AddScoped<INumberingService, NumberingService>();
         services.AddScoped<IBillService, BillService>();

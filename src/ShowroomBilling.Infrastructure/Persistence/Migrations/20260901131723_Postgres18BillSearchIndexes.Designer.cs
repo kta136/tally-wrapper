@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using ShowroomBilling.Infrastructure.Persistence;
 namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ShowroomBillingDbContext))]
-    partial class ShowroomBillingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901131723_Postgres18BillSearchIndexes")]
+    partial class Postgres18BillSearchIndexes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

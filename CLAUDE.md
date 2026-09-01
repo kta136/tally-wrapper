@@ -4,7 +4,7 @@ Notes for Claude (or any AI coding agent) working in this repo. Read [README.md]
 
 ## What this repo is
 
-Two-process Windows desktop billing app for a jewellery showroom. Desktop (WPF, `net10.0-windows`) drives a local ASP.NET Core API (`net10.0`), which owns Postgres (Aiven-managed PostgreSQL) and dials TallyPrime's local XML endpoint. The Desktop owns the API lifecycle via a Job Object so orphaned processes aren't a class of bug.
+Two-process Windows desktop billing app for a jewellery showroom. Desktop (WPF, `net10.0-windows`) drives a local ASP.NET Core API (`net10.0`), which owns PostgreSQL 18 hosted on an Oracle Cloud Infrastructure VPS and dials TallyPrime's local XML endpoint. The Desktop owns the API lifecycle via a Job Object so orphaned processes aren't a class of bug.
 
 - **Solution:** `ShowroomBilling.sln` · target framework is **`.NET 10`** across every project (Desktop is `net10.0-windows`).
 - **Hosts:** `src/ShowroomBilling.Api`, `src/ShowroomBilling.Desktop`.
@@ -15,7 +15,7 @@ Two-process Windows desktop billing app for a jewellery showroom. Desktop (WPF, 
 
 | Topic | File |
 |---|---|
-| Dev prerequisites, build, run, Aiven connection strings | [DEV_SETUP.md](DEV_SETUP.md) |
+| Dev prerequisites, build, run, OpenBao production secret, Oracle VPS/PostgreSQL 18 | [DEV_SETUP.md](DEV_SETUP.md) |
 | Bill state machine (draft → pending → posting → posted/failed/voided) | [docs/03_bill_state_machine.md](docs/03_bill_state_machine.md) |
 | Numbering & idempotency (reservation, `idempotency_key`, `draft:{billId}`) | [docs/04_numbering_and_idempotency.md](docs/04_numbering_and_idempotency.md) |
 | Tally integration responsibility split (sync, operator-initiated) | [docs/05_tally_integration_contract.md](docs/05_tally_integration_contract.md) |
@@ -52,7 +52,7 @@ The design target is the hi-fi prototype in [docs/design/](docs/design/), distil
 
 ## EF migration gotcha
 
-When running migrations against Aiven or any managed PostgreSQL database, pass the connection string explicitly:
+When running migrations against the Oracle VPS or any remote/production PostgreSQL database, pass the connection string explicitly:
 
 ```powershell
 dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<postgres-connection-string>"
@@ -60,12 +60,14 @@ dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup
 
 `ASPNETCORE_ENVIRONMENT` is **silently ignored** by the EF tools and falls back to the localhost default in `appsettings.json` — which will either fail loudly or (worse) quietly migrate a local dev DB you didn't mean to touch. Always supply `--connection`.
 
+The canonical production secret is OpenBao KV v2 `kv/Postgres/apps/tally_wrapper/prod`. Its structured connection fields are authoritative; `connection_string` is the synchronized Npgsql form used by runtime and migration tooling. Retrieve and rotate it with the native `bao` CLI; the API does not read OpenBao directly. See [docs/11_deployment_and_ops.md](docs/11_deployment_and_ops.md#openbao-production-secret) for the exact commands.
+
 ## Build & test
 
 ```powershell
 dotnet restore ShowroomBilling.sln
 dotnet build ShowroomBilling.sln
-dotnet test ShowroomBilling.sln
+dotnet test --solution ShowroomBilling.sln
 ```
 
 - **Desktop DLL lock on rebuild:** if the Desktop exe is running, MSBuild fails to copy `ShowroomBilling.Printing.dll` into `bin/Debug/net10.0-windows/`. This isn't a compile error — just close the running app and rebuild.
@@ -162,11 +164,11 @@ Tests in both `ShowroomBilling.Tests` and `ShowroomBilling.Desktop.Tests` use `M
 
 - Concurrency properties (e.g. "two `CreateDraftAsync` calls on different threads produce distinct invoice numbers") cannot be verified here — they need a real Postgres test harness (Testcontainers or a CI-side service).
 - Unique-index violations (`(ShowroomId, FiscalYear, InvoiceNumber)`, etc.) silently pass in-memory.
-- `NumberingService.ReserveAsync` short-circuits its transaction/`FOR UPDATE` path under InMemory. The separate `Category=Postgres` suite exercises relational behavior in CI against PostgreSQL 17; run `tools/run-postgres-tests.ps1` locally when Docker is available.
+- `NumberingService.ReserveAsync` short-circuits its transaction/`FOR UPDATE` path under InMemory. The separate `Category=Postgres` suite exercises relational behavior in CI against PostgreSQL 18, matching production; run `tools/run-postgres-tests.ps1` locally when Docker is available.
 
 Treat green InMemory tests as "shape-correct", not "race-safe". Changes to numbering, locking, or unique-index-backed invariants must also pass the Postgres category suite.
 
-**HTTP contract tests** (`tests/ShowroomBilling.Tests/Contracts/`) use `Microsoft.AspNetCore.Mvc.Testing` to boot the real API in-process via `TestApiFactory : WebApplicationFactory<Program>`. The factory swaps the DbContext to InMemory, forces `Database:AutoMigrateOnStartup = false`, and replaces `ITallyMasterRefresher` with `StubTallyMasterRefresher` so boot doesn't need real infrastructure. The real `DeviceTokenStore` is left in place — tests read the generated token via `factory.GetDeviceToken()`. When you add a new public-API endpoint or change a response shape, **add or update a contract test in this folder**: this is where the slice 1 master-refresh drift would have been caught at build time. `MasterRefreshContractTests` is the canonical example. To run them isolated: `dotnet test --filter "FullyQualifiedName~Contracts"`.
+**HTTP contract tests** (`tests/ShowroomBilling.Tests/Contracts/`) use `Microsoft.AspNetCore.Mvc.Testing` to boot the real API in-process via `TestApiFactory : WebApplicationFactory<Program>`. The factory swaps the DbContext to InMemory, forces `Database:AutoMigrateOnStartup = false`, and replaces `ITallyMasterRefresher` with `StubTallyMasterRefresher` so boot doesn't need real infrastructure. The real `DeviceTokenStore` is left in place — tests read the generated token via `factory.GetDeviceToken()`. When you add a new public-API endpoint or change a response shape, **add or update a contract test in this folder**: this is where the slice 1 master-refresh drift would have been caught at build time. `MasterRefreshContractTests` is the canonical example. To run them isolated: `dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "FullyQualifiedName~Contracts"`.
 
 ## Things I learned the hard way
 

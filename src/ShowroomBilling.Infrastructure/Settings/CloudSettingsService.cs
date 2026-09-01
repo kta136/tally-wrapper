@@ -289,7 +289,7 @@ public sealed class CloudSettingsService(
         var actor = actorContext?.Current ?? new AuditActor("system", null);
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "settings",
             EntityId = entityId,
             EventType = eventType,

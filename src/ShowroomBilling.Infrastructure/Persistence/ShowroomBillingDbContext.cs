@@ -39,6 +39,8 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("pg_trgm");
+
         modelBuilder.HasDefaultSchema("public");
 
         modelBuilder.Entity<DatabaseIdentityEntity>(entity =>
@@ -218,6 +220,10 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceNumber })
                 .IsUnique()
                 .HasFilter("\"InvoiceNumber\" IS NOT NULL");
+            entity.HasIndex(x => x.InvoiceNumber)
+                .HasMethod("gin")
+                .HasOperators("gin_trgm_ops")
+                .IsCreatedConcurrently();
         });
 
         modelBuilder.Entity<BillRevisionEntity>(entity =>
@@ -236,6 +242,10 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasIndex(x => new { x.BillId, x.CreatedAtUtc });
             entity.HasIndex(x => x.BillDate);
             entity.HasIndex(x => new { x.BillDate, x.Id });
+            entity.HasIndex(x => x.PartyName)
+                .HasMethod("gin")
+                .HasOperators("gin_trgm_ops")
+                .IsCreatedConcurrently();
             entity.HasOne(x => x.Bill)
                 .WithMany(x => x.Revisions)
                 .HasForeignKey(x => x.BillId)

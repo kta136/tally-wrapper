@@ -127,7 +127,7 @@ internal sealed class BillLifecycleWorkflow(
         var now = DateTimeOffset.UtcNow;
         var newBill = new BillEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             ShowroomId = priorBill.ShowroomId,
             CounterId = priorBill.CounterId,
             BillType = priorBill.BillType,
@@ -193,7 +193,7 @@ internal sealed class BillLifecycleWorkflow(
         BillValidator.Validate(request.Payload);
 
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
-        var billId = Guid.NewGuid();
+        var billId = Guid.CreateVersion7();
 
         // Reservation + bill/revision/audit share one transaction so a failed
         // bill persist doesn't leave an orphaned reserved number behind.

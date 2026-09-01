@@ -40,7 +40,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             items.Count,
             batch => AddSnapshotRows(items.Select(item => new TallyCompanySnapshotEntity
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.CreateVersion7(),
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
                 Name = (item.Name ?? string.Empty).Trim(),
@@ -67,7 +67,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             items.Count,
             batch => AddSnapshotRows(items.Select(item => new TallyLedgerSnapshotEntity
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.CreateVersion7(),
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
                 Name = (item.Name ?? string.Empty).Trim(),
@@ -97,7 +97,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             items.Count,
             batch => AddSnapshotRows(items.Select(item => new TallyStockItemSnapshotEntity
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.CreateVersion7(),
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
                 Name = (item.Name ?? string.Empty).Trim(),
@@ -127,7 +127,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             items.Count,
             batch => AddSnapshotRows(items.Select(item => new TallyVoucherTypeSnapshotEntity
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.CreateVersion7(),
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
                 Name = (item.Name ?? string.Empty).Trim(),
@@ -310,7 +310,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
 
         var batch = new TallyMasterSnapshotBatchEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             ShowroomId = showroomId,
             MasterType = masterType,
             FetchedAtUtc = fetchedAtUtc == default ? DateTimeOffset.UtcNow : fetchedAtUtc.ToUniversalTime(),
@@ -328,7 +328,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
     {
         dbContext.AuditEvents.Add(new AuditEventEntity
         {
-            Id = Guid.NewGuid(),
+            Id = Guid.CreateVersion7(),
             EntityType = "masters",
             EntityId = batch.Id.ToString(),
             EventType = $"masters.{batch.MasterType}.ingested",

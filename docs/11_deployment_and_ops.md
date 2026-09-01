@@ -11,7 +11,7 @@ This document describes how Tally Wrapper is deployed and operated.
 - WPF desktop app on each counter workstation
 - ASP.NET Core API process, **co-located on the same machine as TallyPrime** (reaches Tally's XML endpoint over localhost)
 - optional `ShowroomBilling.ServerTray` app on the Tally server, running in the logged-in user's taskbar notification area
-- PostgreSQL database (can be local on the same machine for single-showroom deployment, or remote for multi-showroom)
+- PostgreSQL database (PostgreSQL 18 on an Oracle Cloud Infrastructure VPS in production; local Postgres remains available for development)
 - TallyPrime running on the Tally host
 
 No separate bridge process. No SignalR hub. No job queue.
@@ -49,7 +49,7 @@ Acceptable pilot/early rollout option:
 
 The typed local override file is `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json` and is intentionally limited to `connectionMode` and `serverApiBaseUrl`. It must not override child-process settings, database strings, Tally settings, or shared business behavior.
 
-Operators normally change this from **Settings -> Database -> API Connection Mode** in the desktop. Choosing `Server` and saving writes the local override, then restarts Tally Wrapper so the next boot skips the embedded API. Choosing `LocalEmbedded` restores the old desktop-owned API path. The UI remembers the last non-localhost server URL, can test the server health endpoints, and can scan the local `/24` subnet for a Tally Wrapper API on port `5107`. The same Database section shows the local embedded DB override; editing is disabled while the desktop is currently running in `Server` mode because server DB configuration is owned by the tray on the Tally server.
+Operators normally change this from **Settings -> Database -> API Connection Mode** in the desktop. Choosing `Server` and saving writes the local override, then restarts Tally Wrapper so the next boot skips the embedded API. Choosing `LocalEmbedded` restores the old desktop-owned API path. The UI remembers the last non-localhost server URL, can test the server health endpoints, and can scan the local `/24` subnet for a Tally Wrapper API on port `5107`. Local embedded API and database details are hidden while the selected API location is `Server`; selecting `LocalEmbedded` reveals them. Editing remains disabled until the desktop is actually running in `LocalEmbedded` mode because server DB configuration is owned by the tray on the Tally server.
 
 Fallback remains available per workstation: switching back to `LocalEmbedded` requires that workstation's own DB override and Tally host settings that can reach the Tally server by LAN name/IP.
 
@@ -150,6 +150,93 @@ These are bounded, single-pass startup tasks. There is no recurring posting, Tal
 
 ## 4. PostgreSQL deployment
 
+### Production host
+
+Production uses PostgreSQL 18 self-hosted on an Oracle Cloud Infrastructure VPS. It is not a managed database service: the team owns the operating system, PostgreSQL installation and upgrades, backups, restore testing, certificates, monitoring, and storage capacity.
+
+Configure the API or server tray with an Npgsql connection string shaped like:
+
+```text
+Host=<oracle-vps-host>;Port=5432;Database=tally_wrapper_prod;Username=<app-role>;Password=<secret>;SSL Mode=<vps-required-mode>;Minimum Pool Size=<min>;Maximum Pool Size=<max>
+```
+
+### OpenBao production secret
+
+Canonical shared-environment database secrets are stored in the OpenBao KV v2 mount `kv`:
+
+- production: `Postgres/apps/tally_wrapper/prod`; structured fields are authoritative and `connection_string` is synchronized from them
+- persistent test: `Postgres/apps/tally_wrapper_test/dev`, key `connection_string`
+
+The production connection fields are `host`, `port`, `database`, `username`, `password`, `ssl_mode`, `minimum_pool_size`, and `maximum_pool_size`. Other keys in the same secret are operational metadata and must be preserved. `connection_string` is a derived convenience value for Npgsql consumers; it is not an independent credential. When any authoritative connection field changes, regenerate the derived value during the same controlled rotation and verify both representations before deploying it.
+
+The API and server tray do not call OpenBao directly. An authorized operator retrieves the value with the native `bao` CLI, then injects it into the server tray, the DPAPI-protected server override, or the API's `SHOWROOM_BILLING_POSTGRES` environment variable. Use the native CLI for reads and rotations so version checks and field-preserving patches are explicit and reproducible; do not make the application depend on an interactive browser or Bitwarden session.
+
+Retrieve the value without printing it:
+
+```powershell
+$secretPath = 'Postgres/apps/tally_wrapper/prod'
+$connection = bao kv get -mount=kv -field=connection_string $secretPath
+```
+
+To synchronize `connection_string` from the current production fields, use a CAS-protected patch. `DbConnectionStringBuilder` quotes special characters correctly. `ProcessStartInfo.StandardInput.Write` sends the value without placing it in shell history, process arguments, or adding a trailing line ending:
+
+```powershell
+$secret = bao kv get -mount=kv -format=json $secretPath | ConvertFrom-Json
+$data = $secret.data.data
+$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
+$builder['Host'] = [string]$data.host
+$builder['Port'] = [int]$data.port
+$builder['Database'] = [string]$data.database
+$builder['Username'] = [string]$data.username
+$builder['Password'] = [string]$data.password
+$builder['SSL Mode'] = [string]$data.ssl_mode
+$builder['Minimum Pool Size'] = [int]$data.minimum_pool_size
+$builder['Maximum Pool Size'] = [int]$data.maximum_pool_size
+$connection = $builder.ConnectionString
+
+$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$startInfo.FileName = (Get-Command bao).Source
+$startInfo.UseShellExecute = $false
+$startInfo.RedirectStandardInput = $true
+@('kv', 'patch', '-mount=kv', "-cas=$($secret.data.metadata.version)", $secretPath, 'connection_string=-') |
+    ForEach-Object { [void]$startInfo.ArgumentList.Add($_) }
+$process = [System.Diagnostics.Process]::Start($startInfo)
+$process.StandardInput.Write($connection)
+$process.StandardInput.Close()
+$process.WaitForExit()
+if ($process.ExitCode -ne 0) { throw "OpenBao patch failed with exit code $($process.ExitCode)." }
+Remove-Variable connection, builder, data, secret
+```
+
+If a password, host, port, database, username, TLS mode, or pool limit is being rotated, update that structured field and the newly built `connection_string` together as one reviewed KV v2 change. Do not use `bao kv put` for this path: it replaces the secret data and can destroy the other fields. Never echo the retrieved connection, save it in the repository, or paste it into issue/CI logs.
+
+Use the TLS mode and certificate settings configured on the VPS. Limit inbound TCP `5432` to the API host or its trusted network in both the Oracle Cloud network rules and the VPS firewall; do not expose PostgreSQL to unrestricted internet traffic. Pass the retrieved connection explicitly when applying migrations:
+
+```powershell
+dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection $connection
+Remove-Variable connection
+```
+
+### Shared persistent test database
+
+The Coolify `shared-postgres` stack owns both PostgreSQL 18 and PgBouncer. `tally_wrapper_test` is a persistent application test database inside that existing cluster, not a separate Coolify PostgreSQL resource.
+
+| Component | Contract |
+|---|---|
+| Database | `tally_wrapper_test`, owned by `tally_wrapper_test_dev_owner` |
+| Runtime role | `tally_wrapper_test_dev_api`; `LOGIN`, `NOINHERIT`, no create-role/database privilege, connection limit `5` |
+| Migrator role | `tally_wrapper_test_dev_migrator`; member of the owner role, normally `NOLOGIN` with no verifier |
+| PgBouncer mapping | `tally_wrapper_test` -> `postgres:5432/tally_wrapper_test`, pool size `2`, reserve `0`, max backend connections `2` |
+| Runtime route | `pgbouncer:6432` on external Docker network `shared-postgres-private` |
+| Secret | `kv/Postgres/apps/tally_wrapper_test/dev`; versioned KV v2 data with `connection_string` plus structured connection fields |
+| Environment marker | `public.database_identity.environment = 'DEV'` |
+
+The PgBouncer pool runs in transaction mode. Coolify applications must join `shared-postgres-private` and use the PgBouncer hostname; PostgreSQL itself has no public host port and application roles must not bypass the pooler. Runtime access is limited to this database, and host validation checks that the test API role cannot connect to the production or development databases.
+
+For migrations, enable the managed migrator login only for the bounded migration window, pass the test connection explicitly to `dotnet ef database update`, set the database identity to `DEV`, reconcile runtime grants, and immediately return the migrator to `NOLOGIN` with its verifier removed. Store the usable runtime credential only in OpenBao; do not leave a plaintext or decryptable provisioning copy on the database host.
+
+This database supports a persistent test API deployment. It must not be used as `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`: the relational fixture connects to the `postgres` admin database and creates/drops isolated `tw_test_<guid>` databases, which requires a separate restricted administration contract and a compatible routing path. The default Docker/CI test harness remains the supported path.
+
 ### Role
 
 PostgreSQL is the system of record for:
@@ -166,10 +253,33 @@ PostgreSQL is the system of record for:
 
 ### Requirements
 
+- PostgreSQL 18 in production
 - automated backups
 - point-in-time recovery if possible
+- regular restore drills
+- operating-system and PostgreSQL security patching
+- TLS certificate renewal and expiry monitoring when TLS is enabled
 - alerting on connection failures and storage pressure
 - clear migration strategy for schema changes
+
+### PostgreSQL 18 baseline verification
+
+After provisioning or a major-version upgrade, verify the active production cluster from an administrative session:
+
+```sql
+SHOW server_version;
+SHOW data_checksums;
+SHOW io_method;
+SHOW effective_io_concurrency;
+SHOW maintenance_io_concurrency;
+SHOW password_encryption;
+```
+
+Keep the server on the latest supported PostgreSQL 18 patch release. `data_checksums` should be enabled; PostgreSQL 18 enables checksums for newly initialized clusters, but an upgraded older cluster can retain its prior checksum setting. Enabling checksums later is an offline VPS maintenance operation and must be paired with a verified backup and restore plan.
+
+Use `scram-sha-256` for the application role and matching `pg_hba.conf` rules. PostgreSQL 18 asynchronous I/O should normally report `io_method = worker`; benchmark `io_uring` against the Oracle VPS storage before selecting it. Do not raise I/O concurrency values without measuring query latency and storage saturation. Run `ANALYZE` after a major upgrade and use `EXPLAIN (ANALYZE, BUFFERS)` plus PostgreSQL statistics views before adding or removing indexes.
+
+The EF provider is explicitly targeted at PostgreSQL 18. New application-created database entity IDs use UUIDv7, while stable MD5-derived identity GUIDs remain deterministic. Bill search uses concurrent GIN trigram indexes on invoice number and party name; apply their migration with the explicit production connection command shown above. The index migration runs outside a transaction and drops any same-named partial index before recreating it concurrently, so an interrupted pre-history run can be retried safely.
 
 ---
 
@@ -236,7 +346,7 @@ Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\P
 - `/api/runtime/health` — cheap runtime status by default; pass `?forceDatabase=true` for a PostgreSQL-backed DB/identity probe
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
 
-Desktop background health polling uses cheap runtime probes so it does not wake managed PostgreSQL on every tick. Full DB health, Tally-company health, and master freshness are requested on startup, explicit System Health refreshes, database setup waits, and a slower scheduled probe. With all workstations closed and the server dashboard closed, the API has no recurring DB health loop, so providers with inactivity behavior can suspend the database after their inactivity window.
+Desktop background health polling uses cheap runtime probes so it does not add a database round trip on every tick. Full DB health, Tally-company health, and master freshness are requested on startup, explicit System Health refreshes, database setup waits, and a slower scheduled probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
 
 ### What's NOT a health check anymore
 
