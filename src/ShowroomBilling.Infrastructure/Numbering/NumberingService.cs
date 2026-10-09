@@ -197,7 +197,15 @@ FOR UPDATE")
             CreatedAtUtc = reservation.ReservedAtUtc
         });
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        // Inside a caller-owned transaction the caller's SaveChanges persists
+        // the reservation, sequence and audit together with its own rows: one
+        // batched round trip to the database instead of two. (A failed insert
+        // aborts a PostgreSQL transaction anyway, so the retry loop above can
+        // only help when this method owns the transaction.)
+        if (ambientTransaction is null)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
         if (transaction is not null)
         {
             await transaction.CommitAsync(cancellationToken);

@@ -132,7 +132,7 @@ A small `ADMIN` chip in [NavBarView.xaml](src/ShowroomBilling.Desktop/Views/NavB
 
 Most command methods are a single `SaveChangesAsync` — EF wraps that in an implicit transaction, so they're atomic without extra work. Two methods deliberately open an explicit transaction because they have multiple DB round-trips against the same `ShowroomBillingDbContext`:
 
-- `CreateDraftCoreAsync` wraps `INumberingService.ReserveAsync` + bill/revision/audit persist. `NumberingService.ReserveAsync` detects an ambient transaction on the DbContext and enlists in it rather than opening its own — so the reservation and the bill commit together.
+- `CreateDraftCoreAsync` wraps `INumberingService.ReserveAsync` + bill/revision/audit persist. `NumberingService.ReserveAsync` detects an ambient transaction on the DbContext and enlists in it rather than opening its own, and leaves the save to the caller — so the reservation and the bill commit together in one batched round trip. A caller that opens a transaction around `ReserveAsync` must call `SaveChangesAsync` afterwards.
 - `DeleteAsync` wraps `ClearSupersededByReferencesAsync` (immediate `ExecuteUpdateAsync`) + the bill delete.
 
 **Do NOT wrap `PushInternalAsync` or `RepostAsync`'s pre-flip save in a single transaction.** Those are intentionally split so `posting` is visible to `StuckPostingRecoveryHostedService` if the API crashes mid-push. Wrapping them would defeat crash recovery.
