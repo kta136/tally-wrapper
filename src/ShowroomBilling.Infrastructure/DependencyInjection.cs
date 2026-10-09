@@ -21,6 +21,7 @@ using ShowroomBilling.Infrastructure.Leases;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Infrastructure.Persistence.CompiledModels;
 using ShowroomBilling.Infrastructure.PrintAssets;
 using ShowroomBilling.Infrastructure.Settings;
 using ShowroomBilling.Infrastructure.Tally;
@@ -67,11 +68,16 @@ public static class DependencyInjection
         var dataSource = new NpgsqlDataSourceBuilder(ApplyPoolDefaults(connectionString)).Build();
         services.AddSingleton(dataSource);
         services.AddDbContextPool<ShowroomBillingDbContext>(options =>
-            options.UseNpgsql(dataSource, npgsql =>
-            {
-                npgsql.SetPostgresVersion(18, 0);
-                npgsql.CommandTimeout(15);
-            }));
+            options
+                .UseNpgsql(dataSource, npgsql =>
+                {
+                    npgsql.SetPostgresVersion(18, 0);
+                    npgsql.CommandTimeout(15);
+                })
+                // Precompiled with `dotnet ef dbcontext optimize`: skips the
+                // model build on the first request after every API start.
+                // Regenerate after any model change (see CLAUDE.md).
+                .UseModel(ShowroomBillingDbContextModel.Instance));
         services.AddScoped<IMasterSnapshotService, MasterSnapshotService>();
         services.AddScoped<INumberingService, NumberingService>();
         services.AddScoped<IBillService, BillService>();

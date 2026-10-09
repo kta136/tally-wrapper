@@ -58,6 +58,14 @@ When running migrations against the Oracle VPS or any remote/production PostgreS
 dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<postgres-connection-string>"
 ```
 
+**After any model change (new migration), regenerate the compiled model** the API uses at runtime, or the API runs against a stale model:
+
+```powershell
+dotnet ef dbcontext optimize --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --output-dir Persistence/CompiledModels --namespace ShowroomBilling.Infrastructure.Persistence.CompiledModels
+```
+
+Then delete the generated `ShowroomBillingDbContextAssemblyAttributes.cs` (the compiled model is opted into explicitly with `UseModel` in `DependencyInjection`, so design-time tools and InMemory tests keep building the model from `OnModelCreating`). `CompiledModelTests` fails when the two drift.
+
 `ASPNETCORE_ENVIRONMENT` is **silently ignored** by the EF tools and falls back to the localhost default in `appsettings.json` — which will either fail loudly or (worse) quietly migrate a local dev DB you didn't mean to touch. Always supply `--connection`.
 
 The canonical production secret is OpenBao KV v2 `kv/Postgres/apps/tally_wrapper/prod`. Its structured connection fields are authoritative; `connection_string` is the synchronized Npgsql form used by runtime and migration tooling. Retrieve and rotate it with the native `bao` CLI; the API does not read OpenBao directly. See [docs/11_deployment_and_ops.md](docs/11_deployment_and_ops.md#openbao-production-secret) for the exact commands.
