@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Tally;
 
@@ -69,6 +70,55 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(BillStates.Revised, (await service.GetAsync(original.Id))!.State);
         Assert.Equal(3L, await db.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
+    }
+
+    [PostgresFact]
+    [Trait("Category", "Postgres")]
+    public async Task PushAsync_EditLandsDuringPreflight_DoesNotPushTheOlderRevision()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        await using var setupDb = database.CreateContext();
+        var bill = await PostgresBillTestSupport.BuildService(setupDb)
+            .CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)));
+
+        await using var pushDb = database.CreateContext();
+        await using var editDb = database.CreateContext();
+        var poster = new RecordingTallyPoster();
+        var health = new BlockingTallyHealth();
+        var pushService = PostgresBillTestSupport.BuildService(pushDb, poster, health);
+        var editService = PostgresBillTestSupport.BuildService(editDb);
+
+        var push = pushService.PushAsync(bill.Id, new PushBillRequest("push"));
+        await health.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+        await editService.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 200m)));
+        health.Release();
+
+        await Assert.ThrowsAsync<BillStateConflictException>(() => push.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(0, poster.CallCount);
+        await using var verify = database.CreateContext();
+        Assert.Equal(BillStates.Pending, await verify.Bills.Select(static x => x.State).SingleAsync());
+    }
+
+    [PostgresFact]
+    [Trait("Category", "Postgres")]
+    public async Task StaleBillRow_SavedAfterAnotherTransition_IsRejected()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        await using var setupDb = database.CreateContext();
+        var bill = await PostgresBillTestSupport.BuildService(setupDb)
+            .CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)));
+
+        await using var staleDb = database.CreateContext();
+        var stale = await staleDb.Bills.SingleAsync(x => x.Id == bill.Id);
+
+        await using var otherDb = database.CreateContext();
+        await PostgresBillTestSupport.BuildService(otherDb, new RecordingTallyPoster())
+            .PushAsync(bill.Id, new PushBillRequest("push"));
+
+        stale.State = BillStates.Voided;
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => staleDb.SaveChangesAsync());
+        await using var verify = database.CreateContext();
+        Assert.Equal(BillStates.Posted, await verify.Bills.Select(static x => x.State).SingleAsync());
     }
 
     [PostgresFact]

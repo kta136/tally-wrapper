@@ -51,6 +51,25 @@ internal sealed class BillLifecycleWorkflow(
                 $"Bill '{billId}' is in state '{bill.State}' and cannot be edited.");
         }
 
+        if (request.ExpectedRevisionId is Guid expectedRevisionId && bill.CurrentRevisionId != expectedRevisionId)
+        {
+            var current = bill.CurrentRevisionId is Guid currentId
+                ? await dbContext.BillRevisions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == currentId, cancellationToken)
+                : null;
+
+            // The client's earlier save landed but its response was lost; the
+            // retry carries the same payload. Return what is stored.
+            if (current is not null
+                && current.SupersedesRevisionId == expectedRevisionId
+                && BillSerialization.PayloadMatches(current, request.Payload))
+            {
+                return BillSerialization.MapResponse(bill, current);
+            }
+
+            throw new BillStateConflictException(
+                $"Bill {bill.InvoiceNumber ?? billId.ToString()} was changed elsewhere after you opened it (now revision {current?.RevisionNo.ToString() ?? "?"}). Reload it from Bills before saving.");
+        }
+
         var reopenFrom = bill.State is not (IBillService.StatePending or BillStates.Draft)
             ? bill.State
             : null;

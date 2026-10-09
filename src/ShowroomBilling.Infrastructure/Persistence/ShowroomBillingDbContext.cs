@@ -214,6 +214,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.State).HasMaxLength(32);
             entity.Property(x => x.InvoiceNumber).HasMaxLength(128);
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
+            entity.Property(x => x.RowVersion).IsRowVersion();
             entity.HasIndex(x => new { x.ShowroomId, x.State, x.CreatedAtUtc });
             entity.HasIndex(x => new { x.ShowroomId, x.State, x.CreatedAtUtc, x.Id });
             entity.HasIndex(x => new { x.ShowroomId, x.CreatedAtUtc });

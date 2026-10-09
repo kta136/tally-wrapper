@@ -34,6 +34,17 @@ internal static class BillSerialization
         };
     }
 
+    /// <summary>
+    /// True when <paramref name="revision"/> stores exactly <paramref name="payload"/>.
+    /// Both sides are normalized through the DTO because PostgreSQL jsonb does
+    /// not preserve the original text layout.
+    /// </summary>
+    internal static bool PayloadMatches(BillRevisionEntity revision, BillPayloadDto payload) =>
+        string.Equals(
+            JsonSerializer.Serialize(DeserializePayload(revision), JsonOptions),
+            JsonSerializer.Serialize(payload, JsonOptions),
+            StringComparison.Ordinal);
+
     internal static BillPayloadDto DeserializePayload(BillRevisionEntity revision)
     {
         var payload = JsonSerializer.Deserialize<BillPayloadDto>(revision.SnapshotJson, JsonOptions);

@@ -18,7 +18,7 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("public")
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
@@ -186,6 +186,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<string>("InvoiceNumber")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.Property<Guid>("ShowroomId")
                         .HasColumnType("uuid");

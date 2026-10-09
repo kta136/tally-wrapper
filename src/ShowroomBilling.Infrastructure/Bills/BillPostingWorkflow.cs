@@ -178,6 +178,9 @@ internal sealed class BillPostingWorkflow(
         //   1. Race: two concurrent push requests on the same bill must not both
         //      reach Tally. A conditional UPDATE gated on the pre-flip states
         //      ensures only one caller wins.
+        //      The claim is also gated on the revision loaded above, so an edit
+        //      that lands during Tally preflight cannot be overtaken by a push
+        //      of the older revision.
         //   2. Crash recovery: `posting` must be visible in the DB before the
         //      Tally round-trip, so StuckPostingRecoveryHostedService can heal
         //      a stuck row if the API crashes mid-call. Do NOT wrap this flip
@@ -193,8 +196,10 @@ internal sealed class BillPostingWorkflow(
         }
         else
         {
+            var claimedRevisionId = currentRevision.Id;
             var rowsAffected = await dbContext.Bills
                 .Where(b => b.Id == billId
+                    && b.CurrentRevisionId == claimedRevisionId
                     && (b.State == IBillService.StatePending
                         || b.State == BillStates.Draft
                         || b.State == IBillService.StateFailed
@@ -211,6 +216,12 @@ internal sealed class BillPostingWorkflow(
                 // shape as the "already posting" short-circuit above.
                 dbContext.ChangeTracker.Clear();
                 var refreshed = await LoadTrackedBillAsync(billId, cancellationToken);
+                if (refreshed.CurrentRevisionId != claimedRevisionId
+                    && refreshed.State is not IBillService.StatePosting)
+                {
+                    throw new BillStateConflictException(
+                        $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' was edited while the push was starting. Review the latest version and push again.");
+                }
                 var refreshedRevision = refreshed.CurrentRevisionId is Guid rid
                     ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == rid, cancellationToken)
                     : null;

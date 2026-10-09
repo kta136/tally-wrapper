@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Leases;
@@ -52,7 +53,9 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
             {
                 Status = status,
                 Title = title,
-                Detail = exception.Message
+                Detail = exception is DbUpdateConcurrencyException
+                    ? "This record was changed by another counter or request while you were working on it. Reload it and try again."
+                    : exception.Message
             }
         });
     }
@@ -63,6 +66,7 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         DraftLeaseNotFoundException => (StatusCodes.Status404NotFound,   "Draft lease not found"),
         TallyPreflightUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Tally unavailable"),
         BillStateConflictException => (StatusCodes.Status409Conflict,   "Bill state conflict"),
+        DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Concurrent change"),
         BillValidationException    => (StatusCodes.Status400BadRequest, "Bill payload invalid"),
         AdminPasscodeNotConfiguredException => (StatusCodes.Status409Conflict, "Admin passcode not configured"),
         DraftLeaseOwnershipException => (StatusCodes.Status403Forbidden, "Draft lease ownership required"),

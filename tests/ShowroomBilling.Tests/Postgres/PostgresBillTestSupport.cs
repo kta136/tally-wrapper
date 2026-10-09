@@ -105,6 +105,23 @@ internal sealed class BlockingTallyPoster : ITallyPoster
     }
 }
 
+internal sealed class BlockingTallyHealth : ITallyCompanyHealthService
+{
+    private readonly TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task Entered => entered.Task;
+
+    public void Release() => release.TrySetResult();
+
+    public async Task<TallyCompanyHealthResponse> CheckAsync(CancellationToken cancellationToken = default)
+    {
+        entered.TrySetResult();
+        await release.Task.WaitAsync(cancellationToken);
+        return await HealthyTallyHealth.Instance.CheckAsync(cancellationToken);
+    }
+}
+
 internal sealed class HealthyTallyHealth : ITallyCompanyHealthService
 {
     internal static HealthyTallyHealth Instance { get; } = new();

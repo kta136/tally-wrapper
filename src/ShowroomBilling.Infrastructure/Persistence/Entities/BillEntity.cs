@@ -30,5 +30,12 @@ public sealed class BillEntity
 
     public bool EditedAfterPush { get; set; }
 
+    /// <summary>
+    /// Optimistic concurrency token, mapped to PostgreSQL's <c>xmin</c> system
+    /// column. Every tracked save of a bill checks it, so a stale reader cannot
+    /// overwrite a transition another request committed in between.
+    /// </summary>
+    public uint RowVersion { get; set; }
+
     public ICollection<BillRevisionEntity> Revisions { get; set; } = new List<BillRevisionEntity>();
 }

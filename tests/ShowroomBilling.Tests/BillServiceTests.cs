@@ -89,6 +89,36 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task UpdateDraft_StaleExpectedRevision_IsRejected()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var openedRevision = created.CurrentRevisionId;
+        await service.UpdateDraftAsync(created.Id, new UpdateBillDraftRequest(SamplePayload("Counter 2 edit", 150m), openedRevision));
+
+        await Assert.ThrowsAsync<BillStateConflictException>(() => service.UpdateDraftAsync(
+            created.Id,
+            new UpdateBillDraftRequest(SamplePayload("Counter 1 edit", 120m), openedRevision)));
+        Assert.Equal("Counter 2 edit", (await service.GetAsync(created.Id))!.CurrentRevision!.Payload.PartyName);
+    }
+
+    [Fact]
+    public async Task UpdateDraft_ReplayOfSaveThatAlreadyLanded_ReturnsStoredRevision()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var request = new UpdateBillDraftRequest(SamplePayload("A-edited", 150m), created.CurrentRevisionId);
+        var first = await service.UpdateDraftAsync(created.Id, request);
+
+        var replay = await service.UpdateDraftAsync(created.Id, request);
+
+        Assert.Equal(first.CurrentRevisionId, replay.CurrentRevisionId);
+        Assert.Equal(2, await db.BillRevisions.CountAsync());
+    }
+
+    [Fact]
     public async Task UpdateDraft_KeepsInvoiceNumberUnchanged()
     {
         await using var db = CreateDbContext();

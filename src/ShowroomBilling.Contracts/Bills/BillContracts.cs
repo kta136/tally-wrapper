@@ -69,8 +69,14 @@ public sealed record CreateBillDraftRequest(
     Guid? CounterId,
     BillPayloadDto Payload);
 
+/// <param name="ExpectedRevisionId">
+/// The revision the client loaded or last saved. When set, the server refuses
+/// the update if another save has moved the bill on since then, and treats a
+/// replay of a save that already landed as a no-op.
+/// </param>
 public sealed record UpdateBillDraftRequest(
-    BillPayloadDto Payload);
+    BillPayloadDto Payload,
+    Guid? ExpectedRevisionId = null);
 
 public sealed record PushBillRequest(string? Reason);
 

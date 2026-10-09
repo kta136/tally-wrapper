@@ -32,6 +32,7 @@ public partial class InvoiceViewModel : ObservableObject
     private bool _deferLineCollectionRecompute;
     private bool _syncingLinkedTotals;
     private Guid? _draftBillId;
+    private Guid? _draftRevisionId;
     private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
     private const decimal CgstRate = BillCalculator.CgstRate;
     private const decimal SgstRate = BillCalculator.SgstRate;
@@ -560,8 +561,12 @@ public partial class InvoiceViewModel : ObservableObject
             }
             else
             {
-                bill = await _billsApi.UpdateDraftAsync(_draftBillId.Value, new UpdateBillDraftRequest(payload), cancellationToken);
+                bill = await _billsApi.UpdateDraftAsync(
+                    _draftBillId.Value,
+                    new UpdateBillDraftRequest(payload, _draftRevisionId),
+                    cancellationToken);
             }
+            _draftRevisionId = bill.CurrentRevisionId;
 
             CurrentBillState = bill.State;
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
@@ -615,6 +620,7 @@ public partial class InvoiceViewModel : ObservableObject
     private void ClearInvoice()
     {
         _draftBillId = null;
+        _draftRevisionId = null;
         CurrentBillState = null;
         OnPropertyChanged(nameof(IsDraftSaved));
         InvoiceNumber = InvoiceNumberPlaceholder;
@@ -710,6 +716,7 @@ public partial class InvoiceViewModel : ObservableObject
             ReplaceLines(InvoiceEditMapper.CreateRows(payload, ItemMasters, KaratMasters));
 
             _draftBillId = bill.Id;
+            _draftRevisionId = bill.CurrentRevisionId;
             CurrentBillState = bill.State;
             IsEditingExistingBill = true;
             IsEditingPosted = !BillStateCapabilities.IsPendingLike(bill.State);
