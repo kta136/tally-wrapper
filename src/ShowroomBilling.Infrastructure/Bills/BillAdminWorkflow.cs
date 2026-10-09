@@ -103,8 +103,10 @@ internal sealed class BillAdminWorkflow(
             leavesGap = true;
         }
 
-        bool tallyDiverges = bill.State is IBillService.StatePosted
-            or IBillService.StateFailed;
+        // Tally holds the voucher under the old number. Committing the rename
+        // reopens the bill as an edit-after-push so the next push Alters that
+        // voucher to the new number instead of creating a second one.
+        bool tallyDiverges = await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken);
 
         bool reservationOrphaned = false;
         if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
@@ -133,8 +135,17 @@ internal sealed class BillAdminWorkflow(
 
         var now = DateTimeOffset.UtcNow;
         var oldNumber = bill.InvoiceNumber;
+        var fromState = bill.State;
         bill.InvoiceNumber = newNumber;
         bill.UpdatedAtUtc = now;
+        if (tallyDiverges)
+        {
+            bill.EditedAfterPush = true;
+            if (bill.State == IBillService.StatePosted)
+            {
+                bill.State = IBillService.StatePending;
+            }
+        }
 
         auditStore.Write(
             bill.Id,
@@ -150,6 +161,21 @@ internal sealed class BillAdminWorkflow(
                 reservationOrphaned,
                 reason = request.Reason ?? string.Empty
             });
+        if (tallyDiverges)
+        {
+            auditStore.Write(
+                bill.Id,
+                "bill.edit.reopened",
+                bill.State,
+                now,
+                new
+                {
+                    fromState,
+                    invoiceNumber = newNumber,
+                    previousInvoiceNumber = oldNumber,
+                    reason = "invoice-number-changed"
+                });
+        }
 
         // Save + sequence-rollback share one transaction so a moved-down number
         // that vacates the trailing core (e.g. 94 -> 92 when 94 was the most
@@ -162,7 +188,9 @@ internal sealed class BillAdminWorkflow(
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (bill.FiscalYear is not null)
+        // Tally still holds the old number until the Alter lands, so its core
+        // must not be handed to the next new bill.
+        if (bill.FiscalYear is not null && !tallyDiverges)
         {
             await NumberingSequenceReclaimer.ReclaimAsync(
                 dbContext, showroomId, bill.FiscalYear, $"rename:{bill.Id:N}", cancellationToken);
@@ -278,9 +306,8 @@ internal sealed class BillAdminWorkflow(
                 $"Bill '{billId}' cannot be deleted while its Tally outcome is unresolved.");
         }
 
-        bool tallyDiverges = bill.State is IBillService.StatePosted
-            or IBillService.StateFailed
-            or IBillService.StateReconciliationRequired;
+        var inTally = await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken);
+        bool tallyDiverges = inTally || bill.State is IBillService.StateFailed;
 
         if (request.DryRun)
         {
@@ -330,7 +357,9 @@ internal sealed class BillAdminWorkflow(
         dbContext.Bills.Remove(bill);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (fiscalYear is not null)
+        // A deleted bill whose voucher Tally still holds keeps its number in
+        // Tally, so its core must not be reclaimed for the next new bill.
+        if (fiscalYear is not null && !inTally)
         {
             await NumberingSequenceReclaimer.ReclaimAsync(
                 dbContext, showroomId, fiscalYear, $"delete:{billId:N}", cancellationToken);

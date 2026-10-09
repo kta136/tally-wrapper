@@ -990,6 +990,59 @@ public sealed class BillServiceTests
         Assert.Equal(IBillService.StateVoided, voided.State);
     }
 
+    [Fact]
+    public async Task ChangeInvoiceNumber_PushedBill_ReopensSoNextPushAltersSameVoucher()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        var changed = await service.ChangeInvoiceNumberAsync(bill.Id,
+            new ChangeBillNumberRequest("7", "typo", DryRun: false));
+        var reopened = await service.GetAsync(bill.Id);
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("after-rename"));
+
+        Assert.True(changed.TallyDiverges);
+        Assert.Equal(IBillService.StatePending, reopened!.State);
+        Assert.True(reopened.EditedAfterPush);
+        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
+        Assert.Equal("101", poster.LastRequest.TargetTagValue);
+        Assert.EndsWith("/0007", poster.LastRequest.InvoiceNumber);
+    }
+
+    [Fact]
+    public async Task ChangeInvoiceNumber_PushedTrailingBill_DoesNotReclaimNumberTallyStillHolds()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.PushAsync(second.Id, new PushBillRequest("first"));
+
+        await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("9", null, DryRun: false));
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+
+        Assert.EndsWith("/0003", next.InvoiceNumber);
+    }
+
+    [Fact]
+    public async Task Delete_PushedTrailingBill_DoesNotReclaimNumberTallyStillHolds()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.PushAsync(second.Id, new PushBillRequest("first"));
+
+        await service.DeleteAsync(second.Id, new DeleteBillRequest("removed locally", DryRun: false));
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+
+        Assert.EndsWith("/0003", next.InvoiceNumber);
+    }
+
     // ---------- Mark Posted / Pending ----------
 
     [Fact]

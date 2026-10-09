@@ -181,10 +181,10 @@ internal sealed class BillsBatchActionWorkflow(
         if (rows.Length == 0) return;
 
         var confirm = MessageBox.Show(
-            $"Repost {rows.Length} bill(s)? Each will queue another Tally posting.",
+            $"Repost {rows.Length} bill(s)?\n\nEach repost sends a NEW voucher to Tally. If Tally still holds the original voucher, this creates a duplicate sale. Only repost after the original voucher has been deleted in Tally.",
             "Confirm Repost",
             MessageBoxButton.OKCancel,
-            MessageBoxImage.Question,
+            MessageBoxImage.Warning,
             MessageBoxResult.Cancel);
         if (confirm != MessageBoxResult.OK) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
