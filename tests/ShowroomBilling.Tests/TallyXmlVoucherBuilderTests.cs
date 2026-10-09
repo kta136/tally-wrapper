@@ -105,6 +105,25 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Null(voucher.Element("CONSIGNEECOUNTRYNAME"));
     }
 
+    [Fact]
+    public void Build_SplitsOddPaiseGstLikeThePrintedInvoice()
+    {
+        var payload = Payload() with
+        {
+            Lines = [new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", 100m, 1000.05m, "22K", null)],
+            Totals = new BillTotalsDto(1000m, 0m, 0.05m, 0m, 1000.05m)
+        };
+
+        var xml = TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers(), "Acme Jewellers");
+
+        var entries = xml.Descendants("ALLLEDGERENTRIES.LIST").ToList();
+        decimal AmountFor(string ledger) => decimal.Parse(
+            entries.Single(e => e.Element("LEDGERNAME")?.Value == ledger).Element("AMOUNT")!.Value,
+            System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(0.03m, Math.Abs(AmountFor("CGST")));
+        Assert.Equal(0.02m, Math.Abs(AmountFor("SGST")));
+    }
+
     private static TallyPostRequest Request(
         TallyPostOperation operation = TallyPostOperation.Create,
         string? targetTagName = null,
