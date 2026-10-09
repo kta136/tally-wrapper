@@ -32,6 +32,29 @@ public static class DependencyInjection
     private const string DefaultLocalPostgresConnectionString =
         "Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres";
 
+    /// <summary>
+    /// Applies the WAN-friendly defaults (keep 2 warm connections, 30 s TCP
+    /// keepalive) only where the connection string does not set them, so an
+    /// explicit value from OpenBao / PgBouncer configuration is honoured.
+    /// </summary>
+    public static string ApplyPoolDefaults(string connectionString)
+    {
+        var supplied = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        if (!HasAnyKey(supplied, "Minimum Pool Size", "MinPoolSize", "Min Pool Size"))
+        {
+            builder.MinPoolSize = 2;
+        }
+        if (!HasAnyKey(supplied, "Keepalive", "Keep Alive"))
+        {
+            builder.KeepAlive = 30;
+        }
+        return builder.ConnectionString;
+    }
+
+    private static bool HasAnyKey(System.Data.Common.DbConnectionStringBuilder builder, params string[] keys) =>
+        keys.Any(builder.ContainsKey);
+
     public static IServiceCollection AddInfrastructureLayer(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<DatabaseOptions>(configuration.GetSection(DatabaseOptions.SectionName));
@@ -41,12 +64,7 @@ public static class DependencyInjection
             ? DefaultLocalPostgresConnectionString
             : configuredConnectionString;
 
-        var connectionBuilder = new NpgsqlConnectionStringBuilder(connectionString)
-        {
-            MinPoolSize = 2,
-            KeepAlive = 30
-        };
-        var dataSource = new NpgsqlDataSourceBuilder(connectionBuilder.ConnectionString).Build();
+        var dataSource = new NpgsqlDataSourceBuilder(ApplyPoolDefaults(connectionString)).Build();
         services.AddSingleton(dataSource);
         services.AddDbContextPool<ShowroomBillingDbContext>(options =>
             options.UseNpgsql(dataSource, npgsql =>

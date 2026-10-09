@@ -21,6 +21,30 @@ using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Tests;
 
+public sealed class PoolDefaultsTests
+{
+    [Fact]
+    public void ApplyPoolDefaults_FillsMissingValues()
+    {
+        var result = new Npgsql.NpgsqlConnectionStringBuilder(
+            ShowroomBilling.Infrastructure.DependencyInjection.ApplyPoolDefaults("Host=db;Database=x;Username=u"));
+
+        Assert.Equal(2, result.MinPoolSize);
+        Assert.Equal(30, result.KeepAlive);
+    }
+
+    [Fact]
+    public void ApplyPoolDefaults_KeepsExplicitValues()
+    {
+        var result = new Npgsql.NpgsqlConnectionStringBuilder(
+            ShowroomBilling.Infrastructure.DependencyInjection.ApplyPoolDefaults(
+                "Host=db;Database=x;Username=u;Minimum Pool Size=0;Keepalive=0"));
+
+        Assert.Equal(0, result.MinPoolSize);
+        Assert.Equal(0, result.KeepAlive);
+    }
+}
+
 public sealed class DatabaseConfigurationTests
 {
     [Fact]
