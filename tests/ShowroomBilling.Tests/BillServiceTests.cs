@@ -1104,6 +1104,51 @@ public sealed class BillServiceTests
         Assert.EndsWith("/0003", next.InvoiceNumber);
     }
 
+    [Fact]
+    public async Task Push_CallerCancelsDuringTallyCall_StillSettlesForReconciliation()
+    {
+        await using var db = CreateDbContext();
+        using var requestCts = new CancellationTokenSource();
+        var poster = new CancellingTallyPoster(requestCts);
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        var response = await service.PushAsync(bill.Id, new PushBillRequest("push"), requestCts.Token);
+
+        Assert.Equal(BillStates.ReconciliationRequired, response.State);
+        var persisted = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
+        Assert.Equal(BillStates.ReconciliationRequired, persisted.State);
+        Assert.Contains(await db.AuditEvents.ToListAsync(), a => a.EventType == "tally.outcome.unknown");
+    }
+
+    [Fact]
+    public async Task PushSelected_CallerCancelsDuringFirstBill_DoesNotStartTheNext()
+    {
+        await using var db = CreateDbContext();
+        using var requestCts = new CancellationTokenSource();
+        var poster = new CancellingTallyPoster(requestCts);
+        var service = BuildService(db, poster);
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+
+        await service.PushSelectedAsync(new PushSelectedBillsRequest([first.Id, second.Id], "batch"), requestCts.Token);
+
+        Assert.Equal(1, poster.CallCount);
+        Assert.Equal(BillStates.Pending, (await db.Bills.AsNoTracking().SingleAsync(b => b.Id == second.Id)).State);
+    }
+
+    private sealed class CancellingTallyPoster(CancellationTokenSource requestCts) : ITallyPoster
+    {
+        public int CallCount { get; private set; }
+
+        public Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            requestCts.Cancel();
+            throw new OperationCanceledException(cancellationToken);
+        }
+    }
+
     // ---------- Mark Posted / Pending ----------
 
     [Fact]

@@ -25,6 +25,11 @@ internal sealed class BillPostingWorkflow(
     private const string DefaultShowroomCode = "default";
     private const string TallyAlterTargetTagName = "MASTER ID";
 
+    // Once the bill is committed to `posting`, the outcome must be written
+    // even if the HTTP caller disconnects. Settling uses its own bounded
+    // budget instead of the request token.
+    private static readonly TimeSpan SettleBudget = TimeSpan.FromSeconds(30);
+
     internal Task<BillResponse> PushAsync(
         Guid billId,
         PushBillRequest request,
@@ -167,6 +172,7 @@ internal sealed class BillPostingWorkflow(
         }
 
         var now = DateTimeOffset.UtcNow;
+        var sourceState = bill.State;
 
         // Flip to `posting` atomically BEFORE calling Tally. Two concerns:
         //   1. Race: two concurrent push requests on the same bill must not both
@@ -213,8 +219,11 @@ internal sealed class BillPostingWorkflow(
 
             // Sync tracked entity snapshot with the row we just updated so the
             // final settle-state SaveChanges does not replay the posting flip.
-            await dbContext.Entry(bill).ReloadAsync(cancellationToken);
+            await dbContext.Entry(bill).ReloadAsync(CancellationToken.None);
         }
+
+        using var settleCts = new CancellationTokenSource(SettleBudget);
+        var settleToken = settleCts.Token;
 
         currentRevision.SubmittedAtUtc ??= now;
         currentRevision.FinalizedAtUtc = now;
@@ -224,7 +233,7 @@ internal sealed class BillPostingWorkflow(
         string? targetTagValue = null;
         if (bill.EditedAfterPush)
         {
-            targetTagValue = await ResolveAlterTargetMasterIdAsync(bill.Id, cancellationToken);
+            targetTagValue = await ResolveAlterTargetMasterIdAsync(bill.Id, settleToken);
         }
 
         var trimmedReason = string.IsNullOrWhiteSpace(reason) ? "manual-push" : reason.Trim();
@@ -240,7 +249,23 @@ internal sealed class BillPostingWorkflow(
                 reason = trimmedReason,
                 tallyAction = operation.ToString()
             });
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(settleToken);
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // The caller went away before anything was sent to Tally. Put the
+            // bill back where it was rather than leaving it in `posting`.
+            bill.State = sourceState;
+            bill.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            auditStore.Write(
+                bill.Id,
+                "bill.push.cancelled",
+                bill.State,
+                bill.UpdatedAtUtc,
+                new { reason = "request cancelled before sending to Tally" });
+            await dbContext.SaveChangesAsync(settleToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
 
         // Call Tally synchronously. No queue, no retry.
         var payload = BillSerialization.DeserializePayload(currentRevision);
@@ -375,7 +400,7 @@ internal sealed class BillPostingWorkflow(
                 tallyResult.ErrorMessage);
         }
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(settleToken);
 
         return BillSerialization.MapResponse(bill, currentRevision);
     }
@@ -399,6 +424,12 @@ internal sealed class BillPostingWorkflow(
 
         foreach (var billId in orderedBillIds)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // Stop starting new pushes; any in-flight one has already settled.
+                break;
+            }
+
             try
             {
                 var response = await PushInternalAsync(
