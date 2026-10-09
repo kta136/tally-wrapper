@@ -901,6 +901,95 @@ public sealed class BillServiceTests
         Assert.Equal(3L, response.SequenceNextValue);
     }
 
+    [Fact]
+    public async Task Push_RejectedFirstPushThenEdit_UsesCreateNotAlter()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(new[]
+        {
+            FailedResponse("TALLY_LINEERROR", "Ledger missing."),
+            PostedResponse(remoteId: "201", tallyMasterId: "201")
+        });
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var failed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        Assert.Equal(IBillService.StateFailed, failed.State);
+
+        var edited = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-fixed", 100m)));
+        Assert.False(edited.EditedAfterPush);
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("second"));
+
+        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(2, poster.CallCount);
+        Assert.Equal(TallyPostOperation.Create, poster.LastRequest!.Operation);
+    }
+
+    [Fact]
+    public async Task Push_FailedAlterThenEdit_StillAlters()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(new[]
+        {
+            PostedResponse(remoteId: "101", tallyMasterId: "101"),
+            FailedResponse("TALLY_LINEERROR", "Rejected alter."),
+            PostedResponse(remoteId: "101", tallyMasterId: "101")
+        });
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edit-1", 150m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("alter-1"));
+
+        var edited = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edit-2", 160m)));
+        Assert.True(edited.EditedAfterPush);
+        await service.PushAsync(bill.Id, new PushBillRequest("alter-2"));
+
+        Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
+        Assert.Equal("101", poster.LastRequest.TargetTagValue);
+    }
+
+    [Fact]
+    public async Task Void_EditedAfterPush_RejectedBecauseTallyHoldsVoucher()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+
+        await Assert.ThrowsAsync<BillStateConflictException>(() =>
+            service.VoidAsync(bill.Id, new VoidBillRequest("customer cancelled")));
+        Assert.Equal(IBillService.StatePending, (await service.GetAsync(bill.Id))!.State);
+    }
+
+    [Fact]
+    public async Task Void_FailedFirstPush_Allowed()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(TallyPostOutcome.Failed));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        var voided = await service.VoidAsync(bill.Id, new VoidBillRequest("never reached Tally"));
+
+        Assert.Equal(IBillService.StateVoided, voided.State);
+    }
+
+    [Fact]
+    public async Task Void_AfterAdminMarkPending_Allowed()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        await service.MarkPendingAsync(bill.Id, new MarkBillStateRequest("voucher deleted in Tally"));
+
+        var voided = await service.VoidAsync(bill.Id, new VoidBillRequest(null));
+
+        Assert.Equal(IBillService.StateVoided, voided.State);
+    }
+
     // ---------- Mark Posted / Pending ----------
 
     [Fact]

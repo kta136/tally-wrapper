@@ -72,10 +72,16 @@ internal sealed class BillLifecycleWorkflow(
 
         dbContext.BillRevisions.Add(revision);
 
+        // Only a bill whose voucher Tally actually holds is re-pushed as an
+        // Alter. A definite rejection on the first push leaves nothing in
+        // Tally, so editing that bill must keep the next push a Create.
+        var inTally = reopenFrom is not null
+            && await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken);
+
         if (reopenFrom is not null)
         {
             bill.State = IBillService.StatePending;
-            bill.EditedAfterPush = true;
+            bill.EditedAfterPush = inTally;
             auditStore.Write(
                 bill.Id,
                 "bill.edit.reopened",
@@ -163,6 +169,15 @@ internal sealed class BillLifecycleWorkflow(
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; void is only allowed from pending/draft/failed in this phase.");
+        }
+
+        // Void never contacts Tally. A bill whose voucher Tally still holds
+        // (edited after a push, or a failed repost/alter) would end up voided
+        // here while the sale and GST stay live in Tally.
+        if (await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken))
+        {
+            throw new BillStateConflictException(
+                $"Bill '{bill.InvoiceNumber ?? billId.ToString()}' is already in Tally. Cancel the voucher in Tally first, then use admin Mark as Pending before voiding it here.");
         }
 
         var now = DateTimeOffset.UtcNow;
