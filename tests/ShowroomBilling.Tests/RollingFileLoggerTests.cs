@@ -30,6 +30,34 @@ public sealed class RollingFileLoggerTests
     }
 
     [Fact]
+    public void Log_RecoversAfterTheFileWasTemporarilyLocked()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            using (var provider = NewProvider(dir, "locked"))
+            {
+                var logger = provider.CreateLogger("ShowroomBilling.Lock");
+                var path = Path.Combine(dir, $"locked-{DateTime.Now:yyyyMMdd}.log");
+                using (new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                {
+                    logger.LogInformation("dropped while locked");
+                    Thread.Sleep(300);
+                }
+
+                logger.LogInformation("written after unlock");
+            }
+
+            var text = string.Concat(Directory.EnumerateFiles(dir, "locked-*.log").Select(File.ReadAllText));
+            Assert.Contains("written after unlock", text);
+        }
+        finally
+        {
+            TryDelete(dir);
+        }
+    }
+
+    [Fact]
     public void Log_IncludesScopePropertiesInOutput()
     {
         var dir = NewTempDir();

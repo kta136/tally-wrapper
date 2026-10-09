@@ -102,14 +102,31 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
     {
         lock (_fileLock)
         {
-            RollIfNeeded();
-            _writer!.WriteLine(line);
-            _pendingFlushWrites++;
-            if (_pendingFlushWrites >= 32 || DateTimeOffset.Now - _lastFlushAt >= TimeSpan.FromSeconds(1))
+            try
             {
-                _writer.Flush();
-                _pendingFlushWrites = 0;
-                _lastFlushAt = DateTimeOffset.Now;
+                RollIfNeeded();
+                _writer!.WriteLine(line);
+                _pendingFlushWrites++;
+                if (_pendingFlushWrites >= 32 || DateTimeOffset.Now - _lastFlushAt >= TimeSpan.FromSeconds(1))
+                {
+                    _writer.Flush();
+                    _pendingFlushWrites = 0;
+                    _lastFlushAt = DateTimeOffset.Now;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Antivirus, a tail tool or a second instance briefly holding
+                // the file must not stop logging for the rest of the session:
+                // drop this line and reopen on the next one.
+                try
+                {
+                    _writer?.Dispose();
+                }
+                catch
+                {
+                }
+                _writer = null;
             }
         }
     }
@@ -157,7 +174,7 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
             ? $"{_options.FilePrefix}-{date}.log"
             : $"{_options.FilePrefix}-{date}-{_rollSuffix}.log";
         _currentPath = Path.Combine(_options.Directory, name);
-        var stream = new FileStream(_currentPath, FileMode.Append, FileAccess.Write, FileShare.Read);
+        var stream = new FileStream(_currentPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
         _writer = new StreamWriter(stream) { AutoFlush = false };
         _pendingFlushWrites = 0;
         _lastFlushAt = DateTimeOffset.Now;
