@@ -71,6 +71,23 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task Clear_after_editing_an_old_bill_resets_date_and_payment()
+    {
+        var billId = Guid.NewGuid();
+        var oldBill = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null))
+            with { BillDate = new DateOnly(2026, 4, 24), Payment = PaymentMode.CreditDebit };
+        var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, oldBill) };
+        var vm = new InvoiceViewModel(api, null, null);
+        await vm.LoadBillForEditAsync(billId);
+        Assert.Equal(PaymentMode.CreditDebit, vm.Payment);
+
+        vm.ClearCommand.Execute(null);
+
+        Assert.Equal(DateTime.Today, vm.BillDate.LocalDateTime.Date);
+        Assert.Equal(PaymentMode.Cash, vm.Payment);
+    }
+
+    [Fact]
     public async Task Gold_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();

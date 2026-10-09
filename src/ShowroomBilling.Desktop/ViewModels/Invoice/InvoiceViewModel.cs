@@ -632,6 +632,11 @@ public partial class InvoiceViewModel : ObservableObject
         CurrentBillState = null;
         OnPropertyChanged(nameof(IsDraftSaved));
         InvoiceNumber = InvoiceNumberPlaceholder;
+        // The VM is a singleton: without this, a new bill keeps the date and
+        // payment mode of the bill edited before it, or yesterday's date on a
+        // counter left open overnight.
+        BillDate = DateTimeOffset.Now;
+        Payment = PaymentMode.Cash;
         PartyName = string.Empty;
         Narration = string.Empty;
         Discount = 0m;
