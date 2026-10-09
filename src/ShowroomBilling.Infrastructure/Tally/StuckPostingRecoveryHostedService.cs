@@ -2,20 +2,22 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
-using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
-using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Tally;
 
 /// <summary>
-/// Runs once at API startup. In the sync-post model a bill is flipped to <c>posting</c>
+/// Runs at API startup. In the sync-post model a bill is flipped to <c>posting</c>
 /// just before the HTTP call to Tally. If the API process is killed mid-call, the bill
 /// is left stranded in <c>posting</c>. The write outcome is inherently ambiguous, so
 /// this service moves such bills to <c>reconciliation_required</c> and requires an
 /// operator to verify Tally before permitting another write.
+///
+/// Another counter's API may share the database and be mid-push right now, so
+/// only claims older than <see cref="AbandonedPostingRecovery.AbandonAfter"/>
+/// are recovered. Younger claims are re-checked once they are old enough; by
+/// then a live push has settled and the conditional transition leaves it alone.
 ///
 /// Recovery is best-effort: any failure is logged + recorded on
 /// <see cref="IStartupStatus"/> but never throws, so a transient DB hiccup can't
@@ -61,41 +63,16 @@ public sealed class StuckPostingRecoveryHostedService(
             // this boot — it'll re-run next time the API comes up healthy".
             await startupStatus.WaitForDatabaseReadyAsync(cts.Token);
 
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
-
-            var stuck = await db.Bills
-                .Where(b => b.State == IBillService.StatePosting)
-                .ToListAsync(cts.Token);
-
-            if (stuck.Count == 0)
+            DateTimeOffset? nextCheck;
+            using (var scope = scopeFactory.CreateScope())
             {
-                startupStatus.RecordRecoveryComplete(0);
-                return;
+                var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
+                (var recovered, nextCheck) = await AbandonedPostingRecovery.RecoverAsync(db, DateTimeOffset.UtcNow, cts.Token);
+                startupStatus.RecordRecoveryComplete(recovered);
+                LogRecovered(recovered);
             }
 
-            var now = DateTimeOffset.UtcNow;
-            foreach (var bill in stuck)
-            {
-                bill.State = BillStates.ReconciliationRequired;
-                bill.UpdatedAtUtc = now;
-                db.AuditEvents.Add(new AuditEventEntity
-                {
-                    Id = Guid.CreateVersion7(),
-                    EntityType = "bill",
-                    EntityId = bill.Id.ToString(),
-                    EventType = "bill.posting.recovered",
-                    ActorType = "system",
-                    PayloadJson = "{\"reason\":\"API restarted while bill was mid-post; Tally may have accepted the voucher. Reconciliation is required before another write.\"}",
-                    CreatedAtUtc = now,
-                });
-            }
-            await db.SaveChangesAsync(cts.Token);
-
-            startupStatus.RecordRecoveryComplete(stuck.Count);
-            logger.LogWarning(
-                "Startup recovery: {Count} bill(s) were stuck in 'posting' and now require Tally reconciliation.",
-                stuck.Count);
+            await WatchYoungClaimsAsync(nextCheck, cancellationToken);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -117,6 +94,41 @@ public sealed class StuckPostingRecoveryHostedService(
         {
             logger.LogWarning(ex, "Stuck-posting recovery failed; will retry on next API restart.");
             startupStatus.RecordRecoveryFailure(ex.Message);
+        }
+    }
+
+    private async Task WatchYoungClaimsAsync(DateTimeOffset? nextCheck, CancellationToken cancellationToken)
+    {
+        while (nextCheck is { } due && !cancellationToken.IsCancellationRequested)
+        {
+            var delay = due - DateTimeOffset.UtcNow;
+            if (delay > TimeSpan.Zero)
+            {
+                await Task.Delay(delay + TimeSpan.FromSeconds(1), cancellationToken);
+            }
+
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
+                (var recovered, nextCheck) = await AbandonedPostingRecovery.RecoverAsync(db, DateTimeOffset.UtcNow, cancellationToken);
+                LogRecovered(recovered);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Deferred stuck-posting recovery failed; will retry on next API restart.");
+                return;
+            }
+        }
+    }
+
+    private void LogRecovered(int recovered)
+    {
+        if (recovered > 0)
+        {
+            logger.LogWarning(
+                "Recovery: {Count} bill(s) were stuck in 'posting' and now require Tally reconciliation.",
+                recovered);
         }
     }
 

@@ -204,7 +204,8 @@ There is no automatic reconciliation path; the operator is the reconciler.
 |---|---|
 | Tally down or wrong active company, API up | Push is blocked by preflight with `503 Tally unavailable`; the bill remains `pending`/`failed`/`posted` as it was. Operator opens Tally or the correct company, then retries. |
 | API down | Desktop shows "Cloud unavailable"; bills stay in `pending` on whatever was last persisted; clicking Push is disabled. |
-| API crashes mid-post | Bill is stuck in `posting` until API restart; `StuckPostingRecoveryHostedService` moves it to `reconciliation_required` with an audit breadcrumb. Operator verifies Tally before resolving it. |
+| API crashes mid-post | Bill is stuck in `posting` until an API restart; `StuckPostingRecoveryHostedService` moves it to `reconciliation_required` with an audit breadcrumb once the claim is older than 10 minutes (so a live push on another counter is never touched). Operator verifies Tally before resolving it. |
+| Caller disconnects mid-post | The push keeps its own 30 s settle budget and records the known or unknown outcome; it is never left in `posting`. A cancellation noticed before anything is sent restores the prior state. |
 | Desktop down during a push | That push fails; no correctness lost (the API either completed the post or crashed; either way recovery is deterministic). |
 | Network partitions after preflight / mid-post | Timeout → `reconciliation_required` → operator verifies in Tally → Mark as Pushed or Mark as Pending. |
 
