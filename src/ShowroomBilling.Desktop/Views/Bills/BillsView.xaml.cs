@@ -11,6 +11,18 @@ public partial class BillsView : UserControl
     public BillsView()
     {
         InitializeComponent();
+        PreviewKeyDown += OnPreviewKeyDown;
+    }
+
+    // While a dialog covers the list, keys still routed here (e.g. Ctrl+R,
+    // which retries every selected bill without confirmation) must not act
+    // on the list. Esc still reaches the window to close the dialog.
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (ShellViewModel?.ActiveDialog is not null && e.Key != Key.Escape)
+        {
+            e.Handled = true;
+        }
     }
 
     private BillsViewModel? ViewModel => DataContext as BillsViewModel;
