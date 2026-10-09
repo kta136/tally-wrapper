@@ -19,6 +19,7 @@ public partial class InvoiceView : UserControl
         InitializeComponent();
         LinesItems.PreviewKeyDown += OnLinesPreviewKeyDown;
         LinesItems.GotFocus += OnLinesGotFocus;
+        PreviewKeyDown += OnViewPreviewKeyDown;
         IsVisibleChanged += OnIsVisibleChanged;
         DataContextChanged += OnDataContextChanged;
     }
@@ -73,6 +74,22 @@ public partial class InvoiceView : UserControl
             return;
         }
         Dispatcher.BeginInvoke(new Action(FocusRate24Kt));
+    }
+
+    /// <summary>
+    /// Ctrl+S and F9 are window key bindings, so focus never leaves the cell
+    /// being typed in and its LostFocus binding is never flushed: the bill
+    /// would be saved or previewed with the cell's previous value. Flush it
+    /// here, before the window's key binding runs on the bubbling KeyDown.
+    /// </summary>
+    private void OnViewPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var isSave = key == Key.S && Keyboard.Modifiers == ModifierKeys.Control;
+        if (isSave || key == Key.F9)
+        {
+            CommitFocusedEdit();
+        }
     }
 
     private static void CommitFocusedEdit()
