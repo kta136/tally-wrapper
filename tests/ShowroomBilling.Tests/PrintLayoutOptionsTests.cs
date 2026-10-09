@@ -1,5 +1,5 @@
-using ShowroomBilling.Printing;
 using ShowroomBilling.Contracts.Settings;
+using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Tests;
 

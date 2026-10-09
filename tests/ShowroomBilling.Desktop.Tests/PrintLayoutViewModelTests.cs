@@ -1,8 +1,8 @@
+using System.Net;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels.Settings;
-using System.Net;
 using Xunit;
 
 namespace ShowroomBilling.Desktop.Tests;

@@ -71,7 +71,7 @@ dotnet test --solution ShowroomBilling.sln
 ```
 
 - **Desktop DLL lock on rebuild:** if the Desktop exe is running, MSBuild fails to copy `ShowroomBilling.Printing.dll` into `bin/Debug/net10.0-windows/`. This isn't a compile error — just close the running app and rebuild.
-- **VS Code F5:** `Foundation: Desktop + API` compound launch in `.vscode/launch.json` is the usual target.
+- **VS Code F5:** `Desktop + API` compound launch in `.vscode/launch.json` is the usual target.
 
 ## Tally integration reality check
 
