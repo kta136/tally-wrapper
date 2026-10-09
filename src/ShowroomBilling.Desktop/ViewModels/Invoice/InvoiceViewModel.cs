@@ -415,7 +415,9 @@ public partial class InvoiceViewModel : ObservableObject
     private void RecomputeTotalsFromCurrentLines()
     {
         var (inclusiveTotal, weight, count) = SummarizeCurrentLines();
-        var effectiveDiscount = Math.Max(0m, Discount);
+        // Discount is money: keep it to paise so the saved totals and the
+        // Tally voucher legs balance exactly.
+        var effectiveDiscount = Math.Round(Math.Max(0m, Discount), 2, MidpointRounding.AwayFromZero);
         if (effectiveDiscount != Discount)
             SetDiscountFromLinkedTotals(effectiveDiscount);
 

@@ -190,6 +190,18 @@ public static class TallyXmlVoucherBuilder
             voucherElement.Add(BuildLedgerEntry(ledgers.RoundOffLedger!, bill.Totals.RoundOff, deemedPositive: false));
         }
 
+        // Tally rejects a voucher whose ledger legs do not net to zero, with an
+        // unhelpful message. Check the amounts exactly as they will be sent.
+        var imbalance = voucherElement.Elements("ALLLEDGERENTRIES.LIST")
+            .Sum(e => decimal.Parse(e.Element("AMOUNT")!.Value, NumberStyles.Number, CultureInfo.InvariantCulture));
+        if (imbalance != 0m)
+        {
+            throw new VoucherBuildException(
+                "VOUCHER_UNBALANCED",
+                $"Bill totals do not balance for Tally (off by {imbalance.ToString("0.00", CultureInfo.InvariantCulture)}): grand total must equal subtotal - discount + tax + round-off to the paisa. Edit and save the bill again.",
+                terminal: true);
+        }
+
         return new XElement("ENVELOPE",
             new XElement("HEADER",
                 new XElement("TALLYREQUEST", "Import Data")),

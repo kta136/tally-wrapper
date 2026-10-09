@@ -256,6 +256,21 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task CreateDraft_RejectsMoneyWithMoreThanTwoDecimals()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var payload = SamplePayload("A", 100m) with
+        {
+            Totals = new BillTotalsDto(100m, 0.555m, 0m, 0.555m, 100m)
+        };
+
+        var exception = await Assert.ThrowsAsync<BillValidationException>(() =>
+            service.CreateDraftAsync(new CreateBillDraftRequest(null, payload)));
+        Assert.Contains(exception.Errors, x => x.Contains("DiscountTotal", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Push_DoesNotReserveAnAdditionalNumber()
     {
         await using var db = CreateDbContext();

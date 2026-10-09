@@ -116,6 +116,13 @@ public static class BillValidator
         }
 
         var totals = payload.Totals;
+        // Money is posted to Tally in paise; a third decimal (e.g. a discount
+        // typed as 0.555) makes the rounded voucher legs stop balancing.
+        AddPaise(errors, nameof(totals.Subtotal), totals.Subtotal);
+        AddPaise(errors, nameof(totals.DiscountTotal), totals.DiscountTotal);
+        AddPaise(errors, nameof(totals.TaxTotal), totals.TaxTotal);
+        AddPaise(errors, nameof(totals.RoundOff), totals.RoundOff);
+        AddPaise(errors, nameof(totals.GrandTotal), totals.GrandTotal);
         if (totals.DiscountTotal < 0m)
         {
             errors.Add($"DiscountTotal must be non-negative (got {totals.DiscountTotal}).");
@@ -197,6 +204,14 @@ public static class BillValidator
             return false;
         }
         return true;
+    }
+
+    private static void AddPaise(List<string> errors, string field, decimal value)
+    {
+        if (decimal.Round(value, 2) != value)
+        {
+            errors.Add($"{field} must have at most two decimal places (got {value}).");
+        }
     }
 
     private static void AddNonNegative(

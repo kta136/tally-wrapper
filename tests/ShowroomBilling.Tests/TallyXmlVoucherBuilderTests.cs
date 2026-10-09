@@ -124,6 +124,19 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Equal(0.02m, Math.Abs(AmountFor("SGST")));
     }
 
+    [Fact]
+    public void Build_RejectsTotalsThatDoNotBalanceToThePaisa()
+    {
+        var payload = Payload() with
+        {
+            Totals = new BillTotalsDto(1000m, 0m, 0m, 0m, 1000.50m)
+        };
+
+        var ex = Assert.Throws<VoucherBuildException>(() =>
+            TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers(), "Acme Jewellers"));
+        Assert.Equal("VOUCHER_UNBALANCED", ex.ErrorCode);
+    }
+
     private static TallyPostRequest Request(
         TallyPostOperation operation = TallyPostOperation.Create,
         string? targetTagName = null,
