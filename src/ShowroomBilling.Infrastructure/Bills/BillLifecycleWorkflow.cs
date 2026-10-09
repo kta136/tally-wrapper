@@ -44,6 +44,7 @@ internal sealed class BillLifecycleWorkflow(
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot be edited while its Tally outcome is unresolved.");
         }
+        EnsureBillDateMatchesFiscalYear(bill, request.Payload);
         if (bill.State is IBillService.StateVoided or IBillService.StateRevised)
         {
             throw new BillStateConflictException(
@@ -220,7 +221,9 @@ internal sealed class BillLifecycleWorkflow(
             new ReserveNumberRequest(
                 IdempotencyKey: $"draft:{billId:N}",
                 DocumentType: INumberingService.DocumentTypeSalesInvoice,
-                FiscalYear: null,
+                // The bill date decides the series: a 31 March bill entered on
+                // 1 April still belongs to the year that is closing.
+                FiscalYear: InvoiceNumberFormatter.ComputeFiscalYear(request.Payload.BillDate),
                 ReservedForReference: billId.ToString()),
             cancellationToken);
 
@@ -261,6 +264,26 @@ internal sealed class BillLifecycleWorkflow(
         }
 
         return BillSerialization.MapResponse(bill, revision);
+    }
+
+    /// <summary>
+    /// The invoice number was reserved in the bill date's fiscal-year series.
+    /// An edit that moves the date across 1 April would leave the bill in the
+    /// wrong series, so it is refused; the operator creates a new bill instead.
+    /// </summary>
+    private static void EnsureBillDateMatchesFiscalYear(BillEntity bill, BillPayloadDto payload)
+    {
+        if (string.IsNullOrWhiteSpace(bill.FiscalYear))
+        {
+            return;
+        }
+
+        var dateFiscalYear = InvoiceNumberFormatter.ComputeFiscalYear(payload.BillDate);
+        if (!string.Equals(dateFiscalYear, bill.FiscalYear, StringComparison.Ordinal))
+        {
+            throw new BillStateConflictException(
+                $"Bill date {payload.BillDate:dd-MM-yyyy} falls in fiscal year {dateFiscalYear}, but invoice {bill.InvoiceNumber} is numbered in {bill.FiscalYear}. Keep a date in {bill.FiscalYear}, or create a new bill for the other year.");
+        }
     }
 
     private async Task<BillEntity> LoadTrackedBillAsync(Guid billId, CancellationToken cancellationToken)

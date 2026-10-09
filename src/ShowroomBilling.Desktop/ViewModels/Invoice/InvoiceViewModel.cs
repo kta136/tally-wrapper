@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels.Settings;
@@ -671,7 +672,9 @@ public partial class InvoiceViewModel : ObservableObject
 
         try
         {
-            var preview = await _numberingApi.GetPreviewAsync(cancellationToken: cancellationToken);
+            // The server numbers a bill in its bill date's fiscal year.
+            var fiscalYear = InvoiceNumberFormatter.ComputeFiscalYear(DateOnly.FromDateTime(BillDate.LocalDateTime));
+            var preview = await _numberingApi.GetPreviewAsync(fiscalYear: fiscalYear, cancellationToken: cancellationToken);
             if (!string.IsNullOrWhiteSpace(preview.FormattedNumber))
                 InvoiceNumber = preview.FormattedNumber;
         }

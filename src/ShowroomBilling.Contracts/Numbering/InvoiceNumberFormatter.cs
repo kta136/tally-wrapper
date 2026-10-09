@@ -53,11 +53,17 @@ public static class InvoiceNumberFormatter
         return long.TryParse(invoiceNumber.AsSpan(start, end - start), out var v) ? v : null;
     }
 
-    /// <summary>Returns the Indian fiscal-year label (e.g. <c>2026-27</c>) for the given UTC instant.</summary>
-    public static string ComputeFiscalYear(DateTimeOffset nowUtc)
+    /// <summary>India Standard Time. The fiscal year turns over at 00:00 IST on 1 April, not 00:00 UTC.</summary>
+    public static readonly TimeSpan IndiaOffset = TimeSpan.FromMinutes(330);
+
+    /// <summary>Returns the Indian fiscal-year label (e.g. <c>2026-27</c>) for the given instant, read on the IST calendar.</summary>
+    public static string ComputeFiscalYear(DateTimeOffset instant) =>
+        ComputeFiscalYear(DateOnly.FromDateTime(instant.ToOffset(IndiaOffset).DateTime));
+
+    /// <summary>Returns the Indian fiscal-year label (e.g. <c>2026-27</c>) a bill dated <paramref name="billDate"/> belongs to.</summary>
+    public static string ComputeFiscalYear(DateOnly billDate)
     {
-        var year = nowUtc.Year;
-        var startYear = nowUtc.Month >= 4 ? year : year - 1;
+        var startYear = billDate.Month >= 4 ? billDate.Year : billDate.Year - 1;
         var endYear = startYear + 1;
         return $"{startYear}-{endYear % 100:D2}";
     }

@@ -63,6 +63,8 @@ Recommended table key:
 
 - `(tenant_id, showroom_id, fiscal_year, document_type)`
 
+**Which fiscal year.** A bill is numbered in the fiscal year of its **bill date** (`InvoiceNumberFormatter.ComputeFiscalYear(DateOnly)`), not the server clock: a 31 March bill entered on 1 April gets a number in the year that is closing. Where a "current" year is needed (preview without a date, status bar), it is read on the IST calendar, so the year turns over at 00:00 IST on 1 April rather than 05:30 IST. An edit that moves a bill's date into another fiscal year is rejected with 409; the operator keeps a date in the original year or creates a new bill.
+
 ### 2.3 Preview behavior in Tally Wrapper
 
 Preview endpoint returns a non-reserved next visible number.

@@ -346,13 +346,8 @@ FOR UPDATE")
         return ComputeCurrentFiscalYear(DateTimeOffset.UtcNow);
     }
 
-    public static string ComputeCurrentFiscalYear(DateTimeOffset nowUtc)
-    {
-        var year = nowUtc.Year;
-        var startYear = nowUtc.Month >= 4 ? year : year - 1;
-        var endYear = startYear + 1;
-        return $"{startYear}-{endYear % 100:D2}";
-    }
+    public static string ComputeCurrentFiscalYear(DateTimeOffset now) =>
+        InvoiceNumberFormatter.ComputeFiscalYear(now);
 
     private static Guid ResolveShowroomId(string showroomCode)
     {

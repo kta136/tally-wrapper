@@ -59,6 +59,36 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task CreateDraft_NumbersBillInItsBillDateFiscalYear()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var lastYearsBill = SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 3, 31) };
+        var thisYearsBill = SamplePayload("B", 100m) with { BillDate = new DateOnly(2026, 4, 1) };
+
+        var march = await service.CreateDraftAsync(new CreateBillDraftRequest(null, lastYearsBill));
+        var april = await service.CreateDraftAsync(new CreateBillDraftRequest(null, thisYearsBill));
+
+        Assert.Equal("2025-26", march.FiscalYear);
+        Assert.Equal("2025-26/0001", march.InvoiceNumber);
+        Assert.Equal("2026-27", april.FiscalYear);
+        Assert.Equal("2026-27/0001", april.InvoiceNumber);
+    }
+
+    [Fact]
+    public async Task UpdateDraft_RejectsBillDateInAnotherFiscalYear()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(
+            null, SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 4, 1) }));
+
+        await Assert.ThrowsAsync<BillStateConflictException>(() => service.UpdateDraftAsync(
+            created.Id,
+            new UpdateBillDraftRequest(SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 3, 31) })));
+    }
+
+    [Fact]
     public async Task UpdateDraft_KeepsInvoiceNumberUnchanged()
     {
         await using var db = CreateDbContext();
