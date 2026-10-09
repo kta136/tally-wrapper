@@ -24,6 +24,18 @@ public sealed class BillLineViewModelTests
     }
 
     [Fact]
+    public void Net_entered_with_gross_empty_keeps_the_less_weight_already_typed()
+    {
+        var line = new BillLineViewModel { LessWeight = 1.2m };
+
+        line.NetWeight = 8.5m;
+
+        Assert.Equal(9.7m, line.GrossWeight);
+        Assert.Equal(1.2m, line.LessWeight);
+        Assert.Equal(8.5m, line.NetWeight);
+    }
+
+    [Fact]
     public void Editing_net_weight_recalculates_less_weight()
     {
         var changedProperties = new List<string?>();

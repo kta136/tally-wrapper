@@ -57,7 +57,9 @@ public partial class BillLineViewModel : ObservableObject
 
             if (GrossWeight is null)
             {
-                GrossWeight = normalizedNetWeight;
+                // Less typed first, then Net: Gross must cover both, or the
+                // line would be priced on Net minus Less.
+                GrossWeight = normalizedNetWeight + (LessWeight ?? 0m);
                 return;
             }
 
