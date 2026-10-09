@@ -49,8 +49,13 @@
                 <shell:NavTab>Settings</shell:NavTab>
             </KeyBinding.CommandParameter>
         </KeyBinding>
-        <KeyBinding Key="OemQuestion" Modifiers="Shift" Command="{Binding OpenShortcutsCommand}" />
-        <KeyBinding Key="OemTilde" Command="{Binding OpenAdminUnlockCommand}" />
+        <!--
+            Bare ` and ? are gated (OpenShortcutsKeyCommand / OpenAdminUnlockKeyCommand):
+            they do nothing while a dialog is open or a text box has focus, so
+            "?" and "`" can be typed and a pending prompt is never replaced.
+        -->
+        <KeyBinding Key="OemQuestion" Modifiers="Shift" Command="{Binding OpenShortcutsKeyCommand}" />
+        <KeyBinding Key="OemTilde" Command="{Binding OpenAdminUnlockKeyCommand}" />
         <KeyBinding Key="Escape" Command="{Binding CloseDialogCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddInvoiceRowCommand}" />
         <KeyBinding Key="Delete" Modifiers="Ctrl" Command="{Binding RemoveInvoiceRowCommand}" />

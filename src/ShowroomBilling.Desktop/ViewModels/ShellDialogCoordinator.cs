@@ -97,6 +97,20 @@ internal sealed class ShellDialogCoordinator(
             _adminDialogTcs = null;
             tcs.TrySetResult(true);
         }
+
+        // A prompt replaced by another dialog can never be answered; resolve
+        // it as cancelled so its caller continues and later prompts are not
+        // refused as "already open" for the rest of the session.
+        if (value != "changeNumber" && _changeNumberTcs is { Task.IsCompleted: false } changeNumber)
+        {
+            _changeNumberTcs = null;
+            changeNumber.TrySetResult((false, string.Empty, null));
+        }
+        if (value != "reasonPrompt" && _reasonPromptTcs is { Task.IsCompleted: false } reason)
+        {
+            _reasonPromptTcs = null;
+            reason.TrySetResult(null);
+        }
     }
 
     public static void ReleasePointerState()

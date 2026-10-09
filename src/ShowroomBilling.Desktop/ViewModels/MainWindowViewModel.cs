@@ -124,6 +124,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             ActiveDialog = "admin";
             _ = Admin.LoadStatusCommand.ExecuteAsync(null);
         });
+        // Bare-key variants for the window key bindings. A false CanExecute
+        // lets the key fall through, so "?" and "`" still type into text
+        // boxes, and an open (possibly awaited) prompt is never replaced.
+        OpenShortcutsKeyCommand = new RelayCommand(() => OpenShortcutsCommand.Execute(null), CanUseBareKeyShortcut);
+        OpenAdminUnlockKeyCommand = new RelayCommand(() => OpenAdminUnlockCommand.Execute(null), CanUseBareKeyShortcut);
         OpenSyntheticBatchCommand = new RelayCommand(() =>
         {
             SyntheticBatch.RefreshKaratOptions();
@@ -355,6 +360,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IRelayCommand<NavTab> SwitchTabCommand { get; }
     public IRelayCommand OpenShortcutsCommand { get; }
     public IRelayCommand OpenAdminUnlockCommand { get; }
+    public IRelayCommand OpenShortcutsKeyCommand { get; }
+    public IRelayCommand OpenAdminUnlockKeyCommand { get; }
+
+    private bool CanUseBareKeyShortcut() =>
+        ActiveDialog is null
+        && System.Windows.Input.Keyboard.FocusedElement is not (System.Windows.Controls.Primitives.TextBoxBase or System.Windows.Controls.PasswordBox);
     public IRelayCommand OpenSyntheticBatchCommand { get; }
     public IRelayCommand OpenHealthCommand { get; }
     public IRelayCommand OpenDatabaseSettingsCommand { get; }
