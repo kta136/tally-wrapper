@@ -27,6 +27,7 @@ internal sealed class ShellPrintCoordinator(
 {
     private PrintSettingsDto? _printDefaults;
     private bool _invoiceAwaitingPostPrintReset;
+    private bool _postSavePrintInProgress;
 
     public void ApplyPrintSettings(PrintSettingsDto print, MasterDataSettingsDto? masters = null)
     {
@@ -53,7 +54,27 @@ internal sealed class ShellPrintCoordinator(
 
     public async Task HandleInvoiceSaveCompletedAsync()
     {
-        var content = host.Invoice.BuildPrintContent(companyProfileProvider.Current);
+        // A second Ctrl+S while the first save is still printing would
+        // otherwise print another "Original".
+        if (_postSavePrintInProgress)
+        {
+            return;
+        }
+
+        _postSavePrintInProgress = true;
+        try
+        {
+            await PrintSavedInvoiceAsync();
+        }
+        finally
+        {
+            _postSavePrintInProgress = false;
+        }
+    }
+
+    private async Task PrintSavedInvoiceAsync()
+    {
+        var content = host.Invoice.BuildSavedPrintContent(companyProfileProvider.Current);
         if (content is null)
         {
             host.Invoice.ClearCommand.Execute(null);

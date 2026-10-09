@@ -134,6 +134,24 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task Saved_print_content_ignores_edits_typed_after_the_save()
+    {
+        var api = new FakeBillsApi();
+        var vm = new InvoiceViewModel(api, null, null);
+        vm.PartyName = "Saved Customer";
+        var line = vm.Lines[0];
+        line.ItemMaster = DiamondMaster();
+        line.GrossWeight = 2m;
+        line.DiamondRate = 3500m;
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        vm.PartyName = "Typed After Save";
+        var content = vm.BuildSavedPrintContent(new ShowroomBilling.Printing.CompanyProfile("Acme", null, null, null, null, "", null, null, null, null, null, null));
+
+        Assert.Equal("Saved Customer", content!.PartyName);
+    }
+
+    [Fact]
     public async Task Gold_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();

@@ -36,6 +36,9 @@ public partial class InvoiceViewModel : ObservableObject
     // Id of the Save that will create this bill. Kept across retries so a save
     // whose response was lost resolves to the bill it already created.
     private Guid? _createOperationId;
+    // The bill exactly as the server stored it on the last save; post-save
+    // printing uses this, not the live form.
+    private BillResponse? _lastSavedBill;
     private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
     private const decimal CgstRate = BillCalculator.CgstRate;
     private const decimal SgstRate = BillCalculator.SgstRate;
@@ -583,6 +586,7 @@ public partial class InvoiceViewModel : ObservableObject
             SaveStatus = $"Saved · {bill.State} · {InvoiceNumber}";
             LastSavedAtUtc = DateTimeOffset.UtcNow;
             savedBillId = bill.Id;
+            _lastSavedBill = bill;
         }
         catch (HttpRequestException ex)
         {
@@ -631,6 +635,7 @@ public partial class InvoiceViewModel : ObservableObject
         _draftBillId = null;
         _draftRevisionId = null;
         _createOperationId = null;
+        _lastSavedBill = null;
         CurrentBillState = null;
         OnPropertyChanged(nameof(IsDraftSaved));
         InvoiceNumber = InvoiceNumberPlaceholder;
@@ -735,6 +740,7 @@ public partial class InvoiceViewModel : ObservableObject
 
             _draftBillId = bill.Id;
             _draftRevisionId = bill.CurrentRevisionId;
+            _lastSavedBill = null;
             CurrentBillState = bill.State;
             IsEditingExistingBill = true;
             IsEditingPosted = !BillStateCapabilities.IsPendingLike(bill.State);
@@ -778,6 +784,27 @@ public partial class InvoiceViewModel : ObservableObject
             payload,
             Payment,
             Rate24Kt,
+            company,
+            BuildKaratMappings());
+    }
+
+    /// <summary>
+    /// Print content for the bill as it was last saved. Anything typed into
+    /// the form while the save was in flight was not saved, so it must not be
+    /// printed as if it were. Falls back to the live form if nothing was saved.
+    /// </summary>
+    public BillPrintContent? BuildSavedPrintContent(CompanyProfile company)
+    {
+        if (_lastSavedBill?.CurrentRevision?.Payload is not { } payload)
+        {
+            return BuildPrintContent(company);
+        }
+
+        return InvoicePayloadMapper.BuildPrintContent(
+            _lastSavedBill.InvoiceNumber ?? InvoiceNumberPlaceholder,
+            payload,
+            payload.Payment ?? Payment,
+            payload.Rate24Kt,
             company,
             BuildKaratMappings());
     }
