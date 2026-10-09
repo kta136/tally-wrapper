@@ -30,6 +30,12 @@ public sealed class BillEntity
 
     public Guid? CreatedBy { get; set; }
 
+    /// <summary>
+    /// Client-supplied id of the Save that created this bill. Unique, so a
+    /// replayed save resolves to this bill instead of a second one.
+    /// </summary>
+    public Guid? CreateOperationId { get; set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public DateTimeOffset UpdatedAtUtc { get; set; }

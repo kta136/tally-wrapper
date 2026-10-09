@@ -53,6 +53,24 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task Save_retry_after_lost_response_reuses_the_same_operation_id()
+    {
+        var api = new FakeBillsApi { FailNextCreates = 1 };
+        var vm = new InvoiceViewModel(api, null, null);
+        var line = vm.Lines[0];
+        line.ItemMaster = DiamondMaster();
+        line.GrossWeight = 2m;
+        line.DiamondRate = 3500m;
+
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, api.Creates.Count);
+        Assert.NotNull(api.Creates[0].ClientOperationId);
+        Assert.Equal(api.Creates[0].ClientOperationId, api.Creates[1].ClientOperationId);
+    }
+
+    [Fact]
     public async Task Gold_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();
@@ -513,11 +531,19 @@ public sealed class InvoiceDiamondViewModelTests
     private sealed class FakeBillsApi : IBillsApiClient
     {
         public CreateBillDraftRequest? LastCreate { get; private set; }
+        public List<CreateBillDraftRequest> Creates { get; } = [];
+        public int FailNextCreates { get; set; }
         public BillResponse? GetResponse { get; init; }
 
         public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default)
         {
             LastCreate = request;
+            Creates.Add(request);
+            if (FailNextCreates > 0)
+            {
+                FailNextCreates--;
+                throw new System.Net.Http.HttpRequestException("connection reset");
+            }
             return Task.FromResult(BillResponseFor(Guid.NewGuid(), request.Payload));
         }
 

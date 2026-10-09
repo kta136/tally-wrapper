@@ -46,7 +46,8 @@ Rules:
 
 - invoice number is reserved at draft creation so the operator can print and hand the customer a numbered estimate immediately
 - preview is informational only (what number the next *new* draft would receive)
-- reservation is idempotent per bill: `CreateDraftAsync` uses `draft:{billId}` as the reservation key, so a retried save returns the same number
+- reservation is idempotent per bill: `CreateDraftAsync` uses `draft:{billId}` as the reservation key
+- Save is replay-safe through a client operation id, not the reservation key: the Desktop generates `CreateBillDraftRequest.ClientOperationId` once per unsaved bill and reuses it on every retry. `bills.CreateOperationId` is unique, so a retry whose first attempt committed (response lost) returns that same bill and number; reusing the id with different contents is `409`. Requests without the id still create a new bill every time. Draft updates carry `expectedRevisionId`, so a replayed update that already landed returns the stored bill instead of adding a revision
 - the reservation lives on the bill through every transition — push does not issue a new number, it just transitions the bill to `posting` and synchronously calls Tally; on success the number is preserved on the resulting `posted` bill
 - `UpdateDraftAsync` never changes the number once assigned
 

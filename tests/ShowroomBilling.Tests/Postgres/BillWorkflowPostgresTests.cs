@@ -123,6 +123,31 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
 
     [PostgresFact]
     [Trait("Category", "Postgres")]
+    public async Task CreateDraftAsync_ConcurrentReplaysOfOneSave_CreateOneBill()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var request = new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m), Guid.NewGuid());
+
+        var tasks = Enumerable.Range(0, 6)
+            .Select(_ => Task.Run(async () =>
+            {
+                await start.Task;
+                await using var db = database.CreateContext();
+                return await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(request);
+            }))
+            .ToArray();
+        start.SetResult();
+        var responses = await Task.WhenAll(tasks);
+
+        Assert.Single(responses.Select(static x => x.Id).Distinct());
+        await using var verify = database.CreateContext();
+        Assert.Equal(1, await verify.Bills.CountAsync());
+        Assert.Equal(2L, await verify.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
+    }
+
+    [PostgresFact]
+    [Trait("Category", "Postgres")]
     public async Task PushAsync_OverlappingCalls_PostsToTallyOnlyOnce()
     {
         await using var database = await fixture.CreateDatabaseAsync();

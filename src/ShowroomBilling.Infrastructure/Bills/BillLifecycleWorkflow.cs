@@ -266,6 +266,67 @@ internal sealed class BillLifecycleWorkflow(
         ArgumentNullException.ThrowIfNull(request.Payload);
         BillValidator.Validate(request.Payload);
 
+        if (request.ClientOperationId is not Guid operationId)
+        {
+            return await CreateNewDraftAsync(request, now, cancellationToken);
+        }
+
+        // A retried Save whose first attempt committed but whose response was
+        // lost must not create and number a second bill.
+        var existing = await FindByOperationIdAsync(operationId, cancellationToken);
+        if (existing is not null)
+        {
+            return await ReplayCreateAsync(existing, request.Payload, cancellationToken);
+        }
+
+        try
+        {
+            return await CreateNewDraftAsync(request, now, cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            // Two copies of the same save raced; the other one won.
+            dbContext.ChangeTracker.Clear();
+            existing = await FindByOperationIdAsync(operationId, cancellationToken);
+            if (existing is null)
+            {
+                throw;
+            }
+            return await ReplayCreateAsync(existing, request.Payload, cancellationToken);
+        }
+    }
+
+    private Task<BillEntity?> FindByOperationIdAsync(Guid operationId, CancellationToken cancellationToken) =>
+        dbContext.Bills.AsNoTracking().FirstOrDefaultAsync(x => x.CreateOperationId == operationId, cancellationToken);
+
+    private async Task<BillResponse> ReplayCreateAsync(
+        BillEntity existing,
+        BillPayloadDto payload,
+        CancellationToken cancellationToken)
+    {
+        var firstRevision = await dbContext.BillRevisions.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.BillId == existing.Id && x.RevisionNo == 1, cancellationToken);
+        if (firstRevision is null || !BillSerialization.PayloadMatches(firstRevision, payload))
+        {
+            throw new BillStateConflictException(
+                $"This save was already recorded as invoice {existing.InvoiceNumber ?? existing.Id.ToString()} with different contents. Open that bill from Bills to change it.");
+        }
+
+        var current = existing.CurrentRevisionId is Guid currentId
+            ? await dbContext.BillRevisions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == currentId, cancellationToken)
+            : firstRevision;
+        return BillSerialization.MapResponse(existing, current);
+    }
+
+    private bool IsUniqueViolation(DbUpdateException exception) =>
+        !UsesInMemoryProvider()
+        && exception.GetBaseException() is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation };
+
+    private async Task<BillResponse> CreateNewDraftAsync(
+        CreateBillDraftRequest request,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
         var billId = Guid.CreateVersion7();
 
@@ -295,6 +356,7 @@ internal sealed class BillLifecycleWorkflow(
             InvoiceNumber = reservation.FormattedNumber,
             FiscalYear = reservation.FiscalYear,
             InvoiceCore = reservation.ReservedValue,
+            CreateOperationId = request.ClientOperationId,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };

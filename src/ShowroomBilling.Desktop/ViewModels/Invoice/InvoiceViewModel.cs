@@ -33,6 +33,9 @@ public partial class InvoiceViewModel : ObservableObject
     private bool _syncingLinkedTotals;
     private Guid? _draftBillId;
     private Guid? _draftRevisionId;
+    // Id of the Save that will create this bill. Kept across retries so a save
+    // whose response was lost resolves to the bill it already created.
+    private Guid? _createOperationId;
     private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
     private const decimal CgstRate = BillCalculator.CgstRate;
     private const decimal SgstRate = BillCalculator.SgstRate;
@@ -555,8 +558,12 @@ public partial class InvoiceViewModel : ObservableObject
             BillResponse bill;
             if (_draftBillId is null)
             {
-                bill = await _billsApi.CreateDraftAsync(new CreateBillDraftRequest(null, payload), cancellationToken);
+                _createOperationId ??= Guid.NewGuid();
+                bill = await _billsApi.CreateDraftAsync(
+                    new CreateBillDraftRequest(null, payload, _createOperationId),
+                    cancellationToken);
                 _draftBillId = bill.Id;
+                _createOperationId = null;
                 OnPropertyChanged(nameof(IsDraftSaved));
             }
             else
@@ -621,6 +628,7 @@ public partial class InvoiceViewModel : ObservableObject
     {
         _draftBillId = null;
         _draftRevisionId = null;
+        _createOperationId = null;
         CurrentBillState = null;
         OnPropertyChanged(nameof(IsDraftSaved));
         InvoiceNumber = InvoiceNumberPlaceholder;

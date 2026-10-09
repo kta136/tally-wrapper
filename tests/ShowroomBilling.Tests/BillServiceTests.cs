@@ -43,6 +43,49 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task CreateDraft_ReplayedSaveWithSameOperationId_ReturnsTheFirstBill()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var operationId = Guid.NewGuid();
+        var request = new CreateBillDraftRequest(null, SamplePayload("A", 100m), operationId);
+
+        var first = await service.CreateDraftAsync(request);
+        var replay = await service.CreateDraftAsync(request);
+
+        Assert.Equal(first.Id, replay.Id);
+        Assert.Equal(first.InvoiceNumber, replay.InvoiceNumber);
+        Assert.Single(await db.Bills.ToListAsync());
+        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateDraft_ReusedOperationIdWithDifferentContents_IsRejected()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var operationId = Guid.NewGuid();
+        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m), operationId));
+
+        await Assert.ThrowsAsync<BillStateConflictException>(() =>
+            service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 250m), operationId)));
+        Assert.Single(await db.Bills.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateDraft_WithoutOperationId_StillCreatesSeparateBills()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var request = new CreateBillDraftRequest(null, SamplePayload("A", 100m));
+
+        await service.CreateDraftAsync(request);
+        await service.CreateDraftAsync(request);
+
+        Assert.Equal(2, await db.Bills.CountAsync());
+    }
+
+    [Fact]
     public async Task CreateDraft_AssignsConsecutiveSerialsAcrossDrafts()
     {
         await using var db = CreateDbContext();

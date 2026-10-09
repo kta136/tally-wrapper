@@ -167,6 +167,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CounterId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CreateOperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -214,6 +217,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreateOperationId")
+                        .IsUnique()
+                        .HasFilter("\"CreateOperationId\" IS NOT NULL");
 
                     b.HasIndex("InvoiceNumber")
                         .HasAnnotation("Npgsql:CreatedConcurrently", true);
