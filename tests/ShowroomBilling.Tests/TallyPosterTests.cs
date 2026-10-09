@@ -51,7 +51,7 @@ public sealed class TallyPosterTests
     }
 
     [Fact]
-    public async Task PostAsync_AlterTreatsCreatedVoucherAsFailure()
+    public async Task PostAsync_AlterThatCreatesAVoucherNeedsReconciliation()
     {
         var poster = BuildPoster(Response(created: 1, altered: 0, lastVoucherId: "202"));
 
@@ -60,8 +60,60 @@ public sealed class TallyPosterTests
             targetTagName: "MASTER ID",
             targetTagValue: "101"));
 
-        Assert.Equal(TallyPostOutcome.Failed, response.Outcome);
+        Assert.Equal(TallyPostOutcome.Unknown, response.Outcome);
         Assert.Equal("TALLY_UNEXPECTED_CREATE_ON_ALTER", response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task PostAsync_LineErrorWithCreatedVoucherNeedsReconciliation()
+    {
+        var response = new XElement("ENVELOPE",
+            new XElement("BODY",
+                new XElement("DATA",
+                    new XElement("IMPORTRESULT",
+                        new XElement("CREATED", 1),
+                        new XElement("ALTERED", 0),
+                        new XElement("ERRORS", 1),
+                        new XElement("EXCEPTIONS", 0),
+                        new XElement("LINEERROR", "Ledger 'Card' does not exist")))));
+        var poster = BuildPoster(response);
+
+        var result = await poster.PostAsync(Request());
+
+        Assert.Equal(TallyPostOutcome.Unknown, result.Outcome);
+        Assert.Equal("TALLY_PARTIAL_EFFECT", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task PostAsync_LineErrorWithNoEffectIsDefiniteFailure()
+    {
+        var response = new XElement("ENVELOPE",
+            new XElement("BODY",
+                new XElement("DATA",
+                    new XElement("IMPORTRESULT",
+                        new XElement("CREATED", 0),
+                        new XElement("ALTERED", 0),
+                        new XElement("ERRORS", 1),
+                        new XElement("LINEERROR", "Ledger 'Card' does not exist")))));
+        var poster = BuildPoster(response);
+
+        var result = await poster.PostAsync(Request());
+
+        Assert.Equal(TallyPostOutcome.Failed, result.Outcome);
+        Assert.Equal("TALLY_LINEERROR", result.ErrorCode);
+    }
+
+    [Fact]
+    public async Task PostAsync_ControlCharacterInPayloadFailsBeforeSending()
+    {
+        var (poster, client) = BuildPosterWithClient(Response(created: 1, altered: 0, lastVoucherId: "101"));
+        var request = Request() with { Payload = Payload() with { Notes = "badnote" } };
+
+        var result = await poster.PostAsync(request);
+
+        Assert.Equal(TallyPostOutcome.Failed, result.Outcome);
+        Assert.Equal("TALLY_PREPARE_FAILED", result.ErrorCode);
+        Assert.Null(client.LastRequest);
     }
 
     [Fact]

@@ -552,9 +552,10 @@ Edited-after-push alter requests do not send `REMOTEID`; they target the old vou
 
 | Condition | Outcome | Error code |
 |---|---|---|
+| a `<LINEERROR>`, `ERRORS > 0` or `EXCEPTIONS > 0` **and** `CREATED + ALTERED > 0` | `Unknown` | `TALLY_PARTIAL_EFFECT` |
 | any `<LINEERROR>` descendant | `Failed` | `TALLY_LINEERROR` |
 | `<ERRORS>` > 0 or `<EXCEPTIONS>` > 0 | `Failed` | `TALLY_ERRORS` |
-| alter request and `CREATED > 0` | `Failed` | `TALLY_UNEXPECTED_CREATE_ON_ALTER` |
+| alter request and `CREATED > 0` | `Unknown` | `TALLY_UNEXPECTED_CREATE_ON_ALTER` |
 | create request and `CREATED + ALTERED <= 0` | `Failed` | `TALLY_NO_EFFECT` |
 | alter request and `ALTERED <= 0` | `Failed` | `TALLY_NO_EFFECT` |
 | otherwise | `Posted` | — |
@@ -563,7 +564,7 @@ Edited-after-push alter requests do not send `REMOTEID`; they target the old vou
 
 `RemoteId` on alter success: `LASTVCHID ?? LASTMID ?? request.TargetTagValue`; `tallyMasterId` is `LASTVCHID` when positive numeric, otherwise the alter target.
 
-Transport failures after a voucher write begins are classified as `Unknown`: `TALLY_TRANSPORT_UNKNOWN` for HTTP/transport errors, `TALLY_TIMEOUT` for the configured timeout, and `TALLY_RESPONSE_UNKNOWN` for an unusable response. They move the bill to `reconciliation_required`. Missing configuration is known before sending and remains `Failed` with `TALLY_NOT_CONFIGURED`. `BillPostingStatusResponse` returns the latest problem's `errorCode` + `errorMessage`.
+Transport failures after a voucher write begins are classified as `Unknown`: `TALLY_TRANSPORT_UNKNOWN` for HTTP/transport errors, `TALLY_TIMEOUT` for the configured timeout, and `TALLY_RESPONSE_UNKNOWN` for an unusable response. They move the bill to `reconciliation_required`. Missing configuration is known before sending and remains `Failed` with `TALLY_NOT_CONFIGURED`. Any other failure while loading settings or building/serializing the voucher XML happens before a byte is sent, so it is `Failed` with `TALLY_PREPARE_FAILED` (and `BillValidator` rejects XML-invalid control characters in text fields at save time). A response that changed something in Tally while also reporting an error is never a definite failure: Retry/Repost from `failed` would duplicate the voucher. `BillPostingStatusResponse` returns the latest problem's `errorCode` + `errorMessage`.
 
 Success, failure, and unknown-outcome audit events carry truncated `RequestExcerpt` and `ResponseExcerpt` (≤4000 chars each) for diagnosis.
 
@@ -573,8 +574,8 @@ Since Tally Wrapper has no auto-retry, "terminal" vs "transient" is informationa
 
 - **Config errors → fix Settings, then Retry:** `CONFIG_MISSING_SALES_LEDGER`, `CONFIG_MISSING_CGST_LEDGER`, `CONFIG_MISSING_SGST_LEDGER`, `CONFIG_MISSING_ROUNDOFF_LEDGER`, `CONFIG_MISSING_DISCOUNT_LEDGER`, `CONFIG_MISSING_COMPANY`, `TALLY_NOT_CONFIGURED`.
 - **Bill-content errors → Revise, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`.
-- **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`.
-- **Definite Tally rejection → correct data/config, then Retry or Revise:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`.
+- **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`, `TALLY_PARTIAL_EFFECT`, `TALLY_UNEXPECTED_CREATE_ON_ALTER`.
+- **Definite Tally rejection → correct data/config, then Retry or Revise:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`, `TALLY_PREPARE_FAILED`.
 
 Every voucher click makes one HTTP attempt — there is no automatic voucher retry, backoff, or next-attempt clock. Safe XML reads retain the short transport retry pipeline.
 

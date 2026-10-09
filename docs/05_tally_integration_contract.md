@@ -185,7 +185,7 @@ These outcomes are not auto-retried: a retry could create a duplicate voucher. T
 - malformed business payload
 - Tally business rejection
 
-Explicit Tally business rejections (`LINEERROR`, import errors, and classified configuration/data failures) are definite failures. `BillPostingStatusResponse.LastErrorCode` / `LastErrorMessage` surface the latest definite or ambiguous problem.
+Explicit Tally business rejections (`LINEERROR`, import errors, and classified configuration/data failures) are definite failures, unless the same response also reports `CREATED`/`ALTERED > 0`; that mixed response moves the bill to `reconciliation_required`. `BillPostingStatusResponse.LastErrorCode` / `LastErrorMessage` surface the latest definite or ambiguous problem.
 
 ### 5.3 Ambiguous outcome
 
@@ -257,5 +257,5 @@ There is no automatic reconciliation path; the operator is the reconciler.
 - Edited-after-push bills alter the existing Tally voucher by `MASTER ID`; plain first push, retry, and unedited repost keep create/import semantics.
 - Push, retry, repost, selected push, and push-all-pending must run a Tally company preflight before any bill is moved to `posting`. Batch push probes once before iterating.
 - **No business-level retry loop.** Every bill-level retry is an explicit operator click — `/retry`, `/repost`, re-pushing after fixing config. The state machine is not "eventually consistent".
-- The HTTP client under `ITallyXmlClient` has a **read-only transport** Polly pipeline (2 retries, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx) for safe master/health reads. Voucher writes are marked and excluded from that pipeline, so one operator action makes at most one voucher HTTP attempt. Tally body errors (`LINEERROR`, `EXCEPTIONS > 0`) flow straight to `failed`.
+- The HTTP client under `ITallyXmlClient` has a **read-only transport** Polly pipeline (2 retries, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx) for safe master/health reads. Voucher writes are marked and excluded from that pipeline, so one operator action makes at most one voucher HTTP attempt. Tally body errors (`LINEERROR`, `EXCEPTIONS > 0`) with no created/altered record flow straight to `failed`; with a created/altered record they flow to `reconciliation_required`.
 - Do not re-introduce a queue, polling loop, or second process as an "optimization." The architecture was explicitly collapsed from two-process to single-process; reversing it would re-open the whole class of bugs we removed.

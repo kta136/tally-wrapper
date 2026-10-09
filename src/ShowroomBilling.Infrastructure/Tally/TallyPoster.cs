@@ -17,15 +17,21 @@ public sealed class TallyPoster(
 
     public async Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default)
     {
-        var settings = await cloudSettings.GetEffectiveSettingsAsync(cancellationToken);
-        var ledgers = settings.Settings.Ledgers;
-        var company = settings.Settings.Connection.ActiveCompanyName;
-        var print = settings.Settings.Print;
-
+        // Everything before SendWriteAsync happens before any byte reaches
+        // Tally, so a failure here is a definite failure, never an ambiguous
+        // outcome that needs reconciliation.
         XElement xml;
+        string requestExcerpt;
         try
         {
+            var settings = await cloudSettings.GetEffectiveSettingsAsync(cancellationToken);
+            var ledgers = settings.Settings.Ledgers;
+            var company = settings.Settings.Connection.ActiveCompanyName;
+            var print = settings.Settings.Print;
+
             xml = TallyXmlVoucherBuilder.Build(request, ledgers, company, print.CompanyState, print.CompanyCountry);
+            var requestXml = xml.ToString(SaveOptions.DisableFormatting);
+            requestExcerpt = Truncate(requestXml, ExcerptLimit);
         }
         catch (VoucherBuildException ex)
         {
@@ -39,9 +45,18 @@ public sealed class TallyPoster(
                 RequestExcerpt: null,
                 ResponseExcerpt: null);
         }
-
-        var requestXml = xml.ToString(SaveOptions.DisableFormatting);
-        var requestExcerpt = Truncate(requestXml, ExcerptLimit);
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Voucher could not be prepared for bill {BillId}; nothing was sent to Tally.", request.BillId);
+            return new TallyPostResponse(
+                Outcome: TallyPostOutcome.Failed,
+                RemoteId: null,
+                ErrorCode: "TALLY_PREPARE_FAILED",
+                ErrorMessage: $"The voucher could not be prepared, so nothing was sent to Tally: {Truncate(ex.Message, 900)}",
+                XmlShape: "voucher-import-v1",
+                RequestExcerpt: null,
+                ResponseExcerpt: null);
+        }
 
         XElement response;
         try
@@ -114,6 +129,32 @@ public sealed class TallyPoster(
         string? responseExcerpt)
     {
         var lineError = FindFirst(response, "LINEERROR");
+        var errors = ParseInt(FindFirst(response, "ERRORS"));
+        var exceptions = ParseInt(FindFirst(response, "EXCEPTIONS"));
+        var created = ParseInt(FindFirst(response, "CREATED"));
+        var altered = ParseInt(FindFirst(response, "ALTERED"));
+        var createdCount = created ?? 0;
+        var alteredCount = altered ?? 0;
+        var reportedProblem = !string.IsNullOrWhiteSpace(lineError) || (errors ?? 0) > 0 || (exceptions ?? 0) > 0;
+
+        // Tally changed something AND reported a problem. A voucher may exist,
+        // so this is not a definite failure: Retry/Repost from `failed` would
+        // duplicate it. Park the bill for reconciliation instead.
+        if (reportedProblem && createdCount + alteredCount > 0)
+        {
+            return new TallyPostResponse(
+                Outcome: TallyPostOutcome.Unknown,
+                RemoteId: null,
+                ErrorCode: "TALLY_PARTIAL_EFFECT",
+                ErrorMessage: Truncate(
+                    $"Tally reported created={createdCount}, altered={alteredCount} together with errors={errors ?? 0}, exceptions={exceptions ?? 0}"
+                    + (string.IsNullOrWhiteSpace(lineError) ? "." : $": {lineError}"),
+                    1024),
+                XmlShape: "voucher-import-v1",
+                RequestExcerpt: requestExcerpt,
+                ResponseExcerpt: responseExcerpt);
+        }
+
         if (!string.IsNullOrWhiteSpace(lineError))
         {
             return new TallyPostResponse(
@@ -125,13 +166,6 @@ public sealed class TallyPoster(
                 RequestExcerpt: requestExcerpt,
                 ResponseExcerpt: responseExcerpt);
         }
-
-        var errors = ParseInt(FindFirst(response, "ERRORS"));
-        var exceptions = ParseInt(FindFirst(response, "EXCEPTIONS"));
-        var created = ParseInt(FindFirst(response, "CREATED"));
-        var altered = ParseInt(FindFirst(response, "ALTERED"));
-        var createdCount = created ?? 0;
-        var alteredCount = altered ?? 0;
 
         if ((errors ?? 0) > 0 || (exceptions ?? 0) > 0)
         {
@@ -147,8 +181,9 @@ public sealed class TallyPoster(
 
         if (request.Operation == TallyPostOperation.Alter && createdCount > 0)
         {
+            // A voucher now exists that the alter did not intend; needs a human.
             return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
+                Outcome: TallyPostOutcome.Unknown,
                 RemoteId: null,
                 ErrorCode: "TALLY_UNEXPECTED_CREATE_ON_ALTER",
                 ErrorMessage: "Tally created a voucher while processing an alter request.",

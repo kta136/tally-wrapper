@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Xml;
 using ShowroomBilling.Contracts.Bills;
 
 namespace ShowroomBilling.Application.Bills;
@@ -171,6 +172,31 @@ public static class BillValidator
         {
             errors.Add($"{field} cannot exceed {maxLength} characters.");
         }
+        // Text fields end up in the Tally voucher XML. A control character
+        // would make XML serialization throw at push time.
+        if (value is not null && !IsXmlSafe(value))
+        {
+            errors.Add($"{field} contains a control character that cannot be sent to Tally.");
+        }
+    }
+
+    private static bool IsXmlSafe(string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (XmlConvert.IsXmlChar(c))
+            {
+                continue;
+            }
+            if (i + 1 < value.Length && XmlConvert.IsXmlSurrogatePair(value[i + 1], c))
+            {
+                i++;
+                continue;
+            }
+            return false;
+        }
+        return true;
     }
 
     private static void AddNonNegative(

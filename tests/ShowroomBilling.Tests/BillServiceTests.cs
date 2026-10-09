@@ -140,6 +140,19 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task CreateDraft_RejectsControlCharactersThatTallyXmlCannotCarry()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var payload = SamplePayload("Ram Kumar", 100m);
+
+        var exception = await Assert.ThrowsAsync<BillValidationException>(() =>
+            service.CreateDraftAsync(new CreateBillDraftRequest(null, payload)));
+        Assert.Contains(exception.Errors, x => x.Contains("PartyName", StringComparison.Ordinal));
+        Assert.Empty(await db.Bills.ToListAsync());
+    }
+
+    [Fact]
     public async Task Push_DoesNotReserveAnAdditionalNumber()
     {
         await using var db = CreateDbContext();
