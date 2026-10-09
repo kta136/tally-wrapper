@@ -18,6 +18,14 @@ public sealed class BillEntity
 
     public string? FiscalYear { get; set; }
 
+    /// <summary>
+    /// The numeric sequence core behind <see cref="InvoiceNumber"/>, stored
+    /// explicitly so occupancy and rollback never have to parse display text
+    /// (a suffix such as <c>-A2</c> made trailing-digit parsing wrong).
+    /// Null only for legacy custom numbers that have no core.
+    /// </summary>
+    public long? InvoiceCore { get; set; }
+
     public Guid? SupersededByBillId { get; set; }
 
     public Guid? CreatedBy { get; set; }

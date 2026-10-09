@@ -1,5 +1,3 @@
-using ShowroomBilling.Contracts.Numbering;
-
 namespace ShowroomBilling.Infrastructure.Bills;
 
 internal static class BillNumberChangeRules
@@ -13,9 +11,6 @@ internal static class BillNumberChangeRules
         }
         return true;
     }
-
-    internal static long? ExtractTrailingDigits(string number) =>
-        InvoiceNumberFormatter.TryParseTrailingCore(number);
 
     internal static string? BuildWarning(bool leavesGap, bool tallyDiverges, bool reservationOrphaned)
     {

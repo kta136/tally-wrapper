@@ -180,6 +180,7 @@ internal sealed class BillLifecycleWorkflow(
             State = IBillService.StatePending,
             InvoiceNumber = reservation.FormattedNumber,
             FiscalYear = reservation.FiscalYear,
+            InvoiceCore = reservation.ReservedValue,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
@@ -293,6 +294,7 @@ internal sealed class BillLifecycleWorkflow(
             State = IBillService.StatePending,
             InvoiceNumber = reservation.FormattedNumber,
             FiscalYear = reservation.FiscalYear,
+            InvoiceCore = reservation.ReservedValue,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };

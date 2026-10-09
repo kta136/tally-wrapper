@@ -43,13 +43,19 @@ internal static class NumberingSequenceReclaimer
     /// (e.g. <c>"delete:{billId}"</c>, <c>"rename:{billId}"</c>,
     /// <c>"startup-self-heal"</c>).
     /// </param>
+    /// <param name="keepCoreReserved">
+    /// A core Tally still holds (the bill being deleted or renumbered was
+    /// pushed). The sequence floor is raised past it so neither this rollback
+    /// nor any later one hands that number out again.
+    /// </param>
     /// <returns>True if NextValue moved; false otherwise.</returns>
     internal static async Task<bool> ReclaimAsync(
         ShowroomBillingDbContext dbContext,
         Guid showroomId,
         string fiscalYear,
         string trigger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? keepCoreReserved = null)
     {
         const string documentType = INumberingService.DocumentTypeSalesInvoice;
         var isInMemory = string.Equals(
@@ -77,21 +83,36 @@ FOR UPDATE")
             sequence = locked.FirstOrDefault();
         }
 
-        if (sequence is null || sequence.NextValue <= 1L)
+        if (sequence is null)
         {
             return false;
         }
 
-        var remainingNumbers = await dbContext.Bills
+        if (keepCoreReserved is { } reservedCore && reservedCore + 1L > sequence.MinNextValue)
+        {
+            sequence.MinNextValue = reservedCore + 1L;
+            sequence.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        if (sequence.NextValue <= 1L)
+        {
+            return false;
+        }
+
+        var scope = dbContext.Bills
             .AsNoTracking()
-            .Where(b => b.ShowroomId == showroomId
-                        && b.FiscalYear == fiscalYear
-                        && b.InvoiceNumber != null)
+            .Where(b => b.ShowroomId == showroomId && b.FiscalYear == fiscalYear);
+        long maxOccupiedCore = await scope
+            .Where(b => b.InvoiceCore != null)
+            .MaxAsync(b => (long?)b.InvoiceCore, cancellationToken) ?? 0L;
+
+        // Legacy rows without a stored core: parse their display text.
+        var legacyNumbers = await scope
+            .Where(b => b.InvoiceCore == null && b.InvoiceNumber != null)
             .Select(b => b.InvoiceNumber!)
             .ToListAsync(cancellationToken);
-
-        long maxOccupiedCore = 0L;
-        foreach (var number in remainingNumbers)
+        foreach (var number in legacyNumbers)
         {
             if (InvoiceNumberFormatter.TryParseTrailingCore(number) is { } core && core > maxOccupiedCore)
             {
@@ -100,7 +121,7 @@ FOR UPDATE")
         }
 
         var startedAt = sequence.NextValue;
-        var target = Math.Max(1L, maxOccupiedCore + 1L);
+        var target = Math.Max(Math.Max(1L, maxOccupiedCore + 1L), sequence.MinNextValue);
         if (target >= startedAt)
         {
             return false;

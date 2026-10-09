@@ -76,7 +76,7 @@ internal sealed class BillAdminWorkflow(
             .AnyAsync(
                 x => x.ShowroomId == bill.ShowroomId
                      && x.FiscalYear == bill.FiscalYear
-                     && x.InvoiceNumber == newNumber
+                     && (x.InvoiceNumber == newNumber || x.InvoiceCore == autoFormatCore)
                      && x.Id != bill.Id,
                 cancellationToken);
         if (conflict)
@@ -96,12 +96,7 @@ internal sealed class BillAdminWorkflow(
                 cancellationToken);
         long? seqNext = sequence?.NextValue;
 
-        bool leavesGap = false;
-        var parsedCore = BillNumberChangeRules.ExtractTrailingDigits(newNumber);
-        if (parsedCore is { } core && seqNext is { } next && core > next - 1)
-        {
-            leavesGap = true;
-        }
+        bool leavesGap = seqNext is { } next && autoFormatCore > next - 1;
 
         // Tally holds the voucher under the old number. Committing the rename
         // reopens the bill as an edit-after-push so the next push Alters that
@@ -135,8 +130,10 @@ internal sealed class BillAdminWorkflow(
 
         var now = DateTimeOffset.UtcNow;
         var oldNumber = bill.InvoiceNumber;
+        var oldCore = bill.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(oldNumber);
         var fromState = bill.State;
         bill.InvoiceNumber = newNumber;
+        bill.InvoiceCore = autoFormatCore;
         bill.UpdatedAtUtc = now;
         if (tallyDiverges)
         {
@@ -189,11 +186,16 @@ internal sealed class BillAdminWorkflow(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Tally still holds the old number until the Alter lands, so its core
-        // must not be handed to the next new bill.
-        if (bill.FiscalYear is not null && !tallyDiverges)
+        // stays reserved instead of going to the next new bill.
+        if (bill.FiscalYear is not null)
         {
             await NumberingSequenceReclaimer.ReclaimAsync(
-                dbContext, showroomId, bill.FiscalYear, $"rename:{bill.Id:N}", cancellationToken);
+                dbContext,
+                showroomId,
+                bill.FiscalYear,
+                $"rename:{bill.Id:N}",
+                cancellationToken,
+                keepCoreReserved: tallyDiverges ? oldCore : null);
         }
 
         if (transaction is not null)
@@ -324,6 +326,7 @@ internal sealed class BillAdminWorkflow(
         var invoiceNumber = bill.InvoiceNumber;
         var showroomId = bill.ShowroomId;
         var fiscalYear = bill.FiscalYear;
+        var core = bill.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(invoiceNumber);
 
         var revision = bill.CurrentRevisionId is Guid rid
             ? await dbContext.BillRevisions.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rid, cancellationToken)
@@ -358,11 +361,16 @@ internal sealed class BillAdminWorkflow(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // A deleted bill whose voucher Tally still holds keeps its number in
-        // Tally, so its core must not be reclaimed for the next new bill.
-        if (fiscalYear is not null && !inTally)
+        // Tally, so its core stays reserved for good.
+        if (fiscalYear is not null)
         {
             await NumberingSequenceReclaimer.ReclaimAsync(
-                dbContext, showroomId, fiscalYear, $"delete:{billId:N}", cancellationToken);
+                dbContext,
+                showroomId,
+                fiscalYear,
+                $"delete:{billId:N}",
+                cancellationToken,
+                keepCoreReserved: inTally ? core : null);
         }
 
         if (transaction is not null)

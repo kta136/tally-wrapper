@@ -275,11 +275,12 @@ FOR UPDATE")
     /// <summary>
     /// Starting at <paramref name="startFrom"/>, advance until the candidate
     /// core does not collide with an existing bill in the same
-    /// (showroom, fiscal-year) scope. Occupancy is computed by parsing the
-    /// trailing digits of <c>bills.InvoiceNumber</c> rather than comparing to
-    /// <see cref="InvoiceNumberFormatter.Format"/>'s output, so a scope with
-    /// historical mixed formatting (e.g. legacy <c>/49</c> alongside newer
-    /// <c>/0049</c>) doesn't double-allocate the same semantic core.
+    /// (showroom, fiscal-year) scope. Occupancy reads the stored
+    /// <c>bills.InvoiceCore</c>, so a suffix (<c>-A</c>, <c>-A2</c>) or a
+    /// change in padding never hides an occupied core. Only the cores inside
+    /// the skip window are fetched, through the (showroom, year, core) index,
+    /// instead of every invoice number in the year. Rows without a stored
+    /// core (legacy custom numbers) fall back to trailing-digit parsing.
     /// Capped at 1000 iterations to avoid a pathological spin if the admin
     /// has jumped numbers far ahead and the entire skip range happens to be
     /// occupied.
@@ -295,25 +296,28 @@ FOR UPDATE")
         _ = prefix;
         _ = suffix;
 
-        var occupiedCores = await dbContext.Bills
+        const int SafetyCap = 1000;
+        var candidate = startFrom < 1L ? 1L : startFrom;
+        var windowEnd = candidate + SafetyCap;
+
+        var rows = await dbContext.Bills
             .AsNoTracking()
             .Where(b => b.ShowroomId == showroomId
                         && b.FiscalYear == fiscalYear
-                        && b.InvoiceNumber != null)
-            .Select(b => b.InvoiceNumber!)
+                        && ((b.InvoiceCore >= candidate && b.InvoiceCore < windowEnd)
+                            || (b.InvoiceCore == null && b.InvoiceNumber != null)))
+            .Select(b => new { b.InvoiceCore, b.InvoiceNumber })
             .ToListAsync(cancellationToken);
 
         var occupied = new HashSet<long>();
-        foreach (var number in occupiedCores)
+        foreach (var row in rows)
         {
-            if (InvoiceNumberFormatter.TryParseTrailingCore(number) is { } core)
+            if ((row.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(row.InvoiceNumber)) is { } core)
             {
                 occupied.Add(core);
             }
         }
 
-        const int SafetyCap = 1000;
-        var candidate = startFrom < 1L ? 1L : startFrom;
         for (var i = 0; i < SafetyCap; i++)
         {
             if (!occupied.Contains(candidate))

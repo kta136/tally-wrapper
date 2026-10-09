@@ -183,6 +183,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<long?>("InvoiceCore")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("InvoiceNumber")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -219,6 +222,8 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("InvoiceNumber"), new[] { "gin_trgm_ops" });
 
                     b.HasIndex("ShowroomId", "CreatedAtUtc");
+
+                    b.HasIndex("ShowroomId", "FiscalYear", "InvoiceCore");
 
                     b.HasIndex("ShowroomId", "FiscalYear", "InvoiceNumber")
                         .IsUnique()
@@ -591,6 +596,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<string>("DocumentType")
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<long>("MinNextValue")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("NextValue")
                         .HasColumnType("bigint");

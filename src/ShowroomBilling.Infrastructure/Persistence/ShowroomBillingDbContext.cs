@@ -221,6 +221,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceNumber })
                 .IsUnique()
                 .HasFilter("\"InvoiceNumber\" IS NOT NULL");
+            entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceCore });
             entity.HasIndex(x => x.InvoiceNumber)
                 .HasMethod("gin")
                 .HasOperators("gin_trgm_ops")
