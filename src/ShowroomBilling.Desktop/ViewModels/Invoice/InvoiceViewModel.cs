@@ -694,6 +694,9 @@ public partial class InvoiceViewModel : ObservableObject
             // The server numbers a bill in its bill date's fiscal year.
             var fiscalYear = InvoiceNumberFormatter.ComputeFiscalYear(DateOnly.FromDateTime(BillDate.LocalDateTime));
             var preview = await _numberingApi.GetPreviewAsync(fiscalYear: fiscalYear, cancellationToken: cancellationToken);
+            // A bill may have been loaded for edit (or saved) while the preview
+            // was in flight; its real number must not be replaced by the next one.
+            if (_draftBillId is not null) return;
             if (!string.IsNullOrWhiteSpace(preview.FormattedNumber))
                 InvoiceNumber = preview.FormattedNumber;
         }

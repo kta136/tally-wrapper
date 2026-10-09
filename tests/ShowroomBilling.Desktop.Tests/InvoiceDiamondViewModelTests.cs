@@ -88,6 +88,37 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task Late_next_number_preview_does_not_overwrite_a_bill_loaded_for_edit()
+    {
+        var billId = Guid.NewGuid();
+        var payload = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null));
+        var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, payload) };
+        var numbering = new GatedNumberingApi();
+        var vm = new InvoiceViewModel(api, numbering, null);
+
+        var refresh = vm.RefreshNextNumberAsync();
+        await vm.LoadBillForEditAsync(billId);
+        numbering.Release.SetResult();
+        await refresh;
+
+        Assert.Equal("SR/25-26/0001", vm.InvoiceNumber);
+    }
+
+    private sealed class GatedNumberingApi : INumberingApiClient
+    {
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<NumberingPreviewResponse> GetPreviewAsync(string? documentType = null, string? fiscalYear = null, CancellationToken cancellationToken = default)
+        {
+            await Release.Task;
+            return new NumberingPreviewResponse(Guid.Empty, "2026-27", "sales_invoice", 9, "SR/26-27/0009", "SR/", null);
+        }
+
+        public Task<ReserveNumberResponse> ReserveAsync(ReserveNumberRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    [Fact]
     public async Task Gold_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();
