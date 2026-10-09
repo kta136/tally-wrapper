@@ -61,14 +61,25 @@ public sealed class SequenceSelfHealHostedService(
             {
                 try
                 {
+                    // The reclaimer's FOR UPDATE only holds the sequence row
+                    // inside a transaction; without one a concurrent
+                    // reservation could allocate the core being rolled back.
+                    await using var transaction = db.Database.IsRelational()
+                        ? await db.Database.BeginTransactionAsync(cts.Token)
+                        : null;
                     if (await NumberingSequenceReclaimer.ReclaimAsync(
                         db, s.ShowroomId, s.FiscalYear, "startup-self-heal", cts.Token))
                     {
                         moved++;
                     }
+                    if (transaction is not null)
+                    {
+                        await transaction.CommitAsync(cts.Token);
+                    }
                 }
                 catch (Exception ex)
                 {
+                    db.ChangeTracker.Clear();
                     // One bad scope shouldn't block the others.
                     logger.LogWarning(ex,
                         "Sequence self-heal failed for scope ({ShowroomId}, {FiscalYear}); other scopes will still be reconciled.",
