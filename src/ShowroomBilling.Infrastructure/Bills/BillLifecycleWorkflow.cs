@@ -132,13 +132,35 @@ internal sealed class BillLifecycleWorkflow(
         }
 
         var now = DateTimeOffset.UtcNow;
+        var newBillId = Guid.CreateVersion7();
+
+        // The revised bill is a new bill and needs its own number, exactly
+        // like a fresh draft. Reservation, new bill, supersession and audit
+        // commit together so a failure leaves the original bill untouched.
+        await using var transaction = UsesInMemoryProvider()
+            ? null
+            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var reservation = await numberingService.ReserveAsync(
+            new ReserveNumberRequest(
+                IdempotencyKey: $"draft:{newBillId:N}",
+                DocumentType: INumberingService.DocumentTypeSalesInvoice,
+                FiscalYear: InvoiceNumberFormatter.ComputeFiscalYear(payload.BillDate),
+                ReservedForReference: newBillId.ToString()),
+            cancellationToken);
+
+        // A reservation retry clears the change tracker; re-attach the prior bill.
+        priorBill = await LoadTrackedBillAsync(billId, cancellationToken);
+
         var newBill = new BillEntity
         {
-            Id = Guid.CreateVersion7(),
+            Id = newBillId,
             ShowroomId = priorBill.ShowroomId,
             CounterId = priorBill.CounterId,
             BillType = priorBill.BillType,
             State = IBillService.StatePending,
+            InvoiceNumber = reservation.FormattedNumber,
+            FiscalYear = reservation.FiscalYear,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
@@ -152,8 +174,24 @@ internal sealed class BillLifecycleWorkflow(
         dbContext.Bills.Add(newBill);
         dbContext.BillRevisions.Add(newRevision);
         auditStore.Write(priorBill.Id, "bill.revised", priorBill.State, now, new { supersededByBillId = newBill.Id });
-        auditStore.Write(newBill.Id, "bill.pending.created", newBill.State, now, new { supersedesBillId = priorBill.Id });
+        auditStore.Write(
+            newBill.Id,
+            "bill.pending.created",
+            newBill.State,
+            now,
+            new
+            {
+                supersedesBillId = priorBill.Id,
+                invoiceNumber = reservation.FormattedNumber,
+                reservationId = reservation.ReservationId,
+                fiscalYear = reservation.FiscalYear
+            });
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return BillSerialization.MapResponse(newBill, newRevision);
     }

@@ -54,6 +54,25 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
 
     [PostgresFact]
     [Trait("Category", "Postgres")]
+    public async Task ReviseAsync_ReservesNumberAndRevisedBillPushes()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        await using var db = database.CreateContext();
+        var poster = new RecordingTallyPoster();
+        var service = PostgresBillTestSupport.BuildService(db, poster);
+
+        var original = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)));
+        var revised = await service.ReviseAsync(original.Id, new ReviseBillRequest(PostgresBillTestSupport.SamplePayload("A2", 120m)));
+        var pushed = await service.PushAsync(revised.Id, new PushBillRequest("push"));
+
+        Assert.Contains("/0002", revised.InvoiceNumber);
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Equal(BillStates.Revised, (await service.GetAsync(original.Id))!.State);
+        Assert.Equal(3L, await db.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
+    }
+
+    [PostgresFact]
+    [Trait("Category", "Postgres")]
     public async Task PushAsync_OverlappingCalls_PostsToTallyOnlyOnce()
     {
         await using var database = await fixture.CreateDatabaseAsync();

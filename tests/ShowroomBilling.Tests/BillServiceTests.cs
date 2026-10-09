@@ -406,6 +406,24 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task Revise_ReservesANumberSoTheRevisedBillCanBePushed()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster);
+        var original = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        var revised = await service.ReviseAsync(original.Id, new ReviseBillRequest(SamplePayload("A-revised", 120m)));
+        var pushed = await service.PushAsync(revised.Id, new PushBillRequest("push revised"));
+
+        Assert.EndsWith("/0002", revised.InvoiceNumber);
+        Assert.Equal(original.FiscalYear, revised.FiscalYear);
+        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(revised.InvoiceNumber, poster.LastRequest!.InvoiceNumber);
+        Assert.Equal(2, await db.InvoiceNumberReservations.CountAsync());
+    }
+
+    [Fact]
     public async Task Revise_FromDraft_CreatesNewDraftAndMarksPriorAsRevised()
     {
         await using var db = CreateDbContext();
