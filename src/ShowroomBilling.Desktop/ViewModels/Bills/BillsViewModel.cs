@@ -19,6 +19,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private readonly BillsAdminTokenGate _adminTokenGate;
     private readonly BillsActionWorkflow _actionWorkflow;
     private int _selectedCount;
+    private int _loadGeneration;
 
     /// <summary>
     /// Handler the shell wires up to open the admin-unlock dialog and wait until it closes.
@@ -110,7 +111,8 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         RefreshCommand = new AsyncRelayCommand(LoadAsync, CanRefresh);
         NextPageCommand = new AsyncRelayCommand(NextPageAsync, CanNextPage);
         PrevPageCommand = new AsyncRelayCommand(PrevPageAsync, CanPrevPage);
-        ClearFiltersCommand = new RelayCommand(ClearFilters);
+        ApplyFiltersCommand = new AsyncRelayCommand(ApplyFiltersAsync, CanRefresh);
+        ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
         ShowPostedDaysCommand = new RelayCommand(() => HideFullyPostedDays = false, () => HideFullyPostedDays);
         PushSelectedCommand = new AsyncRelayCommand(PushSelectedAsync, CanPushSelected);
         PushAllPendingCommand = new AsyncRelayCommand(PushAllPendingAsync, CanPushAllPending);
@@ -151,7 +153,9 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public IAsyncRelayCommand RefreshCommand { get; }
     public IAsyncRelayCommand NextPageCommand { get; }
     public IAsyncRelayCommand PrevPageCommand { get; }
-    public IRelayCommand ClearFiltersCommand { get; }
+    public IAsyncRelayCommand ApplyFiltersCommand { get; }
+
+    public IAsyncRelayCommand ClearFiltersCommand { get; }
     public IRelayCommand ShowPostedDaysCommand { get; }
     public IAsyncRelayCommand PushSelectedCommand { get; }
     public IAsyncRelayCommand PushAllPendingCommand { get; }
@@ -380,6 +384,9 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             return;
         }
 
+        // Only the newest load may write the list: an older, slower response
+        // (previous page or filter) must not overwrite a newer one.
+        var generation = ++_loadGeneration;
         IsLoading = true;
         StatusMessage = "Loading bills…";
         try
@@ -394,6 +401,10 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             var list = await _billsApi.SearchAsync(
                 new BillSearchFilter(state, from, to, Skip, PageSize, SortWorkflow, IncludeTotal: false, SearchQuery),
                 cancellationToken);
+            if (generation != _loadGeneration)
+            {
+                return;
+            }
 
             ResetRows(list.Items);
             Total = list.Total;
@@ -418,7 +429,10 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         }
         finally
         {
-            IsLoading = false;
+            if (generation == _loadGeneration)
+            {
+                IsLoading = false;
+            }
         }
     }
 
@@ -512,6 +526,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         OnPropertyChanged(nameof(IsFilteredEmpty));
         RefreshSelectionState();
         RefreshCommand.NotifyCanExecuteChanged();
+        ApplyFiltersCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
         PrevPageCommand.NotifyCanExecuteChanged();
         PushAllPendingCommand.NotifyCanExecuteChanged();
@@ -632,13 +647,21 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         return LoadAsync(cancellationToken);
     }
 
-    private void ClearFilters()
+    // A changed filter starts again from the first page; otherwise the old
+    // offset gives empty "Showing 101-100" pages.
+    private Task ApplyFiltersAsync(CancellationToken cancellationToken)
+    {
+        Skip = 0;
+        return LoadAsync(cancellationToken);
+    }
+
+    private Task ClearFiltersAsync(CancellationToken cancellationToken)
     {
         StateFilter = "All";
         FromDate = null;
         ToDate = null;
         SearchQuery = string.Empty;
-        Skip = 0;
+        return ApplyFiltersAsync(cancellationToken);
     }
 
     private async Task PushSelectedAsync(CancellationToken cancellationToken)

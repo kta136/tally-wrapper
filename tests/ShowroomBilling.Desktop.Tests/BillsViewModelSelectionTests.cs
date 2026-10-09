@@ -315,6 +315,30 @@ public sealed class BillsViewModelSelectionTests
         return store;
     }
 
+    [Fact]
+    public async Task Apply_and_clear_filters_reload_from_the_first_page()
+    {
+        var api = new FakeBillsApi
+        {
+            Response = new BillListResponse(300, 0, 50, [Summary(Guid.NewGuid(), "SR/25-26/0001")], HasMore: true)
+        };
+        var vm = new BillsViewModel(api);
+        await vm.LoadAsync();
+        await vm.NextPageCommand.ExecuteAsync(null);
+        await vm.NextPageCommand.ExecuteAsync(null);
+        Assert.Equal(100, api.LastFilter!.Skip);
+
+        vm.SearchQuery = "ram";
+        await vm.ApplyFiltersCommand.ExecuteAsync(null);
+        Assert.Equal(0, api.LastFilter!.Skip);
+        Assert.Equal("ram", api.LastFilter.Search);
+
+        await vm.NextPageCommand.ExecuteAsync(null);
+        await vm.ClearFiltersCommand.ExecuteAsync(null);
+        Assert.Equal(0, api.LastFilter!.Skip);
+        Assert.Equal(string.Empty, api.LastFilter.Search ?? string.Empty);
+    }
+
     private sealed class FakeBillsApi : IBillsApiClient
     {
         public BillListResponse Response { get; set; } = new(0, 0, 50, []);
