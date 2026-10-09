@@ -193,13 +193,13 @@ Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates vi
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|
 | `GET` | `/api/admin/passcode` | Report whether a passcode is configured | `{ isConfigured }` |
-| `POST` | `/api/admin/passcode` | Create or rotate the admin passcode | 204; 401 if current passcode wrong on rotation; 400 if new passcode shorter than 6 characters |
+| `POST` | `/api/admin/passcode` | Create or rotate the admin passcode | 204; 403 if rotating without an `X-Admin-Token` session; 401 if current passcode wrong on rotation; 429 when throttled; 400 if new passcode shorter than 6 characters |
 | `POST` | `/api/admin/unlock` | Exchange the passcode for a session token | `{ token, expiresAtUtc }`; 401 invalid, 409 not configured, **429 throttled** (with `Retry-After` header) |
 | `POST` | `/api/admin/logout` | Revoke the current token | 204 |
 
 After 4 consecutive failed unlock attempts, the API enters an exponential cooldown (2s, 4s, 8s, 16s, capped at 30s) per showroom. Subsequent attempts during the cooldown return `429 Too Many Requests` with a `Retry-After` header. A successful unlock resets the counter; the counter is in-memory only and resets on API restart. Failed attempts are recorded as `admin.unlock.failed` audit events.
 
-When `DeviceAuth:Mode=TrustedLan` and no admin passcode exists yet, the initial `POST /api/admin/passcode` setup is loopback-only. Later passcode rotations still require the existing admin credential.
+When `DeviceAuth:Mode=TrustedLan` and no admin passcode exists yet, the initial `POST /api/admin/passcode` setup is loopback-only. Later passcode rotations require both an unlocked admin session (`X-Admin-Token`) and the current passcode; wrong current passcodes share the unlock throttle and write `admin.passcode.change.failed` audit rows.
 | `GET` | `/api/admin/session` (admin) | Inspect the session behind the current token | `AdminSessionInfoResponse` |
 | `GET` | `/api/draft-leases/active` (admin) | List every live draft lease across the showroom | `DraftLeaseListResponse` |
 | `POST` | `/api/draft-leases/{leaseId}/force-release` (admin) | Force-release a stale lease with a reason | 204; audits `lease.force_released` |

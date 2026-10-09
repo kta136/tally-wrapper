@@ -14,12 +14,27 @@ public sealed class AdminApiClient(HttpClient httpClient) : IAdminApiClient
         return response ?? new AdminPasscodeStatusResponse(false);
     }
 
-    public async Task SetPasscodeAsync(AdminSetPasscodeRequest request, CancellationToken cancellationToken = default)
+    public async Task SetPasscodeAsync(
+        AdminSetPasscodeRequest request,
+        string? adminToken = null,
+        CancellationToken cancellationToken = default)
     {
-        var http = await httpClient.PostAsJsonAsync("/api/admin/passcode", request, cancellationToken);
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/admin/passcode")
+        {
+            Content = JsonContent.Create(request)
+        };
+        if (!string.IsNullOrWhiteSpace(adminToken))
+        {
+            message.Headers.TryAddWithoutValidation(AdminTokenConstants.HeaderName, adminToken);
+        }
+        var http = await httpClient.SendAsync(message, cancellationToken);
         if (http.StatusCode is HttpStatusCode.Unauthorized)
         {
             throw new AdminUnlockFailedException("Current passcode is invalid.");
+        }
+        if (http.StatusCode is HttpStatusCode.Forbidden)
+        {
+            throw new AdminUnlockFailedException("Admin session has expired. Unlock admin again, then change the passcode.");
         }
         try
         {

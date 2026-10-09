@@ -59,6 +59,37 @@ public sealed class AdminAuthServiceTests
     }
 
     [Fact]
+    public async Task SetPasscodeAsync_RepeatedWrongCurrentPasscode_IsThrottledAndAudited()
+    {
+        await using var db = CreateDbContext();
+        var service = CreateService(db);
+        await service.SetPasscodeAsync(new AdminSetPasscodeRequest(null, "111111"));
+
+        for (var i = 0; i < 5; i++)
+        {
+            await Assert.ThrowsAsync<AdminPasscodeInvalidException>(() =>
+                service.SetPasscodeAsync(new AdminSetPasscodeRequest($"wrong{i}", "222222")));
+        }
+
+        await Assert.ThrowsAsync<AdminUnlockThrottledException>(() =>
+            service.SetPasscodeAsync(new AdminSetPasscodeRequest("111111", "222222")));
+        Assert.Equal(5, await db.AuditEvents.CountAsync(x => x.EventType == "admin.passcode.change.failed"));
+    }
+
+    [Fact]
+    public void Throttle_CountsAttemptsBeforeVerification_SoConcurrentGuessesCannotSlipThrough()
+    {
+        var throttle = new AdminUnlockThrottle();
+        var showroomId = Guid.NewGuid();
+
+        var allowed = Enumerable.Range(0, 20)
+            .AsParallel()
+            .Count(_ => throttle.TryBeginAttempt(showroomId) == TimeSpan.Zero);
+
+        Assert.Equal(5, allowed);
+    }
+
+    [Fact]
     public async Task UnlockAsync_ThrowsIfNoPasscodeConfigured()
     {
         await using var db = CreateDbContext();

@@ -47,10 +47,17 @@ public sealed class AdminAuthService(
 
         if (existing is not null)
         {
+            // Changing the passcode verifies the current one, so it is a
+            // passcode guess like unlock and gets the same throttle and audit.
+            BeginThrottledAttempt(showroomId);
             if (string.IsNullOrEmpty(request.CurrentPasscode) || !VerifyPasscode(request.CurrentPasscode, existing))
             {
+                logger.LogWarning("Admin passcode change rejected for showroom {ShowroomId}: current passcode invalid.", showroomId);
+                WriteAudit("admin.passcode.change.failed", now, actorLabel: null);
+                await dbContext.SaveChangesAsync(cancellationToken);
                 throw new AdminPasscodeInvalidException();
             }
+            unlockThrottle.Reset(showroomId);
 
             (existing.PasscodeSalt, existing.PasscodeHash, existing.Iterations) = HashPasscode(request.NewPasscode);
             existing.UpdatedAtUtc = now;
@@ -81,14 +88,7 @@ public sealed class AdminAuthService(
 
         // Throttle BEFORE we touch the DB so that a hammering caller can't
         // even cause repeated PBKDF2 work, and a 4xx is returned cheaply.
-        var cooldown = unlockThrottle.GetCooldown(showroomId);
-        if (cooldown > TimeSpan.Zero)
-        {
-            logger.LogWarning(
-                "Admin unlock throttled for showroom {ShowroomId}: {SecondsRemaining}s remaining.",
-                showroomId, (int)Math.Ceiling(cooldown.TotalSeconds));
-            throw new AdminUnlockThrottledException(cooldown);
-        }
+        BeginThrottledAttempt(showroomId);
 
         var passcode = await dbContext.AdminPasscodes
             .FirstOrDefaultAsync(x => x.ShowroomId == showroomId, cancellationToken)
@@ -96,11 +96,8 @@ public sealed class AdminAuthService(
 
         if (string.IsNullOrEmpty(request.Passcode) || !VerifyPasscode(request.Passcode, passcode))
         {
-            var nextCooldown = unlockThrottle.RegisterFailure(showroomId);
             var failedAt = DateTimeOffset.UtcNow;
-            logger.LogWarning(
-                "Admin unlock failed for showroom {ShowroomId}; next allowed in {SecondsRemaining}s.",
-                showroomId, (int)Math.Ceiling(nextCooldown.TotalSeconds));
+            logger.LogWarning("Admin unlock failed for showroom {ShowroomId}.", showroomId);
             WriteAudit("admin.unlock.failed", failedAt, actorLabel: null);
             await dbContext.SaveChangesAsync(cancellationToken);
             throw new AdminPasscodeInvalidException();
@@ -167,6 +164,18 @@ public sealed class AdminAuthService(
         session.RevokedReason = "logout";
         WriteAudit("admin.logout", now, session.ActorLabel);
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private void BeginThrottledAttempt(Guid showroomId)
+    {
+        var cooldown = unlockThrottle.TryBeginAttempt(showroomId);
+        if (cooldown > TimeSpan.Zero)
+        {
+            logger.LogWarning(
+                "Admin passcode attempt throttled for showroom {ShowroomId}: {SecondsRemaining}s remaining.",
+                showroomId, (int)Math.Ceiling(cooldown.TotalSeconds));
+            throw new AdminUnlockThrottledException(cooldown);
+        }
     }
 
     private static (string Salt, string Hash, int Iterations) HashPasscode(string passcode)

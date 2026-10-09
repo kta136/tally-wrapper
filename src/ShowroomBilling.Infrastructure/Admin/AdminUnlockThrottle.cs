@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using ShowroomBilling.Application.Admin;
 
 namespace ShowroomBilling.Infrastructure.Admin;
@@ -13,34 +12,33 @@ public sealed class AdminUnlockThrottle : IAdminUnlockThrottle
     private const int FreeAttempts = 4;
     private static readonly TimeSpan MaxCooldown = TimeSpan.FromSeconds(30);
 
-    private readonly ConcurrentDictionary<Guid, ThrottleState> _state = new();
+    private readonly Lock _gate = new();
+    private readonly Dictionary<Guid, ThrottleState> _state = new();
 
-    public TimeSpan GetCooldown(Guid showroomId)
+    public TimeSpan TryBeginAttempt(Guid showroomId)
     {
-        if (!_state.TryGetValue(showroomId, out var state))
+        lock (_gate)
         {
+            var now = DateTimeOffset.UtcNow;
+            _state.TryGetValue(showroomId, out var current);
+            if (current is not null && current.NextAllowedUtc > now)
+            {
+                return current.NextAllowedUtc - now;
+            }
+
+            var attempts = (current?.FailedAttempts ?? 0) + 1;
+            _state[showroomId] = new ThrottleState(attempts, now + ComputeCooldown(attempts));
             return TimeSpan.Zero;
         }
-        var remaining = state.NextAllowedUtc - DateTimeOffset.UtcNow;
-        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
     }
 
-    public TimeSpan RegisterFailure(Guid showroomId)
+    public void Reset(Guid showroomId)
     {
-        var now = DateTimeOffset.UtcNow;
-        var updated = _state.AddOrUpdate(
-            showroomId,
-            _ => new ThrottleState(FailedAttempts: 1, NextAllowedUtc: now),
-            (_, current) =>
-            {
-                var attempts = current.FailedAttempts + 1;
-                var cooldown = ComputeCooldown(attempts);
-                return new ThrottleState(attempts, now + cooldown);
-            });
-        return updated.NextAllowedUtc - now;
+        lock (_gate)
+        {
+            _state.Remove(showroomId);
+        }
     }
-
-    public void Reset(Guid showroomId) => _state.TryRemove(showroomId, out _);
 
     private static TimeSpan ComputeCooldown(int failedAttempts)
     {

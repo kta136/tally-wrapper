@@ -39,9 +39,12 @@ public sealed class AdminUnlockViewModelTests
         public Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new AdminPasscodeStatusResponse(false));
 
-        public Task SetPasscodeAsync(AdminSetPasscodeRequest request, CancellationToken cancellationToken = default)
+        public string? SetAdminToken { get; private set; }
+
+        public Task SetPasscodeAsync(AdminSetPasscodeRequest request, string? adminToken = null, CancellationToken cancellationToken = default)
         {
             SetRequest = request;
+            SetAdminToken = adminToken;
             return Task.CompletedTask;
         }
 

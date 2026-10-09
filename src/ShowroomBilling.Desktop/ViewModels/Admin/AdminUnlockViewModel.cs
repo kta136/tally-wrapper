@@ -224,9 +224,11 @@ public partial class AdminUnlockViewModel : ObservableObject
         ErrorMessage = null;
         try
         {
-            await _adminApi.SetPasscodeAsync(new AdminSetPasscodeRequest(
-                IsPasscodeConfigured ? CurrentPasscode : null,
-                NewPasscode));
+            await _adminApi.SetPasscodeAsync(
+                new AdminSetPasscodeRequest(
+                    IsPasscodeConfigured ? CurrentPasscode : null,
+                    NewPasscode),
+                IsPasscodeConfigured ? _tokenStore.Current?.Token : null);
             StatusMessage = IsPasscodeConfigured ? "Passcode updated." : "Passcode set.";
             IsPasscodeConfigured = true;
             if (isInitialSetup)

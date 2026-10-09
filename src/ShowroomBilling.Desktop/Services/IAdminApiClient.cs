@@ -6,7 +6,7 @@ public interface IAdminApiClient
 {
     Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default);
 
-    Task SetPasscodeAsync(AdminSetPasscodeRequest request, CancellationToken cancellationToken = default);
+    Task SetPasscodeAsync(AdminSetPasscodeRequest request, string? adminToken = null, CancellationToken cancellationToken = default);
 
     Task<AdminUnlockResponse> UnlockAsync(AdminUnlockRequest request, CancellationToken cancellationToken = default);
 

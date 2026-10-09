@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -36,6 +37,23 @@ public sealed class AdminController(
             && ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
         {
             return denied;
+        }
+
+        // Replacing an existing passcode needs an unlocked admin session as
+        // well as the current passcode, so the endpoint cannot be used to
+        // brute-force and take over admin.
+        if (status.IsConfigured
+            && !(await HttpContext.AuthenticateAsync(AdminAuthenticationHandler.SchemeName)).Succeeded)
+        {
+            return new ObjectResult(new ProblemDetails
+            {
+                Title = "Admin session required",
+                Detail = "Unlock admin before changing the passcode.",
+                Status = StatusCodes.Status403Forbidden
+            })
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
         }
 
         await adminService.SetPasscodeAsync(request, cancellationToken);

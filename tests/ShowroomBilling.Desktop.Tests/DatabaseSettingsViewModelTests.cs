@@ -404,7 +404,7 @@ public sealed class DatabaseSettingsViewModelTests
         public Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new AdminPasscodeStatusResponse(true));
 
-        public Task SetPasscodeAsync(AdminSetPasscodeRequest request, CancellationToken cancellationToken = default) =>
+        public Task SetPasscodeAsync(AdminSetPasscodeRequest request, string? adminToken = null, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
         public Task<AdminUnlockResponse> UnlockAsync(AdminUnlockRequest request, CancellationToken cancellationToken = default) =>

@@ -14,21 +14,17 @@ namespace ShowroomBilling.Application.Admin;
 public interface IAdminUnlockThrottle
 {
     /// <summary>
-    /// Returns the cooldown remaining for <paramref name="showroomId"/>, or
-    /// <see cref="TimeSpan.Zero"/> when the next attempt is allowed now.
+    /// Atomically checks the cooldown and, when none applies, counts this
+    /// attempt before the passcode is verified. Counting up front means
+    /// concurrent guesses cannot all slip past the check before any failure
+    /// is recorded. Returns the remaining cooldown when the attempt is refused,
+    /// or <see cref="TimeSpan.Zero"/> when it may proceed.
     /// </summary>
-    TimeSpan GetCooldown(Guid showroomId);
+    TimeSpan TryBeginAttempt(Guid showroomId);
 
     /// <summary>
-    /// Record a failed unlock and return the cooldown that now applies for
-    /// the *next* attempt (used so callers can put the duration in the audit /
-    /// log line).
-    /// </summary>
-    TimeSpan RegisterFailure(Guid showroomId);
-
-    /// <summary>
-    /// Reset the counter for <paramref name="showroomId"/>. Call on a
-    /// successful unlock.
+    /// Reset the counter for <paramref name="showroomId"/>. Call when the
+    /// passcode verified.
     /// </summary>
     void Reset(Guid showroomId);
 }
