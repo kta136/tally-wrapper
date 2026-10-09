@@ -115,11 +115,20 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         }
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = filter.Search.Trim();
+            var search = filter.Search.Trim()
+                .Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("%", "\\%", StringComparison.Ordinal)
+                .Replace("_", "\\_", StringComparison.Ordinal);
             var pattern = $"%{search}%";
-            query = query.Where(x =>
-                (x.bill.InvoiceNumber != null && EF.Functions.Like(x.bill.InvoiceNumber, pattern))
-                || (x.rev != null && x.rev.PartyName != null && EF.Functions.Like(x.rev.PartyName, pattern)));
+            // Operators type party names in any case. PostgreSQL LIKE is
+            // case-sensitive; ILIKE is, and the trigram GIN indexes serve it.
+            query = dbContext.Database.IsNpgsql()
+                ? query.Where(x =>
+                    (x.bill.InvoiceNumber != null && EF.Functions.ILike(x.bill.InvoiceNumber, pattern, @"\"))
+                    || (x.rev != null && x.rev.PartyName != null && EF.Functions.ILike(x.rev.PartyName, pattern, @"\")))
+                : query.Where(x =>
+                    (x.bill.InvoiceNumber != null && EF.Functions.Like(x.bill.InvoiceNumber, pattern, @"\"))
+                    || (x.rev != null && x.rev.PartyName != null && EF.Functions.Like(x.rev.PartyName, pattern, @"\")));
         }
 
         var includeTotal = filter.IncludeTotal ?? true;

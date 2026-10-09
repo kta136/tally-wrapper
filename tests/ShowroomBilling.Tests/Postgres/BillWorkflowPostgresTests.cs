@@ -148,6 +148,23 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
 
     [PostgresFact]
     [Trait("Category", "Postgres")]
+    public async Task SearchAsync_MatchesPartyNameRegardlessOfCase()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        await using var db = database.CreateContext();
+        var service = PostgresBillTestSupport.BuildService(db);
+        var alpha = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("Alpha Jewels", 100m)));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("Beta 100% Gold", 100m)));
+
+        var found = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "alpha jew"));
+        var literalPercent = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "%"));
+
+        Assert.Equal(alpha.Id, Assert.Single(found.Items).Id);
+        Assert.Equal("Beta 100% Gold", Assert.Single(literalPercent.Items).PartyName);
+    }
+
+    [PostgresFact]
+    [Trait("Category", "Postgres")]
     public async Task PushAsync_OverlappingCalls_PostsToTallyOnlyOnce()
     {
         await using var database = await fixture.CreateDatabaseAsync();
