@@ -119,6 +119,21 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task Line_without_weight_is_not_saved()
+    {
+        var api = new FakeBillsApi();
+        var vm = new InvoiceViewModel(api, null, null);
+        var line = vm.Lines[0];
+        line.ItemMaster = DiamondMaster();
+        line.DiamondRate = 3500m;
+
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        Assert.Null(api.LastCreate);
+        Assert.Contains("gross weight", vm.SaveStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Gold_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();

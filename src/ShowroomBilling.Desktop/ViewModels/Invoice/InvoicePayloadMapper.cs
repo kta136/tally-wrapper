@@ -121,6 +121,14 @@ internal static class InvoicePayloadMapper
             return "Karat is required for every gold line.";
         }
 
+        // Net weight is the billed quantity. A blank or unparseable Gross
+        // (e.g. "10..5" left with a red border) must not save as zero.
+        var lineWithoutWeight = activeLines.FirstOrDefault(l => l.NetWeight <= 0m);
+        if (lineWithoutWeight is not null)
+        {
+            return $"Line {lineWithoutWeight.RowNumber}: enter a gross weight greater than the less weight.";
+        }
+
         return null;
     }
 
