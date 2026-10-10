@@ -6,7 +6,6 @@ using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Leases;
-using ShowroomBilling.Contracts.Leases;
 
 namespace ShowroomBilling.Api.Middleware;
 
@@ -22,17 +21,6 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         Exception exception,
         CancellationToken cancellationToken)
     {
-        // Preserve the richer DraftLeaseConflictResponse body the Desktop client
-        // already reads on 409s. Do NOT fold this one into ProblemDetails.
-        if (exception is DraftLeaseConflictException draftConflict)
-        {
-            httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
-            await httpContext.Response.WriteAsJsonAsync(
-                new DraftLeaseConflictResponse(draftConflict.Message, draftConflict.ExistingLease),
-                cancellationToken);
-            return true;
-        }
-
         var (status, title) = MapException(exception);
         if (status is null)
         {
@@ -79,7 +67,6 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Concurrent change"),
         BillValidationException    => (StatusCodes.Status400BadRequest, "Bill payload invalid"),
         AdminPasscodeNotConfiguredException => (StatusCodes.Status409Conflict, "Admin passcode not configured"),
-        DraftLeaseOwnershipException => (StatusCodes.Status403Forbidden, "Draft lease ownership required"),
         AdminPasscodeInvalidException => (StatusCodes.Status401Unauthorized, "Admin passcode invalid"),
         AdminUnlockThrottledException => (StatusCodes.Status429TooManyRequests, "Admin unlock throttled"),
         RequestValidationException => (StatusCodes.Status400BadRequest, "Bad request"),

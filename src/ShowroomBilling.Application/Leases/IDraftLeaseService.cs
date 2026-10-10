@@ -2,26 +2,13 @@ using ShowroomBilling.Contracts.Leases;
 
 namespace ShowroomBilling.Application.Leases;
 
+/// <summary>
+/// The admin side of draft edit leases: list and force-release. Nothing takes
+/// a lease; acquire, renew and release were removed because no client ever
+/// called them.
+/// </summary>
 public interface IDraftLeaseService
 {
-    Task<DraftLeaseAcquireResult> AcquireAsync(
-        DraftLeaseAcquireRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<DraftLeaseResponse> RenewAsync(
-        Guid leaseId,
-        DraftLeaseRenewRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<DraftLeaseResponse> ReleaseAsync(
-        Guid leaseId,
-        DraftLeaseReleaseRequest request,
-        CancellationToken cancellationToken = default);
-
-    Task<DraftLeaseResponse?> GetActiveForBillAsync(
-        Guid billId,
-        CancellationToken cancellationToken = default);
-
     Task<DraftLeaseListResponse> ListActiveAsync(CancellationToken cancellationToken = default);
 
     Task<DraftLeaseResponse> ForceReleaseAsync(
@@ -30,14 +17,5 @@ public interface IDraftLeaseService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class DraftLeaseConflictException(string message, DraftLeaseResponse existingLease)
-    : InvalidOperationException(message)
-{
-    public DraftLeaseResponse ExistingLease { get; } = existingLease;
-}
-
 public sealed class DraftLeaseNotFoundException(Guid leaseId)
     : Exception($"Draft lease '{leaseId}' was not found or already released.");
-
-public sealed class DraftLeaseOwnershipException(string message)
-    : InvalidOperationException(message);

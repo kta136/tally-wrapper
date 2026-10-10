@@ -22,7 +22,7 @@ Style:
   - **Admin token (`X-Admin-Token`)** — operator-entered passcode, 30 min TTL, lives in `AdminTokenStore`. Required for destructive/admin endpoints. Gated via `[Authorize(Policy = "Admin")]` (`AdminAuthenticationHandler`). Admin-gated routes do **not** additionally require the device token (the admin passcode is the stronger secret); if you're adding a new admin-only route, just the admin policy is fine.
   - **Maintenance token (`X-Maintenance-Token`)** — installer-generated local file token used only by the server tray against localhost maintenance DB endpoints. It is not a workstation credential.
 - Timestamps: ISO 8601 UTC
-- Error bodies: **RFC 7807 ProblemDetails** (`application/problem+json`) for all failure responses, emitted by a global `IExceptionHandler` (`DomainExceptionHandler`). The only deliberate exception is `POST /api/draft-leases/acquire`, which still returns the typed `DraftLeaseConflictResponse { Error, ExistingLease }` on 409 because the Desktop parses it as a record.
+- Error bodies: **RFC 7807 ProblemDetails** (`application/problem+json`) for all failure responses, emitted by a global `IExceptionHandler` (`DomainExceptionHandler`). There is no typed error body any more: the one exception, the lease-conflict 409, went with the lease acquire endpoint.
 
 ---
 
@@ -156,14 +156,7 @@ Uploads require a plain file name (no path components), a decoded size of 1 byte
 
 ### 2.7 Draft edit leases
 
-| Method | Path | Purpose | Summary response |
-|---|---|---|---|
-| `POST` | `/api/draft-leases/acquire` | Acquire (or renew) a bill edit lock | `DraftLeaseResponse` (or 409 `DraftLeaseConflictResponse` with current owner) |
-| `POST` | `/api/draft-leases/{leaseId}/renew` | Extend the lease TTL | `DraftLeaseResponse` |
-| `POST` | `/api/draft-leases/{leaseId}/release` | Release the lease | 204 |
-| `GET` | `/api/draft-leases/bill/{billId}` | Get the active lease for a bill, if any | `DraftLeaseResponse?` |
-
-Leases use a 2-minute TTL. The database enforces exactly one live lease per bill via a unique partial index on `(BillId) WHERE ReleasedAtUtc IS NULL`.
+Nothing takes a lease. Acquire, renew, release and get-for-bill were removed on 10 October 2026: the Desktop never called them, so no bill was ever locked for editing. What is left is the admin side in §4 (list and force-release) and the `draft_edit_leases` table; with nothing writing leases, the list is empty. Concurrent edits of one bill are caught by the bill's row version instead (409 "Concurrent change").
 
 ### 2.8 Client presence
 
@@ -198,8 +191,8 @@ Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates vi
 After 4 consecutive failed unlock attempts, the API enters an exponential cooldown (2s, 4s, 8s, 16s, capped at 30s) per showroom. Subsequent attempts during the cooldown return `429 Too Many Requests` with a `Retry-After` header. A successful unlock resets the counter; the counter is in-memory only and resets on API restart. Failed attempts are recorded as `admin.unlock.failed` audit events.
 
 When `DeviceAuth:Mode=TrustedLan` and no admin passcode exists yet, the initial `POST /api/admin/passcode` setup is loopback-only. Later passcode rotations require both an unlocked admin session (`X-Admin-Token`) and the current passcode; wrong current passcodes share the unlock throttle and write `admin.passcode.change.failed` audit rows.
-| `GET` | `/api/draft-leases/active` (admin) | List every live draft lease across the showroom | `DraftLeaseListResponse` |
-| `POST` | `/api/draft-leases/{leaseId}/force-release` (admin) | Force-release a stale lease with a reason | 204; audits `lease.force_released` |
+| `GET` | `/api/leases/drafts/active` (admin) | List every live draft lease across the showroom | `DraftLeaseListResponse` |
+| `POST` | `/api/leases/drafts/{leaseId}/force-release` (admin) | Force-release a stale lease with a reason | `DraftLeaseResponse`; audits `lease.force_released` |
 
 ### 4.1 Bill admin actions
 

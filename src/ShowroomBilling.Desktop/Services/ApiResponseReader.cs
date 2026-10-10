@@ -15,10 +15,6 @@ namespace ShowroomBilling.Desktop.Services;
 /// a subtype of <see cref="HttpRequestException"/>, so existing
 /// <c>catch (HttpRequestException)</c> blocks keep working but now see
 /// the server's <c>detail</c> string in <c>ex.Message</c>.
-///
-/// Callers that have *typed* error bodies (e.g. <c>DraftLeaseApiClient</c>'s
-/// 409 → <c>DraftLeaseConflictResponse</c>) should handle that status before
-/// calling into here.
 /// </summary>
 internal static class ApiResponseReader
 {

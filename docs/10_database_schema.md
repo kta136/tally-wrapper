@@ -199,7 +199,7 @@ DROP TABLE IF EXISTS
 
 ### 1.9 `draft_edit_leases`
 
-Server-owned replacement for current local edit locks.
+Meant as the server-owned replacement for local edit locks. **Nothing writes this table**: the Desktop never took a lease, and the acquire / renew / release endpoints were removed on 10 October 2026. The admin list and force-release still read it, and retention still purges it.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -299,10 +299,9 @@ The table was part of the original bridge design. It was dropped once the API ab
 
 ### 3.1 Draft edit leases
 
-- desktop requests lease when opening editable draft
-- lease expires automatically if client disappears
-- admin recovery can release stale lease
-- this replaces the current local-only lock recovery pattern with a server-owned model
+- not in use: the Desktop does not take a lease when it opens a draft, and there is no endpoint to take one
+- two counters editing the same bill are caught on save by the bill's row version (409 "Concurrent change")
+- the admin list and force-release remain, over a table nothing writes
 
 ### 3.2 ~~Posting job leases~~ (removed)
 

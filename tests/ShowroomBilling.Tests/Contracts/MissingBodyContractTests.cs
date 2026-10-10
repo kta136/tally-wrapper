@@ -20,7 +20,6 @@ public sealed class MissingBodyContractTests : IClassFixture<TestApiFactory>
     public static TheoryData<string, string> RoutesThatNeedABody()
     {
         var bill = Guid.NewGuid();
-        var lease = Guid.NewGuid();
         return new TheoryData<string, string>
         {
             { "POST", "/api/bills/drafts" },
@@ -29,9 +28,6 @@ public sealed class MissingBodyContractTests : IClassFixture<TestApiFactory>
             { "POST", "/api/bills/push-selected" },
             { "POST", $"/api/bills/{bill}/repost" },
             { "POST", "/api/clients/heartbeat" },
-            { "POST", "/api/leases/drafts/acquire" },
-            { "POST", $"/api/leases/drafts/{lease}/renew" },
-            { "POST", $"/api/leases/drafts/{lease}/release" },
             { "POST", "/api/print-assets" },
             { "POST", "/api/admin/unlock" },
             { "POST", "/api/admin/logout" },

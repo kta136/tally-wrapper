@@ -418,18 +418,6 @@ public sealed class DatabaseSettingsViewModelTests
 
     private sealed class StubDraftLeaseApiClient : IDraftLeaseApiClient
     {
-        public Task<DraftLeaseAcquireResult> AcquireAsync(DraftLeaseAcquireRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<DraftLeaseResponse> RenewAsync(Guid leaseId, DraftLeaseRenewRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<DraftLeaseResponse> ReleaseAsync(Guid leaseId, DraftLeaseReleaseRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<DraftLeaseResponse?> GetActiveForBillAsync(Guid billId, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
         public Task<DraftLeaseListResponse> ListActiveAsync(string adminToken, CancellationToken cancellationToken = default) =>
             Task.FromResult(new DraftLeaseListResponse(Array.Empty<DraftLeaseResponse>()));
 

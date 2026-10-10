@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Leases;
 using ShowroomBilling.Contracts.Leases;
 using ShowroomBilling.Infrastructure.Leases;
@@ -7,148 +8,108 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Tests;
 
+/// <summary>
+/// Only the admin side of leases is left (list, force-release). Nothing in
+/// the app takes a lease, so the tests put the rows there themselves.
+/// </summary>
 public sealed class DraftLeaseServiceTests
 {
     [Fact]
-    public async Task AcquireAsync_CreatesNewLease_WhenBillHasNoActiveLease()
+    public async Task ForceReleaseAsync_ReleasesTheLeaseAndAuditsTheReason()
     {
         await using var db = CreateDbContext();
+        var lease = await SeedAsync(db, "counter-a", expiresIn: TimeSpan.FromMinutes(2));
         var service = new DraftLeaseService(db);
-        var billId = Guid.NewGuid();
-
-        var result = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-1", "Counter 1"));
-
-        Assert.False(result.Reacquired);
-        Assert.Equal(billId, result.Lease.BillId);
-        Assert.Equal("counter-1", result.Lease.OwnerActorId);
-        Assert.Null(result.Lease.ReleasedAtUtc);
-        Assert.True(result.Lease.ExpiresAtUtc > DateTimeOffset.UtcNow);
-    }
-
-    [Fact]
-    public async Task AcquireAsync_ThrowsConflict_WhenDifferentActorHoldsLease()
-    {
-        await using var db = CreateDbContext();
-        var service = new DraftLeaseService(db);
-        var billId = Guid.NewGuid();
-        await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-a", null));
-
-        var ex = await Assert.ThrowsAsync<DraftLeaseConflictException>(() =>
-            service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-b", null)));
-
-        Assert.Equal("counter-a", ex.ExistingLease.OwnerActorId);
-    }
-
-    [Fact]
-    public async Task AcquireAsync_RenewsExistingLease_WhenSameActorReacquires()
-    {
-        await using var db = CreateDbContext();
-        var service = new DraftLeaseService(db);
-        var billId = Guid.NewGuid();
-        var first = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-a", null));
-
-        var second = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-a", null));
-
-        Assert.True(second.Reacquired);
-        Assert.Equal(first.Lease.Id, second.Lease.Id);
-        Assert.True(second.Lease.RenewedAtUtc >= first.Lease.RenewedAtUtc);
-    }
-
-    [Fact]
-    public async Task AcquireAsync_TakesOverLease_WhenExistingLeaseIsExpired()
-    {
-        await using var db = CreateDbContext();
-        var showroomId = Guid.Parse("f4d7a0f4-0b8f-9b6d-d1d0-4a5b5b9c2d3e");
-        var billId = Guid.NewGuid();
-        db.DraftEditLeases.Add(new DraftEditLeaseEntity
-        {
-            Id = Guid.NewGuid(),
-            BillId = billId,
-            ShowroomId = showroomId,
-            OwnerActorId = "counter-a",
-            AcquiredAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
-            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5),
-            RenewedAtUtc = DateTimeOffset.UtcNow.AddMinutes(-5)
-        });
-        await db.SaveChangesAsync();
-        var service = new DraftLeaseService(db);
-
-        var result = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-b", null));
-
-        Assert.False(result.Reacquired);
-        Assert.Equal("counter-b", result.Lease.OwnerActorId);
-    }
-
-    [Fact]
-    public async Task RenewAsync_RejectsWrongOwner()
-    {
-        await using var db = CreateDbContext();
-        var service = new DraftLeaseService(db);
-        var billId = Guid.NewGuid();
-        var acquired = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-a", null));
-
-        await Assert.ThrowsAsync<DraftLeaseOwnershipException>(() =>
-            service.RenewAsync(acquired.Lease.Id, new DraftLeaseRenewRequest("counter-b")));
-    }
-
-    [Fact]
-    public async Task ReleaseAsync_MarksLeaseReleased()
-    {
-        await using var db = CreateDbContext();
-        var service = new DraftLeaseService(db);
-        var billId = Guid.NewGuid();
-        var acquired = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-a", null));
-
-        var released = await service.ReleaseAsync(acquired.Lease.Id, new DraftLeaseReleaseRequest("counter-a"));
-
-        Assert.NotNull(released.ReleasedAtUtc);
-        var active = await service.GetActiveForBillAsync(billId);
-        Assert.Null(active);
-    }
-
-    [Fact]
-    public async Task ForceReleaseAsync_ReleasesEvenWithDifferentActor()
-    {
-        await using var db = CreateDbContext();
-        var service = new DraftLeaseService(db);
-        var billId = Guid.NewGuid();
-        var acquired = await service.AcquireAsync(new DraftLeaseAcquireRequest(billId, "counter-a", null));
 
         var released = await service.ForceReleaseAsync(
-            acquired.Lease.Id,
-            new DraftLeaseForceReleaseRequest("admin", "kiosk crashed"));
+            lease.Id,
+            new DraftLeaseForceReleaseRequest("admin", "kiosk \"A\" crashed"));
 
         Assert.NotNull(released.ReleasedAtUtc);
+        var audit = await db.AuditEvents.SingleAsync();
+        Assert.Equal("lease.force_released", audit.EventType);
+        Assert.Equal("admin", audit.ActorId);
+        using var payload = System.Text.Json.JsonDocument.Parse(audit.PayloadJson);
+        Assert.Equal(lease.BillId, payload.RootElement.GetProperty("billId").GetGuid());
+        Assert.Equal(
+            "kiosk \"A\" crashed",
+            payload.RootElement.GetProperty("details").GetProperty("reason").GetString());
+    }
+
+    [Fact]
+    public async Task ForceReleaseAsync_OnAReleasedLease_ChangesNothing()
+    {
+        await using var db = CreateDbContext();
+        var releasedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+        var lease = await SeedAsync(db, "counter-a", expiresIn: TimeSpan.FromMinutes(2), releasedAtUtc: releasedAt);
+        var service = new DraftLeaseService(db);
+
+        var result = await service.ForceReleaseAsync(lease.Id, new DraftLeaseForceReleaseRequest("admin", "again"));
+
+        Assert.Equal(releasedAt, result.ReleasedAtUtc);
+        Assert.Empty(await db.AuditEvents.ToListAsync());
+    }
+
+    [Fact]
+    public async Task ForceReleaseAsync_NeedsAReason()
+    {
+        await using var db = CreateDbContext();
+        var lease = await SeedAsync(db, "counter-a", expiresIn: TimeSpan.FromMinutes(2));
+        var service = new DraftLeaseService(db);
+
+        await Assert.ThrowsAsync<RequestValidationException>(() =>
+            service.ForceReleaseAsync(lease.Id, new DraftLeaseForceReleaseRequest("admin", "  ")));
+
+        Assert.Null((await db.DraftEditLeases.SingleAsync()).ReleasedAtUtc);
+    }
+
+    [Fact]
+    public async Task ForceReleaseAsync_UnknownLease_IsNotFound()
+    {
+        await using var db = CreateDbContext();
+        var service = new DraftLeaseService(db);
+
+        await Assert.ThrowsAsync<DraftLeaseNotFoundException>(() =>
+            service.ForceReleaseAsync(Guid.NewGuid(), new DraftLeaseForceReleaseRequest("admin", "gone")));
     }
 
     [Fact]
     public async Task ListActiveAsync_ExcludesReleasedAndExpired()
     {
         await using var db = CreateDbContext();
+        var live = await SeedAsync(db, "counter-a", expiresIn: TimeSpan.FromMinutes(2));
+        await SeedAsync(db, "counter-b", expiresIn: TimeSpan.FromMinutes(2), releasedAtUtc: DateTimeOffset.UtcNow);
+        await SeedAsync(db, "counter-c", expiresIn: TimeSpan.FromMinutes(-10));
         var service = new DraftLeaseService(db);
-
-        var billA = Guid.NewGuid();
-        var billB = Guid.NewGuid();
-        var billC = Guid.NewGuid();
-        await service.AcquireAsync(new DraftLeaseAcquireRequest(billA, "counter-a", null));
-        var b = await service.AcquireAsync(new DraftLeaseAcquireRequest(billB, "counter-b", null));
-        await service.ReleaseAsync(b.Lease.Id, new DraftLeaseReleaseRequest("counter-b"));
-        db.DraftEditLeases.Add(new DraftEditLeaseEntity
-        {
-            Id = Guid.NewGuid(),
-            BillId = billC,
-            ShowroomId = Guid.NewGuid(),
-            OwnerActorId = "counter-c",
-            AcquiredAtUtc = DateTimeOffset.UtcNow.AddHours(-1),
-            ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
-            RenewedAtUtc = DateTimeOffset.UtcNow.AddHours(-1)
-        });
-        await db.SaveChangesAsync();
 
         var list = await service.ListActiveAsync();
 
-        Assert.Single(list.Leases);
-        Assert.Equal(billA, list.Leases[0].BillId);
+        var only = Assert.Single(list.Leases);
+        Assert.Equal(live.BillId, only.BillId);
+        Assert.Equal("counter-a", only.OwnerActorId);
+    }
+
+    private static async Task<DraftEditLeaseEntity> SeedAsync(
+        ShowroomBillingDbContext db,
+        string owner,
+        TimeSpan expiresIn,
+        DateTimeOffset? releasedAtUtc = null)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var lease = new DraftEditLeaseEntity
+        {
+            Id = Guid.NewGuid(),
+            BillId = Guid.NewGuid(),
+            ShowroomId = Guid.NewGuid(),
+            OwnerActorId = owner,
+            AcquiredAtUtc = now.AddMinutes(-15),
+            ExpiresAtUtc = now.Add(expiresIn),
+            RenewedAtUtc = now.AddMinutes(-15),
+            ReleasedAtUtc = releasedAtUtc
+        };
+        db.DraftEditLeases.Add(lease);
+        await db.SaveChangesAsync();
+        return lease;
     }
 
     private static ShowroomBillingDbContext CreateDbContext()
