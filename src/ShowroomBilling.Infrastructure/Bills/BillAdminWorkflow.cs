@@ -36,7 +36,7 @@ internal sealed class BillAdminWorkflow(
         }
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is IBillService.StatePosting or IBillService.StateReconciliationRequired)
+        if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot change number while its Tally outcome is unresolved.");
@@ -138,9 +138,9 @@ internal sealed class BillAdminWorkflow(
         if (tallyDiverges)
         {
             bill.EditedAfterPush = true;
-            if (bill.State == IBillService.StatePosted)
+            if (bill.State == BillStates.Posted)
             {
-                bill.State = IBillService.StatePending;
+                bill.State = BillStates.Pending;
             }
         }
 
@@ -233,7 +233,7 @@ internal sealed class BillAdminWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (IBillService.StatePending or BillStates.Draft or IBillService.StateFailed or IBillService.StateReconciliationRequired))
+        if (bill.State is not (BillStates.Pending or BillStates.Draft or BillStates.Failed or BillStates.ReconciliationRequired))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; mark-as-pushed is not allowed.");
@@ -241,7 +241,7 @@ internal sealed class BillAdminWorkflow(
 
         var now = DateTimeOffset.UtcNow;
         var fromState = bill.State;
-        bill.State = IBillService.StatePosted;
+        bill.State = BillStates.Posted;
         bill.EditedAfterPush = false;
         bill.UpdatedAtUtc = now;
 
@@ -268,7 +268,7 @@ internal sealed class BillAdminWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (IBillService.StatePosted or IBillService.StateFailed or IBillService.StateReconciliationRequired))
+        if (bill.State is not (BillStates.Posted or BillStates.Failed or BillStates.ReconciliationRequired))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; mark-as-pending is not allowed.");
@@ -276,7 +276,7 @@ internal sealed class BillAdminWorkflow(
 
         var now = DateTimeOffset.UtcNow;
         var fromState = bill.State;
-        bill.State = IBillService.StatePending;
+        bill.State = BillStates.Pending;
         bill.EditedAfterPush = false;
         bill.UpdatedAtUtc = now;
 
@@ -302,14 +302,14 @@ internal sealed class BillAdminWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is IBillService.StatePosting or IBillService.StateReconciliationRequired)
+        if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot be deleted while its Tally outcome is unresolved.");
         }
 
         var inTally = await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken);
-        bool tallyDiverges = inTally || bill.State is IBillService.StateFailed;
+        bool tallyDiverges = inTally || bill.State is BillStates.Failed;
 
         if (request.DryRun)
         {

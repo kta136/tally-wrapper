@@ -69,7 +69,7 @@ internal sealed class BillPostingWorkflow(
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
         var targetIds = await dbContext.Bills
             .AsNoTracking()
-            .Where(x => x.ShowroomId == showroomId && (x.State == IBillService.StatePending || x.State == BillStates.Draft))
+            .Where(x => x.ShowroomId == showroomId && (x.State == BillStates.Pending || x.State == BillStates.Draft))
             .OrderBy(x => x.CreatedAtUtc)
             .Select(x => x.Id)
             .Take(maxBills)
@@ -84,7 +84,7 @@ internal sealed class BillPostingWorkflow(
         CancellationToken cancellationToken = default)
     {
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State != IBillService.StateFailed)
+        if (bill.State != BillStates.Failed)
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; retry is only allowed from 'failed'.");
@@ -113,7 +113,7 @@ internal sealed class BillPostingWorkflow(
         }
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (IBillService.StatePosted or IBillService.StateFailed))
+        if (bill.State is not (BillStates.Posted or BillStates.Failed))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; repost is only allowed from 'posted' or 'failed'.");
@@ -145,15 +145,15 @@ internal sealed class BillPostingWorkflow(
             : null;
 
         // Already-posted / mid-posting short-circuits.
-        if (bill.State is IBillService.StatePosting)
+        if (bill.State is BillStates.Posting)
         {
             return BillSerialization.MapResponse(bill, currentRevision);
         }
 
         // Allowed: pending / draft / failed (retry goes through here too), plus
         // posted only for the explicit repost path.
-        var sourceStateAllowed = bill.State is IBillService.StatePending or BillStates.Draft or IBillService.StateFailed
-            || allowPostedSource && bill.State == IBillService.StatePosted;
+        var sourceStateAllowed = bill.State is BillStates.Pending or BillStates.Draft or BillStates.Failed
+            || allowPostedSource && bill.State == BillStates.Posted;
         if (!sourceStateAllowed)
         {
             throw new BillStateConflictException(
@@ -196,7 +196,7 @@ internal sealed class BillPostingWorkflow(
             // used in unit tests, and those tests don't simulate real concurrency
             // (see CLAUDE.md "Test-harness reality"). Fall back to the original
             // mutate-then-save pattern for the in-memory code path only.
-            bill.State = IBillService.StatePosting;
+            bill.State = BillStates.Posting;
             bill.UpdatedAtUtc = now;
         }
         else
@@ -205,12 +205,12 @@ internal sealed class BillPostingWorkflow(
             var rowsAffected = await dbContext.Bills
                 .Where(b => b.Id == billId
                     && b.CurrentRevisionId == claimedRevisionId
-                    && (b.State == IBillService.StatePending
+                    && (b.State == BillStates.Pending
                         || b.State == BillStates.Draft
-                        || b.State == IBillService.StateFailed
-                        || allowPostedSource && b.State == IBillService.StatePosted))
+                        || b.State == BillStates.Failed
+                        || allowPostedSource && b.State == BillStates.Posted))
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(b => b.State, IBillService.StatePosting)
+                    .SetProperty(b => b.State, BillStates.Posting)
                     .SetProperty(b => b.UpdatedAtUtc, now),
                     cancellationToken);
 
@@ -222,7 +222,7 @@ internal sealed class BillPostingWorkflow(
                 dbContext.ChangeTracker.Clear();
                 var refreshed = await LoadTrackedBillAsync(billId, cancellationToken);
                 if (refreshed.CurrentRevisionId != claimedRevisionId
-                    && refreshed.State is not IBillService.StatePosting)
+                    && refreshed.State is not BillStates.Posting)
                 {
                     throw new BillStateConflictException(
                         $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' was edited while the push was starting. Review the latest version and push again.");
@@ -337,7 +337,7 @@ internal sealed class BillPostingWorkflow(
         var settleAt = DateTimeOffset.UtcNow;
         if (tallyResult.Outcome == TallyPostOutcome.Posted)
         {
-            bill.State = IBillService.StatePosted;
+            bill.State = BillStates.Posted;
             if (operation == TallyPostOperation.Alter)
             {
                 bill.EditedAfterPush = false;
@@ -363,7 +363,7 @@ internal sealed class BillPostingWorkflow(
         }
         else if (tallyResult.Outcome == TallyPostOutcome.Failed)
         {
-            bill.State = IBillService.StateFailed;
+            bill.State = BillStates.Failed;
             bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,

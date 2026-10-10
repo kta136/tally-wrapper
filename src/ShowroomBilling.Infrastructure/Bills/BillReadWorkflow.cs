@@ -150,7 +150,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
             ? query.OrderByDescending(x => x.bill.CreatedAtUtc)
             : query
                 .OrderBy(x =>
-                    x.bill.State == IBillService.StatePending || x.bill.State == BillStates.Draft
+                    x.bill.State == BillStates.Pending || x.bill.State == BillStates.Draft
                         ? 0
                         : 1)
                 .ThenByDescending(x => x.bill.FiscalYear)

@@ -21,7 +21,7 @@ public sealed class BillServiceBackdatedDraftTests
             new CreateBillDraftRequest(null, SamplePayload("Backdated Party", 12_345m)),
             backdate);
 
-        Assert.Equal(IBillService.StatePending, response.State);
+        Assert.Equal(BillStates.Pending, response.State);
         Assert.Equal(backdate, response.CreatedAtUtc);
         Assert.Equal(backdate, response.UpdatedAtUtc);
         Assert.Equal(backdate, response.CurrentRevision!.CreatedAtUtc);

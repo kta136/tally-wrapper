@@ -25,7 +25,7 @@ public sealed class BillServiceTests
             CounterId: null,
             Payload: SamplePayload("Walk-in Customer", grandTotal: 1500m)));
 
-        Assert.Equal(IBillService.StatePending, response.State);
+        Assert.Equal(BillStates.Pending, response.State);
         Assert.NotNull(response.CurrentRevision);
         Assert.Equal(1, response.CurrentRevision!.RevisionNo);
         Assert.Equal("Walk-in Customer", response.CurrentRevision.Payload.PartyName);
@@ -282,7 +282,7 @@ public sealed class BillServiceTests
 
         var pushed = await service.PushAsync(draft.Id, new PushBillRequest("manual"));
 
-        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(draft.InvoiceNumber, pushed.InvoiceNumber);
         Assert.Equal(draft.FiscalYear, pushed.FiscalYear);
         Assert.Equal(reservationsBefore, await db.InvoiceNumberReservations.CountAsync());
@@ -329,7 +329,7 @@ public sealed class BillServiceTests
 
         var updated = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
 
-        Assert.Equal(IBillService.StatePending, updated.State);
+        Assert.Equal(BillStates.Pending, updated.State);
         Assert.True(updated.EditedAfterPush);
         Assert.Equal(bill.InvoiceNumber, updated.InvoiceNumber); // invoice number immutable through reopen
     }
@@ -362,7 +362,7 @@ public sealed class BillServiceTests
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
         Assert.Equal(2, poster.CallCount);
-        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(BillStates.Posted, pushed.State);
         Assert.False(pushed.EditedAfterPush);
         Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
         Assert.Equal("MASTER ID", poster.LastRequest.TargetTagName);
@@ -398,7 +398,7 @@ public sealed class BillServiceTests
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
         Assert.Equal(1, poster.CallCount);
-        Assert.Equal(IBillService.StateFailed, pushed.State);
+        Assert.Equal(BillStates.Failed, pushed.State);
         Assert.True(pushed.EditedAfterPush);
         var status = await service.GetPostingStatusAsync(bill.Id);
         Assert.Equal("TALLY_ALTER_TARGET_MISSING", status!.LastErrorCode);
@@ -420,7 +420,7 @@ public sealed class BillServiceTests
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
-        Assert.Equal(IBillService.StateFailed, pushed.State);
+        Assert.Equal(BillStates.Failed, pushed.State);
         Assert.True(pushed.EditedAfterPush);
         Assert.Equal(1, await db.AuditEvents.CountAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == "tally.posted"));
         Assert.Contains(await db.AuditEvents.ToListAsync(), a => a.EventType == "tally.failed" && a.PayloadJson.Contains("TALLY_NO_EFFECT"));
@@ -456,7 +456,7 @@ public sealed class BillServiceTests
 
         var submitted = await service.PushAsync(bill.Id, new PushBillRequest("sub-1"));
 
-        Assert.Equal(IBillService.StatePosted, submitted.State);
+        Assert.Equal(BillStates.Posted, submitted.State);
         Assert.Equal(bill.InvoiceNumber, submitted.InvoiceNumber);
         Assert.Equal(bill.FiscalYear, submitted.FiscalYear);
         Assert.Contains("/0001", submitted.InvoiceNumber);
@@ -507,7 +507,7 @@ public sealed class BillServiceTests
 
         Assert.EndsWith("/0002", revised.InvoiceNumber);
         Assert.Equal(original.FiscalYear, revised.FiscalYear);
-        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(revised.InvoiceNumber, poster.LastRequest!.InvoiceNumber);
         Assert.Equal(2, await db.InvoiceNumberReservations.CountAsync());
     }
@@ -522,11 +522,11 @@ public sealed class BillServiceTests
         var revised = await service.ReviseAsync(prior.Id, new ReviseBillRequest(InitialPayload: null));
 
         Assert.NotEqual(prior.Id, revised.Id);
-        Assert.Equal(IBillService.StatePending, revised.State);
+        Assert.Equal(BillStates.Pending, revised.State);
         Assert.Equal(1, revised.CurrentRevision!.RevisionNo);
 
         var reloadedPrior = await service.GetAsync(prior.Id);
-        Assert.Equal(IBillService.StateRevised, reloadedPrior!.State);
+        Assert.Equal(BillStates.Revised, reloadedPrior!.State);
         Assert.Equal(revised.Id, reloadedPrior.SupersededByBillId);
     }
 
@@ -539,7 +539,7 @@ public sealed class BillServiceTests
 
         var voided = await service.VoidAsync(bill.Id, new VoidBillRequest("customer cancelled"));
 
-        Assert.Equal(IBillService.StateVoided, voided.State);
+        Assert.Equal(BillStates.Voided, voided.State);
         Assert.NotNull(voided.VoidedAtUtc);
     }
 
@@ -566,8 +566,8 @@ public sealed class BillServiceTests
         await service.PushAsync(d2.Id, new PushBillRequest("s2"));
         _ = d1;
 
-        var drafts = await service.SearchAsync(new BillSearchFilter(IBillService.StatePending, null, null, null, null, null));
-        var queued = await service.SearchAsync(new BillSearchFilter(IBillService.StatePosted, null, null, null, null, null));
+        var drafts = await service.SearchAsync(new BillSearchFilter(BillStates.Pending, null, null, null, null, null));
+        var queued = await service.SearchAsync(new BillSearchFilter(BillStates.Posted, null, null, null, null, null));
 
         Assert.Equal(1, drafts.Total);
         Assert.Single(drafts.Items);
@@ -636,8 +636,8 @@ public sealed class BillServiceTests
 
         var reloadedFirst = await service.GetAsync(first.Id);
         var reloadedThird = await service.GetAsync(third.Id);
-        Assert.Equal(IBillService.StatePosted, reloadedFirst!.State);
-        Assert.Equal(IBillService.StatePending, reloadedThird!.State);
+        Assert.Equal(BillStates.Posted, reloadedFirst!.State);
+        Assert.Equal(BillStates.Pending, reloadedThird!.State);
     }
 
     [Fact]
@@ -664,8 +664,8 @@ public sealed class BillServiceTests
 
         var reloadedFirst = await service.GetAsync(first.Id);
         var reloadedThird = await service.GetAsync(third.Id);
-        Assert.Equal(IBillService.StatePosted, reloadedFirst!.State);
-        Assert.Equal(IBillService.StatePending, reloadedThird!.State);
+        Assert.Equal(BillStates.Posted, reloadedFirst!.State);
+        Assert.Equal(BillStates.Pending, reloadedThird!.State);
     }
 
     [Fact]
@@ -678,7 +678,7 @@ public sealed class BillServiceTests
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("manual"));
 
-        Assert.Equal(IBillService.StateFailed, pushed.State);
+        Assert.Equal(BillStates.Failed, pushed.State);
         Assert.Equal(1, failingPoster.CallCount);
     }
 
@@ -692,7 +692,7 @@ public sealed class BillServiceTests
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("manual"));
 
-        Assert.Equal(IBillService.StateReconciliationRequired, pushed.State);
+        Assert.Equal(BillStates.ReconciliationRequired, pushed.State);
         Assert.Equal(1, poster.CallCount);
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
             service.RetryAsync(bill.Id, new RetryBillPostingRequest("unsafe retry")));
@@ -710,10 +710,10 @@ public sealed class BillServiceTests
         await service.PushAsync(bill.Id, new PushBillRequest("manual"));
 
         var posted = await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("verified in Tally"));
-        Assert.Equal(IBillService.StatePosted, posted.State);
+        Assert.Equal(BillStates.Posted, posted.State);
 
         var pending = await service.MarkPendingAsync(bill.Id, new MarkBillStateRequest("confirmed absent in Tally"));
-        Assert.Equal(IBillService.StatePending, pending.State);
+        Assert.Equal(BillStates.Pending, pending.State);
     }
 
     [Fact]
@@ -733,7 +733,7 @@ public sealed class BillServiceTests
         Assert.True(response.StoppedOnFailure);
         Assert.Equal(first.Id, response.FailedBillId);
         Assert.Equal(1, poster.CallCount);
-        Assert.Equal(IBillService.StatePending, (await service.GetAsync(second.Id))!.State);
+        Assert.Equal(BillStates.Pending, (await service.GetAsync(second.Id))!.State);
     }
 
     [Fact]
@@ -750,7 +750,7 @@ public sealed class BillServiceTests
         Assert.Contains("Tally push blocked", ex.Message);
         Assert.Equal(0, poster.CallCount);
         var reloaded = await service.GetAsync(bill.Id);
-        Assert.Equal(IBillService.StatePending, reloaded!.State);
+        Assert.Equal(BillStates.Pending, reloaded!.State);
         Assert.DoesNotContain(await db.AuditEvents.ToListAsync(), a => a.EventType == "bill.push.requested");
     }
 
@@ -762,7 +762,7 @@ public sealed class BillServiceTests
         var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(x => x.Id == bill.Id);
-        entity.State = IBillService.StateFailed;
+        entity.State = BillStates.Failed;
         await db.SaveChangesAsync();
 
         await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
@@ -770,7 +770,7 @@ public sealed class BillServiceTests
 
         Assert.Equal(0, poster.CallCount);
         var reloaded = await service.GetAsync(bill.Id);
-        Assert.Equal(IBillService.StateFailed, reloaded!.State);
+        Assert.Equal(BillStates.Failed, reloaded!.State);
     }
 
     [Fact]
@@ -781,7 +781,7 @@ public sealed class BillServiceTests
         var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(x => x.Id == bill.Id);
-        entity.State = IBillService.StatePosted;
+        entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
 
         await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
@@ -789,7 +789,7 @@ public sealed class BillServiceTests
 
         Assert.Equal(0, poster.CallCount);
         var reloaded = await service.GetAsync(bill.Id);
-        Assert.Equal(IBillService.StatePosted, reloaded!.State);
+        Assert.Equal(BillStates.Posted, reloaded!.State);
     }
 
     [Fact]
@@ -806,8 +806,8 @@ public sealed class BillServiceTests
             service.PushPendingAsync(new PushPendingBillsRequest("push all", 10)));
 
         Assert.Equal(0, poster.CallCount);
-        Assert.Equal(IBillService.StatePending, (await service.GetAsync(first.Id))!.State);
-        Assert.Equal(IBillService.StatePending, (await service.GetAsync(second.Id))!.State);
+        Assert.Equal(BillStates.Pending, (await service.GetAsync(first.Id))!.State);
+        Assert.Equal(BillStates.Pending, (await service.GetAsync(second.Id))!.State);
     }
 
     [Fact]
@@ -863,7 +863,7 @@ public sealed class BillServiceTests
             .ToListAsync();
         foreach (var row in rows)
         {
-            row.State = IBillService.StatePosted;
+            row.State = BillStates.Posted;
             row.FiscalYear = "2026-27";
         }
 
@@ -960,7 +960,7 @@ public sealed class BillServiceTests
         await service.PushAsync(bill.Id, new PushBillRequest("s"));
         // simulate tally posted
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
-        entity.State = IBillService.StatePosted;
+        entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
 
         var newNumber = bill.InvoiceNumber!.Replace("/0001", "/0050");
@@ -990,7 +990,7 @@ public sealed class BillServiceTests
         var service = BuildService(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
-        entity.State = IBillService.StatePosting;
+        entity.State = BillStates.Posting;
         await db.SaveChangesAsync();
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
@@ -1063,14 +1063,14 @@ public sealed class BillServiceTests
         var service = BuildService(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var failed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        Assert.Equal(IBillService.StateFailed, failed.State);
+        Assert.Equal(BillStates.Failed, failed.State);
 
         var edited = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-fixed", 100m)));
         Assert.False(edited.EditedAfterPush);
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("second"));
 
-        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(2, poster.CallCount);
         Assert.Equal(TallyPostOperation.Create, poster.LastRequest!.Operation);
     }
@@ -1110,7 +1110,7 @@ public sealed class BillServiceTests
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
             service.VoidAsync(bill.Id, new VoidBillRequest("customer cancelled")));
-        Assert.Equal(IBillService.StatePending, (await service.GetAsync(bill.Id))!.State);
+        Assert.Equal(BillStates.Pending, (await service.GetAsync(bill.Id))!.State);
     }
 
     [Fact]
@@ -1123,7 +1123,7 @@ public sealed class BillServiceTests
 
         var voided = await service.VoidAsync(bill.Id, new VoidBillRequest("never reached Tally"));
 
-        Assert.Equal(IBillService.StateVoided, voided.State);
+        Assert.Equal(BillStates.Voided, voided.State);
     }
 
     [Fact]
@@ -1137,7 +1137,7 @@ public sealed class BillServiceTests
 
         var voided = await service.VoidAsync(bill.Id, new VoidBillRequest(null));
 
-        Assert.Equal(IBillService.StateVoided, voided.State);
+        Assert.Equal(BillStates.Voided, voided.State);
     }
 
     [Fact]
@@ -1155,9 +1155,9 @@ public sealed class BillServiceTests
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("after-rename"));
 
         Assert.True(changed.TallyDiverges);
-        Assert.Equal(IBillService.StatePending, reopened!.State);
+        Assert.Equal(BillStates.Pending, reopened!.State);
         Assert.True(reopened.EditedAfterPush);
-        Assert.Equal(IBillService.StatePosted, pushed.State);
+        Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
         Assert.Equal("101", poster.LastRequest.TargetTagValue);
         Assert.EndsWith("/0007", poster.LastRequest.InvoiceNumber);
@@ -1237,9 +1237,9 @@ public sealed class BillServiceTests
 
         var response = await service.PushAsync(bill.Id, new PushBillRequest("push"));
 
-        Assert.Equal(IBillService.StatePosted, response.State);
+        Assert.Equal(BillStates.Posted, response.State);
         var persisted = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
-        Assert.Equal(IBillService.StatePosted, persisted.State);
+        Assert.Equal(BillStates.Posted, persisted.State);
         Assert.Contains(await db.AuditEvents.ToListAsync(), a => a.EventType == "tally.posted");
     }
 
@@ -1299,7 +1299,7 @@ public sealed class BillServiceTests
         var response = await service.MarkPostedAsync(bill.Id,
             new MarkBillStateRequest("cash register offline reprint"));
 
-        Assert.Equal(IBillService.StatePosted, response.State);
+        Assert.Equal(BillStates.Posted, response.State);
         var audits = await db.AuditEvents.Where(x => x.EntityId == bill.Id.ToString()).ToListAsync();
         Assert.Contains(audits, a => a.EventType == "bill.mark_posted");
     }
@@ -1313,7 +1313,7 @@ public sealed class BillServiceTests
 
         var response = await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest(null));
 
-        Assert.Equal(IBillService.StatePosted, response.State);
+        Assert.Equal(BillStates.Posted, response.State);
     }
 
     [Fact]
@@ -1323,14 +1323,14 @@ public sealed class BillServiceTests
         var service = BuildService(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
-        entity.State = IBillService.StatePosted;
+        entity.State = BillStates.Posted;
         entity.EditedAfterPush = true;
         await db.SaveChangesAsync();
 
         var response = await service.MarkPendingAsync(bill.Id,
             new MarkBillStateRequest("actually never made it to tally"));
 
-        Assert.Equal(IBillService.StatePending, response.State);
+        Assert.Equal(BillStates.Pending, response.State);
         Assert.False(response.EditedAfterPush);
         var audits = await db.AuditEvents.Where(x => x.EntityId == bill.Id.ToString()).ToListAsync();
         Assert.Contains(audits, a => a.EventType == "bill.mark_pending");
@@ -1364,7 +1364,7 @@ public sealed class BillServiceTests
         var service = BuildService(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
-        entity.State = IBillService.StatePosted;
+        entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
 
         var response = await service.DeleteAsync(bill.Id,
@@ -1382,7 +1382,7 @@ public sealed class BillServiceTests
         var service = BuildService(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
-        entity.State = IBillService.StatePosted;
+        entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
 
         var response = await service.DeleteAsync(bill.Id,
@@ -1400,7 +1400,7 @@ public sealed class BillServiceTests
         var service = BuildService(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
-        entity.State = IBillService.StatePosting;
+        entity.State = BillStates.Posting;
         await db.SaveChangesAsync();
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
@@ -1415,10 +1415,10 @@ public sealed class BillServiceTests
         var pending = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         var posted = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 200m)));
         var postedEntity = await db.Bills.FirstAsync(b => b.Id == posted.Id);
-        postedEntity.State = IBillService.StatePosted;
+        postedEntity.State = BillStates.Posted;
         var posting = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 300m)));
         var postingEntity = await db.Bills.FirstAsync(b => b.Id == posting.Id);
-        postingEntity.State = IBillService.StatePosting;
+        postingEntity.State = BillStates.Posting;
         await db.SaveChangesAsync();
 
         var response = await service.DeleteSelectedAsync(new DeleteSelectedBillsRequest(

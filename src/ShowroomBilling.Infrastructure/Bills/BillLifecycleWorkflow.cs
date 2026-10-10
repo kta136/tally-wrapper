@@ -39,13 +39,13 @@ internal sealed class BillLifecycleWorkflow(
         BillValidator.Validate(request.Payload);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is IBillService.StatePosting or IBillService.StateReconciliationRequired)
+        if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot be edited while its Tally outcome is unresolved.");
         }
         EnsureBillDateMatchesFiscalYear(bill, request.Payload);
-        if (bill.State is IBillService.StateVoided or IBillService.StateRevised)
+        if (bill.State is BillStates.Voided or BillStates.Revised)
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}' and cannot be edited.");
@@ -70,7 +70,7 @@ internal sealed class BillLifecycleWorkflow(
                 $"Bill {bill.InvoiceNumber ?? billId.ToString()} was changed elsewhere after you opened it (now revision {current?.RevisionNo.ToString() ?? "?"}). Reload it from Bills before saving.");
         }
 
-        var reopenFrom = bill.State is not (IBillService.StatePending or BillStates.Draft)
+        var reopenFrom = bill.State is not (BillStates.Pending or BillStates.Draft)
             ? bill.State
             : null;
 
@@ -100,7 +100,7 @@ internal sealed class BillLifecycleWorkflow(
 
         if (reopenFrom is not null)
         {
-            bill.State = IBillService.StatePending;
+            bill.State = BillStates.Pending;
             bill.EditedAfterPush = inTally;
             auditStore.Write(
                 bill.Id,
@@ -132,7 +132,7 @@ internal sealed class BillLifecycleWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var priorBill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (priorBill.State is not (IBillService.StatePending or BillStates.Draft))
+        if (priorBill.State is not (BillStates.Pending or BillStates.Draft))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{priorBill.State}'; revise is currently only supported from 'pending'.");
@@ -177,7 +177,7 @@ internal sealed class BillLifecycleWorkflow(
             ShowroomId = priorBill.ShowroomId,
             CounterId = priorBill.CounterId,
             BillType = priorBill.BillType,
-            State = IBillService.StatePending,
+            State = BillStates.Pending,
             InvoiceNumber = reservation.FormattedNumber,
             FiscalYear = reservation.FiscalYear,
             InvoiceCore = reservation.ReservedValue,
@@ -187,7 +187,7 @@ internal sealed class BillLifecycleWorkflow(
         var newRevision = BillSerialization.BuildRevision(newBill.Id, payload, revisionNo: 1, supersedes: priorBill.CurrentRevisionId, createdAt: now);
         newBill.CurrentRevisionId = newRevision.Id;
 
-        priorBill.State = IBillService.StateRevised;
+        priorBill.State = BillStates.Revised;
         priorBill.SupersededByBillId = newBill.Id;
         priorBill.UpdatedAtUtc = now;
 
@@ -224,7 +224,7 @@ internal sealed class BillLifecycleWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (IBillService.StatePending or BillStates.Draft or IBillService.StateFailed))
+        if (bill.State is not (BillStates.Pending or BillStates.Draft or BillStates.Failed))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; void is only allowed from pending/draft/failed in this phase.");
@@ -240,7 +240,7 @@ internal sealed class BillLifecycleWorkflow(
         }
 
         var now = DateTimeOffset.UtcNow;
-        bill.State = IBillService.StateVoided;
+        bill.State = BillStates.Voided;
         bill.VoidedAtUtc = now;
         bill.UpdatedAtUtc = now;
 
@@ -352,7 +352,7 @@ internal sealed class BillLifecycleWorkflow(
             ShowroomId = showroomId,
             CounterId = request.CounterId,
             BillType = BillTypeSales,
-            State = IBillService.StatePending,
+            State = BillStates.Pending,
             InvoiceNumber = reservation.FormattedNumber,
             FiscalYear = reservation.FiscalYear,
             InvoiceCore = reservation.ReservedValue,
