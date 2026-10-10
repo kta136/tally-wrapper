@@ -6,7 +6,6 @@ public interface INumberingService
 {
     public const string DocumentTypeSalesInvoice = "sales_invoice";
 
-
     Task<NumberingPreviewResponse> GetPreviewAsync(
         string documentType,
         string? fiscalYear,
@@ -15,8 +14,6 @@ public interface INumberingService
     Task<ReserveNumberResponse> ReserveAsync(
         ReserveNumberRequest request,
         CancellationToken cancellationToken = default);
-
-    Task<NumberingScopesResponse> GetScopesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns the invoice prefix, suffix, and zero-padding width from current cloud

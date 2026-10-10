@@ -4,7 +4,6 @@ using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Middleware;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
-using ShowroomBilling.Application;
 using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Infrastructure;
@@ -53,7 +52,6 @@ builder.Services.Configure<ApiRuntimeOptions>(builder.Configuration.GetSection(A
 builder.Services.Configure<DeviceAuthOptions>(builder.Configuration.GetSection(DeviceAuthOptions.SectionName));
 builder.Services.AddSingleton<IDatabaseConnectionVerifier, DatabaseConnectionVerifier>();
 
-builder.Services.AddApplicationLayer();
 builder.Services.AddInfrastructureLayer(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

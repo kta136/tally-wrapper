@@ -16,8 +16,8 @@ public sealed class DatabaseInitializationHostedService(
     ILogger<DatabaseInitializationHostedService> logger) : IHostedService
 {
     // Bounded so a slow / unreachable Postgres can't hold the API's startup
-    // hostage indefinitely. Beyond this we record a degraded status and
-    // continue — `/api/health/startup` will surface the failure to operators.
+    // hostage indefinitely. Beyond this the failure is logged, the other
+    // start-up tasks are told to step aside, and the API carries on.
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(15);
 
     public async Task StartAsync(CancellationToken cancellationToken)

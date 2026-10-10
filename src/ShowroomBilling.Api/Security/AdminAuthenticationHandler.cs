@@ -10,9 +10,7 @@ namespace ShowroomBilling.Api.Security;
 
 /// <summary>
 /// Reads the <c>X-Admin-Token</c> header, validates via <see cref="IAdminAuthService"/>,
-/// and builds a ClaimsPrincipal. Also publishes the session on
-/// <c>HttpContext.Items[HttpContextItemKey]</c> so
-/// <c>AdminController.GetSession()</c> can keep reading it without a ClaimsPrincipal round-trip.
+/// and builds a ClaimsPrincipal.
 /// </summary>
 public sealed class AdminAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -24,9 +22,6 @@ public sealed class AdminAuthenticationHandler(
     public const string SchemeName = "AdminToken";
     public const string AdminSessionIdClaim = "admin_session_id";
     public const string AdminActorLabelClaim = "admin_actor_label";
-
-    /// <summary>Where the validated session is left on the request for <c>AdminController.GetSession</c>.</summary>
-    public const string HttpContextItemKey = "AdminSession";
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -46,8 +41,6 @@ public sealed class AdminAuthenticationHandler(
         {
             return AuthenticateResult.Fail("Admin token invalid or expired.");
         }
-
-        Context.Items[HttpContextItemKey] = session;
 
         var claims = new List<Claim>
         {

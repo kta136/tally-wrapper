@@ -152,23 +152,6 @@ public sealed class NumberingServiceTests
     }
 
     [Fact]
-    public async Task Scopes_ListsReservedScopesWithCurrentFiscalYear()
-    {
-        await using var db = CreateDbContext();
-        var service = new NumberingService(db);
-
-        await service.ReserveAsync(new ReserveNumberRequest("k-1", SalesInvoice, "2026-27", null));
-        await service.ReserveAsync(new ReserveNumberRequest("k-2", SalesInvoice, "2025-26", null));
-
-        var scopes = await service.GetScopesAsync();
-
-        Assert.Equal(2, scopes.Scopes.Count);
-        Assert.False(string.IsNullOrWhiteSpace(scopes.CurrentFiscalYear));
-        Assert.Contains(scopes.Scopes, s => s.FiscalYear == "2026-27" && s.NextValue == 2L);
-        Assert.Contains(scopes.Scopes, s => s.FiscalYear == "2025-26" && s.NextValue == 2L);
-    }
-
-    [Fact]
     public async Task Reserve_InvalidDocumentType_Throws()
     {
         await using var db = CreateDbContext();

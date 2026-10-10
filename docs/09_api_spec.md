@@ -112,12 +112,10 @@ The flip is deliberately **not** wrapped in a transaction with the Tally call �
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|
 | `GET` | `/api/numbering/preview` | Show next visible number without reservation | preview number, scope metadata |
-| `GET` | `/api/numbering/scopes` | Load configured numbering scopes | scope list and prefixes/suffixes |
-| `POST` | `/api/numbering/reserve` | Atomically reserve next number (idempotent) | reservation id + formatted number |
 
 `GET /api/numbering/preview` accepts optional `documentType` (default `sales_invoice`) and `fiscalYear` (default = current Indian fiscal year `YYYY-YY`). Returns `{ showroomId, fiscalYear, documentType, previewValue, formattedNumber, prefix, suffix }`.
 
-`POST /api/numbering/reserve` requires `{ idempotencyKey, documentType, fiscalYear?, reservedForReference? }` and responds with the reservation. Invoice numbers are reserved by `CreateDraftAsync` on every new bill, not by push. Format: `{prefix}{fiscalYear}/{value:D4}{suffix}`.
+There is no endpoint that reserves a number by itself. A number is reserved by `CreateDraftAsync` when a bill is created (not by push), in the same transaction as the bill, under the idempotency key `draft:{billId}`. Format: `{prefix}{fiscalYear}/{value:D4}{suffix}`.
 
 ### 2.4 Masters
 
@@ -152,7 +150,6 @@ Settings writes validate required nested sections, host/company/ledger presence,
 | `GET` | `/api/print-assets` | List uploaded assets (logo / signature / watermark) | `{ assets[] }` |
 | `POST` | `/api/print-assets` | Upload asset (base64, ≤ 2 MB) | `{ id, assetKind, fileName, byteLength, ... }` |
 | `GET` | `/api/print-assets/{id}` | Stream the raw image bytes | `File(bytes, contentType, fileName)` |
-| `GET` | `/api/print-assets/{id}/metadata` | Metadata only | asset record |
 | `DELETE` | `/api/print-assets/{id}` | Remove asset | 204 / 404 if already gone |
 
 Uploads require a plain file name (no path components), a decoded size of 1 byte–2 MiB, and PNG or JPEG signature bytes. The API detects and stores the actual MIME type instead of trusting caller-supplied metadata. Kestrel limits all request bodies to 5 MiB, preventing oversized base64 payloads from reaching model binding.
@@ -189,7 +186,7 @@ Tally Wrapper no longer has a bridge process. All bridge-facing endpoints (`/api
 
 Admin-gated routes require a valid `X-Admin-Token` header (obtained via `POST /api/admin/unlock`). Tokens are SHA-256 hashed server-side, expire after 30 minutes, and can be revoked explicitly via logout. Passcodes are PBKDF2 (SHA-256, 120 000 iterations).
 
-Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates via `IAdminAuthService.ValidateTokenAsync`, and builds a `ClaimsPrincipal` with an `admin_session_id` claim. Controllers opt in with `[Authorize(Policy = AdminPolicy.PolicyName)]`. The session is also published on `HttpContext.Items[AdminTokenConstants.HttpContextItemKey]` so `GET /api/admin/session` can return it without re-reading the claims.
+Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates via `IAdminAuthService.ValidateTokenAsync`, and builds a `ClaimsPrincipal` with an `admin_session_id` claim. Controllers opt in with `[Authorize(Policy = AdminPolicy.PolicyName)]`.
 
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|
@@ -201,7 +198,6 @@ Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates vi
 After 4 consecutive failed unlock attempts, the API enters an exponential cooldown (2s, 4s, 8s, 16s, capped at 30s) per showroom. Subsequent attempts during the cooldown return `429 Too Many Requests` with a `Retry-After` header. A successful unlock resets the counter; the counter is in-memory only and resets on API restart. Failed attempts are recorded as `admin.unlock.failed` audit events.
 
 When `DeviceAuth:Mode=TrustedLan` and no admin passcode exists yet, the initial `POST /api/admin/passcode` setup is loopback-only. Later passcode rotations require both an unlocked admin session (`X-Admin-Token`) and the current passcode; wrong current passcodes share the unlock throttle and write `admin.passcode.change.failed` audit rows.
-| `GET` | `/api/admin/session` (admin) | Inspect the session behind the current token | `AdminSessionInfoResponse` |
 | `GET` | `/api/draft-leases/active` (admin) | List every live draft lease across the showroom | `DraftLeaseListResponse` |
 | `POST` | `/api/draft-leases/{leaseId}/force-release` (admin) | Force-release a stale lease with a reason | 204; audits `lease.force_released` |
 
@@ -225,10 +221,9 @@ These are the five admin-gated Bill endpoints listed in §2.2:
 | `GET` | `/api/health/ready` | Readiness probe | DB, migrations |
 | `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages; `503` problem details when the database cannot be read |
 | `GET` | `/api/health/tally-company` | Operator-triggered Tally reachability + active-company check | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
-| `GET` | `/api/health/startup` | Startup hosted-service status (DB migration + stuck-posting recovery) | `{ startedAtUtc, databaseReady, databaseError?, recoveryRan, recoveryHealedCount, recoveryError? }` |
 | `GET` | `/api/runtime/health` | Cheap runtime health by default; full DB health only with `?forceDatabase=true` | `{ status, apiAvailable, databaseConfigured, databaseReachable, settingsLoadedFromApi, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, databaseHealthSkipped, databaseHealthSkipReason?, activeClientCount }` |
 
-`/api/health/startup` exposes whether the DB-init and stuck-posting-recovery hosted services completed cleanly on this API boot. Both services are bounded (DB init: 60s timeout, recovery: 30s) and never throw — a Postgres outage during startup leaves the API up but with `databaseReady = false` so the Desktop can show a degraded-mode banner. State is in-memory and resets on each API restart.
+The DB-init and stuck-posting-recovery hosted services are bounded (DB init: 15s, recovery: 30s) and never throw, so a Postgres outage during startup leaves the API up. Their failures go to the API log; `/api/health/ready` and `/api/runtime/health?forceDatabase=true` report whether the database answers now.
 
 `/api/runtime/health` intentionally avoids PostgreSQL unless `forceDatabase=true` is passed. This lets background desktop/server-tray health checks keep the API status current without unnecessary managed-Postgres wakeups. Full DB truth is requested on startup, explicit System Health refreshes, database setup waits, and the desktop's slower scheduled DB probe.
 

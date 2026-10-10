@@ -65,12 +65,4 @@ public sealed class AdminController(
         await adminService.LogoutAsync(request, cancellationToken);
         return NoContent();
     }
-
-    [HttpGet("session")]
-    [Authorize(Policy = AdminPolicy.PolicyName)]
-    public ActionResult<AdminSessionInfoResponse> GetSession()
-    {
-        var session = HttpContext.Items[AdminAuthenticationHandler.HttpContextItemKey] as AdminSessionInfoResponse;
-        return session is null ? Unauthorized() : Ok(session);
-    }
 }

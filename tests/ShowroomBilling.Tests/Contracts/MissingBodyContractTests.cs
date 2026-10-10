@@ -32,7 +32,6 @@ public sealed class MissingBodyContractTests : IClassFixture<TestApiFactory>
             { "POST", "/api/leases/drafts/acquire" },
             { "POST", $"/api/leases/drafts/{lease}/renew" },
             { "POST", $"/api/leases/drafts/{lease}/release" },
-            { "POST", "/api/numbering/reserve" },
             { "POST", "/api/print-assets" },
             { "POST", "/api/admin/unlock" },
             { "POST", "/api/admin/logout" },

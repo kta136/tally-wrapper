@@ -12,12 +12,8 @@ public sealed class HealthController(
     IMasterSnapshotService masterSnapshotService,
     HealthCheckService healthCheckService,
     ITallyCompanyHealthService tallyCompanyHealthService,
-    IStartupStatus startupStatus,
     ILogger<HealthController> logger) : ControllerBase
 {
-    [HttpGet("startup")]
-    public ActionResult<StartupStatusResponse> Startup() => Ok(startupStatus.Snapshot());
-
     [HttpGet("live")]
     public IActionResult Live() => Ok(new
     {

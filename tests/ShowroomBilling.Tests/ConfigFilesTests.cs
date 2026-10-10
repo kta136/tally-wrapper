@@ -1,5 +1,4 @@
 using System.Text.Json;
-using ShowroomBilling.Application.Settings;
 
 namespace ShowroomBilling.Tests;
 
@@ -72,18 +71,6 @@ public sealed class ConfigFilesTests
             .ToArray();
 
         Assert.Equal([5108, 7108], ports);
-    }
-
-    [Fact]
-    public void Settings_Storage_Contract_Marks_Shared_Settings_As_Cloud_Owned()
-    {
-        var contract = new SettingsStorageContract();
-
-        Assert.True(contract.IsCloudOwned("connection.host"));
-        Assert.True(contract.IsCloudOwned("numbering.invoice_prefix"));
-        Assert.True(contract.IsCloudOwned("print.terms_and_conditions"));
-        Assert.True(contract.IsCloudOwned("karat_mapping.rows"));
-        Assert.False(contract.IsCloudOwned("desktop.bootstrap.api_base_url"));
     }
 
     [Fact]

@@ -156,8 +156,6 @@ Key endpoints:
 - `http://localhost:5108/api/masters/companies` (desktop read; also `ledgers`, `stock-items`, `voucher-types`)
 - `http://localhost:5108/api/masters/refresh` (synchronously fetches from Tally and writes the snapshot — the only way masters get updated; there is no background polling)
 - `http://localhost:5108/api/numbering/preview` (next visible invoice number; does not reserve)
-- `http://localhost:5108/api/numbering/scopes` (per-scope `nextValue` plus cloud prefix/suffix)
-- `http://localhost:5108/api/numbering/reserve` (POST idempotent reservation)
 - `http://localhost:5108/api/bills` (bill search; POST `/drafts` to create; `PUT /drafts/{id}` to update; POST `{id}/push|revise|void`)
 - `http://localhost:5108/api/bills/push-pending` (synchronously posts every pending bill to Tally, one at a time)
 - `http://localhost:5108/api/bills/{id}/audit` (bill event trail, ordered by timestamp)

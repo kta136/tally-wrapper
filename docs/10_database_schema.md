@@ -89,7 +89,7 @@ Constraints / indexes:
 
 ### 1.3a `invoice_number_reservations`
 
-Idempotent record of issued numbers. Each successful `POST /api/numbering/reserve` writes exactly one row.
+Idempotent record of issued numbers. Creating a bill writes exactly one row, in the same transaction as the bill.
 
 | Column | Type | Notes |
 |---|---|---|

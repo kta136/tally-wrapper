@@ -208,25 +208,6 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
         };
     }
 
-    public async Task<NumberingScopesResponse> GetScopesAsync(CancellationToken cancellationToken = default)
-    {
-        var (prefix, suffix, _) = await GetEffectivePrefixSuffixAsync(cancellationToken);
-        var currentYear = NormalizeFiscalYear(null);
-
-        var rows = await dbContext.InvoiceSequences
-            .AsNoTracking()
-            .OrderBy(x => x.ShowroomId)
-            .ThenBy(x => x.FiscalYear)
-            .ThenBy(x => x.DocumentType)
-            .ToListAsync(cancellationToken);
-
-        var scopes = rows
-            .Select(r => new NumberingScopeItem(r.ShowroomId, r.FiscalYear, r.DocumentType, r.NextValue, r.UpdatedAtUtc))
-            .ToArray();
-
-        return new NumberingScopesResponse(currentYear, prefix, suffix, scopes);
-    }
-
     /// <summary>
     /// The invoice prefix, suffix and padding a fresh reservation uses. Public
     /// so change-number can format a typed core value the same way.

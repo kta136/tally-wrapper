@@ -1,22 +1,15 @@
-using ShowroomBilling.Contracts.Health;
-
 namespace ShowroomBilling.Application.Health;
 
 /// <summary>
-/// Singleton scratchpad for the API's startup hosted services. Each service
-/// updates its own slot; the Health controller exposes the snapshot via
-/// <c>GET /api/health/startup</c>. The Desktop reads this to decide whether
-/// to show a "limited mode — database unavailable" banner.
+/// The signal the database initialiser gives the other start-up services:
+/// migrations finished, or they failed. In memory only; every API boot starts
+/// again. What went wrong is in the API log, and <c>GET /api/health/ready</c>
+/// reports whether the database answers now.
 /// </summary>
 public interface IStartupStatus
 {
-    StartupStatusResponse Snapshot();
-
     void RecordDatabaseReady();
     void RecordDatabaseFailure(string error);
-
-    void RecordRecoveryComplete(int healedBills);
-    void RecordRecoveryFailure(string error);
 
     /// <summary>
     /// Completes successfully when <see cref="RecordDatabaseReady"/> has been

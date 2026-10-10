@@ -25,16 +25,3 @@ public sealed record ReserveNumberResponse(
     string FormattedNumber,
     DateTimeOffset ReservedAtUtc,
     bool AlreadyExisted);
-
-public sealed record NumberingScopesResponse(
-    string CurrentFiscalYear,
-    string? Prefix,
-    string? Suffix,
-    IReadOnlyList<NumberingScopeItem> Scopes);
-
-public sealed record NumberingScopeItem(
-    Guid ShowroomId,
-    string FiscalYear,
-    string DocumentType,
-    long NextValue,
-    DateTimeOffset? UpdatedAtUtc);

@@ -8,7 +8,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ShowroomBilling.Application;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
@@ -105,7 +104,6 @@ public partial class App : System.Windows.Application
 
         builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "desktop");
 
-        builder.Services.AddApplicationLayer();
         builder.Services.Configure<DesktopBootstrapOptions>(builder.Configuration.GetSection(DesktopBootstrapOptions.SectionName));
         builder.Services.Configure<ChildProcessOptions>(builder.Configuration.GetSection(ChildProcessOptions.SectionName));
         builder.Services.AddSingleton<IApiEndpointResolver, ApiEndpointResolver>();

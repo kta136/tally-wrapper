@@ -39,13 +39,6 @@ public sealed class PrintAssetsController(IPrintAssetService service) : Controll
         return File(bytes, metadata.ContentType, metadata.FileName);
     }
 
-    [HttpGet("{id:guid}/metadata")]
-    public async Task<ActionResult<PrintAssetResponse>> GetMetadata(Guid id, CancellationToken cancellationToken)
-    {
-        var result = await service.GetAsync(id, cancellationToken);
-        return result is null ? NotFound() : Ok(result.Value.Metadata);
-    }
-
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = DevicePolicy.PolicyName)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

@@ -8,29 +8,12 @@ namespace ShowroomBilling.Api.Controllers;
 
 [ApiController]
 [Route("api/settings")]
-public sealed class SettingsController(
-    ICloudSettingsService cloudSettingsService,
-    ISettingsStorageContract settingsStorageContract) : ControllerBase
+public sealed class SettingsController(ICloudSettingsService cloudSettingsService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<EffectiveSettingsResponse>> Get(CancellationToken cancellationToken)
     {
         var response = await cloudSettingsService.GetEffectiveSettingsAsync(cancellationToken);
-        return Ok(response);
-    }
-
-    [HttpGet("storage-contract")]
-    public ActionResult<SettingsStorageContractResponse> GetStorageContract()
-    {
-        var response = new SettingsStorageContractResponse(
-            LocalRules: settingsStorageContract.LocalRules
-                .Select(rule => new SettingsStorageRuleResponse(rule.Key, rule.Scope.ToString(), rule.Description))
-                .ToArray(),
-            CloudRules: settingsStorageContract.CloudRules
-                .Select(rule => new SettingsStorageRuleResponse(rule.Key, rule.Scope.ToString(), rule.Description))
-                .ToArray(),
-            Note: "Desktop must not persist shared business settings locally. It loads effective settings from the API.");
-
         return Ok(response);
     }
 
