@@ -144,8 +144,8 @@ public sealed class NumberingServiceTests
     {
         // 23:59 IST on 31 March is 18:29 UTC; 00:30 IST on 1 April is still
         // 31 March in UTC. The year must turn over on the IST calendar.
-        var march = NumberingService.ComputeCurrentFiscalYear(new DateTimeOffset(2026, 3, 31, 18, 29, 0, TimeSpan.Zero));
-        var april = NumberingService.ComputeCurrentFiscalYear(new DateTimeOffset(2026, 3, 31, 19, 0, 0, TimeSpan.Zero));
+        var march = InvoiceNumberFormatter.ComputeFiscalYear(new DateTimeOffset(2026, 3, 31, 18, 29, 0, TimeSpan.Zero));
+        var april = InvoiceNumberFormatter.ComputeFiscalYear(new DateTimeOffset(2026, 3, 31, 19, 0, 0, TimeSpan.Zero));
 
         Assert.Equal("2025-26", march);
         Assert.Equal("2026-27", april);

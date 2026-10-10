@@ -30,7 +30,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
                 x => x.ShowroomId == showroomId && x.FiscalYear == year && x.DocumentType == normalizedType,
                 cancellationToken);
 
-        var (prefix, suffix, padding) = await GetPrefixSuffixAsync(cancellationToken);
+        var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
         var previewValue = await ComputeNextFreeCoreAsync(
             showroomId, year, sequence?.NextValue ?? 1L, cancellationToken);
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, previewValue, year, padding);
@@ -94,16 +94,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             .FirstOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, cancellationToken);
         if (existing is not null)
         {
-            return new ReserveNumberResponse(
-                ReservationId: existing.Id,
-                IdempotencyKey: existing.IdempotencyKey,
-                ShowroomId: existing.ShowroomId,
-                FiscalYear: existing.FiscalYear,
-                DocumentType: existing.DocumentType,
-                ReservedValue: existing.ReservedValue,
-                FormattedNumber: existing.FormattedNumber,
-                ReservedAtUtc: existing.ReservedAtUtc,
-                AlreadyExisted: true);
+            return MapReservation(existing, alreadyExisted: true);
         }
 
         var isInMemory = dbContext.UsesInMemoryProvider();
@@ -115,27 +106,10 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        InvoiceSequenceEntity? sequence;
-        if (isInMemory)
-        {
-            sequence = await dbContext.InvoiceSequences.FirstOrDefaultAsync(
-                x => x.ShowroomId == showroomId && x.FiscalYear == year && x.DocumentType == normalizedType,
-                cancellationToken);
-        }
-        else
-        {
-            var locked = await dbContext.InvoiceSequences
-                .FromSqlInterpolated($@"
-SELECT * FROM public.invoice_sequences
-WHERE ""ShowroomId"" = {showroomId}
-  AND ""FiscalYear"" = {year}
-  AND ""DocumentType"" = {normalizedType}
-FOR UPDATE")
-                .ToListAsync(cancellationToken);
-            sequence = locked.FirstOrDefault();
-        }
+        var sequence = await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(
+            dbContext, showroomId, year, normalizedType, cancellationToken);
 
-        var (prefix, suffix, padding) = await GetPrefixSuffixAsync(cancellationToken);
+        var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
 
         // Forward-skip past any core value whose formatted form already lives in
         // `bills.InvoiceNumber` for this (showroom, fiscal year). This keeps the
@@ -209,7 +183,11 @@ FOR UPDATE")
             await transaction.CommitAsync(cancellationToken);
         }
 
-        return new ReserveNumberResponse(
+        return MapReservation(reservation, alreadyExisted: false);
+    }
+
+    private static ReserveNumberResponse MapReservation(InvoiceNumberReservationEntity reservation, bool alreadyExisted) =>
+        new(
             ReservationId: reservation.Id,
             IdempotencyKey: reservation.IdempotencyKey,
             ShowroomId: reservation.ShowroomId,
@@ -218,8 +196,7 @@ FOR UPDATE")
             ReservedValue: reservation.ReservedValue,
             FormattedNumber: reservation.FormattedNumber,
             ReservedAtUtc: reservation.ReservedAtUtc,
-            AlreadyExisted: false);
-    }
+            AlreadyExisted: alreadyExisted);
 
     private bool IsRetryableReservationConflict(DbUpdateException exception)
     {
@@ -236,7 +213,7 @@ FOR UPDATE")
 
     public async Task<NumberingScopesResponse> GetScopesAsync(CancellationToken cancellationToken = default)
     {
-        var (prefix, suffix, _) = await GetPrefixSuffixAsync(cancellationToken);
+        var (prefix, suffix, _) = await GetEffectivePrefixSuffixAsync(cancellationToken);
         var currentYear = NormalizeFiscalYear(null);
 
         var rows = await dbContext.InvoiceSequences
@@ -254,15 +231,18 @@ FOR UPDATE")
     }
 
     /// <summary>
-    /// Exposed via <see cref="INumberingService.GetEffectivePrefixSuffixAsync"/>
-    /// so other services (e.g. <c>BillService.ChangeInvoiceNumberAsync</c>) can
-    /// format a user-typed core value the same way a fresh reservation would.
+    /// The invoice prefix, suffix and padding a fresh reservation uses. Public
+    /// so change-number can format a typed core value the same way.
     /// </summary>
-    internal async Task<(string? Prefix, string? Suffix, int Padding)> GetPrefixSuffixAsync(CancellationToken cancellationToken)
+    public async Task<(string? Prefix, string? Suffix, int Padding)> GetEffectivePrefixSuffixAsync(CancellationToken cancellationToken = default)
     {
+        // Only these three columns: the settings row also carries the item
+        // masters, karat mapping and print layout as large JSON, and this runs
+        // on every Save Bill while the sequence row is locked.
         var settings = await dbContext.CloudSettings
             .AsNoTracking()
             .OrderByDescending(x => x.UpdatedAtUtc)
+            .Select(x => new { x.InvoicePrefix, x.InvoiceSuffix, x.InvoicePadding })
             .FirstOrDefaultAsync(cancellationToken);
         if (settings is null)
         {
@@ -274,9 +254,6 @@ FOR UPDATE")
             string.IsNullOrWhiteSpace(settings.InvoiceSuffix) ? null : settings.InvoiceSuffix.Trim(),
             settings.InvoicePadding < 1 ? InvoiceNumberFormatter.DefaultPadding : settings.InvoicePadding);
     }
-
-    public Task<(string? Prefix, string? Suffix, int Padding)> GetEffectivePrefixSuffixAsync(CancellationToken cancellationToken = default)
-        => GetPrefixSuffixAsync(cancellationToken);
 
     /// <summary>
     /// Starting at <paramref name="startFrom"/>, advance until the candidate
@@ -348,10 +325,7 @@ FOR UPDATE")
         {
             return fiscalYear.Trim();
         }
-        return ComputeCurrentFiscalYear(DateTimeOffset.UtcNow);
+        return InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow);
     }
-
-    public static string ComputeCurrentFiscalYear(DateTimeOffset now) =>
-        InvoiceNumberFormatter.ComputeFiscalYear(now);
 
 }

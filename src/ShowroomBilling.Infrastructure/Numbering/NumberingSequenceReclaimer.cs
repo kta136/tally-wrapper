@@ -57,29 +57,8 @@ internal static class NumberingSequenceReclaimer
         long? keepCoreReserved = null)
     {
         const string documentType = INumberingService.DocumentTypeSalesInvoice;
-        var isInMemory = dbContext.UsesInMemoryProvider();
-
-        InvoiceSequenceEntity? sequence;
-        if (isInMemory)
-        {
-            sequence = await dbContext.InvoiceSequences.FirstOrDefaultAsync(
-                x => x.ShowroomId == showroomId
-                     && x.FiscalYear == fiscalYear
-                     && x.DocumentType == documentType,
-                cancellationToken);
-        }
-        else
-        {
-            var locked = await dbContext.InvoiceSequences
-                .FromSqlInterpolated($@"
-SELECT * FROM public.invoice_sequences
-WHERE ""ShowroomId"" = {showroomId}
-  AND ""FiscalYear"" = {fiscalYear}
-  AND ""DocumentType"" = {documentType}
-FOR UPDATE")
-                .ToListAsync(cancellationToken);
-            sequence = locked.FirstOrDefault();
-        }
+        var sequence = await LoadSequenceForUpdateAsync(
+            dbContext, showroomId, fiscalYear, documentType, cancellationToken);
 
         if (sequence is null)
         {
@@ -145,5 +124,39 @@ FOR UPDATE")
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Loads the sequence row for a scope and locks it with <c>FOR UPDATE</c>
+    /// until the surrounding transaction ends, so two reservations (or a
+    /// reservation and a rollback) cannot read the same <c>NextValue</c>.
+    /// The InMemory provider used by unit tests has no row locks and reads
+    /// the row plainly.
+    /// </summary>
+    internal static async Task<InvoiceSequenceEntity?> LoadSequenceForUpdateAsync(
+        ShowroomBillingDbContext dbContext,
+        Guid showroomId,
+        string fiscalYear,
+        string documentType,
+        CancellationToken cancellationToken)
+    {
+        if (dbContext.UsesInMemoryProvider())
+        {
+            return await dbContext.InvoiceSequences.FirstOrDefaultAsync(
+                x => x.ShowroomId == showroomId
+                     && x.FiscalYear == fiscalYear
+                     && x.DocumentType == documentType,
+                cancellationToken);
+        }
+
+        var locked = await dbContext.InvoiceSequences
+            .FromSqlInterpolated($@"
+SELECT * FROM public.invoice_sequences
+WHERE ""ShowroomId"" = {showroomId}
+  AND ""FiscalYear"" = {fiscalYear}
+  AND ""DocumentType"" = {documentType}
+FOR UPDATE")
+            .ToListAsync(cancellationToken);
+        return locked.FirstOrDefault();
     }
 }
