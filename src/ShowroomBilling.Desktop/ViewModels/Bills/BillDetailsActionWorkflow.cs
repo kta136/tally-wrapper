@@ -1,4 +1,3 @@
-using System.Windows;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Desktop.Services;
 
@@ -11,141 +10,97 @@ internal interface IBillDetailsActionHost
     bool IsActing { get; set; }
     string StatusMessage { get; set; }
     Action? BillMutated { get; }
+    Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; }
     Task LoadAsync(Guid billId, CancellationToken cancellationToken = default);
     Task ReloadSupportingStateAsync(Guid billId, CancellationToken cancellationToken);
 }
 
+/// <summary>The action buttons in the Bill Details dialog.</summary>
 internal sealed class BillDetailsActionWorkflow(
     IBillsApiClient? billsApi,
     IBillDetailsActionHost host)
 {
-    public async Task PushAsync(CancellationToken cancellationToken)
-    {
-        if (billsApi is null || host.Bill is null) return;
-
-        var billId = host.Bill.Id;
-        host.IsActing = true;
-        host.StatusMessage = "Pushing to Tally…";
-        try
+    public Task PushAsync(CancellationToken cancellationToken) => RunAsync(
+        "Pushing to Tally…",
+        "Pushed to Tally.",
+        "Push failed",
+        async (api, billId) =>
         {
-            host.Bill = await billsApi.PushAsync(billId, new PushBillRequest(null), cancellationToken);
+            host.Bill = await api.PushAsync(billId, new PushBillRequest(null), cancellationToken);
             await host.ReloadSupportingStateAsync(billId, cancellationToken);
-            host.StatusMessage = "Pushed to Tally.";
-            host.BillMutated?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Push failed: {ex.Message}";
-        }
-        finally
-        {
-            host.IsActing = false;
-        }
-    }
+        });
 
-    public async Task RetryAsync(CancellationToken cancellationToken)
-    {
-        if (billsApi is null || host.Bill is null) return;
-
-        var billId = host.Bill.Id;
-        host.IsActing = true;
-        host.StatusMessage = "Retrying posting…";
-        try
+    public Task RetryAsync(CancellationToken cancellationToken) => RunAsync(
+        "Retrying posting…",
+        "Retry complete.",
+        "Retry failed",
+        async (api, billId) =>
         {
-            host.PostingStatus = await billsApi.RetryAsync(billId, new RetryBillPostingRequest(null), cancellationToken);
+            host.PostingStatus = await api.RetryAsync(billId, new RetryBillPostingRequest(null), cancellationToken);
             await host.LoadAsync(billId, cancellationToken);
-            host.StatusMessage = "Retry complete.";
-            host.BillMutated?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Retry failed: {ex.Message}";
-        }
-        finally
-        {
-            host.IsActing = false;
-        }
-    }
+        });
 
     public async Task RepostAsync(CancellationToken cancellationToken)
     {
-        if (billsApi is null || host.Bill is null) return;
+        if (host.Bill is not { } bill) return;
 
-        var alreadyPosted = BillStateCapabilities.IsPosted(host.Bill.State);
-        var warning = alreadyPosted
-            ? $"This bill (Invoice {host.Bill.InvoiceNumber ?? "—"}) is already posted to Tally. Reposting will push the current revision to Tally again — if the original voucher hasn't been cleared in Tally first, you will end up with a duplicate voucher.\n\nProceed with repost?"
-            : $"Repost Invoice {host.Bill.InvoiceNumber ?? "—"} to Tally?";
+        var question = BillConfirmations.Repost(
+            $"invoice {bill.InvoiceNumber ?? "—"}",
+            BillStateCapabilities.IsPosted(bill.State));
+        if (host.ConfirmHandler is null || !await host.ConfirmHandler(question)) return;
 
-        var confirm = MessageBox.Show(
-            warning,
-            "Confirm Repost",
-            MessageBoxButton.OKCancel,
-            alreadyPosted ? MessageBoxImage.Warning : MessageBoxImage.Question,
-            MessageBoxResult.Cancel);
-        if (confirm != MessageBoxResult.OK) return;
-
-        var billId = host.Bill.Id;
-        host.IsActing = true;
-        host.StatusMessage = "Reposting…";
-        try
-        {
-            var key = Guid.NewGuid().ToString("N");
-            host.PostingStatus = await billsApi.RepostAsync(billId, new RepostBillRequest(key, null), cancellationToken);
-            await host.LoadAsync(billId, cancellationToken);
-            host.StatusMessage = "Repost complete.";
-            host.BillMutated?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Repost failed: {ex.Message}";
-        }
-        finally
-        {
-            host.IsActing = false;
-        }
+        await RunAsync(
+            "Reposting…",
+            "Repost complete.",
+            "Repost failed",
+            async (api, billId) =>
+            {
+                host.PostingStatus = await api.RepostAsync(
+                    billId,
+                    new RepostBillRequest(Guid.NewGuid().ToString("N"), null),
+                    cancellationToken);
+                await host.LoadAsync(billId, cancellationToken);
+            });
     }
 
-    public async Task VoidAsync(CancellationToken cancellationToken)
-    {
-        if (billsApi is null || host.Bill is null) return;
-
-        var billId = host.Bill.Id;
-        host.IsActing = true;
-        host.StatusMessage = "Voiding…";
-        try
+    public Task VoidAsync(CancellationToken cancellationToken) => RunAsync(
+        "Voiding…",
+        "Bill voided.",
+        "Void failed",
+        async (api, billId) =>
         {
-            host.Bill = await billsApi.VoidAsync(billId, new VoidBillRequest(null), cancellationToken);
+            host.Bill = await api.VoidAsync(billId, new VoidBillRequest(null), cancellationToken);
             await host.ReloadSupportingStateAsync(billId, cancellationToken);
-            host.StatusMessage = "Bill voided.";
-            host.BillMutated?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Void failed: {ex.Message}";
-        }
-        finally
-        {
-            host.IsActing = false;
-        }
-    }
+        });
 
-    public async Task ReviseAsync(CancellationToken cancellationToken)
+    public Task ReviseAsync(CancellationToken cancellationToken) => RunAsync(
+        "Creating revision…",
+        "Revision created.",
+        "Revise failed",
+        async (api, billId) =>
+        {
+            // The revision is a new bill; the dialog follows it.
+            var revision = await api.ReviseAsync(billId, new ReviseBillRequest(null), cancellationToken);
+            host.Bill = revision;
+            await host.ReloadSupportingStateAsync(revision.Id, cancellationToken);
+        });
+
+    private async Task RunAsync(string starting, string done, string failure, Func<IBillsApiClient, Guid, Task> action)
     {
         if (billsApi is null || host.Bill is null) return;
 
         var billId = host.Bill.Id;
         host.IsActing = true;
-        host.StatusMessage = "Creating revision…";
+        host.StatusMessage = starting;
         try
         {
-            host.Bill = await billsApi.ReviseAsync(billId, new ReviseBillRequest(null), cancellationToken);
-            await host.ReloadSupportingStateAsync(host.Bill.Id, cancellationToken);
-            host.StatusMessage = "Revision created.";
+            await action(billsApi, billId);
+            host.StatusMessage = done;
             host.BillMutated?.Invoke();
         }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Revise failed: {ex.Message}";
+            host.StatusMessage = $"{failure}: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

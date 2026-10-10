@@ -22,11 +22,11 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         _actions = new BillDetailsActionWorkflow(_billsApi, this);
         AuditTrail = new ObservableCollection<BillAuditTrailItemViewModel>();
 
-        PushCommand = new AsyncRelayCommand(PushAsync, CanPush);
-        RetryCommand = new AsyncRelayCommand(RetryAsync, CanRetry);
-        RepostCommand = new AsyncRelayCommand(RepostAsync, CanRepost);
-        VoidCommand = new AsyncRelayCommand(VoidAsync, CanVoid);
-        ReviseCommand = new AsyncRelayCommand(ReviseAsync, CanRevise);
+        PushCommand = new AsyncRelayCommand(_actions.PushAsync, () => CanAct(BillStateCapabilities.CanPush));
+        RetryCommand = new AsyncRelayCommand(_actions.RetryAsync, () => CanAct(BillStateCapabilities.CanRetry));
+        RepostCommand = new AsyncRelayCommand(_actions.RepostAsync, () => CanAct(BillStateCapabilities.CanRepost));
+        VoidCommand = new AsyncRelayCommand(_actions.VoidAsync, () => CanAct(BillStateCapabilities.CanVoid));
+        ReviseCommand = new AsyncRelayCommand(_actions.ReviseAsync, () => CanAct(BillStateCapabilities.CanRevise));
     }
 
     public ObservableCollection<BillAuditTrailItemViewModel> AuditTrail { get; }
@@ -44,6 +44,9 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     public IAsyncRelayCommand ReviseCommand { get; }
 
     public Action? BillMutated { get; set; }
+
+    /// <summary>Handler the shell wires up to ask a yes/no question in the confirm overlay.</summary>
+    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
     public IReadOnlyList<BillLineItemDto> Lines =>
         Bill?.CurrentRevision?.Payload.Lines ?? Array.Empty<BillLineItemDto>();
@@ -110,12 +113,8 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         ReviseCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanAct() => _billsApi is not null && Bill is not null && !IsActing && !IsLoading;
-    private bool CanPush() => CanAct() && BillStateCapabilities.CanPush(Bill!.State);
-    private bool CanRetry() => CanAct() && BillStateCapabilities.CanRetry(Bill!.State);
-    private bool CanRepost() => CanAct() && BillStateCapabilities.CanRepost(Bill!.State);
-    private bool CanVoid() => CanAct() && BillStateCapabilities.CanVoid(Bill!.State);
-    private bool CanRevise() => CanAct() && BillStateCapabilities.CanRevise(Bill!.State);
+    private bool CanAct(Func<string?, bool> allowedInState)
+        => _billsApi is not null && Bill is not null && !IsActing && !IsLoading && allowedInState(Bill.State);
 
     public async Task LoadAsync(Guid billId, CancellationToken cancellationToken = default)
     {
@@ -135,34 +134,20 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
 
         try
         {
+            // The posting status and the timeline are read by bill id, so they
+            // load alongside the bill instead of after it.
+            var supporting = ReloadSupportingStateAsync(billId, cancellationToken);
             var bill = await _billsApi.GetAsync(billId, cancellationToken);
+            await supporting;
             if (bill is null)
             {
+                PostingStatus = null;
+                ApplyAudit(null);
                 StatusMessage = "Bill not found.";
                 return;
             }
 
             Bill = bill;
-            try
-            {
-                PostingStatus = await _billsApi.GetPostingStatusAsync(billId, cancellationToken);
-            }
-            catch
-            {
-                PostingStatus = null;
-            }
-
-            try
-            {
-                var audit = await _billsApi.GetAuditAsync(billId, cancellationToken);
-                ApplyAudit(audit);
-            }
-            catch
-            {
-                AuditTrail.Clear();
-                OnPropertyChanged(nameof(HasAuditTrail));
-            }
-
             StatusMessage = string.Empty;
         }
         catch (Exception ex)
@@ -177,26 +162,20 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         }
     }
 
-    private async Task PushAsync(CancellationToken cancellationToken)
-        => await _actions.PushAsync(cancellationToken);
-
-    private async Task RetryAsync(CancellationToken cancellationToken)
-        => await _actions.RetryAsync(cancellationToken);
-
-    private async Task RepostAsync(CancellationToken cancellationToken)
-        => await _actions.RepostAsync(cancellationToken);
-
-    private async Task VoidAsync(CancellationToken cancellationToken)
-        => await _actions.VoidAsync(cancellationToken);
-
-    private async Task ReviseAsync(CancellationToken cancellationToken)
-        => await _actions.ReviseAsync(cancellationToken);
-
     public async Task ReloadSupportingStateAsync(Guid billId, CancellationToken cancellationToken)
     {
+        if (_billsApi is null)
+        {
+            return;
+        }
+
+        var status = _billsApi.GetPostingStatusAsync(billId, cancellationToken);
+        var audit = _billsApi.GetAuditAsync(billId, cancellationToken);
+
+        // Either read may fail on its own; the bill itself is still worth showing.
         try
         {
-            PostingStatus = await _billsApi!.GetPostingStatusAsync(billId, cancellationToken);
+            PostingStatus = await status;
         }
         catch
         {
@@ -205,12 +184,11 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
 
         try
         {
-            ApplyAudit(await _billsApi!.GetAuditAsync(billId, cancellationToken));
+            ApplyAudit(await audit);
         }
         catch
         {
-            AuditTrail.Clear();
-            OnPropertyChanged(nameof(HasAuditTrail));
+            ApplyAudit(null);
         }
     }
 
@@ -231,5 +209,4 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         OnPropertyChanged(nameof(HasAuditTrail));
         OnPropertyChanged(nameof(AuditEmptyMessage));
     }
-
 }

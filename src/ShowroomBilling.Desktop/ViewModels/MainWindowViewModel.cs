@@ -85,6 +85,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         SyntheticBatch = syntheticBatch;
         ChangeNumberDialog = new ChangeNumberDialogViewModel();
         ReasonPromptDialog = new ReasonPromptDialogViewModel();
+        ConfirmDialog = new ConfirmDialogViewModel();
         _dialogCoordinator = new ShellDialogCoordinator(
             _adminTokenStore,
             Admin,
@@ -116,10 +117,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         ApplySystemState(SystemState.Degraded);
 
         SwitchTabCommand = new RelayCommand<NavTab>(SwitchTab);
-        OpenShortcutsCommand = new RelayCommand(() => ActiveDialog = "shortcuts");
+        OpenShortcutsCommand = new RelayCommand(() => ActiveDialog = ShellDialogs.Shortcuts);
         OpenAdminUnlockCommand = new RelayCommand(() =>
         {
-            ActiveDialog = "admin";
+            ActiveDialog = ShellDialogs.Admin;
             _ = Admin.LoadStatusCommand.ExecuteAsync(null);
         });
         // Bare-key variants for the window key bindings. A false CanExecute
@@ -134,11 +135,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             {
                 SyntheticBatch.Rate24Kt = Invoice.Rate24Kt.Value;
             }
-            ActiveDialog = "syntheticBatch";
+            ActiveDialog = ShellDialogs.SyntheticBatch;
         });
         OpenHealthCommand = new RelayCommand(() =>
         {
-            ActiveDialog = "health";
+            ActiveDialog = ShellDialogs.Health;
             _ = RefreshHealthAsync(forceTallyCompany: true);
         });
         SaveActiveCommand = new AsyncRelayCommand(SaveActiveAsync);
@@ -159,11 +160,18 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         RefreshAllMastersCommand = new AsyncRelayCommand(RefreshAllMastersAsync);
         CloseDialogCommand = new RelayCommand(() =>
         {
+            // The confirm overlay sits above everything, so Esc answers it first.
+            if (ConfirmDialog.IsOpen)
+            {
+                ConfirmDialog.Cancel();
+                return;
+            }
+
             // Esc-close: if a prompting overlay is in flight, resolve its TCS
             // as "cancel" first so the await'ing caller unblocks instead of
             // hanging forever.
-            if (ActiveDialog == "changeNumber") OnChangeNumberDialogClosed((false, string.Empty, null));
-            else if (ActiveDialog == "reasonPrompt") OnReasonPromptDialogClosed(null);
+            if (ActiveDialog == ShellDialogs.ChangeNumber) OnChangeNumberDialogClosed((false, string.Empty, null));
+            else if (ActiveDialog == ShellDialogs.ReasonPrompt) OnReasonPromptDialogClosed(null);
 
             if (ActiveDialog is not null)
             {
@@ -225,6 +233,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Bills.EditBillHandler = LoadBillForEditInInvoiceTabAsync;
         Bills.ChangeNumberPromptHandler = PromptChangeNumberAsync;
         Bills.ReasonPromptHandler = PromptReasonAsync;
+        Bills.ConfirmHandler = ConfirmDialog.ShowAsync;
+        BillDetails.ConfirmHandler = ConfirmDialog.ShowAsync;
+        Settings.Database.ConfirmHandler = ConfirmDialog.ShowAsync;
         Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
     }
 
@@ -276,22 +287,17 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 cancellationToken);
             if (!string.IsNullOrWhiteSpace(dry.WarningSummary))
             {
-                var confirm = System.Windows.MessageBox.Show(
-                    dry.WarningSummary,
+                var goAhead = await ConfirmDialog.ShowAsync(new ConfirmRequest(
                     "Invoice-number change warnings",
-                    System.Windows.MessageBoxButton.OKCancel,
-                    System.Windows.MessageBoxImage.Warning,
-                    System.Windows.MessageBoxResult.Cancel);
-                if (confirm != System.Windows.MessageBoxResult.OK) return (false, string.Empty, null);
+                    dry.WarningSummary,
+                    "Change number",
+                    IsWarning: true));
+                if (!goAhead) return (false, string.Empty, null);
             }
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(
-                $"Validation failed: {ex.Message}",
-                "Change invoice number",
-                System.Windows.MessageBoxButton.OK,
-                System.Windows.MessageBoxImage.Error);
+            Bills.StatusMessage = $"Change number check failed: {ApiResponseReader.FormatError(ex)}";
             return (false, string.Empty, null);
         }
 
@@ -357,6 +363,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public SyntheticBatchViewModel SyntheticBatch { get; }
     public ChangeNumberDialogViewModel ChangeNumberDialog { get; }
     public ReasonPromptDialogViewModel ReasonPromptDialog { get; }
+    public ConfirmDialogViewModel ConfirmDialog { get; }
 
     public TitleBarViewModel TitleBar { get; }
     public HealthClusterViewModel Health { get; }
@@ -369,8 +376,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IRelayCommand OpenShortcutsKeyCommand { get; }
     public IRelayCommand OpenAdminUnlockKeyCommand { get; }
 
+    private bool IsAnyDialogOpen => ActiveDialog is not null || ConfirmDialog.IsOpen;
+
     private bool CanUseBareKeyShortcut() =>
-        ActiveDialog is null
+        !IsAnyDialogOpen
         && System.Windows.Input.Keyboard.FocusedElement is not (System.Windows.Controls.Primitives.TextBoxBase or System.Windows.Controls.PasswordBox);
     public IRelayCommand OpenSyntheticBatchCommand { get; }
     public IRelayCommand OpenHealthCommand { get; }
@@ -481,7 +490,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     private async Task SaveActiveAsync(CancellationToken cancellationToken)
     {
-        if (ActiveDialog is not null)
+        if (IsAnyDialogOpen)
         {
             return;
         }
@@ -498,7 +507,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     private async Task PrintEstimateAsync(CancellationToken cancellationToken)
     {
-        if (ActiveDialog is null && ActiveTab == NavTab.Invoice)
+        if (!IsAnyDialogOpen && ActiveTab == NavTab.Invoice)
         {
             await OpenInvoicePreviewAsync(cancellationToken);
         }
@@ -508,7 +517,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     {
         var selected = Bills.SelectedBill;
         if (selected is null) return;
-        ActiveDialog = "billDetails";
+        ActiveDialog = ShellDialogs.BillDetails;
         _ = BillDetails.LoadAsync(selected.Id);
     }
 
@@ -554,7 +563,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         if (LastHealthSnapshot?.ApiReachable == true
             && await SetupWizard.PrepareForStartupAsync(LastHealthSnapshot, settingsResponse))
         {
-            ActiveDialog = "setupWizard";
+            ActiveDialog = ShellDialogs.SetupWizard;
         }
         else if (_databaseConfigurationAttentionRequired && LastHealthSnapshot?.ApiReachable == true)
         {
@@ -632,13 +641,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     private async Task SwitchToLocalFallbackAsync(CancellationToken cancellationToken)
     {
-        var confirm = MessageBox.Show(
-            "Switch this workstation to local embedded API mode and restart Billing? This fallback requires local database configuration on this PC, and any unsaved in-memory invoice work will be lost.",
+        var confirmed = await ConfirmDialog.ShowAsync(new ConfirmRequest(
             "Switch to local fallback",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Warning,
-            MessageBoxResult.Cancel);
-        if (confirm != MessageBoxResult.OK)
+            "Switch this workstation to local embedded API mode and restart Billing? This fallback requires local database configuration on this PC, and any unsaved in-memory invoice work will be lost.",
+            "Switch and restart",
+            IsWarning: true));
+        if (!confirmed)
         {
             return;
         }
@@ -647,7 +655,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             DesktopConnectionModes.LocalEmbedded,
             _bootstrapOptions.ServerApiBaseUrl,
             cancellationToken);
-        RestartCurrentProcess();
+        AppRestart.Restart();
     }
 
     private async Task SwitchToServerModeAsync(CancellationToken cancellationToken)
@@ -656,23 +664,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             DesktopConnectionModes.Server,
             _bootstrapOptions.ServerApiBaseUrl,
             cancellationToken);
-        RestartCurrentProcess();
-    }
-
-    private static void RestartCurrentProcess()
-    {
-        var executable = Environment.ProcessPath
-            ?? Process.GetCurrentProcess().MainModule?.FileName;
-        if (!string.IsNullOrWhiteSpace(executable))
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = executable,
-                UseShellExecute = true
-            });
-        }
-
-        System.Windows.Application.Current.Shutdown();
+        AppRestart.Restart();
     }
 
     private void StartHealthPolling()

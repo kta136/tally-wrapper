@@ -47,33 +47,14 @@ public partial class SettingsPreviewViewModel : ObservableObject
     private bool _bulkWasActive;
     private bool _suppressZoomPersist;
 
-    public SettingsPreviewViewModel() : this(null, null, null, null, null, null, null) { }
-
     public SettingsPreviewViewModel(
-        SettingsDraft? draft,
-        PrintLayoutViewModel? printLayout,
-        SettingsViewModel? settings,
-        IPrintDispatcher? dispatcher,
-        IPrintAssetApiClient? assets)
-        : this(draft, printLayout, settings, dispatcher, assets, null, null) { }
-
-    public SettingsPreviewViewModel(
-        SettingsDraft? draft,
-        PrintLayoutViewModel? printLayout,
-        SettingsViewModel? settings,
-        IPrintDispatcher? dispatcher,
-        IPrintAssetApiClient? assets,
-        IPrintPreferencesStore? preferences)
-        : this(draft, printLayout, settings, dispatcher, assets, preferences, null) { }
-
-    public SettingsPreviewViewModel(
-        SettingsDraft? draft,
-        PrintLayoutViewModel? printLayout,
-        SettingsViewModel? settings,
-        IPrintDispatcher? dispatcher,
-        IPrintAssetApiClient? assets,
-        IPrintPreferencesStore? preferences,
-        TimeSpan? debounceInterval)
+        SettingsDraft? draft = null,
+        PrintLayoutViewModel? printLayout = null,
+        SettingsViewModel? settings = null,
+        IPrintDispatcher? dispatcher = null,
+        IPrintAssetApiClient? assets = null,
+        IPrintPreferencesStore? preferences = null,
+        TimeSpan? debounceInterval = null)
     {
         _draft = draft;
         _printLayout = printLayout;

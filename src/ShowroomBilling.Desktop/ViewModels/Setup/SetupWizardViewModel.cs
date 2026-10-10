@@ -50,7 +50,7 @@ public partial class SetupWizardViewModel : ObservableObject
 
     public IRelayCommand RestartDesktopCommand { get; }
 
-    public Action RestartDesktopAction { get; set; } = RestartCurrentProcess;
+    public Action RestartDesktopAction { get; set; } = AppRestart.Restart;
 
     [ObservableProperty] private SetupWizardStep currentStep = SetupWizardStep.Database;
     [ObservableProperty] private bool isBusy;
@@ -386,23 +386,6 @@ public partial class SetupWizardViewModel : ObservableObject
     private void RestartDesktop()
     {
         RestartDesktopAction();
-    }
-
-    private static void RestartCurrentProcess()
-    {
-        var executable = Environment.ProcessPath
-            ?? Process.GetCurrentProcess().MainModule?.FileName;
-        if (string.IsNullOrWhiteSpace(executable))
-        {
-            return;
-        }
-
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = executable,
-            UseShellExecute = true
-        });
-        System.Windows.Application.Current.Shutdown();
     }
 
     partial void OnCurrentStepChanged(SetupWizardStep value)

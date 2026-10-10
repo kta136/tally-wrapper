@@ -135,6 +135,7 @@ Every class above has a direct WPF translation — most become a `Style` keyed i
 | Print preview dialog (estimate/final toggle, watermark, copy checkboxes, thermal mock) | [dialogs.jsx PrintPreviewDialog](design/app/dialogs.jsx) |
 | Settings screen (sectioned nav, Connection / Invoice Content / Advanced with full treatment; Numbering / Ledgers / Items / Karat / Invoice Layout / Company as styled scaffolds) | [screens.jsx SettingsScreen](design/app/screens.jsx) |
 | Admin unlock + danger confirm dialogs | [dialogs.jsx](design/app/dialogs.jsx) |
+| Confirm overlay for void / repost / delete / push all (`Views/ConfirmDialog.xaml`; uses the app's dialog chrome rather than the mock's Windows message-box look) | [dialogs.jsx ConfirmRepostDialog](design/app/dialogs.jsx) |
 | Shortcuts help (`?` overlay) | [dialogs.jsx ShortcutsDialog](design/app/dialogs.jsx) |
 
 ## 6. Keyboard-first rules (design-enforced, port verbatim)

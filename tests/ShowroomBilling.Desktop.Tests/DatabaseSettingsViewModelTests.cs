@@ -50,8 +50,10 @@ public sealed class DatabaseSettingsViewModelTests
                 ApiBaseUrl = "http://localhost:5107"
             },
             restartApplication: () => restartCount++,
-            confirmConnectionModeRestart: () => false,
-            hasUnsavedSettingsEdits: () => true);
+            hasUnsavedSettingsEdits: () => true)
+        {
+            ConfirmHandler = _ => Task.FromResult(false)
+        };
 
         vm.ApiConnectionMode = DesktopConnectionModes.Server;
         vm.ServerApiBaseUrl = "http://192.168.1.13:5107";

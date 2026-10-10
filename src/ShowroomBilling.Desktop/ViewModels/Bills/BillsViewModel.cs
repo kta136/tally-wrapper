@@ -18,9 +18,11 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private readonly IBillsApiClient? _billsApi;
     private readonly AdminTokenStore? _adminTokens;
     private readonly BillsAdminTokenGate _adminTokenGate;
-    private readonly BillsActionWorkflow _actionWorkflow;
-    private int _selectedCount;
     private int _loadGeneration;
+
+    // True while many rows are being ticked at once, so the list is not
+    // re-evaluated for every row; the caller refreshes once at the end.
+    private bool _selectingInBulk;
 
     /// <summary>
     /// Handler the shell wires up to open the admin-unlock dialog and wait until it closes.
@@ -51,6 +53,12 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public Func<string, string, CancellationToken, Task<string?>>? ReasonPromptHandler { get; set; }
 
     /// <summary>
+    /// Handler the shell wires up to ask a yes/no question in the confirm
+    /// overlay (void, repost, delete, push all).
+    /// </summary>
+    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
+
+    /// <summary>
     /// Handler the shell wires up to force a Tally-company health check before
     /// push/retry/repost commands call the bills API.
     /// </summary>
@@ -63,7 +71,10 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         _billsApi = billsApi;
         _adminTokens = adminTokens;
         _adminTokenGate = new BillsAdminTokenGate(_adminTokens);
-        _actionWorkflow = new BillsActionWorkflow(_billsApi, _adminTokenGate, this);
+        var runner = new BillsActionRunner(this);
+        var batch = new BillsBatchActionWorkflow(_billsApi, this, runner);
+        var rows = new BillsRowActionWorkflow(_billsApi, this, runner);
+        var admin = new BillsAdminActionWorkflow(_billsApi, _adminTokenGate, this, runner);
 
         // Re-publish admin state to XAML so admin-only actions
         // (Change Bill Number, Mark Posted/Pending, Delete, Delete Selected)
@@ -109,37 +120,48 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             BillStates.Voided,
         ];
 
-        RefreshCommand = new AsyncRelayCommand(LoadAsync, CanRefresh);
-        NextPageCommand = new AsyncRelayCommand(NextPageAsync, CanNextPage);
-        PrevPageCommand = new AsyncRelayCommand(PrevPageAsync, CanPrevPage);
-        ApplyFiltersCommand = new AsyncRelayCommand(ApplyFiltersAsync, CanRefresh);
+        RefreshCommand = new AsyncRelayCommand(LoadAsync, () => CanAct);
+        NextPageCommand = new AsyncRelayCommand(NextPageAsync, () => HasNext && !IsLoading && !IsActing);
+        PrevPageCommand = new AsyncRelayCommand(PrevPageAsync, () => Skip > 0 && !IsLoading && !IsActing);
+        ApplyFiltersCommand = new AsyncRelayCommand(ApplyFiltersAsync, () => CanAct);
         ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
         ShowPostedDaysCommand = new RelayCommand(() => HideFullyPostedDays = false, () => HideFullyPostedDays);
-        PushSelectedCommand = new AsyncRelayCommand(PushSelectedAsync, CanPushSelected);
-        PushAllPendingCommand = new AsyncRelayCommand(PushAllPendingAsync, CanPushAllPending);
-        RetrySelectedCommand = new AsyncRelayCommand(RetrySelectedAsync, CanRetrySelected);
-        VoidSelectedCommand = new AsyncRelayCommand(VoidSelectedAsync, CanVoidSelected);
-        ReviseSelectedCommand = new AsyncRelayCommand(ReviseSelectedAsync, CanReviseSelected);
-        RepostSelectedCommand = new AsyncRelayCommand(RepostSelectedAsync, CanRepostSelected);
-        TallyPushSelectedCommand = new AsyncRelayCommand(TallyPushSelectedAsync, CanTallyPushSelected);
         ClearSelectionCommand = new RelayCommand(ClearSelection, () => HasSelection);
 
-        PushRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(PushRowAsync, row => row?.CanBePushed == true && !IsLoading && !IsActing && IsTallyPushAllowed);
-        RetryRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(RetryRowAsync, row => row?.CanBeRetried == true && !IsLoading && !IsActing && IsTallyPushAllowed);
-        RepostRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(RepostRowAsync, row => row?.CanBeReposted == true && !IsLoading && !IsActing && IsTallyPushAllowed);
-        ReviseRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(ReviseRowAsync, row => row?.CanBeRevised == true && !IsLoading && !IsActing);
-        VoidRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(VoidRowAsync, row => row?.CanBeVoided == true && !IsLoading && !IsActing);
-        CopyInvoiceNumberCommand = new RelayCommand<BillListRowViewModel?>(CopyInvoiceNumber, row => row?.CanCopyInvoiceNumber == true);
+        _pushSelected = batch.PushSelectedAsync;
+        _retrySelected = batch.RetrySelectedAsync;
+        _repostSelected = batch.RepostSelectedAsync;
+        PushSelectedCommand = new AsyncRelayCommand(_pushSelected, () => CanActOnSelection(x => x.IsPendingLike, needsTally: true));
+        PushAllPendingCommand = new AsyncRelayCommand(batch.PushAllPendingAsync, () => CanAct && IsTallyPushAllowed);
+        RetrySelectedCommand = new AsyncRelayCommand(_retrySelected, () => CanActOnSelection(x => x.IsRetryable, needsTally: true));
+        VoidSelectedCommand = new AsyncRelayCommand(batch.VoidSelectedAsync, () => CanActOnSelection(x => x.CanBeVoided));
+        ReviseSelectedCommand = new AsyncRelayCommand(batch.ReviseSelectedAsync, () => CanActOnSelection(x => x.CanBeRevised));
+        RepostSelectedCommand = new AsyncRelayCommand(_repostSelected, () => CanActOnSelection(x => x.CanBeReposted, needsTally: true));
+        TallyPushSelectedCommand = new AsyncRelayCommand(
+            TallyPushSelectedAsync,
+            () => CanAct && IsTallyPushAllowed && GetTallyPushMode() != TallyPushMode.None);
 
-        EditRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(EditRowAsync, row => row?.CanBeEdited == true && !IsLoading && !IsActing);
-        ChangeNumberRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(ChangeNumberRowAsync, row => row?.CanChangeNumber == true && !IsLoading && !IsActing);
-        MarkPostedRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(MarkPostedRowAsync, CanMarkPostedFromContext);
-        MarkPostedSelectedCommand = new AsyncRelayCommand(MarkPostedSelectedAsync, CanMarkPostedSelected);
-        MarkPendingRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(MarkPendingRowAsync, CanMarkPendingFromContext);
-        MarkPendingSelectedCommand = new AsyncRelayCommand(MarkPendingSelectedAsync, CanMarkPendingSelected);
-        DeleteRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(DeleteRowAsync, CanDeleteFromContext);
-        DeleteSelectedCommand = new AsyncRelayCommand(DeleteSelectedAsync, CanDeleteSelected);
+        PushRowCommand = RowCommand(rows.PushRowAsync, x => x.CanBePushed, needsTally: true);
+        RetryRowCommand = RowCommand(rows.RetryRowAsync, x => x.CanBeRetried, needsTally: true);
+        RepostRowCommand = RowCommand(rows.RepostRowAsync, x => x.CanBeReposted, needsTally: true);
+        ReviseRowCommand = RowCommand(rows.ReviseRowAsync, x => x.CanBeRevised);
+        VoidRowCommand = RowCommand(rows.VoidRowAsync, x => x.CanBeVoided);
+        EditRowCommand = RowCommand(rows.EditRowAsync, x => x.CanBeEdited);
+        CopyInvoiceNumberCommand = new RelayCommand<BillListRowViewModel?>(rows.CopyInvoiceNumber, row => row?.CanCopyInvoiceNumber == true);
+
+        ChangeNumberRowCommand = RowCommand(admin.ChangeNumberRowAsync, x => x.CanChangeNumber);
+        MarkPostedRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.MarkPostedRowAsync, row => CanActOnContextRows(row, x => x.CanMarkPosted));
+        MarkPostedSelectedCommand = new AsyncRelayCommand(admin.MarkPostedSelectedAsync, () => CanActOnSelection(x => x.CanMarkPosted));
+        MarkPendingRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.MarkPendingRowAsync, row => CanActOnContextRows(row, x => x.CanMarkPending));
+        MarkPendingSelectedCommand = new AsyncRelayCommand(admin.MarkPendingSelectedAsync, () => CanActOnSelection(x => x.CanMarkPending));
+        DeleteRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.DeleteRowAsync, row => CanActOnContextRows(row, x => x.CanBeDeleted));
+        DeleteSelectedCommand = new AsyncRelayCommand(admin.DeleteSelectedAsync, () => CanActOnSelection(x => x.CanBeDeleted));
     }
+
+    // The combined "Push to Tally" button picks one of these three by what is selected.
+    private readonly Func<CancellationToken, Task> _pushSelected;
+    private readonly Func<CancellationToken, Task> _retrySelected;
+    private readonly Func<CancellationToken, Task> _repostSelected;
 
     public ObservableCollection<BillListRowViewModel> Items { get; }
 
@@ -192,8 +214,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     [ObservableProperty] private int skip;
     [ObservableProperty] private int total;
     [ObservableProperty] private bool isLoading;
-    [ObservableProperty] private bool isPushingSelected;
-    [ObservableProperty] private bool isRetryingSelected;
+    [ObservableProperty] private bool isActing;
     [ObservableProperty] private bool isTallyPushAllowed;
     [ObservableProperty] private string tallyPushBlockReason = "Tally connection has not been checked yet.";
     [ObservableProperty] private string statusMessage = string.Empty;
@@ -214,12 +235,12 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public bool HasNext => Skip + PageSize < Total;
     public int PageTake => PageSize;
-    public int VisibleCount => GroupedItems.Cast<object>().Count();
+    public int VisibleCount => GroupedItems.Count;
     public int Showing => VisibleCount;
     public int HiddenByPostedDaysCount => Math.Max(0, Items.Count - VisibleCount);
     public bool HasHiddenPostedDays => HideFullyPostedDays && HiddenByPostedDaysCount > 0;
     public bool IsFilteredEmpty => Items.Count > 0 && VisibleCount == 0;
-    public int SelectedCount => _selectedCount;
+    public int SelectedCount => Items.Count(x => x.IsSelected);
     public bool HasSelection => SelectedCount > 0;
     public bool HasSingleSelection => SelectedCount == 1;
     public bool CanPrintSelected => HasSelection;
@@ -233,19 +254,18 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     }
 
     public IReadOnlyList<Guid> SelectedBillIds =>
-        Items.Where(x => x.IsSelected).Select(x => x.Id).ToArray();
+        SelectedRows.Select(x => x.Id).ToArray();
+
+    private IEnumerable<BillListRowViewModel> SelectedRows => Items.Where(x => x.IsSelected);
 
     public BillListRowViewModel? SelectedRow =>
         Items.FirstOrDefault(x => x.IsSelected)
         ?? (SelectedBill is { } s ? Items.FirstOrDefault(x => x.Id == s.Id) : null);
 
-    private bool IsActing => IsPushingSelected || IsRetryingSelected;
-
     partial void OnSkipChanged(int value) => RefreshComputed();
     partial void OnTotalChanged(int value) => RefreshComputed();
     partial void OnIsLoadingChanged(bool value) => RefreshComputed();
-    partial void OnIsPushingSelectedChanged(bool value) => RefreshComputed();
-    partial void OnIsRetryingSelectedChanged(bool value) => RefreshComputed();
+    partial void OnIsActingChanged(bool value) => RefreshComputed();
     partial void OnIsTallyPushAllowedChanged(bool value) => RefreshComputed();
     partial void OnStateFilterChanged(string value) => RefreshComputed();
     partial void OnSearchQueryChanged(string value) => RefreshComputed();
@@ -314,12 +334,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             return;
         }
 
-        foreach (var item in Items)
-        {
-            item.IsSelected = ReferenceEquals(item, row);
-        }
-
-        _selectedCount = 1;
+        SelectInBulk(item => ReferenceEquals(item, row));
         SelectedBill = row.Item;
         RefreshSelectionState();
     }
@@ -343,24 +358,14 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public void ToggleVisibleSelection(bool isSelected)
     {
-        foreach (var item in Items)
-        {
-            item.IsSelected = isSelected;
-        }
-
+        SelectInBulk(_ => isSelected);
         if (!isSelected)
         {
-            _selectedCount = 0;
             SelectedBill = null;
         }
         else if (SelectedBill is null && Items.Count > 0)
         {
-            _selectedCount = Items.Count;
             SelectedBill = Items[0].Item;
-        }
-        else
-        {
-            _selectedCount = Items.Count;
         }
 
         RefreshSelectionState();
@@ -368,14 +373,25 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public void ClearSelection()
     {
-        foreach (var item in Items)
-        {
-            item.IsSelected = false;
-        }
-
-        _selectedCount = 0;
+        SelectInBulk(_ => false);
         SelectedBill = null;
         RefreshSelectionState();
+    }
+
+    private void SelectInBulk(Func<BillListRowViewModel, bool> isSelected)
+    {
+        _selectingInBulk = true;
+        try
+        {
+            foreach (var item in Items)
+            {
+                item.IsSelected = isSelected(item);
+            }
+        }
+        finally
+        {
+            _selectingInBulk = false;
+        }
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -410,8 +426,16 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             ResetRows(list.Items);
             Total = list.Total;
 
-            SelectedBill = BillsSelectionRestorer.Restore(Items, priorSelectedIds, priorFocusedId);
-            RecalculateSelectedCount();
+            _selectingInBulk = true;
+            try
+            {
+                SelectedBill = BillsSelectionRestorer.Restore(Items, priorSelectedIds, priorFocusedId);
+            }
+            finally
+            {
+                _selectingInBulk = false;
+            }
+
             RefreshSelectionState();
 
             StatusMessage = list.Total == 0
@@ -441,7 +465,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         }
 
         Items.Clear();
-        _selectedCount = 0;
         foreach (var row in rows)
         {
             var item = new BillListRowViewModel(row);
@@ -483,35 +506,25 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(BillListRowViewModel.IsSelected))
+        if (_selectingInBulk
+            || e.PropertyName != nameof(BillListRowViewModel.IsSelected)
+            || sender is not BillListRowViewModel row)
         {
             return;
         }
 
-        if (sender is not BillListRowViewModel row)
-        {
-            return;
-        }
-
+        // The focused bill follows the tick; unticking it hands focus to another ticked row.
         if (row.IsSelected)
         {
-            _selectedCount++;
             SelectedBill = row.Item;
         }
-        else if (SelectedBill?.Id == row.Id && !Items.Any(x => x.IsSelected && x.Id == row.Id))
+        else if (SelectedBill?.Id == row.Id)
         {
-            _selectedCount = Math.Max(0, _selectedCount - 1);
-            SelectedBill = Items.FirstOrDefault(x => x.IsSelected)?.Item;
-        }
-        else if (!row.IsSelected)
-        {
-            _selectedCount = Math.Max(0, _selectedCount - 1);
+            SelectedBill = SelectedRows.FirstOrDefault()?.Item;
         }
 
         RefreshSelectionState();
     }
-
-    private void RecalculateSelectedCount() => _selectedCount = Items.Count(x => x.IsSelected);
 
     private void RefreshComputed()
     {
@@ -563,41 +576,37 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanRefresh() => _billsApi is not null && !IsLoading && !IsActing;
-    private bool CanNextPage() => HasNext && !IsLoading && !IsActing;
-    private bool CanPrevPage() => Skip > 0 && !IsLoading && !IsActing;
+    private bool CanAct => _billsApi is not null && !IsLoading && !IsActing;
 
-    private bool CanPushAllPending() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && IsTallyPushAllowed;
+    private bool CanActOnSelection(Func<BillListRowViewModel, bool> allowed, bool needsTally = false)
+        => CanAct && HasSelection && (!needsTally || IsTallyPushAllowed) && SelectedRows.All(allowed);
 
-    private async Task PushAllPendingAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.PushAllPendingAsync(cancellationToken);
+    /// <summary>
+    /// A context-menu action applies to the whole selection when the clicked
+    /// row is part of a multi-row selection, otherwise to that row alone.
+    /// </summary>
+    private bool CanActOnContextRows(BillListRowViewModel? row, Func<BillListRowViewModel, bool> allowed)
+    {
+        if (!CanAct || row is null)
+        {
+            return false;
+        }
 
-    private bool CanPushSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && IsTallyPushAllowed
-        && Items.Where(x => x.IsSelected).All(x => x.IsPendingLike);
+        return row.IsSelected && SelectedCount > 1 ? SelectedRows.All(allowed) : allowed(row);
+    }
 
-    private bool CanRetrySelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && IsTallyPushAllowed
-        && Items.Where(x => x.IsSelected).All(x => x.IsRetryable);
+    private AsyncRelayCommand<BillListRowViewModel?> RowCommand(
+        Func<BillListRowViewModel?, CancellationToken, Task> action,
+        Func<BillListRowViewModel, bool> allowed,
+        bool needsTally = false)
+        => new(action, row => row is not null && allowed(row) && !IsLoading && !IsActing && (!needsTally || IsTallyPushAllowed));
 
     public enum TallyPushMode { None, Push, Retry, Repost }
 
     private TallyPushMode GetTallyPushMode()
     {
         if (!HasSelection) return TallyPushMode.None;
-        var selected = Items.Where(x => x.IsSelected).ToArray();
+        var selected = SelectedRows.ToArray();
         if (selected.All(x => x.IsPendingLike)) return TallyPushMode.Push;
         if (selected.All(x => x.IsRetryable)) return TallyPushMode.Retry;
         if (selected.All(x => BillStateCapabilities.IsPosted(x.State))) return TallyPushMode.Repost;
@@ -612,18 +621,11 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         _ => "Push to Tally",
     };
 
-    private bool CanTallyPushSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && IsTallyPushAllowed
-        && GetTallyPushMode() != TallyPushMode.None;
-
     private Task TallyPushSelectedAsync(CancellationToken cancellationToken) => GetTallyPushMode() switch
     {
-        TallyPushMode.Push => PushSelectedAsync(cancellationToken),
-        TallyPushMode.Retry => RetrySelectedAsync(cancellationToken),
-        TallyPushMode.Repost => RepostSelectedAsync(cancellationToken),
+        TallyPushMode.Push => _pushSelected(cancellationToken),
+        TallyPushMode.Retry => _retrySelected(cancellationToken),
+        TallyPushMode.Repost => _repostSelected(cancellationToken),
         _ => Task.CompletedTask,
     };
 
@@ -660,129 +662,4 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         SearchQuery = string.Empty;
         return ApplyFiltersAsync(cancellationToken);
     }
-
-    private async Task PushSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.PushSelectedAsync(cancellationToken);
-
-    private async Task RetrySelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.RetrySelectedAsync(cancellationToken);
-
-    private bool CanVoidSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && Items.Where(x => x.IsSelected).All(x => x.CanBeVoided);
-
-    private async Task VoidSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.VoidSelectedAsync(cancellationToken);
-
-    private bool CanReviseSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && Items.Where(x => x.IsSelected).All(x => x.CanBeRevised);
-
-    private async Task ReviseSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.ReviseSelectedAsync(cancellationToken);
-
-    private bool CanRepostSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && IsTallyPushAllowed
-        && Items.Where(x => x.IsSelected).All(x => x.CanBeReposted);
-
-    private async Task RepostSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.RepostSelectedAsync(cancellationToken);
-
-    private async Task PushRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.PushRowAsync(row, cancellationToken);
-
-    private async Task RetryRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.RetryRowAsync(row, cancellationToken);
-
-    private async Task RepostRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.RepostRowAsync(row, cancellationToken);
-
-    private async Task ReviseRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.ReviseRowAsync(row, cancellationToken);
-
-    private async Task VoidRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.VoidRowAsync(row, cancellationToken);
-
-    private void CopyInvoiceNumber(BillListRowViewModel? row)
-        => _actionWorkflow.CopyInvoiceNumber(row);
-
-    private async Task EditRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.EditRowAsync(row, cancellationToken);
-
-    private async Task ChangeNumberRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.ChangeNumberRowAsync(row, cancellationToken);
-
-    private async Task MarkPostedRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.MarkPostedRowAsync(row, cancellationToken);
-
-    private bool CanMarkPostedFromContext(BillListRowViewModel? row) =>
-        CanRunAdminContextAction(row, x => x.CanMarkPosted);
-
-    private bool CanMarkPostedSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && Items.Where(x => x.IsSelected).All(x => x.CanMarkPosted);
-
-    private async Task MarkPostedSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.MarkPostedSelectedAsync(cancellationToken);
-
-    private async Task MarkPendingRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.MarkPendingRowAsync(row, cancellationToken);
-
-    private bool CanMarkPendingFromContext(BillListRowViewModel? row) =>
-        CanRunAdminContextAction(row, x => x.CanMarkPending);
-
-    private bool CanMarkPendingSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && Items.Where(x => x.IsSelected).All(x => x.CanMarkPending);
-
-    private async Task MarkPendingSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.MarkPendingSelectedAsync(cancellationToken);
-
-    private async Task DeleteRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-        => await _actionWorkflow.DeleteRowAsync(row, cancellationToken);
-
-    private bool CanDeleteFromContext(BillListRowViewModel? row) =>
-        CanRunAdminContextAction(row, x => x.CanBeDeleted);
-
-    private bool CanRunAdminContextAction(
-        BillListRowViewModel? row,
-        Func<BillListRowViewModel, bool> canRun)
-    {
-        if (_billsApi is null || IsLoading || IsActing || row is null)
-        {
-            return false;
-        }
-
-        var rows = row.IsSelected && SelectedCount > 1
-            ? Items.Where(x => x.IsSelected).ToArray()
-            : new[] { row };
-        return rows.Length > 0 && rows.All(canRun);
-    }
-
-    private bool CanDeleteSelected() =>
-        _billsApi is not null
-        && !IsLoading
-        && !IsActing
-        && HasSelection
-        && Items.Where(x => x.IsSelected).All(x => x.CanBeDeleted);
-
-    private async Task DeleteSelectedAsync(CancellationToken cancellationToken)
-        => await _actionWorkflow.DeleteSelectedAsync(cancellationToken);
-
 }

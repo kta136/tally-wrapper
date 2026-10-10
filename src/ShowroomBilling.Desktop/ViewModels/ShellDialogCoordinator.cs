@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 
@@ -24,7 +25,7 @@ internal sealed class ShellDialogCoordinator(
         if (_adminDialogTcs is { Task.IsCompleted: false } inflight) return inflight.Task;
 
         _adminDialogTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        setActiveDialog("admin");
+        setActiveDialog(ShellDialogs.Admin);
         _ = admin.LoadStatusCommand.ExecuteAsync(null);
         return _adminDialogTcs.Task;
     }
@@ -57,7 +58,7 @@ internal sealed class ShellDialogCoordinator(
         var tcs = new TaskCompletionSource<(bool, string, string?)>(TaskCreationOptions.RunContinuationsAsynchronously);
         _changeNumberTcs = tcs;
         changeNumberDialog.Configure(currentNumber, prefix, suffix, fiscalYear, padding);
-        setActiveDialog("changeNumber");
+        setActiveDialog(ShellDialogs.ChangeNumber);
         return tcs.Task;
     }
 
@@ -65,7 +66,7 @@ internal sealed class ShellDialogCoordinator(
     {
         var tcs = _changeNumberTcs;
         _changeNumberTcs = null;
-        if (getActiveDialog() == "changeNumber") setActiveDialog(null);
+        if (getActiveDialog() == ShellDialogs.ChangeNumber) setActiveDialog(null);
         tcs?.TrySetResult(result);
     }
 
@@ -76,7 +77,7 @@ internal sealed class ShellDialogCoordinator(
         var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _reasonPromptTcs = tcs;
         reasonPromptDialog.Configure(title, message);
-        setActiveDialog("reasonPrompt");
+        setActiveDialog(ShellDialogs.ReasonPrompt);
         return tcs.Task;
     }
 
@@ -84,7 +85,7 @@ internal sealed class ShellDialogCoordinator(
     {
         var tcs = _reasonPromptTcs;
         _reasonPromptTcs = null;
-        if (getActiveDialog() == "reasonPrompt") setActiveDialog(null);
+        if (getActiveDialog() == ShellDialogs.ReasonPrompt) setActiveDialog(null);
         tcs?.TrySetResult(result);
     }
 
@@ -101,12 +102,12 @@ internal sealed class ShellDialogCoordinator(
         // A prompt replaced by another dialog can never be answered; resolve
         // it as cancelled so its caller continues and later prompts are not
         // refused as "already open" for the rest of the session.
-        if (value != "changeNumber" && _changeNumberTcs is { Task.IsCompleted: false } changeNumber)
+        if (value != ShellDialogs.ChangeNumber && _changeNumberTcs is { Task.IsCompleted: false } changeNumber)
         {
             _changeNumberTcs = null;
             changeNumber.TrySetResult((false, string.Empty, null));
         }
-        if (value != "reasonPrompt" && _reasonPromptTcs is { Task.IsCompleted: false } reason)
+        if (value != ShellDialogs.ReasonPrompt && _reasonPromptTcs is { Task.IsCompleted: false } reason)
         {
             _reasonPromptTcs = null;
             reason.TrySetResult(null);

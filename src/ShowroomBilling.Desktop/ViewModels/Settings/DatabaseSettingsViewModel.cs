@@ -23,7 +23,6 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     private readonly DatabaseConfigurationWorkflow _databaseWorkflow;
     private readonly DesktopBootstrapOptions _bootstrapOptions;
     private readonly Action _restartApplication;
-    private readonly Func<bool> _confirmConnectionModeRestart;
     private readonly Func<bool> _hasUnsavedSettingsEdits;
     private readonly Action<string> _copyToClipboard;
     private string _lastServerApiBaseUrl;
@@ -35,13 +34,11 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         IChildProcessSupervisor? childProcessSupervisor = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
-        Func<bool>? confirmConnectionModeRestart = null,
         Func<bool>? hasUnsavedSettingsEdits = null,
         Action<string>? copyToClipboard = null)
     {
         _bootstrapOptions = bootstrapOptions ?? new DesktopBootstrapOptions();
-        _restartApplication = restartApplication ?? RestartCurrentProcess;
-        _confirmConnectionModeRestart = confirmConnectionModeRestart ?? ConfirmConnectionModeRestart;
+        _restartApplication = restartApplication ?? AppRestart.Restart;
         _hasUnsavedSettingsEdits = hasUnsavedSettingsEdits ?? (static () => false);
         _copyToClipboard = copyToClipboard ?? Clipboard.SetText;
         _databaseWorkflow = new DatabaseConfigurationWorkflow(runtimeApi, healthApi, adminTokenStore, childProcessSupervisor, this);
@@ -360,7 +357,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
             _lastServerApiBaseUrl = normalizedServerUrl;
         }
 
-        if (_hasUnsavedSettingsEdits() && !_confirmConnectionModeRestart())
+        if (_hasUnsavedSettingsEdits() && !await ConfirmConnectionModeRestartAsync())
         {
             ApiConnectionStatus = "Connection mode save cancelled. Save or discard settings edits before restarting.";
             return;
@@ -620,31 +617,15 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
             : primary.Trim();
     }
 
-    private static void RestartCurrentProcess()
-    {
-        var executable = Environment.ProcessPath
-            ?? Process.GetCurrentProcess().MainModule?.FileName;
-        if (!string.IsNullOrWhiteSpace(executable))
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = executable,
-                UseShellExecute = true
-            });
-        }
+    /// <summary>Handler the shell wires up to ask a yes/no question in the confirm overlay.</summary>
+    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
-        System.Windows.Application.Current.Shutdown();
-    }
-
-    private static bool ConfirmConnectionModeRestart()
-    {
-        var result = MessageBox.Show(
-            "Billing must restart to change the API connection mode. Unsaved Settings edits will be lost. Continue?",
+    private async Task<bool> ConfirmConnectionModeRestartAsync()
+        => ConfirmHandler is not null && await ConfirmHandler(new ConfirmRequest(
             "Restart Billing",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-        return result == MessageBoxResult.Yes;
-    }
+            "Billing must restart to change the API connection mode. Unsaved Settings edits will be lost. Continue?",
+            "Restart",
+            IsWarning: true));
 }
 
 internal sealed record ServerProbeResult(string StatusMessage);

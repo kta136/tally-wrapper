@@ -2,6 +2,7 @@ using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 
 namespace ShowroomBilling.Desktop.Tests;
@@ -337,67 +338,5 @@ public sealed class BillsViewModelSelectionTests
         await vm.ClearFiltersCommand.ExecuteAsync(null);
         Assert.Equal(0, api.LastFilter!.Skip);
         Assert.Equal(string.Empty, api.LastFilter.Search ?? string.Empty);
-    }
-
-    private sealed class FakeBillsApi : IBillsApiClient
-    {
-        public BillListResponse Response { get; set; } = new(0, 0, 50, []);
-        public BillSearchFilter? LastFilter { get; private set; }
-        public List<Guid> MarkPostedIds { get; } = [];
-        public List<string?> MarkPostedReasons { get; } = [];
-        public List<Guid> MarkPendingIds { get; } = [];
-        public List<string?> MarkPendingReasons { get; } = [];
-
-        public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
-        {
-            LastFilter = filter;
-            return Task.FromResult(Response);
-        }
-
-        public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillResponse> ReviseAsync(Guid billId, ReviseBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(Guid billId, ChangeBillNumberRequest request, string adminToken, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<BillResponse> MarkPostedAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
-        {
-            MarkPostedIds.Add(billId);
-            MarkPostedReasons.Add(request.Reason);
-            return Task.FromResult(ResponseFor(billId, BillStates.Posted));
-        }
-
-        public Task<BillResponse> MarkPendingAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
-        {
-            MarkPendingIds.Add(billId);
-            MarkPendingReasons.Add(request.Reason);
-            return Task.FromResult(ResponseFor(billId, BillStates.Pending));
-        }
-        public Task<DeleteBillResponse> DeleteAsync(Guid billId, DeleteBillRequest request, string adminToken, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(DeleteSelectedBillsRequest request, string adminToken, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<SyntheticBatchResponse> CreateSyntheticBatchAsync(SyntheticBatchRequest request, string adminToken, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-
-        private static BillResponse ResponseFor(Guid billId, string state) => new(
-            Id: billId,
-            ShowroomId: Guid.Empty,
-            CounterId: null,
-            BillType: "sales",
-            State: state,
-            InvoiceNumber: null,
-            FiscalYear: null,
-            SupersededByBillId: null,
-            CurrentRevisionId: null,
-            CreatedAtUtc: DateTimeOffset.UtcNow,
-            UpdatedAtUtc: DateTimeOffset.UtcNow,
-            VoidedAtUtc: null,
-            CurrentRevision: null);
     }
 }

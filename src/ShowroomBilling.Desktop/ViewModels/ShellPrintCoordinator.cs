@@ -1,6 +1,7 @@
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Printing;
@@ -118,7 +119,7 @@ internal sealed class ShellPrintCoordinator(
         }
 
         _invoiceAwaitingPostPrintReset = true;
-        host.ActiveDialog = "printPreview";
+        host.ActiveDialog = ShellDialogs.PrintPreview;
         host.PrintPreview.Initialize(content, layout, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
     }
 
@@ -130,7 +131,7 @@ internal sealed class ShellPrintCoordinator(
             host.Invoice.SaveStatus = "Add a line before previewing the invoice.";
             return;
         }
-        host.ActiveDialog = "printPreview";
+        host.ActiveDialog = ShellDialogs.PrintPreview;
         host.PrintPreview.Initialize(content, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
     }
 
@@ -140,7 +141,7 @@ internal sealed class ShellPrintCoordinator(
             companyProfileProvider.Current,
             companyProfileProvider.KaratMappings);
         if (content is null) return;
-        host.ActiveDialog = "printPreview";
+        host.ActiveDialog = ShellDialogs.PrintPreview;
         host.PrintPreview.Initialize(content, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
     }
 
@@ -165,7 +166,7 @@ internal sealed class ShellPrintCoordinator(
 
         if (contents.Count == 0) return;
 
-        host.ActiveDialog = "printPreview";
+        host.ActiveDialog = ShellDialogs.PrintPreview;
         host.PrintPreview.Initialize(contents, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
     }
 

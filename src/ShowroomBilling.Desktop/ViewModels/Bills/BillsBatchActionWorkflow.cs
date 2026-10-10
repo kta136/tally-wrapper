@@ -1,214 +1,121 @@
-using System.Windows;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
+/// <summary>Toolbar actions on the selected bills, or on every pending bill.</summary>
 internal sealed class BillsBatchActionWorkflow(
     IBillsApiClient? billsApi,
-    IBillsActionWorkflowHost host)
+    IBillsActionWorkflowHost host,
+    BillsActionRunner runner)
 {
     internal async Task PushSelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;
-
-        var selectedIds = host.SelectedBillIds;
-        if (selectedIds.Count == 0) return;
+        var rows = runner.SelectedRows();
+        if (rows.Count == 0) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
-        host.IsPushingSelected = true;
-        try
-        {
-            host.StatusMessage = $"Pushing {selectedIds.Count} selected bill(s)…";
-            var response = await billsApi.PushSelectedAsync(
-                new PushSelectedBillsRequest(selectedIds, "Selected push from Bills tab"),
-                cancellationToken);
-            host.StatusMessage = BillsStatusFormatter.FormatBatchPushStatus(response);
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Push selected failed: {ex.Message}";
-        }
-        finally
-        {
-            host.IsPushingSelected = false;
-        }
-
-        await host.LoadAsync(cancellationToken);
+        await runner.RunAsync(
+            $"Pushing {rows.Count} selected bill(s)…",
+            "Push selected failed",
+            async () => BillsStatusFormatter.FormatBatchPushStatus(await billsApi.PushSelectedAsync(
+                new PushSelectedBillsRequest(rows.Select(x => x.Id).ToArray(), "Selected push from Bills tab"),
+                cancellationToken)),
+            cancellationToken);
     }
 
     internal async Task PushAllPendingAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;
-
-        var confirm = MessageBox.Show(
-            "Push every pending/draft bill to Tally? Bills are pushed oldest-first; the run stops on the first failure.",
+        var confirmed = await runner.ConfirmAsync(new ConfirmRequest(
             "Confirm Push All Pending",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Question,
-            MessageBoxResult.Cancel);
-        if (confirm != MessageBoxResult.OK) return;
+            "Push every pending/draft bill to Tally? Bills are pushed oldest-first; the run stops on the first failure.",
+            "Push all"));
+        if (!confirmed) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
-        host.IsPushingSelected = true;
-        try
-        {
-            host.StatusMessage = "Pushing all pending bills (oldest first)…";
-            var response = await billsApi.PushPendingAsync(
-                new PushPendingBillsRequest("Push all pending from Bills tab", null),
-                cancellationToken);
-            host.StatusMessage = response.Matched == 0
-                ? "No pending bills to push."
-                : BillsStatusFormatter.FormatBatchPushStatus(response);
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Push all pending failed: {ex.Message}";
-        }
-        finally
-        {
-            host.IsPushingSelected = false;
-        }
-
-        await host.LoadAsync(cancellationToken);
+        await runner.RunAsync(
+            "Pushing all pending bills (oldest first)…",
+            "Push all pending failed",
+            async () =>
+            {
+                var response = await billsApi.PushPendingAsync(
+                    new PushPendingBillsRequest("Push all pending from Bills tab", null),
+                    cancellationToken);
+                return response.Matched == 0
+                    ? "No pending bills to push."
+                    : BillsStatusFormatter.FormatBatchPushStatus(response);
+            },
+            cancellationToken);
     }
 
     internal async Task RetrySelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;
-
-        var selectedIds = host.SelectedBillIds;
-        if (selectedIds.Count == 0) return;
+        var rows = runner.SelectedRows();
+        if (rows.Count == 0) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
-        host.IsRetryingSelected = true;
-        try
-        {
-            var completed = 0;
-            foreach (var billId in selectedIds)
-            {
-                host.StatusMessage = $"Retrying {completed + 1} of {selectedIds.Count}…";
-                await billsApi.RetryAsync(billId, new RetryBillPostingRequest("Retry selected from Bills tab"), cancellationToken);
-                completed++;
-            }
-
-            host.StatusMessage = $"Retried {completed} bill(s).";
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Retry stopped: {ex.Message}";
-        }
-        finally
-        {
-            host.IsRetryingSelected = false;
-        }
-
-        await host.LoadAsync(cancellationToken);
+        await runner.ForEachRowAsync(
+            rows,
+            "Retrying",
+            "Retry stopped",
+            row => billsApi.RetryAsync(row.Id, new RetryBillPostingRequest("Retry selected from Bills tab"), cancellationToken),
+            count => $"Retried {count} bill(s).",
+            cancellationToken);
     }
 
     internal async Task VoidSelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;
+        var rows = runner.SelectedRows();
+        if (rows.Count == 0) return;
+        if (!await runner.ConfirmAsync(BillConfirmations.Void($"{rows.Count} bill(s)"))) return;
 
-        var selectedRows = host.Items.Where(x => x.IsSelected).ToArray();
-        if (selectedRows.Length == 0) return;
-
-        var confirm = MessageBox.Show(
-            $"Void {selectedRows.Length} bill(s)? This cannot be undone.",
-            "Confirm Void",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Warning,
-            MessageBoxResult.Cancel);
-        if (confirm != MessageBoxResult.OK) return;
-
-        host.IsRetryingSelected = true;
-        try
-        {
-            var completed = 0;
-            foreach (var row in selectedRows)
-            {
-                host.StatusMessage = $"Voiding {completed + 1} of {selectedRows.Length}…";
-                await billsApi.VoidAsync(row.Id, new VoidBillRequest("Voided from Bills tab"), cancellationToken);
-                completed++;
-            }
-            host.StatusMessage = $"Voided {completed} bill(s).";
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Void stopped: {ex.Message}";
-        }
-        finally
-        {
-            host.IsRetryingSelected = false;
-        }
-
-        await host.LoadAsync(cancellationToken);
+        await runner.ForEachRowAsync(
+            rows,
+            "Voiding",
+            "Void stopped",
+            row => billsApi.VoidAsync(row.Id, new VoidBillRequest("Voided from Bills tab"), cancellationToken),
+            count => $"Voided {count} bill(s).",
+            cancellationToken);
     }
 
     internal async Task ReviseSelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;
-        var rows = host.Items.Where(x => x.IsSelected).ToArray();
-        if (rows.Length == 0) return;
+        var rows = runner.SelectedRows();
+        if (rows.Count == 0) return;
 
-        host.IsRetryingSelected = true;
-        try
-        {
-            var completed = 0;
-            foreach (var row in rows)
-            {
-                host.StatusMessage = $"Revising {completed + 1} of {rows.Length}…";
-                await billsApi.ReviseAsync(row.Id, new ReviseBillRequest(null), cancellationToken);
-                completed++;
-            }
-            host.StatusMessage = $"Revised {completed} bill(s).";
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Revise stopped: {ex.Message}";
-        }
-        finally
-        {
-            host.IsRetryingSelected = false;
-        }
-        await host.LoadAsync(cancellationToken);
+        await runner.ForEachRowAsync(
+            rows,
+            "Revising",
+            "Revise stopped",
+            row => billsApi.ReviseAsync(row.Id, new ReviseBillRequest(null), cancellationToken),
+            count => $"Revised {count} bill(s).",
+            cancellationToken);
     }
 
     internal async Task RepostSelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;
-        var rows = host.Items.Where(x => x.IsSelected).ToArray();
-        if (rows.Length == 0) return;
+        var rows = runner.SelectedRows();
+        if (rows.Count == 0) return;
 
-        var confirm = MessageBox.Show(
-            $"Repost {rows.Length} bill(s)?\n\nEach repost sends a NEW voucher to Tally. If Tally still holds the original voucher, this creates a duplicate sale. Only repost after the original voucher has been deleted in Tally.",
-            "Confirm Repost",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Warning,
-            MessageBoxResult.Cancel);
-        if (confirm != MessageBoxResult.OK) return;
+        var question = BillConfirmations.Repost($"{rows.Count} bill(s)", rows.Any(BillConfirmations.IsPosted));
+        if (!await runner.ConfirmAsync(question)) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
-        host.IsRetryingSelected = true;
-        try
-        {
-            var completed = 0;
-            foreach (var row in rows)
-            {
-                host.StatusMessage = $"Reposting {completed + 1} of {rows.Length}…";
-                await billsApi.RepostAsync(row.Id, new RepostBillRequest(Guid.NewGuid().ToString("N"), "Batch repost from Bills tab"), cancellationToken);
-                completed++;
-            }
-            host.StatusMessage = $"Reposted {completed} bill(s).";
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Repost stopped: {ex.Message}";
-        }
-        finally
-        {
-            host.IsRetryingSelected = false;
-        }
-        await host.LoadAsync(cancellationToken);
+        await runner.ForEachRowAsync(
+            rows,
+            "Reposting",
+            "Repost stopped",
+            row => billsApi.RepostAsync(
+                row.Id,
+                new RepostBillRequest(Guid.NewGuid().ToString("N"), "Batch repost from Bills tab"),
+                cancellationToken),
+            count => $"Reposted {count} bill(s).",
+            cancellationToken);
     }
 }

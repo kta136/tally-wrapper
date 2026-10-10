@@ -26,68 +26,25 @@ public partial class SettingsViewModel : ObservableObject,
     private readonly object _loadGate = new();
     private Task? _loadTask;
 
-    public SettingsViewModel() : this(null, null, null, (IPrintDispatcher?)null) { }
-
-    public SettingsViewModel(ISettingsApiClient? settingsApi, IMastersApiClient? mastersApi)
-        : this(settingsApi, mastersApi, null, (IPrintDispatcher?)null) { }
-
+    /// <param name="previewFactory">
+    /// Builds the embedded <see cref="Preview"/>. Tests pass one so the preview
+    /// under test is the one this view model owns, not a second subscriber
+    /// over the same draft and layout.
+    /// </param>
     public SettingsViewModel(
-        ISettingsApiClient? settingsApi,
-        IMastersApiClient? mastersApi,
-        IPrintAssetApiClient? printAssetApi)
-        : this(settingsApi, mastersApi, printAssetApi, (IPrintDispatcher?)null) { }
-
-    public SettingsViewModel(
-        ISettingsApiClient? settingsApi,
-        IMastersApiClient? mastersApi,
-        IPrintAssetApiClient? printAssetApi,
-        IPrintDispatcher? printDispatcher)
-        : this(settingsApi, mastersApi, printAssetApi, printDispatcher, null)
-    { }
-
-    public SettingsViewModel(
-        ISettingsApiClient? settingsApi,
-        IMastersApiClient? mastersApi,
-        IPrintAssetApiClient? printAssetApi,
-        IPrintDispatcher? printDispatcher,
-        IPrintPreferencesStore? printPreferences,
+        ISettingsApiClient? settingsApi = null,
+        IMastersApiClient? mastersApi = null,
+        IPrintAssetApiClient? printAssetApi = null,
+        IPrintDispatcher? printDispatcher = null,
+        IPrintPreferencesStore? printPreferences = null,
         IRuntimeApiClient? runtimeApi = null,
         IHealthApiClient? healthApi = null,
         AdminTokenStore? adminTokenStore = null,
         IChildProcessSupervisor? childProcessSupervisor = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
-        Func<bool>? confirmConnectionModeRestart = null)
-        : this(settingsApi, mastersApi, printAssetApi,
-            (draft, layout, host) =>
-                new SettingsPreviewViewModel(draft, layout, host, printDispatcher, printAssetApi, printPreferences),
-            runtimeApi,
-            healthApi,
-            adminTokenStore,
-            childProcessSupervisor,
-            bootstrapOptions,
-            restartApplication,
-            confirmConnectionModeRestart)
-    { }
-
-    /// <summary>Internal ctor that accepts a preview factory. Tests inject a factory
-    /// so the embedded <see cref="Preview"/> is the one under test — avoiding the
-    /// double subscription you get from constructing a second preview over the same
-    /// draft/layout.</summary>
-    internal SettingsViewModel(
-        ISettingsApiClient? settingsApi,
-        IMastersApiClient? mastersApi,
-        IPrintAssetApiClient? printAssetApi,
-        Func<SettingsDraft, PrintLayoutViewModel, SettingsViewModel, SettingsPreviewViewModel> previewFactory,
-        IRuntimeApiClient? runtimeApi = null,
-        IHealthApiClient? healthApi = null,
-        AdminTokenStore? adminTokenStore = null,
-        IChildProcessSupervisor? childProcessSupervisor = null,
-        DesktopBootstrapOptions? bootstrapOptions = null,
-        Action? restartApplication = null,
-        Func<bool>? confirmConnectionModeRestart = null)
+        Func<SettingsDraft, PrintLayoutViewModel, SettingsViewModel, SettingsPreviewViewModel>? previewFactory = null)
     {
-        ArgumentNullException.ThrowIfNull(previewFactory);
         _settingsApi = settingsApi;
         Draft = new SettingsDraft();
         Draft.PropertyChanged += OnDraftPropertyChanged;
@@ -99,8 +56,7 @@ public partial class SettingsViewModel : ObservableObject,
             childProcessSupervisor,
             bootstrapOptions,
             restartApplication,
-            confirmConnectionModeRestart,
-            () => IsDirty);
+            hasUnsavedSettingsEdits: () => IsDirty);
         MasterData = new MasterDataSettingsViewModel(_settingsApi, mastersApi, this);
         _editWorkflow = new SettingsEditWorkflow(_settingsApi, this);
         _sectionCoordinator = new SettingsSectionCoordinator(this);
@@ -122,7 +78,9 @@ public partial class SettingsViewModel : ObservableObject,
         };
         SelectedSection = SettingsSectionKey.Database;
 
-        Preview = previewFactory(Draft, PrintLayout, this);
+        Preview = previewFactory is not null
+            ? previewFactory(Draft, PrintLayout, this)
+            : new SettingsPreviewViewModel(Draft, PrintLayout, this, printDispatcher, printAssetApi, printPreferences);
         _sectionCoordinator.UpdatePreviewActivation();
 
         RefreshCommand = new AsyncRelayCommand(() => LoadAsync(CancellationToken.None), () => !IsLoading && !IsEditing);
