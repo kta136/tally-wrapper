@@ -15,7 +15,11 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
     [ObservableProperty] private string currentNumberDisplay = "(none)";
     [ObservableProperty] private string newNumberRaw = string.Empty;
     [ObservableProperty] private string? reason;
-    [ObservableProperty] private string previewText = "Type the core number (e.g. 42) to auto-format with prefix / fiscal / suffix, or a full custom string to store verbatim.";
+    [ObservableProperty] private string previewText = HelpText;
+
+    // The server accepts positive digits only and adds the prefix, fiscal year
+    // and suffix itself (BillAdminWorkflow.ChangeInvoiceNumberAsync).
+    private const string HelpText = "Type the new number in digits (e.g. 42). The prefix, fiscal year and suffix are added automatically.";
 
     private string? _prefix;
     private string? _suffix;
@@ -58,41 +62,36 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
 
     private void UpdatePreview()
     {
-        var v = (NewNumberRaw ?? string.Empty).Trim();
-        if (v.Length == 0)
+        if (string.IsNullOrWhiteSpace(NewNumberRaw))
         {
-            PreviewText = "Type the core number (e.g. 42) to auto-format with prefix / fiscal / suffix, or a full custom string to store verbatim.";
-            return;
+            PreviewText = HelpText;
         }
-        if (IsDigitsOnly(v) && long.TryParse(v, out var core) && core > 0)
+        else if (TryReadCore(out var core))
         {
             PreviewText = $"Will save as: {InvoiceNumberFormatter.Format(_prefix, _suffix, core, _fiscalYear, _padding)}";
         }
         else
         {
-            PreviewText = "Stored verbatim (no auto-format).";
+            PreviewText = "Digits only, greater than zero. The prefix, fiscal year and suffix are added automatically.";
         }
     }
 
-    private static bool IsDigitsOnly(string value)
+    private bool TryReadCore(out long core)
     {
-        foreach (var c in value)
-        {
-            if (c < '0' || c > '9') return false;
-        }
-        return value.Length > 0;
-    }
-
-    private bool CanOk()
-    {
+        core = 0;
         var v = (NewNumberRaw ?? string.Empty).Trim();
-        return v.Length > 0 && !v.Any(char.IsWhiteSpace);
+        return v.Length > 0
+            && v.All(char.IsAsciiDigit)
+            && long.TryParse(v, out core)
+            && core > 0;
     }
+
+    private bool CanOk() => TryReadCore(out _);
 
     private void OnOk()
     {
-        var v = (NewNumberRaw ?? string.Empty).Trim();
-        if (v.Length == 0) return;
+        if (!TryReadCore(out _)) return;
+        var v = NewNumberRaw.Trim();
         var trimmedReason = string.IsNullOrWhiteSpace(Reason) ? null : Reason!.Trim();
         Closed?.Invoke((true, v, trimmedReason));
     }

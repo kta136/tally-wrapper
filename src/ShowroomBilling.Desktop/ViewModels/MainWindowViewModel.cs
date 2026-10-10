@@ -250,7 +250,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         if (string.IsNullOrWhiteSpace(token)) return (false, string.Empty, null);
 
         var numbering = Settings.Settings?.Numbering;
-        var fiscalYear = Contracts.Numbering.InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow);
+        // A bill keeps the fiscal year of its bill date, so the preview uses
+        // that rather than today's; they differ for a bill from an earlier year.
+        var fiscalYear = row.BillDate is { } billDate
+            ? Contracts.Numbering.InvoiceNumberFormatter.ComputeFiscalYear(billDate)
+            : Contracts.Numbering.InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow);
 
         var result = await ShowChangeNumberDialogAsync(
             row.InvoiceNumber,
