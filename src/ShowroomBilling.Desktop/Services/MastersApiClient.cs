@@ -50,10 +50,6 @@ public sealed class MastersApiClient(HttpClient httpClient) : IMastersApiClient
         {
             qp.Add($"take={query.Take.Value}");
         }
-        if (query.IncludeRaw is true)
-        {
-            qp.Add("includeRaw=true");
-        }
 
         return qp.Count == 0 ? path : $"{path}?{string.Join('&', qp)}";
     }

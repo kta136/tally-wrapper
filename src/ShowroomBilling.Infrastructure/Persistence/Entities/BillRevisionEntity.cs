@@ -10,7 +10,6 @@ public sealed class BillRevisionEntity
 
     public string SnapshotJson { get; set; } = "{}";
 
-    public string TotalsJson { get; set; } = "{}";
 
     public string? PartyName { get; set; }
 

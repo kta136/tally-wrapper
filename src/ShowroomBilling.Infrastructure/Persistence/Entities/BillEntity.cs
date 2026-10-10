@@ -28,7 +28,6 @@ public sealed class BillEntity
 
     public Guid? SupersededByBillId { get; set; }
 
-    public Guid? CreatedBy { get; set; }
 
     /// <summary>
     /// Client-supplied id of the Save that created this bill. Unique, so a

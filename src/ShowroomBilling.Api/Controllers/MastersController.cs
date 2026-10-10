@@ -14,7 +14,7 @@ public sealed class MastersController(
     IMasterSnapshotService masterSnapshotService,
     ITallyMasterRefresher tallyMasterRefresher) : ControllerBase
 {
-    // Each read takes the optional search / skip / take / includeRaw query values.
+    // Each read takes the optional search / skip / take query values.
 
     [HttpGet(MasterTypes.Companies)]
     public async Task<ActionResult<CompanySnapshotResponse>> GetCompanies(

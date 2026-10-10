@@ -50,7 +50,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.Key).HasColumnName("key").HasMaxLength(64);
             entity.Property(x => x.Value).HasColumnName("value").HasMaxLength(64);
             entity.Property(x => x.UpdatedAtUtc).HasColumnName("updated_at_utc");
-            entity.HasIndex(x => x.Value);
         });
 
         modelBuilder.Entity<CloudSettingsEntity>(entity =>
@@ -84,7 +83,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.ItemMasterDataJson).HasColumnType("jsonb");
             entity.Property(x => x.KaratMappingDataJson).HasColumnType("jsonb");
             entity.Property(x => x.PrintLayoutJson).HasColumnType("jsonb");
-            entity.HasIndex(x => x.UpdatedAtUtc);
         });
 
         modelBuilder.Entity<AuditEventEntity>(entity =>
@@ -118,9 +116,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.ToTable("tally_company_snapshots");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(256);
-            entity.Property(x => x.RawJson).HasColumnType("jsonb");
-            entity.HasIndex(x => new { x.ShowroomId, x.Name });
-            entity.HasIndex(x => x.BatchId);
+            // The one index: rows are only ever read through their batch, in name order.
             entity.HasIndex(x => new { x.BatchId, x.Name });
             entity.HasOne(x => x.Batch)
                 .WithMany(x => x.CompanySnapshots)
@@ -136,9 +132,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.Parent).HasMaxLength(256);
             entity.Property(x => x.PrimaryGroup).HasMaxLength(256);
             entity.Property(x => x.Gstin).HasMaxLength(32);
-            entity.Property(x => x.RawJson).HasColumnType("jsonb");
-            entity.HasIndex(x => new { x.ShowroomId, x.Name });
-            entity.HasIndex(x => x.BatchId);
+            // The one index: rows are only ever read through their batch, in name order.
             entity.HasIndex(x => new { x.BatchId, x.Name });
             entity.HasOne(x => x.Batch)
                 .WithMany(x => x.LedgerSnapshots)
@@ -155,9 +149,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.BaseUnit).HasMaxLength(64);
             entity.Property(x => x.HsnCode).HasMaxLength(32);
             entity.Property(x => x.Karat).HasMaxLength(32);
-            entity.Property(x => x.RawJson).HasColumnType("jsonb");
-            entity.HasIndex(x => new { x.ShowroomId, x.Name });
-            entity.HasIndex(x => x.BatchId);
+            // The one index: rows are only ever read through their batch, in name order.
             entity.HasIndex(x => new { x.BatchId, x.Name });
             entity.HasOne(x => x.Batch)
                 .WithMany(x => x.StockItemSnapshots)
@@ -171,9 +163,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(256);
             entity.Property(x => x.ParentType).HasMaxLength(256);
-            entity.Property(x => x.RawJson).HasColumnType("jsonb");
-            entity.HasIndex(x => new { x.ShowroomId, x.Name });
-            entity.HasIndex(x => x.BatchId);
+            // The one index: rows are only ever read through their batch, in name order.
             entity.HasIndex(x => new { x.BatchId, x.Name });
             entity.HasOne(x => x.Batch)
                 .WithMany(x => x.VoucherTypeSnapshots)
@@ -215,7 +205,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.InvoiceNumber).HasMaxLength(128);
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
             entity.Property(x => x.RowVersion).IsRowVersion();
-            entity.HasIndex(x => new { x.ShowroomId, x.State, x.CreatedAtUtc });
             entity.HasIndex(x => new { x.ShowroomId, x.State, x.CreatedAtUtc, x.Id });
             entity.HasIndex(x => new { x.ShowroomId, x.CreatedAtUtc });
             entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceNumber })
@@ -240,12 +229,10 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             });
             entity.HasKey(x => x.Id);
             entity.Property(x => x.SnapshotJson).HasColumnType("jsonb");
-            entity.Property(x => x.TotalsJson).HasColumnType("jsonb");
             entity.Property(x => x.PartyName).HasMaxLength(256);
             entity.Property(x => x.GrandTotal).HasColumnType("numeric(18,3)");
             entity.HasIndex(x => new { x.BillId, x.RevisionNo }).IsUnique();
             entity.HasIndex(x => new { x.BillId, x.CreatedAtUtc });
-            entity.HasIndex(x => x.BillDate);
             entity.HasIndex(x => new { x.BillDate, x.Id });
             entity.HasIndex(x => x.PartyName)
                 .HasMethod("gin")

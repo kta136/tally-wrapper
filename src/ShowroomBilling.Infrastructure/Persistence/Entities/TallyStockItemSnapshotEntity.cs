@@ -18,7 +18,6 @@ public sealed class TallyStockItemSnapshotEntity
 
     public string? Karat { get; set; }
 
-    public string RawJson { get; set; } = "{}";
 
     public TallyMasterSnapshotBatchEntity Batch { get; set; } = null!;
 }

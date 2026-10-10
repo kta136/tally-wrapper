@@ -74,6 +74,10 @@ dotnet ef dbcontext optimize --project src/ShowroomBilling.Infrastructure --star
 
 Then delete the generated `ShowroomBillingDbContextAssemblyAttributes.cs` (the compiled model is opted into explicitly with `UseModel` in `DependencyInjection`, so design-time tools and InMemory tests keep building the model from `OnModelCreating`). `CompiledModelTests` fails when the two drift.
 
+**A migration that drops data copies it aside first.** Production applies migrations by itself at start-up, so "take a backup first" cannot be left to whoever deploys. Follow `20261010124946_DropUnusedColumnsAndIndexes`: copy the values into a `dropped_<date>_<table>_<column>` table in the same transaction, make `Down` restore from it, and write every statement conditionally (`IF EXISTS` / `IF NOT EXISTS`), because a migration that fails at start-up leaves the API in limited mode. `DropUnusedColumnsMigrationPostgresTests` runs it both ways against real rows; add the same for the next one. A full `pg_dump` before the release is still the deploy step in [docs/11 §11](docs/11_deployment_and_ops.md).
+
+When you run the EF tools on a machine that also runs the real app, point them away from its settings first, or the design-time host reads the saved production connection: set `SHOWROOM_BILLING_APPDATA` to an empty folder and `SHOWROOM_BILLING_POSTGRES` to a dummy value. Neither `migrations add` nor `dbcontext optimize` connects to a database.
+
 `ASPNETCORE_ENVIRONMENT` is **silently ignored** by the EF tools and falls back to the localhost default in `appsettings.json` — which will either fail loudly or (worse) quietly migrate a local dev DB you didn't mean to touch. Always supply `--connection`.
 
 The canonical production secret is OpenBao KV v2 `kv/Postgres/apps/tally_wrapper/prod`. Its structured connection fields are authoritative; `connection_string` is the synchronized Npgsql form used by runtime and migration tooling. Retrieve and rotate it with the native `bao` CLI; the API does not read OpenBao directly. See [docs/11_deployment_and_ops.md](docs/11_deployment_and_ops.md#openbao-production-secret) for the exact commands.

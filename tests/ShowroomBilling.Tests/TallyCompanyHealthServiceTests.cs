@@ -14,7 +14,7 @@ public sealed class TallyCompanyHealthServiceTests
     {
         var service = BuildService(
             activeCompany: "Acme Jewellers",
-            companies: [new CompanySnapshotItem("  acme jewellers  ", true, null)]);
+            companies: [new CompanySnapshotItem("  acme jewellers  ", true)]);
 
         var response = await service.CheckAsync();
 
@@ -30,7 +30,7 @@ public sealed class TallyCompanyHealthServiceTests
     {
         var service = BuildService(
             activeCompany: "Acme Jewellers",
-            companies: [new CompanySnapshotItem("Other Company", true, null)]);
+            companies: [new CompanySnapshotItem("Other Company", true)]);
 
         var response = await service.CheckAsync();
 

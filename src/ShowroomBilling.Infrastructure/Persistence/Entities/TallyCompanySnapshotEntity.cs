@@ -12,7 +12,6 @@ public sealed class TallyCompanySnapshotEntity
 
     public bool IsActive { get; set; }
 
-    public string RawJson { get; set; } = "{}";
 
     public TallyMasterSnapshotBatchEntity Batch { get; set; } = null!;
 }

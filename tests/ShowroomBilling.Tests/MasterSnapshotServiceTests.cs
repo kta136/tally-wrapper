@@ -18,8 +18,8 @@ public sealed class MasterSnapshotServiceTests
         var response = await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
             [
-                new CompanySnapshotItem("ACME Jewellers", true, null),
-                new CompanySnapshotItem("Legacy Co", false, "{\"tag\":\"legacy\"}")
+                new CompanySnapshotItem("ACME Jewellers", true),
+                new CompanySnapshotItem("Legacy Co", false)
             ]));
 
         Assert.Equal("companies", response.MasterType);
@@ -30,24 +30,6 @@ public sealed class MasterSnapshotServiceTests
         Assert.Equal("fresh", stored.Metadata.Freshness);
         Assert.Equal(response.BatchId, stored.Metadata.BatchId);
         Assert.Contains(stored.Companies, c => c.Name == "ACME Jewellers" && c.IsActive);
-        Assert.All(stored.Companies, c => Assert.Null(c.RawJson));
-    }
-
-    [Fact]
-    public async Task GetCompaniesAsync_ReturnsRawJsonOnlyWhenRequested()
-    {
-        await using var db = CreateDbContext();
-        var service = new MasterSnapshotService(db);
-
-        await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [new CompanySnapshotItem("Raw Co", true, "{\"tag\":\"raw\"}")]));
-
-        var defaultRead = await service.GetCompaniesAsync();
-        var rawRead = await service.GetCompaniesAsync(query: new MasterSnapshotQuery(null, null, null, IncludeRaw: true));
-
-        Assert.Null(defaultRead.Companies.Single().RawJson);
-        Assert.Equal("{\"tag\":\"raw\"}", rawRead.Companies.Single().RawJson);
     }
 
     [Fact]
@@ -58,11 +40,11 @@ public sealed class MasterSnapshotServiceTests
 
         await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow.AddMinutes(-5),
-            [new CompanySnapshotItem("Old Co", true, null)]));
+            [new CompanySnapshotItem("Old Co", true)]));
 
         var latest = await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
-            [new CompanySnapshotItem("ACME Jewellers", true, null)]));
+            [new CompanySnapshotItem("ACME Jewellers", true)]));
 
         var batches = await db.TallyMasterSnapshotBatches.ToListAsync();
         Assert.Equal(2, batches.Count);
@@ -83,8 +65,8 @@ public sealed class MasterSnapshotServiceTests
         var response = await service.IngestLedgersAsync(new PushLedgerSnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
             [
-                new LedgerSnapshotItem("Sales A/c", "  Sales Accounts  ", "Sales Accounts", true, null, null),
-                new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null, null)
+                new LedgerSnapshotItem("Sales A/c", "  Sales Accounts  ", "Sales Accounts", true, null),
+                new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null)
             ]));
 
         Assert.Equal(2, response.ItemCount);
@@ -102,7 +84,7 @@ public sealed class MasterSnapshotServiceTests
 
         await service.IngestStockItemsAsync(new PushStockItemSnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
-            [new StockItemSnapshotItem("22K Gold Ring", "22K-RING", "grams", "7113", "22K", null)]));
+            [new StockItemSnapshotItem("22K Gold Ring", "22K-RING", "grams", "7113", "22K")]));
 
         var read = await service.GetStockItemsAsync();
         Assert.Single(read.StockItems);
@@ -118,7 +100,7 @@ public sealed class MasterSnapshotServiceTests
 
         await service.IngestVoucherTypesAsync(new PushVoucherTypeSnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
-            [new VoucherTypeSnapshotItem("Sales", "Sales", true, null)]));
+            [new VoucherTypeSnapshotItem("Sales", "Sales", true)]));
 
         var read = await service.GetVoucherTypesAsync();
         Assert.Single(read.VoucherTypes);
@@ -134,7 +116,7 @@ public sealed class MasterSnapshotServiceTests
 
         await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
-            [new CompanySnapshotItem("ACME", true, null)]));
+            [new CompanySnapshotItem("ACME", true)]));
 
         var summary = await service.GetFreshnessSummaryAsync();
 

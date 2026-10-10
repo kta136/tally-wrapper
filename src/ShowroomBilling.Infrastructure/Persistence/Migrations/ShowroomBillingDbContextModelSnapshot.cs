@@ -173,9 +173,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("CreatedBy")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("CurrentRevisionId")
                         .HasColumnType("uuid");
 
@@ -236,8 +233,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"InvoiceNumber\" IS NOT NULL");
 
-                    b.HasIndex("ShowroomId", "State", "CreatedAtUtc");
-
                     b.HasIndex("ShowroomId", "State", "CreatedAtUtc", "Id");
 
                     b.ToTable("bills", "public", t =>
@@ -284,13 +279,7 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("SupersedesRevisionId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("TotalsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("BillDate");
 
                     b.HasIndex("PartyName")
                         .HasAnnotation("Npgsql:CreatedConcurrently", true);
@@ -467,8 +456,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UpdatedAtUtc");
-
                     b.ToTable("cloud_settings", "public");
                 });
 
@@ -490,8 +477,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasColumnName("value");
 
                     b.HasKey("Key");
-
-                    b.HasIndex("Value");
 
                     b.ToTable("database_identity", "public");
                 });
@@ -684,20 +669,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("RawJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.Property<Guid>("ShowroomId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BatchId");
-
                     b.HasIndex("BatchId", "Name");
-
-                    b.HasIndex("ShowroomId", "Name");
 
                     b.ToTable("tally_company_snapshots", "public");
                 });
@@ -731,20 +708,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("RawJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.Property<Guid>("ShowroomId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BatchId");
-
                     b.HasIndex("BatchId", "Name");
-
-                    b.HasIndex("ShowroomId", "Name");
 
                     b.ToTable("tally_ledger_snapshots", "public");
                 });
@@ -816,20 +785,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("RawJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.Property<Guid>("ShowroomId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BatchId");
-
                     b.HasIndex("BatchId", "Name");
-
-                    b.HasIndex("ShowroomId", "Name");
 
                     b.ToTable("tally_stock_item_snapshots", "public");
                 });
@@ -855,20 +816,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("RawJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.Property<Guid>("ShowroomId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BatchId");
-
                     b.HasIndex("BatchId", "Name");
-
-                    b.HasIndex("ShowroomId", "Name");
 
                     b.ToTable("tally_voucher_type_snapshots", "public");
                 });

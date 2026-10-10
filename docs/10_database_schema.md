@@ -30,7 +30,6 @@ Business document lineage. Present as of the `BillsAndRevisions` migration; `ten
 | `fiscal_year` | text nullable | Indian fiscal year of the reserved number (`YYYY-YY`) |
 | `superseded_by_bill_id` | UUID nullable | Set when a `revise` produces a new draft lineage |
 | `edited_after_push` | boolean NOT NULL DEFAULT false | Set when an admin reopens a posted/failed bill for edit; cleared by mark-pending |
-| `created_by` | UUID nullable | Operator/user |
 | `created_at_utc` | timestamptz | |
 | `updated_at_utc` | timestamptz | |
 | `voided_at_utc` | timestamptz nullable | |
@@ -39,7 +38,7 @@ Constraints / indexes:
 
 - PK on `id`
 - check `state IN ('draft','pending','posting','posted','failed','reconciliation_required','revised','voided')`
-- index `(showroom_id, state, created_at_utc desc)` for history/list queries
+- index `(showroom_id, state, created_at_utc, id)` for history/list queries
 - unique partial index `(showroom_id, fiscal_year, invoice_number) WHERE invoice_number IS NOT NULL` — hard duplicate-number guard on finalized bills
 - GIN trigram index on `invoice_number` for the Bills tab's contains search
 
@@ -53,7 +52,6 @@ Immutable snapshots of bill content. Present as of the `BillsAndRevisions` migra
 | `bill_id` | UUID FK -> `bills.id` ON DELETE CASCADE | |
 | `revision_no` | integer | Monotonic within bill |
 | `snapshot_json` | jsonb | Full bill payload |
-| `totals_json` | jsonb | Derived totals snapshot |
 | `party_name` | text nullable | Search/helper projection |
 | `bill_date` | date nullable | Search/helper projection |
 | `grand_total` | numeric(18,3) | Search/helper projection |
@@ -165,10 +163,10 @@ Supersession: on ingestion, any prior row with the same `(showroom_id, master_ty
 
 Separate tables for query simplicity (all present as of the `MasterSnapshotsIngestion` migration):
 
-- `tally_company_snapshots` — `name`, `is_active`, `raw_json`
-- `tally_ledger_snapshots` — `name`, `parent`, `primary_group`, `is_revenue`, `gstin`, `raw_json`
-- `tally_stock_item_snapshots` — `name`, `alias`, `base_unit`, `hsn_code`, `karat`, `raw_json`
-- `tally_voucher_type_snapshots` — `name`, `parent_type`, `is_deemed_positive`, `raw_json`
+- `tally_company_snapshots` — `name`, `is_active`
+- `tally_ledger_snapshots` — `name`, `parent`, `primary_group`, `is_revenue`, `gstin`
+- `tally_stock_item_snapshots` — `name`, `alias`, `base_unit`, `hsn_code`, `karat`
+- `tally_voucher_type_snapshots` — `name`, `parent_type`, `is_deemed_positive`
 
 Common columns:
 
@@ -177,12 +175,27 @@ Common columns:
 - `tenant_id` (deferred as above)
 - `showroom_id`
 - normalized value columns per type
-- `raw_json` jsonb for source metadata
 
 Indexes per type:
 
-- index `(showroom_id, name)`
-- index `(batch_id)`
+- index `(batch_id, name)`: rows are only read through their batch, in name order
+- trigram index on `name` for search
+
+### 1.8.1 Columns removed on 10 October 2026
+
+The `DropUnusedColumnsAndIndexes` migration removed six columns nothing read: `bills.created_by`, `bill_revisions.totals_json` and `raw_json` on the four master snapshot tables. It also removed twelve indexes that were a prefix of another index or sat on a single-row table.
+
+Before dropping a column the migration copies its values into a table named `dropped_20261010_<table>_<column>` (`Id` plus the value, only rows that held something), in the same transaction. Rolling the migration back restores the columns from those tables. They are not part of the EF model. When the release has settled, remove them by hand:
+
+```sql
+DROP TABLE IF EXISTS
+    public.dropped_20261010_bills_created_by,
+    public.dropped_20261010_bill_revisions_totals_json,
+    public.dropped_20261010_tally_company_snapshots_raw_json,
+    public.dropped_20261010_tally_ledger_snapshots_raw_json,
+    public.dropped_20261010_tally_stock_item_snapshots_raw_json,
+    public.dropped_20261010_tally_voucher_type_snapshots_raw_json;
+```
 
 ### 1.9 `draft_edit_leases`
 

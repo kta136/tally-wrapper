@@ -10,8 +10,7 @@ public sealed record MasterSnapshotMetadata(
 public sealed record MasterSnapshotQuery(
     string? Search,
     int? Skip,
-    int? Take,
-    bool? IncludeRaw = false);
+    int? Take);
 
 public sealed record CompanySnapshotResponse(
     MasterSnapshotMetadata Metadata,

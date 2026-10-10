@@ -25,7 +25,6 @@ internal static class BillSerialization
             BillId = billId,
             RevisionNo = revisionNo,
             SnapshotJson = JsonSerializer.Serialize(payload, JsonOptions),
-            TotalsJson = JsonSerializer.Serialize(payload.Totals, JsonOptions),
             PartyName = string.IsNullOrWhiteSpace(payload.PartyName) ? null : payload.PartyName.Trim(),
             BillDate = payload.BillDate,
             GrandTotal = payload.Totals.GrandTotal,

@@ -148,8 +148,8 @@ public sealed class MasterDataSettingsViewModelTests
                 Metadata("companies", 2),
                 new[]
                 {
-                    new CompanySnapshotItem("Backup Jewels", false, null),
-                    new CompanySnapshotItem("DDA Jewels", true, null),
+                    new CompanySnapshotItem("Backup Jewels", false),
+                    new CompanySnapshotItem("DDA Jewels", true),
                 }));
 
         public Task<LedgerSnapshotResponse> GetLedgersAsync(
@@ -159,8 +159,8 @@ public sealed class MasterDataSettingsViewModelTests
                 Metadata("ledgers", 2),
                 new[]
                 {
-                    new LedgerSnapshotItem("Sales", null, "Sales Accounts", true, null, null),
-                    new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null, null),
+                    new LedgerSnapshotItem("Sales", null, "Sales Accounts", true, null),
+                    new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null),
                 }));
 
         public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
@@ -168,7 +168,7 @@ public sealed class MasterDataSettingsViewModelTests
             CancellationToken cancellationToken = default)
             => Task.FromResult(new VoucherTypeSnapshotResponse(
                 Metadata("voucher-types", 1),
-                new[] { new VoucherTypeSnapshotItem("Sales", "Sales", false, null) }));
+                new[] { new VoucherTypeSnapshotItem("Sales", "Sales", false) }));
 
         public Task<StockItemSnapshotResponse> GetStockItemsAsync(
             MasterSnapshotQuery? query = null,
@@ -177,8 +177,8 @@ public sealed class MasterDataSettingsViewModelTests
                 Metadata("stock-items", 2),
                 new[]
                 {
-                    new StockItemSnapshotItem("Gold 22K", null, "GMS", "7113", "22K", null),
-                    new StockItemSnapshotItem("Diamond", null, "CTS", "7102", null, null),
+                    new StockItemSnapshotItem("Gold 22K", null, "GMS", "7113", "22K"),
+                    new StockItemSnapshotItem("Diamond", null, "CTS", "7102", null),
                 }));
 
         public List<string?> RefreshedMasterTypes { get; } = [];

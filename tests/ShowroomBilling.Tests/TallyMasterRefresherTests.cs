@@ -18,7 +18,7 @@ public sealed class TallyMasterRefresherTests
     public async Task A_successful_refresh_reports_the_stored_batch()
     {
         var refresher = Refresher(_ => Task.FromResult<IReadOnlyList<CompanySnapshotItem>>(
-            [new CompanySnapshotItem("Acme Jewellers", true, null)]));
+            [new CompanySnapshotItem("Acme Jewellers", true)]));
 
         var result = await refresher.RefreshCompaniesAsync(TestContext.Current.CancellationToken);
 

@@ -397,6 +397,17 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 - `DatabaseInitializationHostedService` applies migrations on startup
 - preserve backward-compatibility window if desktop rollout is staged
 
+**Take a database dump before a release that carries migrations.** Production applies pending migrations by itself the first time the new API starts (`Database__AutoMigrateOnStartup=true`), so the dump has to exist before that build is started, not after. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
+
+```powershell
+$env:PGPASSWORD = '<password from OpenBao>'
+pg_dump --format=custom --no-owner --host <host> --port <port> --username <user> --dbname tally_wrapper_prod --file "tally_wrapper_prod_$(Get-Date -Format yyyyMMdd-HHmmss).dump"
+Remove-Item Env:PGPASSWORD
+pg_restore --list <the .dump file> | Select-Object -First 5   # proves the file is readable
+```
+
+A migration that removes data must also protect itself, because that step can be forgotten: it copies what it is about to drop into a side table in the same transaction, and its `Down` restores from that copy. `DropUnusedColumnsAndIndexes` (10 October 2026) is the model; see [10_database_schema.md §1.8.1](10_database_schema.md) for the tables it leaves and how to remove them.
+
 ### Desktop
 
 - staged counter rollout acceptable if contracts remain compatible

@@ -115,7 +115,7 @@ public sealed class TallyXmlMasterSource(
         var name = ReadNameFromAttrOrChild(element);
         if (string.IsNullOrWhiteSpace(name)) return null;
         var inactive = ReadBool(element, "ISINACTIVE", defaultValue: false);
-        return new CompanySnapshotItem(Name: name!, IsActive: !inactive, RawJson: ToRawJson(element));
+        return new CompanySnapshotItem(Name: name!, IsActive: !inactive);
     }
 
     private static LedgerSnapshotItem? MapLedger(XElement element)
@@ -127,8 +127,7 @@ public sealed class TallyXmlMasterSource(
             Parent: ReadChild(element, "PARENT"),
             PrimaryGroup: ReadChild(element, "PRIMARYGROUP"),
             IsRevenue: ReadBool(element, "ISREVENUE", defaultValue: false),
-            Gstin: ReadChild(element, "PARTYGSTIN"),
-            RawJson: ToRawJson(element));
+            Gstin: ReadChild(element, "PARTYGSTIN"));
     }
 
     private static StockItemSnapshotItem? MapStockItem(XElement element)
@@ -140,8 +139,7 @@ public sealed class TallyXmlMasterSource(
             Alias: ReadChild(element, "ALIASNAME"),
             BaseUnit: ReadChild(element, "BASEUNITS"),
             HsnCode: SanitizeHsn(ReadChild(element, "GSTHSNCODE")) ?? SanitizeHsn(ReadChild(element, "HSNCODE")),
-            Karat: null,
-            RawJson: ToRawJson(element));
+            Karat: null);
     }
 
     private static VoucherTypeSnapshotItem? MapVoucherType(XElement element)
@@ -151,8 +149,7 @@ public sealed class TallyXmlMasterSource(
         return new VoucherTypeSnapshotItem(
             Name: name!,
             ParentType: ReadChild(element, "PARENT"),
-            IsDeemedPositive: ReadBool(element, "ISDEEMEDPOSITIVE", defaultValue: false),
-            RawJson: ToRawJson(element));
+            IsDeemedPositive: ReadBool(element, "ISDEEMEDPOSITIVE", defaultValue: false));
     }
 
     private static string? ReadNameFromAttrOrChild(XElement element)
@@ -187,6 +184,4 @@ public sealed class TallyXmlMasterSource(
             || value == "1";
     }
 
-    private static string ToRawJson(XElement element) =>
-        JsonSerializer.Serialize(new { xml = element.ToString(SaveOptions.DisableFormatting) });
 }

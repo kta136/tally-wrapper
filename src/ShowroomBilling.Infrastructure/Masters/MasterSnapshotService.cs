@@ -46,8 +46,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
                 Name = (item.Name ?? string.Empty).Trim(),
-                IsActive = item.IsActive,
-                RawJson = MasterSnapshotNormalization.NormalizeJson(item.RawJson)
+                IsActive = item.IsActive
             })),
             cancellationToken);
     }
@@ -76,8 +75,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 Parent = MasterSnapshotNormalization.Normalize(item.Parent),
                 PrimaryGroup = MasterSnapshotNormalization.Normalize(item.PrimaryGroup),
                 IsRevenue = item.IsRevenue,
-                Gstin = MasterSnapshotNormalization.Normalize(item.Gstin),
-                RawJson = MasterSnapshotNormalization.NormalizeJson(item.RawJson)
+                Gstin = MasterSnapshotNormalization.Normalize(item.Gstin)
             })),
             cancellationToken);
     }
@@ -106,8 +104,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 Alias = MasterSnapshotNormalization.Normalize(item.Alias),
                 BaseUnit = MasterSnapshotNormalization.Normalize(item.BaseUnit),
                 HsnCode = MasterSnapshotNormalization.Normalize(item.HsnCode),
-                Karat = MasterSnapshotNormalization.Normalize(item.Karat),
-                RawJson = MasterSnapshotNormalization.NormalizeJson(item.RawJson)
+                Karat = MasterSnapshotNormalization.Normalize(item.Karat)
             })),
             cancellationToken);
     }
@@ -134,8 +131,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 ShowroomId = showroomId,
                 Name = (item.Name ?? string.Empty).Trim(),
                 ParentType = MasterSnapshotNormalization.Normalize(item.ParentType),
-                IsDeemedPositive = item.IsDeemedPositive,
-                RawJson = MasterSnapshotNormalization.NormalizeJson(item.RawJson)
+                IsDeemedPositive = item.IsDeemedPositive
             })),
             cancellationToken);
     }
@@ -155,9 +151,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             .Where(x => x.BatchId == batch.Id);
         rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
 
-        var includeRaw = query?.IncludeRaw == true;
         var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
-            .Select(row => new CompanySnapshotItem(row.Name, row.IsActive, includeRaw ? row.RawJson : null))
+            .Select(row => new CompanySnapshotItem(row.Name, row.IsActive))
             .ToArrayAsync(cancellationToken);
 
         return new CompanySnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
@@ -178,9 +173,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             .Where(x => x.BatchId == batch.Id);
         rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
 
-        var includeRaw = query?.IncludeRaw == true;
         var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
-            .Select(row => new LedgerSnapshotItem(row.Name, row.Parent, row.PrimaryGroup, row.IsRevenue, row.Gstin, includeRaw ? row.RawJson : null))
+            .Select(row => new LedgerSnapshotItem(row.Name, row.Parent, row.PrimaryGroup, row.IsRevenue, row.Gstin))
             .ToArrayAsync(cancellationToken);
 
         return new LedgerSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
@@ -201,9 +195,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             .Where(x => x.BatchId == batch.Id);
         rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
 
-        var includeRaw = query?.IncludeRaw == true;
         var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
-            .Select(row => new StockItemSnapshotItem(row.Name, row.Alias, row.BaseUnit, row.HsnCode, row.Karat, includeRaw ? row.RawJson : null))
+            .Select(row => new StockItemSnapshotItem(row.Name, row.Alias, row.BaseUnit, row.HsnCode, row.Karat))
             .ToArrayAsync(cancellationToken);
 
         return new StockItemSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
@@ -224,9 +217,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             .Where(x => x.BatchId == batch.Id);
         rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
 
-        var includeRaw = query?.IncludeRaw == true;
         var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
-            .Select(row => new VoucherTypeSnapshotItem(row.Name, row.ParentType, row.IsDeemedPositive, includeRaw ? row.RawJson : null))
+            .Select(row => new VoucherTypeSnapshotItem(row.Name, row.ParentType, row.IsDeemedPositive))
             .ToArrayAsync(cancellationToken);
 
         return new VoucherTypeSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);

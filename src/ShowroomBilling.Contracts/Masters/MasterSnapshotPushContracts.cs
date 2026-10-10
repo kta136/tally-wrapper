@@ -7,8 +7,7 @@ public sealed record PushCompanySnapshotRequest(
 
 public sealed record CompanySnapshotItem(
     string Name,
-    bool IsActive,
-    string? RawJson);
+    bool IsActive);
 
 public sealed record PushLedgerSnapshotRequest(
     string ShowroomCode,
@@ -20,8 +19,7 @@ public sealed record LedgerSnapshotItem(
     string? Parent,
     string? PrimaryGroup,
     bool IsRevenue,
-    string? Gstin,
-    string? RawJson);
+    string? Gstin);
 
 public sealed record PushStockItemSnapshotRequest(
     string ShowroomCode,
@@ -33,8 +31,7 @@ public sealed record StockItemSnapshotItem(
     string? Alias,
     string? BaseUnit,
     string? HsnCode,
-    string? Karat,
-    string? RawJson);
+    string? Karat);
 
 public sealed record PushVoucherTypeSnapshotRequest(
     string ShowroomCode,
@@ -44,8 +41,7 @@ public sealed record PushVoucherTypeSnapshotRequest(
 public sealed record VoucherTypeSnapshotItem(
     string Name,
     string? ParentType,
-    bool IsDeemedPositive,
-    string? RawJson);
+    bool IsDeemedPositive);
 
 public sealed record MasterSnapshotAcceptedResponse(
     string MasterType,
