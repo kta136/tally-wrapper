@@ -32,15 +32,10 @@ public sealed class BillDateGroupHeaderConverter : IValueConverter
         }
 
         var today = DateOnly.FromDateTime(DateTime.Today);
-        var label = date == today
-            ? "Today"
-            : date == today.AddDays(-1)
-                ? "Yesterday"
-                : date.ToString("ddd, dd MMM yyyy", CultureInfo.CurrentCulture);
-
-        return date == today || date == today.AddDays(-1)
-            ? $"{label} · {date:ddd, dd MMM yyyy}"
-            : label;
+        var formatted = date.ToString("ddd, dd MMM yyyy", CultureInfo.CurrentCulture);
+        if (date == today) return $"Today · {formatted}";
+        if (date == today.AddDays(-1)) return $"Yesterday · {formatted}";
+        return formatted;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

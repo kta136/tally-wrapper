@@ -14,11 +14,6 @@
         <KeyBinding Key="PageUp" Command="{Binding PrevPageCommand}" />
         <KeyBinding Key="Enter"
                     Command="{Binding DataContext.OpenBillDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
-        <!--
-            Bare "P" used to push selected bills — routed up from TextBox focus
-            and could fire mid-typing in a filter. Removed. Push is available
-            via the toolbar button (or the row/context menu).
-        -->
         <KeyBinding Key="P"
                     Modifiers="Ctrl"
                     Command="{Binding DataContext.OpenSelectedBillsPrintPreviewCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
@@ -172,19 +167,6 @@
                           ToolTip="Hide date groups in which every bill is already posted to Tally. Leaves only days that still have unposted work.">
                     <TextBlock Text="Hide fully posted days" Foreground="{StaticResource InkMutedBrush}" />
                 </CheckBox>
-                <TextBlock Grid.Column="7"
-                           VerticalAlignment="Center"
-                           FontSize="{DynamicResource FontSizeXs}"
-                           Foreground="{StaticResource InkSoftBrush}">
-                    <Run Text="Showing " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
-                    <Run Text=" of " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
-                    <Run Text=" bills" />
-                    <Run Text=" · " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
-                    <Run Text=" hidden" />
-                </TextBlock>
             </Grid>
         </Border>
 
@@ -329,18 +311,9 @@
                                     BorderThickness="0,0,0,1"
                                     MinHeight="{DynamicResource RowHeight}"
                                     Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Background="Transparent"
                                     MouseLeftButtonDown="OnBillRowMouseLeftButtonDown"
                                     PreviewMouseRightButtonDown="OnBillRowRightClick">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="Transparent" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                <Setter Property="Background" Value="{StaticResource BgSelectedBrush}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
                                 <Border.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="Open Details" InputGestureText="Enter" Click="OnOpenDetailsMenuItemClick" />
@@ -515,7 +488,7 @@
                     <Run Text="Showing " />
                     <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
                     <Run Text=" of " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Total, Mode=OneWay}" />
+                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding TotalDisplay, Mode=OneWay}" />
                     <Run Text=" bills · " />
                     <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
                     <Run Text=" hidden by posted-day filter · Right-click row for actions" />

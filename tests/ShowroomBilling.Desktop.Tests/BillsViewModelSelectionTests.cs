@@ -317,6 +317,26 @@ public sealed class BillsViewModelSelectionTests
     }
 
     [Fact]
+    public async Task The_total_is_shown_as_at_least_so_many_until_the_last_page()
+    {
+        // The list is loaded without a count: the server reports one more than
+        // it returned when further pages exist.
+        var api = new FakeBillsApi
+        {
+            Response = new BillListResponse(3, 0, 50, [Summary(Guid.NewGuid(), "SR/25-26/0001"), Summary(Guid.NewGuid(), "SR/25-26/0002")], HasMore: true)
+        };
+        var vm = new BillsViewModel(api);
+
+        await vm.LoadAsync();
+        Assert.Equal("2+", vm.TotalDisplay);
+        Assert.True(vm.HasNext || vm.Total > vm.Items.Count);
+
+        api.Response = new BillListResponse(2, 0, 50, [Summary(Guid.NewGuid(), "SR/25-26/0001"), Summary(Guid.NewGuid(), "SR/25-26/0002")], HasMore: false);
+        await vm.LoadAsync();
+        Assert.Equal("2", vm.TotalDisplay);
+    }
+
+    [Fact]
     public async Task Apply_and_clear_filters_reload_from_the_first_page()
     {
         var api = new FakeBillsApi

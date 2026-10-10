@@ -68,6 +68,12 @@
       WM_GETMINMAXINFO so the custom chrome stays inside the current work area.
     -->
     <Grid>
+        <Grid.Resources>
+            <Style x:Key="DialogHost" TargetType="{x:Type shell:LazyViewHost}">
+                <Setter Property="Grid.RowSpan" Value="6" />
+                <Setter Property="Panel.ZIndex" Value="100" />
+            </Style>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -128,41 +134,32 @@
         <!--  Row 5: Status bar  -->
         <views:StatusBarView Grid.Row="5" DataContext="{Binding StatusBar}" />
 
-        <!--  Dialog overlays (span all rows)  -->
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <!--  Dialog overlays: one is shown at a time, over every row  -->
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type views:ShortcutsDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.Shortcuts}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type views:SystemHealthDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.Health}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type billsViews:BillDetailsDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.BillDetails}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type printingViews:PrintPreviewDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.PrintPreview}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type adminViews:AdminUnlockDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.Admin}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type setupViews:SetupWizardDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.SetupWizard}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type syntheticViews:SyntheticBatchDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.SyntheticBatch}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type billsViews:ChangeNumberDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.ChangeNumber}}" />
-        <shell:LazyViewHost Grid.RowSpan="6"
-                            Panel.ZIndex="100"
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type billsViews:ReasonPromptDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.ReasonPrompt}}" />
         <!--  Confirm sits above the other dialogs: a question asked from inside one must not replace it.  -->

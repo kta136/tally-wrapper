@@ -88,6 +88,22 @@ public sealed class ViewSmokeTests
             window.Content = null;
         }
 
+        // The shell itself: its XAML, the dialog hosts and the chrome around
+        // the tabs. It is never shown, so the tab and dialog views stay
+        // unrealised here; the loop above covered them.
+        try
+        {
+            var mainWindow = new MainWindow(shell, endpointResolver: null!, apiReadiness: null!);
+            var root = (FrameworkElement)mainWindow.Content;
+            Layout(root);
+            ViewSnapshot.Save(root, nameof(MainWindow));
+        }
+        catch (Exception ex)
+        {
+            problems.Add($"{nameof(MainWindow)}: {ex.GetBaseException().Message}");
+        }
+
+        problems.AddRange(bindingErrors.Take().Select(error => $"{nameof(MainWindow)}: {error}"));
         return problems;
     }
 

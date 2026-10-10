@@ -234,6 +234,13 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private readonly HashSet<DateOnly?> _fullyPostedDates = [];
 
     public bool HasNext => Skip + PageSize < Total;
+
+    // The list is loaded without a count, so until the last page the server
+    // only knows there is at least one more bill.
+    private bool _hasMorePages;
+
+    /// <summary>"120", or "50+" while more pages follow.</summary>
+    public string TotalDisplay => _hasMorePages ? $"{Skip + Items.Count}+" : Total.ToString();
     public int PageTake => PageSize;
     public int VisibleCount => GroupedItems.Count;
     public int Showing => VisibleCount;
@@ -424,6 +431,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             }
 
             ResetRows(list.Items);
+            _hasMorePages = list.HasMore == true;
             Total = list.Total;
 
             _selectingInBulk = true;
@@ -529,6 +537,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private void RefreshComputed()
     {
         OnPropertyChanged(nameof(HasNext));
+        OnPropertyChanged(nameof(TotalDisplay));
         OnPropertyChanged(nameof(Showing));
         OnPropertyChanged(nameof(VisibleCount));
         OnPropertyChanged(nameof(HiddenByPostedDaysCount));
