@@ -130,6 +130,45 @@ public sealed class RollingFileLoggerTests
         }
     }
 
+    [Fact]
+    public async Task Log_ReachesTheFileDuringAQuietSpell_WithoutAnotherLineOrDispose()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            using var provider = NewProvider(dir, "quiet");
+            provider.CreateLogger("ShowroomBilling.Quiet").LogInformation("last line before the crash");
+
+            // Nothing else is logged and the provider stays open, as when the
+            // process is about to be killed. The line must still get flushed.
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            var text = string.Empty;
+            while (DateTime.UtcNow < deadline && !text.Contains("last line before the crash", StringComparison.Ordinal))
+            {
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+                text = ReadShared(dir, "quiet-*.log");
+            }
+
+            Assert.Contains("last line before the crash", text);
+        }
+        finally
+        {
+            TryDelete(dir);
+        }
+    }
+
+    private static string ReadShared(string dir, string pattern)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var file in Directory.EnumerateFiles(dir, pattern))
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            text.Append(reader.ReadToEnd());
+        }
+        return text.ToString();
+    }
+
     private static RollingFileLoggerProvider NewProvider(string dir, string prefix, string minLevel = "Information") =>
         new(new RollingFileLoggerOptions
         {

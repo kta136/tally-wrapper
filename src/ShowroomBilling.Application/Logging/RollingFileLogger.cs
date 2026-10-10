@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -72,7 +71,8 @@ public sealed class RollingFileLogger(
             {
                 foreach (var kvp in kvps)
                 {
-                    if (kvp.Key.StartsWith('{') || kvp.Key == "{OriginalFormat}")
+                    // Skips "{OriginalFormat}" and any other template placeholder key.
+                    if (kvp.Key.StartsWith('{'))
                     {
                         continue;
                     }

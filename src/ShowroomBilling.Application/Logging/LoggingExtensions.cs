@@ -17,7 +17,7 @@ public static class LoggingExtensions
             .Configure(options =>
             {
                 section.Bind(options);
-                if (string.IsNullOrWhiteSpace(options.FilePrefix) || options.FilePrefix == "host")
+                if (string.IsNullOrWhiteSpace(options.FilePrefix) || options.FilePrefix == RollingFileLoggerOptions.DefaultFilePrefix)
                 {
                     options.FilePrefix = filePrefix;
                 }

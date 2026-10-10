@@ -8,7 +8,10 @@ public sealed class RollingFileLoggerOptions
 
     public string Directory { get; set; } = DefaultDirectory();
 
-    public string FilePrefix { get; set; } = "host";
+    /// <summary>Placeholder prefix; <c>AddRollingFile</c> replaces it with the host's own.</summary>
+    public const string DefaultFilePrefix = "host";
+
+    public string FilePrefix { get; set; } = DefaultFilePrefix;
 
     public int RetentionDays { get; set; } = 30;
 

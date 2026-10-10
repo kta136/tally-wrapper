@@ -15,9 +15,11 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
     private readonly Task _writerTask;
     private readonly object _fileLock = new();
 
+    // How long written lines may sit in the buffer when no further line arrives.
+    private static readonly TimeSpan IdleFlushInterval = TimeSpan.FromSeconds(1);
+
     private DateOnly _currentDay;
     private StreamWriter? _writer;
-    private string? _currentPath;
     private int _rollSuffix;
     private int _pendingFlushWrites;
     private DateTimeOffset _lastFlushAt = DateTimeOffset.Now;
@@ -61,19 +63,28 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
         {
             return;
         }
-        if (!_queue.TryAdd(line))
-        {
-            // Queue full — drop to keep logging non-blocking.
-        }
+
+        // A full queue drops the line: logging must never block the caller.
+        _ = _queue.TryAdd(line);
     }
 
-    private async Task WriterLoop()
+    private void WriterLoop()
     {
         try
         {
-            foreach (var line in _queue.GetConsumingEnumerable(_stopCts.Token))
+            while (!_queue.IsCompleted)
             {
-                WriteLine(line);
+                // Wait a bounded time for the next line. Without the timeout
+                // the last lines before a quiet spell stay in the buffer, and
+                // they are lost if the process is then killed.
+                if (_queue.TryTake(out var line, (int)IdleFlushInterval.TotalMilliseconds, _stopCts.Token))
+                {
+                    WriteLine(line);
+                }
+                else
+                {
+                    FlushPending();
+                }
             }
         }
         catch (OperationCanceledException)
@@ -81,21 +92,40 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
         }
         finally
         {
-            await DrainAsync();
+            Drain();
         }
     }
 
-    private Task DrainAsync()
+    private void Drain()
     {
         while (_queue.TryTake(out var line))
         {
             WriteLine(line);
         }
+        FlushPending();
+    }
+
+    private void FlushPending()
+    {
         lock (_fileLock)
         {
-            _writer?.Flush();
+            if (_pendingFlushWrites == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _writer?.Flush();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Same policy as a failed write: give up on these lines and
+                // let the next one reopen the file.
+            }
+            _pendingFlushWrites = 0;
+            _lastFlushAt = DateTimeOffset.Now;
         }
-        return Task.CompletedTask;
     }
 
     private void WriteLine(string line)
@@ -107,7 +137,7 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
                 RollIfNeeded();
                 _writer!.WriteLine(line);
                 _pendingFlushWrites++;
-                if (_pendingFlushWrites >= 32 || DateTimeOffset.Now - _lastFlushAt >= TimeSpan.FromSeconds(1))
+                if (_pendingFlushWrites >= 32 || DateTimeOffset.Now - _lastFlushAt >= IdleFlushInterval)
                 {
                     _writer.Flush();
                     _pendingFlushWrites = 0;
@@ -173,8 +203,8 @@ public sealed class RollingFileLoggerProvider : ILoggerProvider, ISupportExterna
         var name = _rollSuffix == 0
             ? $"{_options.FilePrefix}-{date}.log"
             : $"{_options.FilePrefix}-{date}-{_rollSuffix}.log";
-        _currentPath = Path.Combine(_options.Directory, name);
-        var stream = new FileStream(_currentPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        var path = Path.Combine(_options.Directory, name);
+        var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
         _writer = new StreamWriter(stream) { AutoFlush = false };
         _pendingFlushWrites = 0;
         _lastFlushAt = DateTimeOffset.Now;
