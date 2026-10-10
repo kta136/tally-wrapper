@@ -149,10 +149,10 @@ public sealed class CloudSettingsService(
     }
 
     private static readonly PrintLayoutSettings DefaultPrintLayout = new(
-        LeftMarginCm: 1.0,
-        RightMarginCm: 1.0,
-        TopMarginCm: 1.0,
-        BottomMarginCm: 1.0,
+        LeftMarginCm: PrintLayoutDefaults.MarginCm,
+        RightMarginCm: PrintLayoutDefaults.MarginCm,
+        TopMarginCm: PrintLayoutDefaults.MarginCm,
+        BottomMarginCm: PrintLayoutDefaults.MarginCm,
         Logo: null,
         Signature: null,
         Watermark: null,

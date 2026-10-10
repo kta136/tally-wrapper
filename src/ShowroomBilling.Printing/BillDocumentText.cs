@@ -42,7 +42,7 @@ internal static class BillDocumentText
         var wastage = line.WastagePercent ?? 0m;
         var labour = line.LabourPerUnit ?? 0m;
         if (wastage != 0m)
-            parts.Add((wastage % 1 == 0m ? wastage.ToString("0") : wastage.ToString("0.##")) + "%");
+            parts.Add(wastage.ToString(wastage % 1 == 0m ? "0" : "0.##", CultureInfo.InvariantCulture) + "%");
         if (labour != 0m) parts.Add($"{FormatCompactNumber(labour)}/g");
         return parts.Count == 0 ? "—" : string.Join("+", parts);
     }

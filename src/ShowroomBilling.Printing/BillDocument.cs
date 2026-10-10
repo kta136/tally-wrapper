@@ -3,6 +3,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Contracts.Settings;
 using static ShowroomBilling.Printing.BillDocumentText;
 
@@ -734,12 +735,7 @@ public sealed class BillDocument : IDocument
             return null;
         }
 
-        ReadOnlySpan<byte> pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        var mediaType = bytes.AsSpan().StartsWith(pngSignature)
-                ? "image/png"
-                : bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF
-                    ? "image/jpeg"
-                    : null;
+        var mediaType = ImageSignature.DetectContentType(bytes);
         if (mediaType is null)
         {
             return null;

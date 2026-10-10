@@ -25,7 +25,7 @@ public static class PreviewSampleProvider
             PartyGstin: "29AAAA0000A1Z5",
             PartyPhone: "+91 98765 43210",
             PartyAddress: "12, MG Road, Bengaluru",
-            Payment: "Credit and debit",
+            Payment: PaymentMode.CreditDebit,
             Rate24Kt: 72500m,
             Lines: new[]
             {

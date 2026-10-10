@@ -84,7 +84,7 @@ public sealed class PrintAssetService(
             throw new RequestValidationException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.");
         }
 
-        var contentType = DetectImageContentType(bytes)
+        var contentType = ImageSignature.DetectContentType(bytes)
             ?? throw new RequestValidationException("Asset must be a valid PNG or JPEG image.");
 
         var showroomId = Showrooms.DefaultId;
@@ -150,14 +150,5 @@ public sealed class PrintAssetService(
             new { kind = entity.AssetKind }));
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
-    }
-
-
-    private static string? DetectImageContentType(ReadOnlySpan<byte> bytes)
-    {
-        ReadOnlySpan<byte> png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-        if (bytes.StartsWith(png)) return "image/png";
-        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) return "image/jpeg";
-        return null;
     }
 }

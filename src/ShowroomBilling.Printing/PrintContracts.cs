@@ -72,18 +72,26 @@ public static class PrintLayoutLimits
     public const float DefaultSignatureOffsetXMm = 30f * PxToMm; // ≈7.9
     public const float DefaultSignatureOffsetYMm = 8f * PxToMm;  // ≈2.1 (reduced from 13px)
 
-    public const float MarginMinMm = 0f;
-    public const float MarginMaxMm = 25f;
+    // Margins, fonts, page size and watermark defaults are defined once, in
+    // centimetres, in Contracts (PrintLayoutDefaults); these are the same
+    // numbers in the renderer's millimetres.
+    private const float MmPerCm = 10f;
 
-    public const float DefaultMarginLeftMm = 10f;
-    public const float DefaultMarginTopMm = 10f;
-    public const float DefaultMarginRightMm = 10f;
+    public const float MarginMinMm = 0f;
+    public const float MarginMaxMm = (float)PrintLayoutDefaults.MarginMaxCm * MmPerCm;
+
+    public const float DefaultMarginLeftMm = (float)PrintLayoutDefaults.MarginCm * MmPerCm;
+    public const float DefaultMarginTopMm = DefaultMarginLeftMm;
+    public const float DefaultMarginRightMm = DefaultMarginLeftMm;
+    // V1's value, and the only default that differs from the stored one
+    // (1.0 cm). It applies only when a document is rendered with no saved
+    // layout at all; the API always supplies one.
     public const float DefaultMarginBottomMm = 12f;
 
-    public const int InvoiceFontMin = 8;
-    public const int InvoiceFontMax = 18;
-    public const int TermsFontMin = 7;
-    public const int TermsFontMax = 16;
+    public const int InvoiceFontMin = PrintLayoutDefaults.InvoiceFontMin;
+    public const int InvoiceFontMax = PrintLayoutDefaults.InvoiceFontMax;
+    public const int TermsFontMin = PrintLayoutDefaults.TermsFontMin;
+    public const int TermsFontMax = PrintLayoutDefaults.TermsFontMax;
 
     public const int DefaultInvoiceFontSize = 11;
     public const int DefaultTermsFontSize = 9;
@@ -91,14 +99,14 @@ public static class PrintLayoutLimits
     public static float GetSignatureLineWidthMm(float signatureImageWidthMm) =>
         Math.Min(SignatureSlotWidthMm, signatureImageWidthMm + SignatureLineOverhangMm);
 
-    public const float A4WidthMm = 210f;
-    public const float A4HeightMm = 297f;
+    public const float A4WidthMm = (float)PrintLayoutDefaults.A4WidthCm * MmPerCm;
+    public const float A4HeightMm = (float)PrintLayoutDefaults.A4HeightCm * MmPerCm;
     public const float WatermarkMinSizeMm = 1f;
-    public const float DefaultWatermarkWidthMm = 120f;
-    public const float DefaultWatermarkHeightMm = 120f;
-    public const float DefaultWatermarkOffsetXMm = 45f;
-    public const float DefaultWatermarkOffsetYMm = 88.5f;
-    public const float DefaultWatermarkOpacity = 0.15f;
+    public const float DefaultWatermarkWidthMm = (float)PrintLayoutDefaults.WatermarkWidthCm * MmPerCm;
+    public const float DefaultWatermarkHeightMm = (float)PrintLayoutDefaults.WatermarkHeightCm * MmPerCm;
+    public const float DefaultWatermarkOffsetXMm = (float)PrintLayoutDefaults.WatermarkOffsetXCm * MmPerCm;
+    public const float DefaultWatermarkOffsetYMm = (float)PrintLayoutDefaults.WatermarkOffsetYCm * MmPerCm;
+    public const float DefaultWatermarkOpacity = (float)PrintLayoutDefaults.WatermarkOpacityPercent / 100f;
 
     public const float SectionSpacingMinMm = 0f;
     public const float SectionSpacingMaxMm = 20f;
@@ -146,15 +154,12 @@ public sealed record PrintLayoutOptions(
     /// <summary>Return a copy with all numeric fields clamped to V1 ranges.</summary>
     public PrintLayoutOptions Clamped()
     {
-        static float ClampF(float v, float lo, float hi) => v < lo ? lo : v > hi ? hi : v;
-        static int ClampI(int v, int lo, int hi) => v < lo ? lo : v > hi ? hi : v;
-
-        var logoWidth = ClampF(LogoWidthMm, PrintLayoutLimits.LogoMinWidthMm, PrintLayoutLimits.LogoSlotWidthMm);
-        var logoHeight = ClampF(LogoHeightMm, PrintLayoutLimits.LogoMinHeightMm, PrintLayoutLimits.LogoSlotHeightMm);
-        var sigWidth = ClampF(SignatureWidthMm, PrintLayoutLimits.SignatureMinWidthMm, PrintLayoutLimits.SignatureSlotWidthMm);
-        var sigHeight = ClampF(SignatureHeightMm, PrintLayoutLimits.SignatureMinHeightMm, PrintLayoutLimits.SignatureSlotHeightMm);
-        var watermarkWidth = ClampF(WatermarkWidthMm, PrintLayoutLimits.WatermarkMinSizeMm, PrintLayoutLimits.A4WidthMm);
-        var watermarkHeight = ClampF(WatermarkHeightMm, PrintLayoutLimits.WatermarkMinSizeMm, PrintLayoutLimits.A4HeightMm);
+        var logoWidth = Math.Clamp(LogoWidthMm, PrintLayoutLimits.LogoMinWidthMm, PrintLayoutLimits.LogoSlotWidthMm);
+        var logoHeight = Math.Clamp(LogoHeightMm, PrintLayoutLimits.LogoMinHeightMm, PrintLayoutLimits.LogoSlotHeightMm);
+        var sigWidth = Math.Clamp(SignatureWidthMm, PrintLayoutLimits.SignatureMinWidthMm, PrintLayoutLimits.SignatureSlotWidthMm);
+        var sigHeight = Math.Clamp(SignatureHeightMm, PrintLayoutLimits.SignatureMinHeightMm, PrintLayoutLimits.SignatureSlotHeightMm);
+        var watermarkWidth = Math.Clamp(WatermarkWidthMm, PrintLayoutLimits.WatermarkMinSizeMm, PrintLayoutLimits.A4WidthMm);
+        var watermarkHeight = Math.Clamp(WatermarkHeightMm, PrintLayoutLimits.WatermarkMinSizeMm, PrintLayoutLimits.A4HeightMm);
 
         var normalizedSections = new List<PrintSectionLayoutOptions>();
         var seenSections = new HashSet<string>(StringComparer.Ordinal);
@@ -169,11 +174,11 @@ public sealed record PrintLayoutOptions(
             normalizedSections.Add(section with
             {
                 IsVisible = PrintLayoutSectionKeys.Mandatory.Contains(section.SectionKey) || section.IsVisible,
-                SpacingBeforeMm = ClampF(
+                SpacingBeforeMm = Math.Clamp(
                     section.SpacingBeforeMm,
                     PrintLayoutLimits.SectionSpacingMinMm,
                     PrintLayoutLimits.SectionSpacingMaxMm),
-                SpacingAfterMm = ClampF(
+                SpacingAfterMm = Math.Clamp(
                     section.SpacingAfterMm,
                     PrintLayoutLimits.SectionSpacingMinMm,
                     PrintLayoutLimits.SectionSpacingMaxMm),
@@ -194,27 +199,27 @@ public sealed record PrintLayoutOptions(
 
         return this with
         {
-            MarginLeftMm = ClampF(MarginLeftMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
-            MarginTopMm = ClampF(MarginTopMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
-            MarginRightMm = ClampF(MarginRightMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
-            MarginBottomMm = ClampF(MarginBottomMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
-            InvoiceFontSize = ClampI(InvoiceFontSize, PrintLayoutLimits.InvoiceFontMin, PrintLayoutLimits.InvoiceFontMax),
-            TermsFontSize = ClampI(TermsFontSize, PrintLayoutLimits.TermsFontMin, PrintLayoutLimits.TermsFontMax),
+            MarginLeftMm = Math.Clamp(MarginLeftMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
+            MarginTopMm = Math.Clamp(MarginTopMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
+            MarginRightMm = Math.Clamp(MarginRightMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
+            MarginBottomMm = Math.Clamp(MarginBottomMm, PrintLayoutLimits.MarginMinMm, PrintLayoutLimits.MarginMaxMm),
+            InvoiceFontSize = Math.Clamp(InvoiceFontSize, PrintLayoutLimits.InvoiceFontMin, PrintLayoutLimits.InvoiceFontMax),
+            TermsFontSize = Math.Clamp(TermsFontSize, PrintLayoutLimits.TermsFontMin, PrintLayoutLimits.TermsFontMax),
             LogoWidthMm = logoWidth,
             LogoHeightMm = logoHeight,
-            LogoOffsetXMm = ClampF(LogoOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.LogoSlotWidthMm - logoWidth)),
-            LogoOffsetYMm = ClampF(LogoOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.LogoSlotHeightMm - logoHeight)),
+            LogoOffsetXMm = Math.Clamp(LogoOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.LogoSlotWidthMm - logoWidth)),
+            LogoOffsetYMm = Math.Clamp(LogoOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.LogoSlotHeightMm - logoHeight)),
             SignatureWidthMm = sigWidth,
             SignatureHeightMm = sigHeight,
-            SignatureOffsetXMm = ClampF(SignatureOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.SignatureSlotWidthMm - sigWidth)),
-            SignatureOffsetYMm = ClampF(SignatureOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.SignatureSlotHeightMm - sigHeight)),
+            SignatureOffsetXMm = Math.Clamp(SignatureOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.SignatureSlotWidthMm - sigWidth)),
+            SignatureOffsetYMm = Math.Clamp(SignatureOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.SignatureSlotHeightMm - sigHeight)),
             WatermarkWidthMm = watermarkWidth,
             WatermarkHeightMm = watermarkHeight,
-            WatermarkOffsetXMm = ClampF(WatermarkOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.A4WidthMm - watermarkWidth)),
-            WatermarkOffsetYMm = ClampF(WatermarkOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.A4HeightMm - watermarkHeight)),
-            WatermarkOpacity = ClampF(WatermarkOpacity, 0f, 1f),
+            WatermarkOffsetXMm = Math.Clamp(WatermarkOffsetXMm, 0f, Math.Max(0f, PrintLayoutLimits.A4WidthMm - watermarkWidth)),
+            WatermarkOffsetYMm = Math.Clamp(WatermarkOffsetYMm, 0f, Math.Max(0f, PrintLayoutLimits.A4HeightMm - watermarkHeight)),
+            WatermarkOpacity = Math.Clamp(WatermarkOpacity, 0f, 1f),
             PageDensity = density,
-            InvoiceBorderThicknessPt = ClampF(
+            InvoiceBorderThicknessPt = Math.Clamp(
                 InvoiceBorderThicknessPt,
                 PrintLayoutLimits.InvoiceBorderMinPt,
                 PrintLayoutLimits.InvoiceBorderMaxPt),

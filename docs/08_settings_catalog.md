@@ -38,8 +38,8 @@ Scope rules:
 | `logo_path` | Invoice / Layout Assets | Optional logo source path | Optional file path | Local file selection + shared print asset reference/data | Affects rendered output | Browse, Clear, `Save All` |
 | `signature_path` | Invoice / Layout Assets | Optional signature source path | Optional file path | Local file selection + shared print asset reference/data | Affects rendered output | Browse, Clear, `Save All` |
 | `watermark_path` | Print Layout / Assets | Optional watermark source path | PNG/JPEG, ≤2 MiB | Local file selection + shared print asset reference/data | Repeats behind content on every physical page | Browse, Delete, `Save` |
-| `print_font_size` | Invoice / Layout Editor | Base print font size | Positive integer | Shared print layout setting | Affects rendered output | Layout Editor, `Save All` |
-| `print_terms_font_size` | Invoice / Layout Editor | Terms font size | Positive integer | Shared print layout setting | Affects rendered output | Layout Editor, `Save All` |
+| `print_font_size` | Invoice / Layout Editor | Base print font size | Integer, 8 to 18 | Shared print layout setting | Affects rendered output | Layout Editor, `Save All` |
+| `print_terms_font_size` | Invoice / Layout Editor | Terms font size | Integer, 7 to 16 | Shared print layout setting | Affects rendered output | Layout Editor, `Save All` |
 | `margin_left_mm` | Invoice / Layout Editor | Left margin | Numeric | Shared print layout setting | Affects page composition | Layout Editor, `Save All` |
 | `margin_top_mm` | Invoice / Layout Editor | Top margin | Numeric | Shared print layout setting | Affects page composition | Layout Editor, `Save All` |
 | `margin_right_mm` | Invoice / Layout Editor | Right margin | Numeric | Shared print layout setting | Affects page composition | Layout Editor, `Save All` |

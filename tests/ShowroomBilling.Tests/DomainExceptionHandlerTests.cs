@@ -37,9 +37,9 @@ public sealed class DomainExceptionHandlerTests
     [Fact]
     public async Task A_validation_message_reaches_the_operator_unchanged()
     {
-        var (_, _, problem) = await HandleAsync(new RequestValidationException("Print.PrintFontSize must be between 6 and 24."));
+        var (_, _, problem) = await HandleAsync(new RequestValidationException("Print.PrintFontSize must be between 8 and 18."));
 
-        Assert.Equal("Print.PrintFontSize must be between 6 and 24.", problem!.Detail);
+        Assert.Equal("Print.PrintFontSize must be between 8 and 18.", problem!.Detail);
     }
 
     [Fact]

@@ -41,8 +41,17 @@ public static class CloudSettingsValidator
         Max(print.BankIfsc, "Print.BankIfsc", 32);
         Max(print.BankUpi, "Print.BankUpi", 256);
         Max(print.TermsAndConditions, "Print.TermsAndConditions", 10_000);
-        if (print.PrintFontSize is < 6 or > 24) throw new RequestValidationException("Print.PrintFontSize must be between 6 and 24.");
-        if (print.PrintTermsFontSize is < 6 or > 24) throw new RequestValidationException("Print.PrintTermsFontSize must be between 6 and 24.");
+        if (print.PrintFontSize is < PrintLayoutDefaults.InvoiceFontMin or > PrintLayoutDefaults.InvoiceFontMax)
+        {
+            throw new RequestValidationException(
+                $"Print.PrintFontSize must be between {PrintLayoutDefaults.InvoiceFontMin} and {PrintLayoutDefaults.InvoiceFontMax}.");
+        }
+
+        if (print.PrintTermsFontSize is < PrintLayoutDefaults.TermsFontMin or > PrintLayoutDefaults.TermsFontMax)
+        {
+            throw new RequestValidationException(
+                $"Print.PrintTermsFontSize must be between {PrintLayoutDefaults.TermsFontMin} and {PrintLayoutDefaults.TermsFontMax}.");
+        }
 
         Require(ledgers.SalesLedger, "Ledgers.SalesLedger", 256);
         Require(ledgers.CashLedger, "Ledgers.CashLedger", 256);
@@ -66,14 +75,10 @@ public static class CloudSettingsValidator
     {
         ArgumentNullException.ThrowIfNull(request);
         var layout = request.Layout ?? throw new RequestValidationException("Layout is required.");
-        ValidateRange(layout.LeftMarginCm, "LeftMarginCm", 0, 5);
-        ValidateRange(layout.RightMarginCm, "RightMarginCm", 0, 5);
-        ValidateRange(layout.TopMarginCm, "TopMarginCm", 0, 5);
-        ValidateRange(layout.BottomMarginCm, "BottomMarginCm", 0, 5);
-        if (layout.LeftMarginCm + layout.RightMarginCm >= 20)
-        {
-            throw new RequestValidationException("Combined horizontal margins leave no printable page width.");
-        }
+        ValidateRange(layout.LeftMarginCm, "LeftMarginCm", 0, PrintLayoutDefaults.MarginMaxCm);
+        ValidateRange(layout.RightMarginCm, "RightMarginCm", 0, PrintLayoutDefaults.MarginMaxCm);
+        ValidateRange(layout.TopMarginCm, "TopMarginCm", 0, PrintLayoutDefaults.MarginMaxCm);
+        ValidateRange(layout.BottomMarginCm, "BottomMarginCm", 0, PrintLayoutDefaults.MarginMaxCm);
         ValidatePlacement(layout.Logo, "Logo");
         ValidatePlacement(layout.Signature, "Signature");
         ValidateWatermark(layout.Watermark);

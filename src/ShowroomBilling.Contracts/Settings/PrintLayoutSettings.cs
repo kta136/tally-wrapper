@@ -91,10 +91,23 @@ public static class PrintLayoutSectionKeys
         StringComparer.Ordinal);
 }
 
+/// <summary>
+/// Print limits and defaults. The API validator, the renderer and the Settings
+/// screen all read these, so a value the API accepts is the value that prints.
+/// </summary>
 public static class PrintLayoutDefaults
 {
     public const double A4WidthCm = 21.0;
     public const double A4HeightCm = 29.7;
+
+    /// <summary>Default for each of the four page margins.</summary>
+    public const double MarginCm = 1.0;
+    public const double MarginMaxCm = 2.5;
+
+    public const int InvoiceFontMin = 8;
+    public const int InvoiceFontMax = 18;
+    public const int TermsFontMin = 7;
+    public const int TermsFontMax = 16;
     public const double WatermarkWidthCm = 12.0;
     public const double WatermarkHeightCm = 12.0;
     public const double WatermarkOffsetXCm = 4.5;

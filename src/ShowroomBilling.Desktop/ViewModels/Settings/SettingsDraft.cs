@@ -155,10 +155,12 @@ public partial class SettingsDraft : ObservableObject
         { error = $"Timeout must be between {SettingLimits.MinTallyTimeoutSeconds} and {SettingLimits.MaxTallyTimeoutSeconds} seconds."; return false; }
 
         if (string.IsNullOrWhiteSpace(PrintCompanyName)) { error = "Print company name is required."; return false; }
-        if (!int.TryParse(PrintFontSize, NumberStyles.Integer, CultureInfo.InvariantCulture, out var printFont) || printFont < 1)
-        { error = "Print font size must be a positive integer."; return false; }
-        if (!int.TryParse(PrintTermsFontSize, NumberStyles.Integer, CultureInfo.InvariantCulture, out var termsFont) || termsFont < 1)
-        { error = "Terms font size must be a positive integer."; return false; }
+        if (!int.TryParse(PrintFontSize, NumberStyles.Integer, CultureInfo.InvariantCulture, out var printFont)
+            || printFont is < PrintLayoutDefaults.InvoiceFontMin or > PrintLayoutDefaults.InvoiceFontMax)
+        { error = $"Print font size must be between {PrintLayoutDefaults.InvoiceFontMin} and {PrintLayoutDefaults.InvoiceFontMax}."; return false; }
+        if (!int.TryParse(PrintTermsFontSize, NumberStyles.Integer, CultureInfo.InvariantCulture, out var termsFont)
+            || termsFont is < PrintLayoutDefaults.TermsFontMin or > PrintLayoutDefaults.TermsFontMax)
+        { error = $"Terms font size must be between {PrintLayoutDefaults.TermsFontMin} and {PrintLayoutDefaults.TermsFontMax}."; return false; }
 
         if (!int.TryParse(InvoicePadding, NumberStyles.Integer, CultureInfo.InvariantCulture, out var invoicePadding) || invoicePadding < 1 || invoicePadding > 10)
         { error = "Invoice number padding must be between 1 and 10."; return false; }
