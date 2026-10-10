@@ -94,6 +94,8 @@ tools/
   publish-server-tray.ps1
   publish-server-api.ps1
   uninstall-server-api-service.ps1
+  run-postgres-tests.ps1
+  run-scratch.ps1               dev build on a throwaway database with a stand-in Tally
 
 docs/
   Architecture, API, database, deployment, printing, settings, and UI references

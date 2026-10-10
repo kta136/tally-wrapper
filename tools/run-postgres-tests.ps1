@@ -10,116 +10,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-function Invoke-Docker {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
-    )
-
-    & docker --context $DockerContext @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "docker --context $DockerContext $($Arguments -join ' ') failed."
-    }
-}
-
-function Get-DockerEndpoint {
-    $endpoint = (& docker context inspect $DockerContext --format '{{.Endpoints.docker.Host}}').Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not inspect Docker context '$DockerContext'."
-    }
-    if ([string]::IsNullOrWhiteSpace($endpoint) -or $endpoint -eq '<no value>') {
-        throw "Docker context '$DockerContext' does not expose a docker endpoint."
-    }
-    return $endpoint
-}
-
-function Resolve-DockerHostAddress {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Endpoint
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($HostAddress)) {
-        return $HostAddress
-    }
-
-    if ($Endpoint.StartsWith('ssh://', [StringComparison]::OrdinalIgnoreCase)) {
-        $uri = [Uri]$Endpoint
-        $sshTarget = if ([string]::IsNullOrWhiteSpace($uri.UserInfo)) {
-            $uri.Host
-        } else {
-            "$($uri.UserInfo)@$($uri.Host)"
-        }
-
-        $sshArgs = @('-G')
-        if (-not $uri.IsDefaultPort) {
-            $sshArgs += @('-p', [string]$uri.Port)
-        }
-        $sshArgs += $sshTarget
-
-        $sshConfig = & ssh @sshArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "Could not resolve SSH config for '$sshTarget'. Pass -HostAddress explicitly."
-        }
-
-        $hostnameLine = $sshConfig | Where-Object { $_ -match '^hostname\s+' } | Select-Object -First 1
-        if ($hostnameLine -match '^hostname\s+(.+)$') {
-            return $Matches[1].Trim()
-        }
-
-        return $uri.Host
-    }
-
-    if ($Endpoint -match '^tcp://([^:/]+)') {
-        return $Matches[1]
-    }
-
-    if ($Endpoint -match '^(npipe|unix)://') {
-        return '127.0.0.1'
-    }
-
-    throw "Unsupported Docker endpoint '$Endpoint'. Pass -HostAddress explicitly."
-}
-
-function Get-PublishedPort {
-    $portOutput = @(Invoke-Docker @('port', $ContainerName, '5432/tcp'))
-    $portLine = $portOutput | Where-Object { $_ -match '^0\.0\.0\.0:' } | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($portLine)) {
-        $portLine = $portOutput | Select-Object -First 1
-    }
-    if ($portLine -notmatch ':(\d+)$') {
-        throw "Could not parse published Postgres port from: $($portOutput -join '; ')"
-    }
-    return $Matches[1]
-}
-
-function Wait-ForPostgres {
-    $deadline = (Get-Date).AddSeconds(60)
-    do {
-        # Over TCP, not the local socket: while the image runs its first-time
-        # set-up it answers on the socket only, and the tests connect over TCP.
-        & docker --context $DockerContext exec $ContainerName pg_isready -h 127.0.0.1 -U postgres -d postgres *> $null
-        if ($LASTEXITCODE -eq 0) {
-            return
-        }
-        Start-Sleep -Milliseconds 500
-    } while ((Get-Date) -lt $deadline)
-
-    Invoke-Docker @('logs', '--tail', '80', $ContainerName) | Out-Host
-    throw "Postgres container '$ContainerName' did not become ready within 60 seconds."
-}
+. (Join-Path $PSScriptRoot 'PostgresContainer.ps1')
 
 $containerStarted = $false
 $previousRunFlag = $env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS
 $previousConnection = $env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION
 
 try {
-    $endpoint = Get-DockerEndpoint
-    $resolvedHost = Resolve-DockerHostAddress $endpoint
+    $resolvedHost = Resolve-DockerHostAddress -Context $DockerContext -HostAddress $HostAddress
 
     Write-Host "Starting $Image on Docker context '$DockerContext'..." -ForegroundColor Cyan
-    $containerId = (Invoke-Docker @(
+    $containerId = (Invoke-Docker -Context $DockerContext -Arguments @(
         'run', '-d', '--rm',
         '--name', $ContainerName,
         '-e', "POSTGRES_PASSWORD=$PostgresPassword",
@@ -128,8 +29,8 @@ try {
     )).Trim()
     $containerStarted = $true
 
-    $port = Get-PublishedPort
-    Wait-ForPostgres
+    $port = Get-PublishedPostgresPort -Context $DockerContext -ContainerName $ContainerName
+    Wait-ForPostgres -Context $DockerContext -ContainerName $ContainerName
 
     $connectionString = "Host=$resolvedHost;Port=$port;Database=postgres;Username=postgres;Password=$PostgresPassword"
     Write-Host "Running Postgres tests against $resolvedHost`:$port (container $containerId)..." -ForegroundColor Cyan

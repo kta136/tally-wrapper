@@ -230,6 +230,24 @@ Design-system surfaces:
 - control styles in [src/ShowroomBilling.Desktop/Resources/Styles.xaml](src/ShowroomBilling.Desktop/Resources/Styles.xaml)
 - design reference: [docs/15_ui_design_reference.md](docs/15_ui_design_reference.md), mockup bundle in [docs/design/](docs/design/)
 
+## Run against a scratch database
+
+On a PC that also runs the real app, the dev build must not find the saved production connection, and test bills must not reach TallyPrime. This starts it so that neither can happen:
+
+```powershell
+.\tools\run-scratch.ps1
+```
+
+It needs Docker (the `proxmox-docker` context by default, as for the PostgreSQL tests) and `dotnet-ef`. Everything it creates is under `artifacts\scratch`, which git ignores:
+
+- a `postgres:18` container named `tw-scratch-postgres` with a random password, migrated to the current schema and marked `DEV`;
+- empty settings folders, handed to the app through `SHOWROOM_BILLING_APPDATA` and `SHOWROOM_BILLING_LOCALAPPDATA`, with `SHOWROOM_BILLING_POSTGRES` pointing at the container. The API gives that variable precedence over every saved connection string;
+- a stand-in Tally (`tools\scratch-tally.ps1`) on `127.0.0.1:9000`, which is where a new database expects Tally. It serves two companies, nine ledgers, five stock items and three voucher types, and accepts vouchers. A bill whose party name or note contains `FAIL` is refused with a line error (the bill becomes `failed`); one containing `UNKNOWN` gets a server error (the bill needs reconciliation). `artifacts\scratch\tally.log` lists what the app sent.
+
+The script refuses to start the app when something already listens on port 9000 (probably TallyPrime; pass `-AllowRealTally` if that is intended) or on the dev API ports 5108 / 7108 (the Desktop would attach to that API, whatever database it uses).
+
+The app starts like a fresh install: no admin passcode, placeholder company. The database keeps its data between runs until the container stops. `-NoLaunch` prepares without starting the app, `-Reset` starts over with an empty database, `-Remove` deletes the container and the folder. A plain `dotnet run` or F5 does none of this and uses whatever connection this PC has saved.
+
 ## VS Code F5
 
 - shared VS Code debug config is checked into [.vscode/launch.json](.vscode/launch.json)
