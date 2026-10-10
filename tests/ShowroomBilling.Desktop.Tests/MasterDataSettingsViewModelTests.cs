@@ -74,6 +74,49 @@ public sealed class MasterDataSettingsViewModelTests
         Assert.Contains("Active company set to Backup Jewels", shell.StatusMessage);
     }
 
+    [Fact]
+    public async Task Refreshing_ledgers_asks_tally_for_ledgers_and_voucher_types_only()
+    {
+        var mastersApi = new FakeMastersApiClient();
+        var vm = new MasterDataSettingsViewModel(null, mastersApi, new FakeShell());
+
+        await vm.RequestLedgerRefreshCommand.ExecuteAsync(null);
+
+        // No master type at all would refresh all four; companies and stock items were not asked for.
+        Assert.Equal([MasterTypes.Ledgers, MasterTypes.VoucherTypes], mastersApi.RefreshedMasterTypes);
+        Assert.Equal(2, vm.LedgerOptions.Count);
+        Assert.Single(vm.VoucherTypeOptions);
+        Assert.False(vm.IsFetchingLedgers);
+    }
+
+    [Fact]
+    public async Task Each_refresh_button_asks_for_its_own_master()
+    {
+        var mastersApi = new FakeMastersApiClient();
+        var vm = new MasterDataSettingsViewModel(null, mastersApi, new FakeShell());
+
+        await vm.RequestCompanyRefreshCommand.ExecuteAsync(null);
+        await vm.RequestStockItemRefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal([MasterTypes.Companies, MasterTypes.StockItems], mastersApi.RefreshedMasterTypes);
+        Assert.Equal(2, vm.Companies.Count);
+        Assert.Equal(2, vm.StockItems.Count);
+    }
+
+    [Fact]
+    public async Task A_refresh_tally_refused_reports_it_and_leaves_the_cached_list_alone()
+    {
+        var shell = new FakeShell();
+        var mastersApi = new FakeMastersApiClient { RefreshError = "Tally is not running." };
+        var vm = new MasterDataSettingsViewModel(null, mastersApi, shell);
+
+        await vm.RequestStockItemRefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal($"Refresh failed for {MasterTypes.StockItems}: Tally is not running.", shell.StatusMessage);
+        Assert.Empty(vm.StockItems);
+        Assert.False(vm.IsFetchingStockItems);
+    }
+
     private sealed class FakeShell : IMasterDataSettingsShell
     {
         public SettingsDraft Draft { get; } = new();
@@ -138,11 +181,20 @@ public sealed class MasterDataSettingsViewModelTests
                     new StockItemSnapshotItem("Diamond", null, "CTS", "7102", null, null),
                 }));
 
+        public List<string?> RefreshedMasterTypes { get; } = [];
+        public string? RefreshError { get; init; }
+
         public Task<IReadOnlyList<TallyMasterRefreshResult>> RequestRefreshAsync(
             MasterRefreshRequest request,
             CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<TallyMasterRefreshResult>>(
-                [new TallyMasterRefreshResult(request.MasterType ?? "all", true, 1, "batch-1", null)]);
+        {
+            RefreshedMasterTypes.Add(request.MasterType);
+            return Task.FromResult<IReadOnlyList<TallyMasterRefreshResult>>(
+            [
+                new TallyMasterRefreshResult(
+                    request.MasterType ?? "all", RefreshError is null, 1, "batch-1", RefreshError)
+            ]);
+        }
 
         private MasterSnapshotMetadata Metadata(string masterType, int count)
             => new(masterType, "batch-1", _fetchedAt, count, "fresh");

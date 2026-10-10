@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Net.Http;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
@@ -34,75 +33,93 @@ internal interface ISettingsMasterSnapshotHost
     ObservableCollection<StockItemSnapshotItem> StockItems { get; }
 }
 
+/// <summary>
+/// The three master sections of Settings. Each has a "fetch" (read the cached
+/// snapshot into the dropdown) and a "refresh" (ask Tally again, then fetch).
+/// </summary>
 internal sealed class SettingsMasterSnapshotWorkflow(
     ISettingsApiClient? settingsApi,
     IMastersApiClient? mastersApi,
     ISettingsMasterSnapshotHost host,
     Func<CancellationToken, Task> reloadSettings)
 {
-    public async Task FetchCompaniesAsync(CancellationToken cancellationToken)
-    {
-        if (mastersApi is null) return;
-
-        host.IsFetchingCompanies = true;
-        host.StatusMessage = "Fetching companies…";
-        try
+    public Task FetchCompaniesAsync(CancellationToken cancellationToken) => FetchAsync(
+        busy => host.IsFetchingCompanies = busy,
+        "companies",
+        async api =>
         {
-            var response = await mastersApi.GetCompaniesAsync(cancellationToken: cancellationToken);
+            var response = await api.GetCompaniesAsync(cancellationToken: cancellationToken);
             var activeName = host.ActiveCompanyName;
-            host.Companies.Clear();
-            foreach (var company in response.Companies)
-                host.Companies.Add(company);
-
+            Replace(host.Companies, response.Companies);
             host.CompaniesCount = response.Metadata.ItemCount;
             host.CompaniesFreshness = response.Metadata.Freshness;
             host.CompaniesFetchedAtUtc = response.Metadata.FetchedAtUtc;
             host.SelectedCompany = host.Companies.FirstOrDefault(c => string.Equals(c.Name, activeName, StringComparison.Ordinal))
                 ?? host.Companies.FirstOrDefault();
 
-            host.StatusMessage = host.Companies.Count == 0
+            return host.Companies.Count == 0
                 ? "No companies cached — try Refresh from Tally."
                 : $"{host.Companies.Count} compan{(host.Companies.Count == 1 ? "y" : "ies")} loaded · {response.Metadata.Freshness}";
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Fetch companies failed: {ApiResponseReader.FormatError(ex)}";
-        }
-        finally
-        {
-            host.IsFetchingCompanies = false;
-        }
-    }
+        });
 
-    public async Task RequestCompanyRefreshAsync(CancellationToken cancellationToken)
-    {
-        if (mastersApi is null) return;
+    public Task FetchLedgersAndVoucherTypesAsync(CancellationToken cancellationToken) => FetchAsync(
+        busy => host.IsFetchingLedgers = busy,
+        "ledgers & voucher types",
+        async api =>
+        {
+            var ledgersTask = api.GetLedgersAsync(cancellationToken: cancellationToken);
+            var voucherTypesTask = api.GetVoucherTypesAsync(cancellationToken: cancellationToken);
+            await Task.WhenAll(ledgersTask, voucherTypesTask);
 
-        host.IsFetchingCompanies = true;
-        host.StatusMessage = "Refreshing companies from Tally…";
-        var refreshOk = false;
-        try
-        {
-            var response = await mastersApi.RequestRefreshAsync(
-                new MasterRefreshRequest(MasterType: MasterTypes.Companies, RequestedByActor: "desktop-settings"),
-                cancellationToken);
-            refreshOk = response.All(r => r.Succeeded);
-            host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
-        }
-        finally
-        {
-            host.IsFetchingCompanies = false;
-        }
+            var ledgers = await ledgersTask;
+            Replace(host.LedgerOptions, ledgers.Ledgers);
+            host.LedgersCount = ledgers.Metadata.ItemCount;
+            host.LedgersFreshness = ledgers.Metadata.Freshness;
+            host.LedgersFetchedAtUtc = ledgers.Metadata.FetchedAtUtc;
 
-        if (refreshOk)
+            var voucherTypes = await voucherTypesTask;
+            Replace(host.VoucherTypeOptions, voucherTypes.VoucherTypes);
+            host.VoucherTypesCount = voucherTypes.Metadata.ItemCount;
+
+            return $"{host.LedgerOptions.Count} ledger(s) · {host.VoucherTypeOptions.Count} voucher type(s) · {ledgers.Metadata.Freshness}";
+        });
+
+    public Task FetchStockItemsAsync(CancellationToken cancellationToken) => FetchAsync(
+        busy => host.IsFetchingStockItems = busy,
+        "stock items",
+        async api =>
         {
-            await FetchCompaniesAsync(cancellationToken);
-        }
-    }
+            var response = await api.GetStockItemsAsync(cancellationToken: cancellationToken);
+            Replace(host.StockItems, response.StockItems);
+            host.StockItemsCount = response.Metadata.ItemCount;
+            host.StockItemsFreshness = response.Metadata.Freshness;
+            host.StockItemsFetchedAtUtc = response.Metadata.FetchedAtUtc;
+
+            return host.StockItems.Count == 0
+                ? "No stock items cached — try Refresh from Tally."
+                : $"{host.StockItems.Count} stock item(s) loaded · {response.Metadata.Freshness}";
+        });
+
+    public Task RequestCompanyRefreshAsync(CancellationToken cancellationToken) => RefreshAsync(
+        busy => host.IsFetchingCompanies = busy,
+        "companies",
+        [MasterTypes.Companies],
+        FetchCompaniesAsync,
+        cancellationToken);
+
+    public Task RequestLedgerRefreshAsync(CancellationToken cancellationToken) => RefreshAsync(
+        busy => host.IsFetchingLedgers = busy,
+        "ledgers + voucher types",
+        [MasterTypes.Ledgers, MasterTypes.VoucherTypes],
+        FetchLedgersAndVoucherTypesAsync,
+        cancellationToken);
+
+    public Task RequestStockItemRefreshAsync(CancellationToken cancellationToken) => RefreshAsync(
+        busy => host.IsFetchingStockItems = busy,
+        "stock items",
+        [MasterTypes.StockItems],
+        FetchStockItemsAsync,
+        cancellationToken);
 
     public async Task SetActiveCompanyAsync(CancellationToken cancellationToken)
     {
@@ -131,58 +148,57 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         }
     }
 
-    public async Task FetchLedgersAndVoucherTypesAsync(CancellationToken cancellationToken)
+    /// <summary>Reads a cached snapshot; <paramref name="load"/> returns the status text to show.</summary>
+    private async Task FetchAsync(Action<bool> setBusy, string what, Func<IMastersApiClient, Task<string>> load)
     {
         if (mastersApi is null) return;
 
-        host.IsFetchingLedgers = true;
-        host.StatusMessage = "Fetching ledgers & voucher types…";
+        setBusy(true);
+        host.StatusMessage = $"Fetching {what}…";
         try
         {
-            var ledgersTask = mastersApi.GetLedgersAsync(cancellationToken: cancellationToken);
-            var voucherTypesTask = mastersApi.GetVoucherTypesAsync(cancellationToken: cancellationToken);
-            await Task.WhenAll(ledgersTask, voucherTypesTask);
-
-            var ledgersResponse = await ledgersTask;
-            host.LedgerOptions.Clear();
-            foreach (var ledger in ledgersResponse.Ledgers)
-                host.LedgerOptions.Add(ledger);
-            host.LedgersCount = ledgersResponse.Metadata.ItemCount;
-            host.LedgersFreshness = ledgersResponse.Metadata.Freshness;
-            host.LedgersFetchedAtUtc = ledgersResponse.Metadata.FetchedAtUtc;
-
-            var voucherTypesResponse = await voucherTypesTask;
-            host.VoucherTypeOptions.Clear();
-            foreach (var voucherType in voucherTypesResponse.VoucherTypes)
-                host.VoucherTypeOptions.Add(voucherType);
-            host.VoucherTypesCount = voucherTypesResponse.Metadata.ItemCount;
-
-            host.StatusMessage = $"{host.LedgerOptions.Count} ledger(s) · {host.VoucherTypeOptions.Count} voucher type(s) · {ledgersResponse.Metadata.Freshness}";
+            host.StatusMessage = await load(mastersApi);
         }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Fetch ledgers failed: {ApiResponseReader.FormatError(ex)}";
+            host.StatusMessage = $"Fetch {what} failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
-            host.IsFetchingLedgers = false;
+            setBusy(false);
         }
     }
 
-    public async Task RequestLedgerRefreshAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Asks Tally for the named masters, then re-reads the snapshot. Each
+    /// master is its own request, one after another: Tally's XML endpoint
+    /// does not cope with concurrent reads, and asking for no master type at
+    /// all would refresh all four.
+    /// </summary>
+    private async Task RefreshAsync(
+        Action<bool> setBusy,
+        string what,
+        IReadOnlyList<string> masterTypes,
+        Func<CancellationToken, Task> fetch,
+        CancellationToken cancellationToken)
     {
         if (mastersApi is null) return;
 
-        host.IsFetchingLedgers = true;
-        host.StatusMessage = "Refreshing ledgers + voucher types from Tally…";
-        var refreshOk = false;
+        setBusy(true);
+        host.StatusMessage = $"Refreshing {what} from Tally…";
+        var refreshed = false;
         try
         {
-            var response = await mastersApi.RequestRefreshAsync(
-                new MasterRefreshRequest(MasterType: null, RequestedByActor: "desktop-settings"),
-                cancellationToken);
-            refreshOk = response.All(r => r.Succeeded);
-            host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
+            var results = new List<TallyMasterRefreshResult>();
+            foreach (var masterType in masterTypes)
+            {
+                results.AddRange(await mastersApi.RequestRefreshAsync(
+                    new MasterRefreshRequest(MasterType: masterType, RequestedByActor: "desktop-settings"),
+                    cancellationToken));
+            }
+
+            refreshed = results.All(result => result.Succeeded);
+            host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(results);
         }
         catch (Exception ex)
         {
@@ -190,73 +206,21 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         }
         finally
         {
-            host.IsFetchingLedgers = false;
+            setBusy(false);
         }
 
-        if (refreshOk)
+        if (refreshed)
         {
-            await FetchLedgersAndVoucherTypesAsync(cancellationToken);
-        }
-    }
-
-    public async Task FetchStockItemsAsync(CancellationToken cancellationToken)
-    {
-        if (mastersApi is null) return;
-
-        host.IsFetchingStockItems = true;
-        host.StatusMessage = "Fetching stock items…";
-        try
-        {
-            var response = await mastersApi.GetStockItemsAsync(cancellationToken: cancellationToken);
-            host.StockItems.Clear();
-            foreach (var item in response.StockItems)
-                host.StockItems.Add(item);
-
-            host.StockItemsCount = response.Metadata.ItemCount;
-            host.StockItemsFreshness = response.Metadata.Freshness;
-            host.StockItemsFetchedAtUtc = response.Metadata.FetchedAtUtc;
-
-            host.StatusMessage = host.StockItems.Count == 0
-                ? "No stock items cached — try Refresh from Tally."
-                : $"{host.StockItems.Count} stock item(s) loaded · {response.Metadata.Freshness}";
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Fetch stock items failed: {ApiResponseReader.FormatError(ex)}";
-        }
-        finally
-        {
-            host.IsFetchingStockItems = false;
+            await fetch(cancellationToken);
         }
     }
 
-    public async Task RequestStockItemRefreshAsync(CancellationToken cancellationToken)
+    private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)
     {
-        if (mastersApi is null) return;
-
-        host.IsFetchingStockItems = true;
-        host.StatusMessage = "Refreshing stock items from Tally…";
-        var refreshOk = false;
-        try
+        target.Clear();
+        foreach (var item in items)
         {
-            var response = await mastersApi.RequestRefreshAsync(
-                new MasterRefreshRequest(MasterType: MasterTypes.StockItems, RequestedByActor: "desktop-settings"),
-                cancellationToken);
-            refreshOk = response.All(r => r.Succeeded);
-            host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
-        }
-        catch (Exception ex)
-        {
-            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
-        }
-        finally
-        {
-            host.IsFetchingStockItems = false;
-        }
-
-        if (refreshOk)
-        {
-            await FetchStockItemsAsync(cancellationToken);
+            target.Add(item);
         }
     }
 }

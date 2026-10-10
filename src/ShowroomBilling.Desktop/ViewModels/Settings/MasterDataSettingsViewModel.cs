@@ -45,17 +45,17 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
         VoucherTypeOptions = new ObservableCollection<VoucherTypeSnapshotItem>();
         StockItems = new ObservableCollection<StockItemSnapshotItem>();
 
-        RequestCompanyRefreshCommand = new AsyncRelayCommand(RequestCompanyRefreshAsync,
+        RequestCompanyRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestCompanyRefreshAsync,
             () => _mastersApi is not null && !IsFetchingCompanies && !IsSettingActiveCompany);
-        SetActiveCompanyCommand = new AsyncRelayCommand(SetActiveCompanyAsync,
+        SetActiveCompanyCommand = new AsyncRelayCommand(_masterWorkflow.SetActiveCompanyAsync,
             () => _settingsApi is not null
                 && SelectedCompany is not null
                 && !IsSettingActiveCompany
                 && !IsFetchingCompanies
                 && !string.Equals(SelectedCompany.Name, ActiveCompanyName, StringComparison.Ordinal));
-        RequestLedgerRefreshCommand = new AsyncRelayCommand(RequestLedgerRefreshAsync,
+        RequestLedgerRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestLedgerRefreshAsync,
             () => _mastersApi is not null && !IsFetchingLedgers);
-        RequestStockItemRefreshCommand = new AsyncRelayCommand(RequestStockItemRefreshAsync,
+        RequestStockItemRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestStockItemRefreshAsync,
             () => _mastersApi is not null && !IsFetchingStockItems);
 
         AddItemMasterRowCommand = new RelayCommand(AddItemMasterRow, () => IsEditing);
@@ -146,11 +146,11 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
 
         var snapshotLoads = new List<Task>(capacity: 3);
         if (Companies.Count == 0)
-            snapshotLoads.Add(FetchCompaniesAsync(cancellationToken));
+            snapshotLoads.Add(_masterWorkflow.FetchCompaniesAsync(cancellationToken));
         if (LedgerOptions.Count == 0)
-            snapshotLoads.Add(FetchLedgersAndVoucherTypesAsync(cancellationToken));
+            snapshotLoads.Add(_masterWorkflow.FetchLedgersAndVoucherTypesAsync(cancellationToken));
         if (StockItems.Count == 0)
-            snapshotLoads.Add(FetchStockItemsAsync(cancellationToken));
+            snapshotLoads.Add(_masterWorkflow.FetchStockItemsAsync(cancellationToken));
 
         if (snapshotLoads.Count > 0)
             await Task.WhenAll(snapshotLoads);
@@ -192,25 +192,4 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
     {
         if (row is not null) Draft.KaratRows.Remove(row);
     }
-
-    private async Task FetchCompaniesAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.FetchCompaniesAsync(cancellationToken);
-
-    private async Task RequestCompanyRefreshAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.RequestCompanyRefreshAsync(cancellationToken);
-
-    private async Task SetActiveCompanyAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.SetActiveCompanyAsync(cancellationToken);
-
-    private async Task FetchLedgersAndVoucherTypesAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.FetchLedgersAndVoucherTypesAsync(cancellationToken);
-
-    private async Task RequestLedgerRefreshAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.RequestLedgerRefreshAsync(cancellationToken);
-
-    private async Task FetchStockItemsAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.FetchStockItemsAsync(cancellationToken);
-
-    private async Task RequestStockItemRefreshAsync(CancellationToken cancellationToken)
-        => await _masterWorkflow.RequestStockItemRefreshAsync(cancellationToken);
 }
