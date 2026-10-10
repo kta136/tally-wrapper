@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
 using Microsoft.Extensions.Options;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Desktop.Configuration;
@@ -78,6 +80,8 @@ public sealed class ViewSmokeTests
                     Layout(view);
                     ViewSnapshot.Save(view, viewType.Name);
                 }
+
+                problems.AddRange(InertMenuItems(view).Select(item => $"{viewType.Name}: {item}"));
             }
             catch (Exception ex)
             {
@@ -105,6 +109,47 @@ public sealed class ViewSmokeTests
 
         problems.AddRange(bindingErrors.Take().Select(error => $"{nameof(MainWindow)}: {error}"));
         return problems;
+    }
+
+    /// <summary>
+    /// A context menu is a separate tree that only connects to its owner when
+    /// it opens, so a menu item bound to the wrong view model does nothing and
+    /// reports nothing. This connects each menu the way opening it would and
+    /// names every item whose command binding found no command.
+    /// </summary>
+    private static List<string> InertMenuItems(DependencyObject root)
+    {
+        var inert = new List<string>();
+        foreach (var owner in Descendants(root).OfType<FrameworkElement>())
+        {
+            if (owner.ContextMenu is not { } menu)
+            {
+                continue;
+            }
+
+            menu.PlacementTarget = owner;
+            menu.DataContext = owner.DataContext;
+            WpfTestHost.DrainDispatcher();
+            inert.AddRange(menu.Items.OfType<MenuItem>()
+                .Where(item => BindingOperations.GetBindingExpression(item, MenuItem.CommandProperty) is not null
+                    && item.Command is null)
+                .Select(item => $"context menu item '{item.Header}' is bound to a command that was not found"));
+        }
+
+        return inert.Distinct().ToList();
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            yield return child;
+            foreach (var descendant in Descendants(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private static void Layout(FrameworkElement view)

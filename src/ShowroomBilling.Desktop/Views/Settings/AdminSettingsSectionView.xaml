@@ -1,6 +1,7 @@
 <UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.AdminSettingsSectionView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
@@ -96,12 +97,12 @@
                 </Grid>
                 <StackPanel Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}">
                     <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT PASSCODE" />
-                    <PasswordBox x:Name="AdminCurrentPasscodeBox" PasswordChanged="AdminCurrentPasscodeBox_PasswordChanged" />
+                    <PasswordBox shell:PasswordBinding.Password="{Binding CurrentPasscode}" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="NEW PASSCODE" />
-                <PasswordBox x:Name="AdminNewPasscodeBox" PasswordChanged="AdminNewPasscodeBox_PasswordChanged" />
+                <PasswordBox shell:PasswordBinding.Password="{Binding NewPasscode}" />
                 <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
-                <PasswordBox x:Name="AdminConfirmNewPasscodeBox" PasswordChanged="AdminConfirmNewPasscodeBox_PasswordChanged" />
+                <PasswordBox shell:PasswordBinding.Password="{Binding ConfirmNewPasscode}" />
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Style="{StaticResource BtnPrimary}"
                             MinWidth="120"

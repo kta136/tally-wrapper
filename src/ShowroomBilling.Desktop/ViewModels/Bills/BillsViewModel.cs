@@ -59,6 +59,16 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
     /// <summary>
+    /// Opens Bill Details for the focused bill. The shell owns the dialog and
+    /// hands its command over, so the row context menu can bind it like every
+    /// other item.
+    /// </summary>
+    public System.Windows.Input.ICommand? OpenDetailsCommand { get; set; }
+
+    /// <summary>Opens the print preview for the selected bills; owned by the shell, as above.</summary>
+    public System.Windows.Input.ICommand? PrintSelectedCommand { get; set; }
+
+    /// <summary>
     /// Handler the shell wires up to force a Tally-company health check before
     /// push/retry/repost commands call the bills API.
     /// </summary>

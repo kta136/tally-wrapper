@@ -233,6 +233,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Bills.ChangeNumberPromptHandler = PromptChangeNumberAsync;
         Bills.ReasonPromptHandler = PromptReasonAsync;
         Bills.ConfirmHandler = ConfirmDialog.ShowAsync;
+        Bills.OpenDetailsCommand = OpenBillDetailsCommand;
+        Bills.PrintSelectedCommand = OpenSelectedBillsPrintPreviewCommand;
         BillDetails.ConfirmHandler = ConfirmDialog.ShowAsync;
         Settings.Database.ConfirmHandler = ConfirmDialog.ShowAsync;
         Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
@@ -375,7 +377,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IRelayCommand OpenShortcutsKeyCommand { get; }
     public IRelayCommand OpenAdminUnlockKeyCommand { get; }
 
-    private bool IsAnyDialogOpen => ActiveDialog is not null || ConfirmDialog.IsOpen;
+    /// <summary>True while any overlay, including the confirm question, covers the tabs.</summary>
+    public bool IsAnyDialogOpen => ActiveDialog is not null || ConfirmDialog.IsOpen;
 
     private bool CanUseBareKeyShortcut() =>
         !IsAnyDialogOpen

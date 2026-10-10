@@ -1,6 +1,7 @@
 <UserControl x:Class="ShowroomBilling.Desktop.Views.Bills.ReasonPromptDialog"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
@@ -32,7 +33,7 @@
                                    FontSize="{DynamicResource FontSizeUi}"
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource InkBrush}" />
-                        <TextBox x:Name="ReasonBox"
+                        <TextBox shell:FocusOnShown.IsEnabled="True"
                                  Text="{Binding ReasonText, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,10,0,0"
                                  MinHeight="58"

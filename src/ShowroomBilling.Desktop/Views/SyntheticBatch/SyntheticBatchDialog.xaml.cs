@@ -1,7 +1,7 @@
-using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.SyntheticBatch;
 
 namespace ShowroomBilling.Desktop.Views.SyntheticBatch;
@@ -13,78 +13,62 @@ public partial class SyntheticBatchDialog : UserControl
     public SyntheticBatchDialog()
     {
         InitializeComponent();
-        DataContextChanged += OnDataContextChanged;
-        IsVisibleChanged += OnIsVisibleChanged;
+        DataContextChanged += (_, _) => SyncInputsFromVm();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible) SyncInputsFromVm();
+        };
     }
 
-    private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
-    {
-        SyncInputsFromVm();
-    }
-
-    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
-    {
-        if (IsVisible) SyncInputsFromVm();
-    }
-
-    private SyntheticBatchViewModel? Vm => FindVm();
-
-    private SyntheticBatchViewModel? FindVm()
-    {
-        // DataContext is the wrapper (.SyntheticBatch); resolve it.
-        var ctx = DataContext;
-        if (ctx is null) return null;
-        var prop = ctx.GetType().GetProperty("SyntheticBatch");
-        return prop?.GetValue(ctx) as SyntheticBatchViewModel;
-    }
+    // The dialog inherits the shell view model; the batch view model hangs off it.
+    private SyntheticBatchViewModel? Vm => (DataContext as MainWindowViewModel)?.SyntheticBatch;
 
     private void SyncInputsFromVm()
     {
-        var vm = Vm;
-        if (vm is null) return;
-        StartAtBox.Text = vm.StartAt.LocalDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
-        EndAtBox.Text = vm.EndAt.LocalDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+        if (Vm is not { } vm) return;
+        StartAtBox.Text = Format(vm.StartAt);
+        EndAtBox.Text = Format(vm.EndAt);
     }
 
     private void OnStartAtLostFocus(object sender, RoutedEventArgs e)
-    {
-        if (Vm is not { } vm || sender is not TextBox box) return;
-        if (TryParse(box.Text, out var parsed))
-        {
-            vm.StartAt = parsed;
-        }
-        else
-        {
-            box.Text = vm.StartAt.LocalDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
-        }
-    }
+        => CommitDateTime(sender, vm => vm.StartAt, (vm, value) => vm.StartAt = value);
 
     private void OnEndAtLostFocus(object sender, RoutedEventArgs e)
+        => CommitDateTime(sender, vm => vm.EndAt, (vm, value) => vm.EndAt = value);
+
+    /// <summary>Takes what was typed if it is a date and time; otherwise puts the current value back.</summary>
+    private void CommitDateTime(
+        object sender,
+        Func<SyntheticBatchViewModel, DateTimeOffset> current,
+        Action<SyntheticBatchViewModel, DateTimeOffset> assign)
     {
         if (Vm is not { } vm || sender is not TextBox box) return;
-        if (TryParse(box.Text, out var parsed))
+        if (TryParseLocal(box.Text, out var parsed))
         {
-            vm.EndAt = parsed;
+            assign(vm, parsed);
         }
         else
         {
-            box.Text = vm.EndAt.LocalDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+            box.Text = Format(current(vm));
         }
     }
 
-    private static bool TryParse(string? text, out DateTimeOffset value)
+    private static string Format(DateTimeOffset value)
+        => value.LocalDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Reads a local date and time. The offset is the one in force on that
+    /// date, not today's, so the value is right either side of a clock change.
+    /// </summary>
+    internal static bool TryParseLocal(string? text, out DateTimeOffset value)
     {
-        if (DateTime.TryParseExact(text, DateTimeFormat, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeLocal, out var dt))
+        if (DateTime.TryParseExact(text, DateTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var local)
+            || DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out local))
         {
-            value = new DateTimeOffset(dt, DateTimeOffset.Now.Offset);
+            value = new DateTimeOffset(local);
             return true;
         }
-        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dt2))
-        {
-            value = new DateTimeOffset(dt2, DateTimeOffset.Now.Offset);
-            return true;
-        }
+
         value = default;
         return false;
     }

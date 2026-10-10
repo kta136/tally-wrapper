@@ -316,10 +316,12 @@
                                     PreviewMouseRightButtonDown="OnBillRowRightClick">
                                 <Border.ContextMenu>
                                     <ContextMenu>
-                                        <MenuItem Header="Open Details" InputGestureText="Enter" Click="OnOpenDetailsMenuItemClick" />
+                                        <MenuItem Header="Open Details" InputGestureText="Enter"
+                                                  Command="{Binding PlacementTarget.Tag.OpenDetailsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <MenuItem Header="Edit" InputGestureText="Ctrl+Shift+E"
                                                   Visibility="{Binding CanBeEdited, Converter={StaticResource BoolToVis}}"
-                                                  Click="OnEditRowMenuItemClick" />
+                                                  Command="{Binding PlacementTarget.Tag.EditRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}" />
                                         <Separator />
                                         <MenuItem Header="Retry Push" InputGestureText="Ctrl+R"
                                                   Visibility="{Binding CanBeRetried, Converter={StaticResource BoolToVis}}"
@@ -334,7 +336,8 @@
                                                   Command="{Binding PlacementTarget.Tag.RepostRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}" />
                                         <Separator />
-                                        <MenuItem Header="Print" InputGestureText="Ctrl+P" Click="OnPrintRowMenuItemClick" />
+                                        <MenuItem Header="Print" InputGestureText="Ctrl+P"
+                                                  Command="{Binding PlacementTarget.Tag.PrintSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                         <MenuItem Header="Copy Invoice Number"
                                                   Visibility="{Binding CanCopyInvoiceNumber, Converter={StaticResource BoolToVis}}"
                                                   Command="{Binding PlacementTarget.Tag.CopyInvoiceNumberCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -346,8 +349,8 @@
                                             so reach through PlacementTarget.Tag.
                                         -->
                                         <MenuItem Header="Change Bill Number…"
-                                                  IsEnabled="{Binding CanChangeNumber}"
-                                                  Click="OnChangeNumberRowMenuItemClick"
+                                                  Command="{Binding PlacementTarget.Tag.ChangeNumberRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}"
                                                   Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
                                         <MenuItem Header="Mark as Pushed…"
                                                   Command="{Binding PlacementTarget.Tag.MarkPostedRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
