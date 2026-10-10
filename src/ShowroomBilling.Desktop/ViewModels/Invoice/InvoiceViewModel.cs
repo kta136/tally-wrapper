@@ -40,8 +40,6 @@ public partial class InvoiceViewModel : ObservableObject
     // printing uses this, not the live form.
     private BillResponse? _lastSavedBill;
     private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
-    private const decimal CgstRate = BillCalculator.CgstRate;
-    private const decimal SgstRate = BillCalculator.SgstRate;
     /// <summary>
     /// Upper bound on the readiness wait when <c>RefreshNextNumberAsync(waitForApi: true)</c>
     /// is called. If the API is genuinely down past this we bail to the

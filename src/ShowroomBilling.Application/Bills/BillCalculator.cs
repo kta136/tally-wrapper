@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Application.Bills;
@@ -11,8 +12,8 @@ namespace ShowroomBilling.Application.Bills;
 /// </summary>
 public static class BillCalculator
 {
-    public const decimal CgstRate = 0.015m;
-    public const decimal SgstRate = 0.015m;
+    public const decimal CgstRate = JewelleryGst.CgstRate;
+    public const decimal SgstRate = JewelleryGst.SgstRate;
     public static readonly decimal GstFactor = 1m + CgstRate + SgstRate;
 
     public readonly record struct LineInputs(

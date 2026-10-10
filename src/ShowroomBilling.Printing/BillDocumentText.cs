@@ -6,11 +6,10 @@ namespace ShowroomBilling.Printing;
 
 internal static class BillDocumentText
 {
-    // CGST/SGST percentages printed in the GST breakup box. V1 hardcoded 1.5/1.5 in
-    // defaults.py (CGST_RATE/SGST_RATE); we mirror that until they become configurable.
-    internal const decimal CgstRatePct = 1.5m;
-    internal const decimal SgstRatePct = 1.5m;
-    internal const string DefaultHsnCode = "711319";
+    // CGST/SGST percentages printed in the GST breakup box.
+    internal const decimal CgstRatePct = JewelleryGst.CgstRate * 100m;
+    internal const decimal SgstRatePct = JewelleryGst.SgstRate * 100m;
+    internal const string DefaultHsnCode = JewelleryGst.HsnCode;
 
     private static readonly CultureInfo IndianCulture = new("en-IN");
 

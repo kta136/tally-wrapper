@@ -551,8 +551,7 @@ public sealed class BillDocument : IDocument
     {
         var totals = _options.Content.Totals;
         var gstTotal = totals.TaxTotal;
-        var cgst = Math.Round(gstTotal / 2m, 2, MidpointRounding.AwayFromZero);
-        var sgst = gstTotal - cgst;
+        var (cgst, sgst) = JewelleryGst.Split(gstTotal);
 
         container.Border(1f).BorderColor(Colors.Black).Column(c =>
         {

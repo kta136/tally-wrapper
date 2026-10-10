@@ -328,7 +328,7 @@ public sealed class SyntheticBillPlanner
 
         return new BillLineItemDto(
             ItemName: itemEntry.Name,
-            HsnCode: "711319",
+            HsnCode: JewelleryGst.HsnCode,
             Quantity: qty,
             Unit: string.IsNullOrWhiteSpace(itemEntry.Unit) ? ItemUnits.Gram : itemEntry.Unit,
             Rate: result.EffectiveRate,

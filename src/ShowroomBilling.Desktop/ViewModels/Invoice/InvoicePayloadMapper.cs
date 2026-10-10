@@ -41,7 +41,7 @@ internal static class InvoicePayloadMapper
             .Where(l => !l.IsEmpty)
             .Select(l => new BillLineItemDto(
                 ItemName: l.ItemName,
-                HsnCode: "711319",
+                HsnCode: JewelleryGst.HsnCode,
                 Quantity: l.NetWeight,
                 Unit: l.Unit,
                 Rate: l.EffectiveRate,

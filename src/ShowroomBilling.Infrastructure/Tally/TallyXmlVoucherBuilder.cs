@@ -58,11 +58,8 @@ public static class TallyXmlVoucherBuilder
                 terminal: true);
         }
 
-        var taxTotal = bill.Totals.TaxTotal;
-        // Same split as the printed invoice (BillDocument) and BillCalculator:
-        // half-paisa goes to CGST. Banker's rounding here swapped the two.
-        var cgst = Math.Round(taxTotal / 2m, 2, MidpointRounding.AwayFromZero);
-        var sgst = taxTotal - cgst;
+        // The same split the printed invoice uses, so the two agree to the paisa.
+        var (cgst, sgst) = JewelleryGst.Split(bill.Totals.TaxTotal);
 
         if (cgst != 0m && string.IsNullOrWhiteSpace(ledgers.CgstLedger))
         {
