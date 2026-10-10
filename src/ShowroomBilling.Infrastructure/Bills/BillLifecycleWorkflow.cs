@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Numbering;
@@ -37,7 +35,7 @@ internal sealed class BillLifecycleWorkflow(
         ArgumentNullException.ThrowIfNull(request.Payload);
         BillValidator.Validate(request.Payload);
 
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
         {
             throw new BillStateConflictException(
@@ -130,7 +128,7 @@ internal sealed class BillLifecycleWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var priorBill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var priorBill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (priorBill.State is not (BillStates.Pending or BillStates.Draft))
         {
             throw new BillStateConflictException(
@@ -168,7 +166,7 @@ internal sealed class BillLifecycleWorkflow(
             cancellationToken);
 
         // A reservation retry clears the change tracker; re-attach the prior bill.
-        priorBill = await LoadTrackedBillAsync(billId, cancellationToken);
+        priorBill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
 
         var newBill = new BillEntity
         {
@@ -222,7 +220,7 @@ internal sealed class BillLifecycleWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is not (BillStates.Pending or BillStates.Draft or BillStates.Failed))
         {
             throw new BillStateConflictException(
@@ -406,14 +404,5 @@ internal sealed class BillLifecycleWorkflow(
         }
     }
 
-    private async Task<BillEntity> LoadTrackedBillAsync(Guid billId, CancellationToken cancellationToken)
-    {
-        var bill = await dbContext.Bills.FirstOrDefaultAsync(x => x.Id == billId, cancellationToken);
-        if (bill is null)
-        {
-            throw new BillNotFoundException(billId);
-        }
-        return bill;
-    }
 
 }

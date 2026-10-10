@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
@@ -39,7 +37,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var orderedIds = NormalizeOrderedIds(request.BillIds);
+        var orderedIds = BillAdminSelection.NormalizeOrderedIds(request.BillIds);
         if (orderedIds.Count == 0)
         {
             return new BillBatchGetResponse(Array.Empty<BillResponse>());
@@ -199,25 +197,4 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         };
     }
 
-    private static IReadOnlyList<Guid> NormalizeOrderedIds(IReadOnlyList<Guid>? billIds)
-    {
-        if (billIds is null || billIds.Count == 0)
-        {
-            return Array.Empty<Guid>();
-        }
-
-        var seen = new HashSet<Guid>();
-        var ordered = new List<Guid>(billIds.Count);
-        foreach (var billId in billIds)
-        {
-            if (billId == Guid.Empty || !seen.Add(billId))
-            {
-                continue;
-            }
-
-            ordered.Add(billId);
-        }
-
-        return ordered;
-    }
 }

@@ -35,7 +35,7 @@ internal sealed class BillAdminWorkflow(
             throw new BillStateConflictException("Invoice number cannot contain whitespace.");
         }
 
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
         {
             throw new BillStateConflictException(
@@ -232,7 +232,7 @@ internal sealed class BillAdminWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is not (BillStates.Pending or BillStates.Draft or BillStates.Failed or BillStates.ReconciliationRequired))
         {
             throw new BillStateConflictException(
@@ -267,7 +267,7 @@ internal sealed class BillAdminWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is not (BillStates.Posted or BillStates.Failed or BillStates.ReconciliationRequired))
         {
             throw new BillStateConflictException(
@@ -301,7 +301,7 @@ internal sealed class BillAdminWorkflow(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
         {
             throw new BillStateConflictException(
@@ -430,15 +430,6 @@ internal sealed class BillAdminWorkflow(
         return new DeleteSelectedBillsResponse(ordered.Count, deleted, skipped, items);
     }
 
-    private async Task<BillEntity> LoadTrackedBillAsync(Guid billId, CancellationToken cancellationToken)
-    {
-        var bill = await dbContext.Bills.FirstOrDefaultAsync(x => x.Id == billId, cancellationToken);
-        if (bill is null)
-        {
-            throw new BillNotFoundException(billId);
-        }
-        return bill;
-    }
 
     private async Task ClearSupersededByReferencesAsync(
         Guid billId,

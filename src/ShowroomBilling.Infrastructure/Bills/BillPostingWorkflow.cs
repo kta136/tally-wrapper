@@ -1,7 +1,3 @@
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application;
@@ -13,6 +9,7 @@ using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
+using ShowroomBilling.Infrastructure.Tally;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
@@ -55,7 +52,7 @@ internal sealed class BillPostingWorkflow(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var orderedIds = NormalizeOrderedIds(request.BillIds);
+        var orderedIds = BillAdminSelection.NormalizeOrderedIds(request.BillIds);
         return PushBatchAsync(orderedIds, request.Reason, cancellationToken);
     }
 
@@ -83,7 +80,7 @@ internal sealed class BillPostingWorkflow(
         RetryBillPostingRequest request,
         CancellationToken cancellationToken = default)
     {
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State != BillStates.Failed)
         {
             throw new BillStateConflictException(
@@ -115,7 +112,7 @@ internal sealed class BillPostingWorkflow(
             throw new RequestValidationException("Repost idempotency key must be 128 characters or fewer.");
         }
 
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is not (BillStates.Posted or BillStates.Failed))
         {
             throw new BillStateConflictException(
@@ -142,7 +139,7 @@ internal sealed class BillPostingWorkflow(
         string? idempotencyKeyOverride,
         CancellationToken cancellationToken)
     {
-        var bill = await LoadTrackedBillAsync(billId, cancellationToken);
+        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         var currentRevision = bill.CurrentRevisionId is Guid id
             ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             : null;
@@ -223,7 +220,7 @@ internal sealed class BillPostingWorkflow(
                 // Reload and return whatever is current; caller sees the same
                 // shape as the "already posting" short-circuit above.
                 dbContext.ChangeTracker.Clear();
-                var refreshed = await LoadTrackedBillAsync(billId, cancellationToken);
+                var refreshed = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
                 if (refreshed.CurrentRevisionId != claimedRevisionId
                     && refreshed.State is not BillStates.Posting)
                 {
@@ -574,67 +571,12 @@ internal sealed class BillPostingWorkflow(
             return null;
         }
 
-        return NormalizePositiveInteger(ReadDetailsString(lastPreEditSuccess.PayloadJson, "tallyMasterId"))
-            ?? NormalizePositiveInteger(ReadDetailsString(lastPreEditSuccess.PayloadJson, "remoteId"));
-    }
-
-    private async Task<BillEntity> LoadTrackedBillAsync(Guid billId, CancellationToken cancellationToken)
-    {
-        var bill = await dbContext.Bills.FirstOrDefaultAsync(x => x.Id == billId, cancellationToken);
-        if (bill is null)
-        {
-            throw new BillNotFoundException(billId);
-        }
-        return bill;
+        return TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(lastPreEditSuccess.PayloadJson, "tallyMasterId"))
+            ?? TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(lastPreEditSuccess.PayloadJson, "remoteId"));
     }
 
 
-    private static string? ReadDetailsString(string? payloadJson, string propertyName)
-    {
-        if (string.IsNullOrWhiteSpace(payloadJson)) return null;
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            if (doc.RootElement.TryGetProperty("details", out var details)
-                && details.ValueKind == JsonValueKind.Object
-                && details.TryGetProperty(propertyName, out var v)
-                && v.ValueKind == JsonValueKind.String)
-            {
-                return v.GetString();
-            }
-        }
-        catch (JsonException) { }
-        return null;
-    }
 
-    private static string? NormalizePositiveInteger(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed)) return null;
-        return long.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0
-            ? trimmed
-            : null;
-    }
 
-    private static IReadOnlyList<Guid> NormalizeOrderedIds(IReadOnlyList<Guid>? billIds)
-    {
-        if (billIds is null || billIds.Count == 0)
-        {
-            return Array.Empty<Guid>();
-        }
 
-        var seen = new HashSet<Guid>();
-        var ordered = new List<Guid>(billIds.Count);
-        foreach (var billId in billIds)
-        {
-            if (billId == Guid.Empty || !seen.Add(billId))
-            {
-                continue;
-            }
-
-            ordered.Add(billId);
-        }
-
-        return ordered;
-    }
 }

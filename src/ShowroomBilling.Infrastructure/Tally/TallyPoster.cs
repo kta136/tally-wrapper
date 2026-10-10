@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net.Http;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
@@ -174,9 +173,9 @@ public sealed class TallyPoster(
 
         var lastVoucherId = FindFirst(response, "LASTVCHID");
         var lastMasterId = FindFirst(response, "LASTMID");
-        var tallyMasterId = NormalizePositiveInteger(lastVoucherId)
+        var tallyMasterId = TallyIds.NormalizePositiveInteger(lastVoucherId)
             ?? (request.Operation == TallyPostOperation.Alter
-                ? NormalizePositiveInteger(request.TargetTagValue)
+                ? TallyIds.NormalizePositiveInteger(request.TargetTagValue)
                 : null);
         var remoteId = lastVoucherId
             ?? lastMasterId
@@ -200,14 +199,6 @@ public sealed class TallyPoster(
     private static int? ParseInt(string? value) =>
         int.TryParse(value, out var n) ? n : null;
 
-    private static string? NormalizePositiveInteger(string? value)
-    {
-        var trimmed = value?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed)) return null;
-        return long.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0
-            ? trimmed
-            : null;
-    }
 
     private static string Truncate(string value, int max) =>
         string.IsNullOrEmpty(value) || value.Length <= max ? value : value[..max];

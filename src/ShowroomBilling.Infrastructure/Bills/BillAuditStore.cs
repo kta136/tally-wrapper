@@ -98,7 +98,8 @@ internal sealed class BillAuditStore(
             LastRemoteId: lastRemoteId);
     }
 
-    private static string? ReadDetailsString(string? payloadJson, string propertyName)
+    /// <summary>Reads a string from the <c>details</c> object of a bill audit payload.</summary>
+    internal static string? ReadDetailsString(string? payloadJson, string propertyName)
     {
         if (string.IsNullOrWhiteSpace(payloadJson)) return null;
         try
