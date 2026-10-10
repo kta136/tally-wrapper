@@ -3,6 +3,7 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>TallyWrapper.ServerTray</AssemblyName>
     <Version>1.0</Version>
     <ApplicationIcon>..\ShowroomBilling.Desktop\Resources\Billing.ico</ApplicationIcon>

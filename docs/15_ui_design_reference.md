@@ -87,6 +87,12 @@ Density is a settings-level toggle, not a Tweaks-panel affordance in production 
 - Status bar is 22px, monospace 10.5px, sunken-white.
 - F-key strip sits just above the status bar (22px, same treatment) and is **context-sensitive** per screen — see [shell.jsx FKeyStrip](design/app/shell.jsx).
 
+### 3.7 DPI and monitor work areas
+
+- The WPF desktop and the WinForms server dashboard run as Per-Monitor V2 DPI-aware processes. Do not replace this with system-DPI or bitmap scaling.
+- The custom WPF chrome handles `WM_GETMINMAXINFO` and derives maximize bounds from the current monitor's work area. Do not reintroduce fixed padding for taskbar compensation.
+- UI smoke tests must cover 100%, 125%, and 150% scaling where available, plus maximizing and moving between monitors with different scale factors. The F-key and status strips must remain above taskbars on every edge.
+
 ## 4. Component inventory (classes to port)
 
 | CSS class | Purpose | Design file |

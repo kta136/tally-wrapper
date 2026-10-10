@@ -6,6 +6,7 @@
     <AssemblyName>TallyWrapper</AssemblyName>
     <Version>1.0</Version>
     <ApplicationIcon>Resources\Billing.ico</ApplicationIcon>
+    <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
     <UserSecretsId>ShowroomBilling-Desktop-Foundation</UserSecretsId>
   </PropertyGroup>
 

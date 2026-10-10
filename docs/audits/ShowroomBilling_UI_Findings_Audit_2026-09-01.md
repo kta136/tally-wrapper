@@ -124,6 +124,8 @@ This audit contains 16 findings:
 - All bottom chrome remains above the taskbar when maximized on each monitor.
 - The window recalculates correctly after monitor and DPI changes.
 
+**Resolution (2026-09-02):** Implemented Per-Monitor V2 awareness for both Windows UIs. The WPF shell now handles `WM_GETMINMAXINFO` using the active monitor's work area, replacing the fixed-padding workaround; the Server Tray uses WinForms Per-Monitor V2 initialization and DPI autoscaling.
+
 ### D-05 - Shortcut help is not contextual or truthful
 
 **Priority:** P1 - High

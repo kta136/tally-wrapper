@@ -64,14 +64,10 @@
     </Window.InputBindings>
 
     <!--
-      Root grid is wrapped in an outer Border so we can apply a maximize-state
-      margin without disturbing the inner row layout. With WindowStyle=None +
-      WindowChrome, Windows positions a maximized window so each edge sits
-      ~SystemParameters.WindowResizeBorder px past the work-area, clipping the
-      bottom status bar. MainWindow.xaml.cs flips RootChrome.Padding on
-      WindowState changes to compensate.
+      MainWindow.xaml.cs supplies per-monitor maximize bounds through
+      WM_GETMINMAXINFO so the custom chrome stays inside the current work area.
     -->
-    <Border x:Name="RootChrome">
+    <Border>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

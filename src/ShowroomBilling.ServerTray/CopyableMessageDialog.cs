@@ -9,6 +9,8 @@ internal sealed class CopyableMessageDialog : Form
     {
         _message = message;
 
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Text = caption;
         Icon = AppIconProvider.CreateIcon();
         StartPosition = FormStartPosition.CenterParent;

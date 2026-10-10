@@ -5,6 +5,8 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        ApplicationConfiguration.Initialize();
+
         var options = new ServerTrayOptions();
         if (args.Any(arg => string.Equals(arg, "--verify-embedded-api", StringComparison.OrdinalIgnoreCase)))
         {
@@ -33,7 +35,6 @@ internal static class Program
             return;
         }
 
-        ApplicationConfiguration.Initialize();
         var installed = ServerInstaller.EnsureInstalledInteractive(options);
         if (!installed)
         {

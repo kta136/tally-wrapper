@@ -56,6 +56,8 @@ public sealed class StatusForm : Form
         _stopServiceAndExitTray = stopServiceAndExitTray;
         _httpClient = new HttpClient { BaseAddress = new Uri(options.ApiBaseUrl), Timeout = TimeSpan.FromSeconds(5) };
 
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Text = "Tally Wrapper Server";
         Icon = AppIconProvider.CreateIcon();
         BackColor = PageBackground;
