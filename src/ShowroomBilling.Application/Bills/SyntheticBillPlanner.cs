@@ -244,7 +244,8 @@ public sealed class SyntheticBillPlanner
                 targetInclusive: lineTarget,
                 request: request,
                 itemEntry: itemEntries[rng.Next(itemEntries.Count)],
-                karatEntry: karatEntries[rng.Next(karatEntries.Count)]);
+                karatEntry: karatEntries[rng.Next(karatEntries.Count)],
+                rng: rng);
             if (line is null)
             {
                 // Could not produce a valid line at this rate/karat — fall back to a minimum-qty line
@@ -289,48 +290,22 @@ public sealed class SyntheticBillPlanner
         long targetInclusive,
         SyntheticBatchRequest request,
         ItemMasterEntry itemEntry,
-        KaratMasterEntry karatEntry)
+        KaratMasterEntry karatEntry,
+        Random rng)
     {
-        var rng = new Random(HashCode.Combine(targetInclusive, itemEntry.Name, karatEntry.Label));
-        var effRate = BillCalculator.ComputeEffectiveRate(new BillCalculator.LineInputs(
-            Rate24Kt: request.Rate24Kt,
-            PurityPercent: karatEntry.PurityPercent,
-            WastagePercent: itemEntry.WastagePercent,
-            LabourPerUnit: itemEntry.DefaultLabourPerGram,
-            NetWeight: 0m,
-            ExtraCharges: 0m,
-            PricingMode: itemEntry.PricingMode,
-            IsDiamond: string.Equals(itemEntry.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase),
-            DiamondRate: 0m));
+        var inputs = BuildLineInputs(request, itemEntry, karatEntry, netWeight: 0m);
+        var effRate = BillCalculator.ComputeEffectiveRate(inputs);
         if (effRate <= 0m) return null;
 
         var fraction = (decimal)(SyntheticBatchPlanLimits.QtyFractionMin
             + (SyntheticBatchPlanLimits.QtyFractionMax - SyntheticBatchPlanLimits.QtyFractionMin) * rng.NextDouble());
         var qty = Math.Max(SyntheticBatchPlanLimits.MinQty, Math.Round(targetInclusive / effRate * fraction, 3));
 
-        var probe = BillCalculator.ComputeLine(new BillCalculator.LineInputs(
-            Rate24Kt: request.Rate24Kt,
-            PurityPercent: karatEntry.PurityPercent,
-            WastagePercent: itemEntry.WastagePercent,
-            LabourPerUnit: itemEntry.DefaultLabourPerGram,
-            NetWeight: qty,
-            ExtraCharges: 0m,
-            PricingMode: itemEntry.PricingMode,
-            IsDiamond: string.Equals(itemEntry.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase),
-            DiamondRate: 0m));
+        var probe = BillCalculator.ComputeLine(inputs with { NetWeight = qty });
         if (probe.LineTotalInclusive > targetInclusive)
         {
             qty = Math.Max(SyntheticBatchPlanLimits.MinQty, Math.Round(targetInclusive / effRate * 0.5m, 3));
-            probe = BillCalculator.ComputeLine(new BillCalculator.LineInputs(
-                Rate24Kt: request.Rate24Kt,
-                PurityPercent: karatEntry.PurityPercent,
-                WastagePercent: itemEntry.WastagePercent,
-                LabourPerUnit: itemEntry.DefaultLabourPerGram,
-                NetWeight: qty,
-                ExtraCharges: 0m,
-                PricingMode: itemEntry.PricingMode,
-                IsDiamond: string.Equals(itemEntry.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase),
-                DiamondRate: 0m));
+            probe = BillCalculator.ComputeLine(inputs with { NetWeight = qty });
         }
         if (probe.LineTotalInclusive > targetInclusive)
             qty = SyntheticBatchPlanLimits.MinQty;
@@ -344,18 +319,7 @@ public sealed class SyntheticBillPlanner
         KaratMasterEntry karatEntry,
         decimal qty)
     {
-        var isDiamond = string.Equals(itemEntry.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase);
-        var inputs = new BillCalculator.LineInputs(
-            Rate24Kt: request.Rate24Kt,
-            PurityPercent: karatEntry.PurityPercent,
-            WastagePercent: itemEntry.WastagePercent,
-            LabourPerUnit: itemEntry.DefaultLabourPerGram,
-            NetWeight: qty,
-            ExtraCharges: 0m,
-            PricingMode: itemEntry.PricingMode,
-            IsDiamond: isDiamond,
-            DiamondRate: 0m);
-        var result = BillCalculator.ComputeLine(inputs);
+        var result = BillCalculator.ComputeLine(BuildLineInputs(request, itemEntry, karatEntry, netWeight: qty));
 
         var stockName = !string.IsNullOrWhiteSpace(karatEntry.TallyItem)
             ? karatEntry.TallyItem.Trim()
@@ -379,6 +343,22 @@ public sealed class SyntheticBillPlanner
             Extra: 0m);
     }
 
+    private static BillCalculator.LineInputs BuildLineInputs(
+        SyntheticBatchRequest request,
+        ItemMasterEntry itemEntry,
+        KaratMasterEntry karatEntry,
+        decimal netWeight)
+        => new(
+            Rate24Kt: request.Rate24Kt,
+            PurityPercent: karatEntry.PurityPercent,
+            WastagePercent: itemEntry.WastagePercent,
+            LabourPerUnit: itemEntry.DefaultLabourPerGram,
+            NetWeight: netWeight,
+            ExtraCharges: 0m,
+            PricingMode: itemEntry.PricingMode,
+            IsDiamond: string.Equals(itemEntry.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase),
+            DiamondRate: 0m);
+
     private static DateTimeOffset FloorToMinute(DateTimeOffset v)
         => new(v.Year, v.Month, v.Day, v.Hour, v.Minute, 0, v.Offset);
 
@@ -388,10 +368,30 @@ public sealed class SyntheticBillPlanner
         return floored == v ? floored : floored + TimeSpan.FromMinutes(1);
     }
 
-    /// <summary>Fisher-Yates reservoir sample of k distinct values in [0, population).</summary>
+    /// <summary>Samples k distinct values in [0, population).</summary>
     private static int[] SampleWithoutReplacement(int population, int k, Random rng)
     {
         if (k > population) throw new ArgumentException("k > population", nameof(k));
+
+        // Line targets pick about 20 cut points out of up to 199,000 rupees.
+        // Drawing until k distinct values turn up avoids allocating the whole
+        // range; collisions are rare while k is small against the population.
+        if ((long)k * 8 <= population)
+        {
+            var picked = new HashSet<int>(k);
+            var sample = new int[k];
+            while (picked.Count < k)
+            {
+                var candidate = rng.Next(population);
+                if (picked.Add(candidate))
+                {
+                    sample[picked.Count - 1] = candidate;
+                }
+            }
+            return sample;
+        }
+
+        // Partial Fisher-Yates shuffle, for the schedule, where k can approach the population.
         var indices = Enumerable.Range(0, population).ToArray();
         for (var i = 0; i < k; i++)
         {
