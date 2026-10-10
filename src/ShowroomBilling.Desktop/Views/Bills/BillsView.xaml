@@ -1,6 +1,7 @@
 <UserControl x:Class="ShowroomBilling.Desktop.Views.Bills.BillsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Bills"
@@ -86,63 +87,27 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Style="{StaticResource BtnSm}"
                             Margin="0,0,6,0"
-                            Command="{Binding DataContext.OpenBillDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Open Details" />
-                            <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Enter" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
-                            </Border>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Retry Push" />
-                            <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Ctrl+R" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
-                            </Border>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding TallyPushButtonLabel}" />
-                            <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Button" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
-                            </Border>
-                        </StackPanel>
-                    </Button>
+                            Command="{Binding DataContext.OpenBillDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Content="Open Details"
+                            shell:Kbd.Hint="Enter" />
+                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry Push" shell:Kbd.Hint="Ctrl+R" />
+                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}" Content="{Binding TallyPushButtonLabel}" />
                     <Button Style="{StaticResource BtnSm}"
                             Margin="0,0,6,0"
                             Command="{Binding PushAllPendingCommand}"
                             Content="Push All Pending"
                             ToolTip="Push every pending/draft bill to Tally, oldest first. Stops on the first failure." />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RepostSelectedCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Repost to Tally" />
-                            <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Ctrl+Shift+R" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
-                            </Border>
-                        </StackPanel>
-                    </Button>
+                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RepostSelectedCommand}" Content="Repost to Tally" shell:Kbd.Hint="Ctrl+Shift+R" />
                     <Button Style="{StaticResource BtnSm}"
                             Margin="0,0,6,0"
                             Command="{Binding EditRowCommand}"
-                            CommandParameter="{Binding SelectedRow}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Edit" />
-                            <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Ctrl+Shift+E" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
-                            </Border>
-                        </StackPanel>
-                    </Button>
+                            CommandParameter="{Binding SelectedRow}"
+                            Content="Edit"
+                            shell:Kbd.Hint="Ctrl+Shift+E" />
                     <Button Style="{StaticResource BtnSm}"
-                            Command="{Binding DataContext.OpenSelectedBillsPrintPreviewCommand, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Print" />
-                            <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                                <TextBlock Text="Ctrl+P" FontFamily="{StaticResource MonoFontFamily}" FontSize="9.5" />
-                            </Border>
-                        </StackPanel>
-                    </Button>
+                            Command="{Binding DataContext.OpenSelectedBillsPrintPreviewCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Content="Print"
+                            shell:Kbd.Hint="Ctrl+P" />
                 </StackPanel>
             </Grid>
         </Border>

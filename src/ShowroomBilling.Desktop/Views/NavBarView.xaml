@@ -80,9 +80,7 @@
                               StrokeThickness="1.25"
                               Data="M 1.5,1 L 11.5,1 L 11.5,12 L 1.5,12 Z M 3.5,4 L 9.5,4 M 3.5,6.5 L 9.5,6.5 M 3.5,9 L 7,9" />
                         <TextBlock Margin="6,0,0,0" Text="Invoice" />
-                        <Border Style="{StaticResource KbdHint}" Margin="8,0,0,0">
-                            <TextBlock Text="Ctrl+1" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
-                        </Border>
+                        <ContentControl Style="{StaticResource Kbd}" Margin="8,0,0,0" Content="Ctrl+1" />
                     </StackPanel>
                 </RadioButton>
                 <RadioButton Style="{StaticResource NavItem}"
@@ -99,9 +97,7 @@
                               StrokeThickness="1.25"
                               Data="M 2,4 L 11,4 L 11,11.5 L 2,11.5 Z M 4,4 L 4,2.5 L 9,2.5 L 9,4 M 4.5,6.5 L 8.5,6.5 M 4.5,8.5 L 7,8.5" />
                         <TextBlock Margin="6,0,0,0" Text="Bills" />
-                        <Border Style="{StaticResource KbdHint}" Margin="8,0,0,0">
-                            <TextBlock Text="Ctrl+2" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
-                        </Border>
+                        <ContentControl Style="{StaticResource Kbd}" Margin="8,0,0,0" Content="Ctrl+2" />
                     </StackPanel>
                 </RadioButton>
                 <RadioButton Style="{StaticResource NavItem}"
@@ -113,9 +109,7 @@
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="4" Height="4" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" StrokeThickness="1.25" />
                         <TextBlock Margin="6,0,0,0" Text="Settings" />
-                        <Border Style="{StaticResource KbdHint}" Margin="8,0,0,0">
-                            <TextBlock Text="Ctrl+3" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
-                        </Border>
+                        <ContentControl Style="{StaticResource Kbd}" Margin="8,0,0,0" Content="Ctrl+3" />
                     </StackPanel>
                 </RadioButton>
             </StackPanel>
@@ -192,14 +186,9 @@
                            Fill="{StaticResource DividerBrush}" />
                 <Button Style="{StaticResource HealthBtn}"
                         Command="{Binding OpenShortcutsCommand}"
-                        ToolTip="Keyboard shortcuts (?)">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Shortcuts" VerticalAlignment="Center" />
-                        <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">
-                            <TextBlock Text="?" FontSize="9.5" FontFamily="{StaticResource MonoFontFamily}" />
-                        </Border>
-                    </StackPanel>
-                </Button>
+                        ToolTip="Keyboard shortcuts (?)"
+                        Content="Shortcuts"
+                        shell:Kbd.Hint="?" />
             </StackPanel>
         </Grid>
     </Border>

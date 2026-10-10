@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using ShowroomBilling.Desktop.Shell;
 
 namespace ShowroomBilling.Desktop.Tests.Views;
 
@@ -29,7 +30,7 @@ public sealed class ButtonStyleTests
             var chrome = Chrome(button);
             AssertBrush(background, chrome.Background);
             AssertBrush(border, chrome.BorderBrush);
-            AssertBrush(foreground, Texts(button).Single().Foreground);
+            AssertBrush(foreground, Label(button).Foreground);
             return true;
         });
 
@@ -39,8 +40,7 @@ public sealed class ButtonStyleTests
         {
             var content = new StackPanel { Orientation = Orientation.Horizontal };
             content.Children.Add(new TextBlock { Text = "Save" });
-            var hint = new Border { Style = (Style)Resource("KbdHintOnPrimary"), Child = new TextBlock { Text = "Ctrl+S" } };
-            content.Children.Add(hint);
+            content.Children.Add(new TextBlock { Text = "now" });
 
             var button = Build("BtnPrimary", content);
 
@@ -49,6 +49,43 @@ public sealed class ButtonStyleTests
             button.IsEnabled = false;
             Layout(button);
             Assert.All(Texts(button), text => AssertBrush("InkDisabledBrush", text.Foreground));
+            return true;
+        });
+
+    [Fact]
+    public void A_button_shows_its_keyboard_hint_after_the_label_and_nothing_when_it_has_none()
+        => WpfTestHost.Run(() =>
+        {
+            var plain = Build("BtnSm", "Push to Tally");
+            var hinted = new Button { Style = (Style)Resource("BtnSm"), Content = "Retry Push" };
+            Kbd.SetHint(hinted, "Ctrl+R");
+            Layout(hinted);
+
+            Assert.Equal(Visibility.Collapsed, Hint(plain).Visibility);
+            Assert.Equal(Visibility.Visible, Hint(hinted).Visibility);
+            Assert.Equal(["Retry Push", "Ctrl+R"], Texts(hinted).Select(text => text.Text));
+            Assert.True(hinted.DesiredSize.Width > plain.DesiredSize.Width - 20);
+
+            // The chip greys out with the button.
+            hinted.IsEnabled = false;
+            Layout(hinted);
+            Assert.All(Texts(hinted), text => AssertBrush("InkDisabledBrush", text.Foreground));
+            return true;
+        });
+
+    [Theory]
+    [InlineData("Kbd", "InkBrush", "BgSunkenBrush")]
+    [InlineData("KbdOnPrimary", "OnFilledInkBrush", "OnFilledChipBrush")]
+    public void A_stand_alone_keyboard_chip_shows_its_key(string style, string foreground, string background)
+        => WpfTestHost.Run(() =>
+        {
+            var chip = new ContentControl { Style = (Style)Resource(style), Content = "F2" };
+            Layout(chip);
+
+            var text = Texts(chip).Single();
+            Assert.Equal("F2", text.Text);
+            AssertBrush(foreground, text.Foreground);
+            AssertBrush(background, ((Border)VisualTreeHelper.GetChild(chip, 0)).Background);
             return true;
         });
 
@@ -87,7 +124,22 @@ public sealed class ButtonStyleTests
             var chrome = Chrome(button);
             AssertBrush(background, chrome.Background);
             AssertBrush(border, chrome.BorderBrush);
-            AssertBrush("InkDisabledBrush", Texts(button).Single().Foreground);
+            AssertBrush("InkDisabledBrush", Label(button).Foreground);
+            return true;
+        });
+
+    [Fact]
+    public void The_chip_on_a_primary_button_stays_readable_when_the_button_is_disabled()
+        => WpfTestHost.Run(() =>
+        {
+            var chip = new ContentControl { Style = (Style)Resource("KbdOnPrimary"), Content = "Ctrl+S" };
+            var button = Build("BtnPrimary", chip);
+            AssertBrush("OnFilledInkBrush", Texts(chip).Single().Foreground);
+
+            button.IsEnabled = false;
+            Layout(button);
+
+            AssertBrush("InkDisabledBrush", Texts(chip).Single().Foreground);
             return true;
         });
 
@@ -107,6 +159,11 @@ public sealed class ButtonStyleTests
     }
 
     private static Border Chrome(Button button) => (Border)button.Template.FindName("bd", button);
+
+    private static Border Hint(Button button) => (Border)button.Template.FindName("hint", button);
+
+    // The label comes first; the hint chip's text, shown or not, follows it.
+    private static TextBlock Label(Button button) => Texts(button)[0];
 
     private static List<TextBlock> Texts(DependencyObject root)
     {
