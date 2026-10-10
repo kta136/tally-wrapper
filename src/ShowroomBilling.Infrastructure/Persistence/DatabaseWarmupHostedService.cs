@@ -35,6 +35,7 @@ public sealed class DatabaseWarmupHostedService(
         //     Pays the Npgsql connection + TLS costs.
         _ = await db.InvoiceSequences
             .AsNoTracking()
+            .OrderByDescending(x => x.FiscalYear)
             .Take(1)
             .ToListAsync(timeboxed);
 

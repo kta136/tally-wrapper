@@ -43,10 +43,22 @@ internal static class TcpPortProbe
         try
         {
             using var client = new TcpClient();
-            var ar = client.BeginConnect(host, port, null, null);
-            if (!ar.AsyncWaitHandle.WaitOne(timeout)) return false;
-            client.EndConnect(ar);
-            return client.Connected;
+            var connect = client.ConnectAsync(host, port);
+
+            // Windows takes about two seconds to refuse a loopback connection,
+            // so on a closed port the wait below gives up first and disposing
+            // the client aborts the attempt. Look at that failure here, or it
+            // comes back from the finalizer as an unobserved task exception and
+            // the app logs an error on every start.
+            connect.ContinueWith(
+                static task => _ = task.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            // Waiting on this task cannot deadlock the dispatcher: TcpClient
+            // completes it without returning to the caller's context.
+            return connect.Wait(timeout) && client.Connected;
         }
         catch
         {
