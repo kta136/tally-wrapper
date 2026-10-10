@@ -21,17 +21,17 @@ public sealed class TallyMasterRefresher(
             var items = await source.FetchCompaniesAsync(cancellationToken);
             if (items is null)
             {
-                return Fail("companies", "Tally did not return a response. Check connection settings and that Tally is running.");
+                return Fail(MasterTypes.Companies, "Tally did not return a response. Check connection settings and that Tally is running.");
             }
             var response = await snapshotService.IngestCompaniesAsync(
                 new PushCompanySnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
                 cancellationToken);
-            return new TallyMasterRefreshResult("companies", true, response.ItemCount, response.BatchId, null);
+            return new TallyMasterRefreshResult(MasterTypes.Companies, true, response.ItemCount, response.BatchId, null);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "RefreshCompaniesAsync failed.");
-            return Fail("companies", ex.Message);
+            return Fail(MasterTypes.Companies, ex.Message);
         }
     }
 
@@ -42,17 +42,17 @@ public sealed class TallyMasterRefresher(
             var items = await source.FetchLedgersAsync(cancellationToken);
             if (items is null)
             {
-                return Fail("ledgers", "Tally did not return a response.");
+                return Fail(MasterTypes.Ledgers, "Tally did not return a response.");
             }
             var response = await snapshotService.IngestLedgersAsync(
                 new PushLedgerSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
                 cancellationToken);
-            return new TallyMasterRefreshResult("ledgers", true, response.ItemCount, response.BatchId, null);
+            return new TallyMasterRefreshResult(MasterTypes.Ledgers, true, response.ItemCount, response.BatchId, null);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "RefreshLedgersAsync failed.");
-            return Fail("ledgers", ex.Message);
+            return Fail(MasterTypes.Ledgers, ex.Message);
         }
     }
 
@@ -63,17 +63,17 @@ public sealed class TallyMasterRefresher(
             var items = await source.FetchStockItemsAsync(cancellationToken);
             if (items is null)
             {
-                return Fail("stock-items", "Tally did not return a response.");
+                return Fail(MasterTypes.StockItems, "Tally did not return a response.");
             }
             var response = await snapshotService.IngestStockItemsAsync(
                 new PushStockItemSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
                 cancellationToken);
-            return new TallyMasterRefreshResult("stock-items", true, response.ItemCount, response.BatchId, null);
+            return new TallyMasterRefreshResult(MasterTypes.StockItems, true, response.ItemCount, response.BatchId, null);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "RefreshStockItemsAsync failed.");
-            return Fail("stock-items", ex.Message);
+            return Fail(MasterTypes.StockItems, ex.Message);
         }
     }
 
@@ -84,17 +84,17 @@ public sealed class TallyMasterRefresher(
             var items = await source.FetchVoucherTypesAsync(cancellationToken);
             if (items is null)
             {
-                return Fail("voucher-types", "Tally did not return a response.");
+                return Fail(MasterTypes.VoucherTypes, "Tally did not return a response.");
             }
             var response = await snapshotService.IngestVoucherTypesAsync(
                 new PushVoucherTypeSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
                 cancellationToken);
-            return new TallyMasterRefreshResult("voucher-types", true, response.ItemCount, response.BatchId, null);
+            return new TallyMasterRefreshResult(MasterTypes.VoucherTypes, true, response.ItemCount, response.BatchId, null);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "RefreshVoucherTypesAsync failed.");
-            return Fail("voucher-types", ex.Message);
+            return Fail(MasterTypes.VoucherTypes, ex.Message);
         }
     }
 

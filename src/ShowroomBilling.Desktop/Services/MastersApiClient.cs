@@ -8,8 +8,8 @@ namespace ShowroomBilling.Desktop.Services;
 public sealed class MastersApiClient(HttpClient httpClient) : IMastersApiClient
 {
     public async Task<CompanySnapshotResponse> GetCompaniesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var response = await httpClient.GetFromJsonAsync<CompanySnapshotResponse>(
             BuildUrl("/api/masters/companies", query),
@@ -18,8 +18,8 @@ public sealed class MastersApiClient(HttpClient httpClient) : IMastersApiClient
     }
 
     public async Task<LedgerSnapshotResponse> GetLedgersAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var response = await httpClient.GetFromJsonAsync<LedgerSnapshotResponse>(
             BuildUrl("/api/masters/ledgers", query),
@@ -28,8 +28,8 @@ public sealed class MastersApiClient(HttpClient httpClient) : IMastersApiClient
     }
 
     public async Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var response = await httpClient.GetFromJsonAsync<VoucherTypeSnapshotResponse>(
             BuildUrl("/api/masters/voucher-types", query),
@@ -38,8 +38,8 @@ public sealed class MastersApiClient(HttpClient httpClient) : IMastersApiClient
     }
 
     public async Task<StockItemSnapshotResponse> GetStockItemsAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var response = await httpClient.GetFromJsonAsync<StockItemSnapshotResponse>(
             BuildUrl("/api/masters/stock-items", query),

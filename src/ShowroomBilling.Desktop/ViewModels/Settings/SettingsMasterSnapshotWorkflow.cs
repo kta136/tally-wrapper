@@ -48,7 +48,7 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         host.StatusMessage = "Fetching companies…";
         try
         {
-            var response = await mastersApi.GetCompaniesAsync(cancellationToken);
+            var response = await mastersApi.GetCompaniesAsync(cancellationToken: cancellationToken);
             var activeName = host.ActiveCompanyName;
             host.Companies.Clear();
             foreach (var company in response.Companies)
@@ -88,7 +88,7 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         try
         {
             var response = await mastersApi.RequestRefreshAsync(
-                new MasterRefreshRequest(MasterType: "companies", RequestedByActor: "desktop-settings"),
+                new MasterRefreshRequest(MasterType: MasterTypes.Companies, RequestedByActor: "desktop-settings"),
                 cancellationToken);
             refreshOk = response.All(r => r.Succeeded);
             host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
@@ -151,8 +151,8 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         host.StatusMessage = "Fetching ledgers & voucher types…";
         try
         {
-            var ledgersTask = mastersApi.GetLedgersAsync(cancellationToken);
-            var voucherTypesTask = mastersApi.GetVoucherTypesAsync(cancellationToken);
+            var ledgersTask = mastersApi.GetLedgersAsync(cancellationToken: cancellationToken);
+            var voucherTypesTask = mastersApi.GetVoucherTypesAsync(cancellationToken: cancellationToken);
             await Task.WhenAll(ledgersTask, voucherTypesTask);
 
             var ledgersResponse = await ledgersTask;
@@ -227,7 +227,7 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         host.StatusMessage = "Fetching stock items…";
         try
         {
-            var response = await mastersApi.GetStockItemsAsync(cancellationToken);
+            var response = await mastersApi.GetStockItemsAsync(cancellationToken: cancellationToken);
             host.StockItems.Clear();
             foreach (var item in response.StockItems)
                 host.StockItems.Add(item);
@@ -264,7 +264,7 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         try
         {
             var response = await mastersApi.RequestRefreshAsync(
-                new MasterRefreshRequest(MasterType: "stock-items", RequestedByActor: "desktop-settings"),
+                new MasterRefreshRequest(MasterType: MasterTypes.StockItems, RequestedByActor: "desktop-settings"),
                 cancellationToken);
             refreshOk = response.All(r => r.Succeeded);
             host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);

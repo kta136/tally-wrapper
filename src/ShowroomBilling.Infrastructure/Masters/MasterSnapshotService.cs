@@ -8,10 +8,10 @@ namespace ShowroomBilling.Infrastructure.Masters;
 
 public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : IMasterSnapshotService
 {
-    public const string MasterTypeCompanies = "companies";
-    public const string MasterTypeLedgers = "ledgers";
-    public const string MasterTypeStockItems = "stock_items";
-    public const string MasterTypeVoucherTypes = "voucher_types";
+    public const string MasterTypeCompanies = MasterTypes.Companies;
+    public const string MasterTypeLedgers = MasterTypes.Ledgers;
+    public const string MasterTypeStockItems = MasterTypes.StockItemsSnapshot;
+    public const string MasterTypeVoucherTypes = MasterTypes.VoucherTypesSnapshot;
 
     private static readonly string[] AllMasterTypes =
     [
@@ -139,8 +139,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
     }
 
     public async Task<CompanySnapshotResponse> GetCompaniesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeCompanies, cancellationToken);
         if (batch is null)
@@ -162,8 +162,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
     }
 
     public async Task<LedgerSnapshotResponse> GetLedgersAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeLedgers, cancellationToken);
         if (batch is null)
@@ -185,8 +185,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
     }
 
     public async Task<StockItemSnapshotResponse> GetStockItemsAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeStockItems, cancellationToken);
         if (batch is null)
@@ -208,8 +208,8 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
     }
 
     public async Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null)
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeVoucherTypes, cancellationToken);
         if (batch is null)

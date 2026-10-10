@@ -128,7 +128,7 @@ The flip is deliberately **not** wrapped in a transaction with the Tally call �
 | `GET` | `/api/masters/voucher-types` | Load voucher type snapshot | voucher types, freshness metadata |
 | `POST` | `/api/masters/refresh` | **Synchronously** fetch fresh master data from Tally and write the snapshot | one or more `TallyMasterRefreshResult` rows |
 
-`POST /api/masters/refresh` body: `{ masterType?, requestedByActor? }`. `masterType` accepts `companies`, `ledgers`, `stock-items`, `voucher-types`, or null (all four). The API calls `ITallyMasterRefresher` synchronously — which uses `ITallyXmlClient` to query Tally, parses the response via `TallyXmlMasterSource`, and writes the snapshot via `IMasterSnapshotService`. The call blocks until Tally answers. There is no background polling, no timer, no scheduled refresh. **The only way master data updates is via this endpoint triggered by a UI click.**
+`POST /api/masters/refresh` body: `{ masterType?, requestedByActor? }`. `masterType` accepts `companies`, `ledgers`, `stock-items`, `voucher-types`, or null (all four). Any other value is rejected with `400`; the names are the constants in `Contracts.Masters.MasterTypes`. The API calls `ITallyMasterRefresher` synchronously — which uses `ITallyXmlClient` to query Tally, parses the response via `TallyXmlMasterSource`, and writes the snapshot via `IMasterSnapshotService`. The call blocks until Tally answers. There is no background polling, no timer, no scheduled refresh. **The only way master data updates is via this endpoint triggered by a UI click.**
 
 Response per master type: `{ masterType, succeeded, itemCount, batchId?, errorMessage? }`.
 

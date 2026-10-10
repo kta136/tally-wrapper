@@ -6,20 +6,20 @@ namespace ShowroomBilling.Desktop.Services;
 public interface IMastersApiClient
 {
     Task<CompanySnapshotResponse> GetCompaniesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<LedgerSnapshotResponse> GetLedgersAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<StockItemSnapshotResponse> GetStockItemsAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Calls <c>POST /api/masters/refresh</c>. The endpoint is synchronous: it

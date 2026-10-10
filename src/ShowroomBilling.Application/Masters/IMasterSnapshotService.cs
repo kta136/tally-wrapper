@@ -21,20 +21,20 @@ public interface IMasterSnapshotService
         CancellationToken cancellationToken = default);
 
     Task<CompanySnapshotResponse> GetCompaniesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<LedgerSnapshotResponse> GetLedgersAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<StockItemSnapshotResponse> GetStockItemsAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-        CancellationToken cancellationToken = default,
-        MasterSnapshotQuery? query = null);
+        MasterSnapshotQuery? query = null,
+        CancellationToken cancellationToken = default);
 
     Task<MasterFreshnessSummaryResponse> GetFreshnessSummaryAsync(CancellationToken cancellationToken = default);
 }

@@ -68,6 +68,36 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task Refresh_with_an_unknown_master_type_is_rejected_instead_of_refreshing_everything()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/api/masters/refresh",
+            new MasterRefreshRequest(MasterType: "ledgerz", RequestedByActor: "contract-test"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Unknown master type 'ledgerz'.", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Theory]
+    [InlineData("/api/masters/companies")]
+    [InlineData("/api/masters/ledgers?search=cash&skip=0&take=5")]
+    [InlineData("/api/masters/stock-items?includeRaw=true")]
+    [InlineData("/api/masters/voucher-types?take=1")]
+    public async Task Snapshot_reads_accept_their_optional_query_values(string url)
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(JsonValueKind.Object, doc.RootElement.GetProperty("metadata").ValueKind);
+    }
+
+    [Fact]
     public async Task Refresh_without_device_token_returns_401()
     {
         var client = _factory.CreateClient();

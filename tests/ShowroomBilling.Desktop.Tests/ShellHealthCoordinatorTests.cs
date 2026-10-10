@@ -66,23 +66,23 @@ public sealed class ShellHealthCoordinatorTests
     private sealed class FakeMastersApiClient : IMastersApiClient
     {
         public Task<CompanySnapshotResponse> GetCompaniesAsync(
-            CancellationToken cancellationToken = default,
-            MasterSnapshotQuery? query = null) =>
+            MasterSnapshotQuery? query = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<LedgerSnapshotResponse> GetLedgersAsync(
-            CancellationToken cancellationToken = default,
-            MasterSnapshotQuery? query = null) =>
+            MasterSnapshotQuery? query = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-            CancellationToken cancellationToken = default,
-            MasterSnapshotQuery? query = null) =>
+            MasterSnapshotQuery? query = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<StockItemSnapshotResponse> GetStockItemsAsync(
-            CancellationToken cancellationToken = default,
-            MasterSnapshotQuery? query = null) =>
+            MasterSnapshotQuery? query = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TallyMasterRefreshResult>> RequestRefreshAsync(

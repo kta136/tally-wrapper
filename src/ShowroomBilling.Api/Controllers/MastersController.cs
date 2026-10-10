@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShowroomBilling.Api.Security;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Masters;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Masters;
@@ -13,41 +14,31 @@ public sealed class MastersController(
     IMasterSnapshotService masterSnapshotService,
     ITallyMasterRefresher tallyMasterRefresher) : ControllerBase
 {
-    [HttpGet("companies")]
+    // Each read takes the optional search / skip / take / includeRaw query values.
+
+    [HttpGet(MasterTypes.Companies)]
     public async Task<ActionResult<CompanySnapshotResponse>> GetCompanies(
-        [FromQuery] string? search,
-        [FromQuery] int? skip,
-        [FromQuery] int? take,
-        [FromQuery] bool? includeRaw,
+        [FromQuery] MasterSnapshotQuery query,
         CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetCompaniesAsync(cancellationToken, new MasterSnapshotQuery(search, skip, take, includeRaw)));
+        => Ok(await masterSnapshotService.GetCompaniesAsync(query, cancellationToken));
 
-    [HttpGet("ledgers")]
+    [HttpGet(MasterTypes.Ledgers)]
     public async Task<ActionResult<LedgerSnapshotResponse>> GetLedgers(
-        [FromQuery] string? search,
-        [FromQuery] int? skip,
-        [FromQuery] int? take,
-        [FromQuery] bool? includeRaw,
+        [FromQuery] MasterSnapshotQuery query,
         CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetLedgersAsync(cancellationToken, new MasterSnapshotQuery(search, skip, take, includeRaw)));
+        => Ok(await masterSnapshotService.GetLedgersAsync(query, cancellationToken));
 
-    [HttpGet("stock-items")]
+    [HttpGet(MasterTypes.StockItems)]
     public async Task<ActionResult<StockItemSnapshotResponse>> GetStockItems(
-        [FromQuery] string? search,
-        [FromQuery] int? skip,
-        [FromQuery] int? take,
-        [FromQuery] bool? includeRaw,
+        [FromQuery] MasterSnapshotQuery query,
         CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetStockItemsAsync(cancellationToken, new MasterSnapshotQuery(search, skip, take, includeRaw)));
+        => Ok(await masterSnapshotService.GetStockItemsAsync(query, cancellationToken));
 
-    [HttpGet("voucher-types")]
+    [HttpGet(MasterTypes.VoucherTypes)]
     public async Task<ActionResult<VoucherTypeSnapshotResponse>> GetVoucherTypes(
-        [FromQuery] string? search,
-        [FromQuery] int? skip,
-        [FromQuery] int? take,
-        [FromQuery] bool? includeRaw,
+        [FromQuery] MasterSnapshotQuery query,
         CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetVoucherTypesAsync(cancellationToken, new MasterSnapshotQuery(search, skip, take, includeRaw)));
+        => Ok(await masterSnapshotService.GetVoucherTypesAsync(query, cancellationToken));
 
     /// <summary>
     /// Synchronously fetches master data from Tally and writes the snapshot. This is the
@@ -61,13 +52,17 @@ public sealed class MastersController(
         CancellationToken cancellationToken)
     {
         var masterType = request?.MasterType?.Trim().ToLowerInvariant();
-        var results = masterType switch
+        IReadOnlyList<TallyMasterRefreshResult> results = masterType switch
         {
-            "companies" => new[] { await tallyMasterRefresher.RefreshCompaniesAsync(cancellationToken) },
-            "ledgers" => new[] { await tallyMasterRefresher.RefreshLedgersAsync(cancellationToken) },
-            "stock-items" or "stock_items" => new[] { await tallyMasterRefresher.RefreshStockItemsAsync(cancellationToken) },
-            "voucher-types" or "voucher_types" => new[] { await tallyMasterRefresher.RefreshVoucherTypesAsync(cancellationToken) },
-            _ => (IReadOnlyList<TallyMasterRefreshResult>)await tallyMasterRefresher.RefreshAllAsync(cancellationToken),
+            null or "" => await tallyMasterRefresher.RefreshAllAsync(cancellationToken),
+            MasterTypes.Companies => [await tallyMasterRefresher.RefreshCompaniesAsync(cancellationToken)],
+            MasterTypes.Ledgers => [await tallyMasterRefresher.RefreshLedgersAsync(cancellationToken)],
+            MasterTypes.StockItems or MasterTypes.StockItemsSnapshot
+                => [await tallyMasterRefresher.RefreshStockItemsAsync(cancellationToken)],
+            MasterTypes.VoucherTypes or MasterTypes.VoucherTypesSnapshot
+                => [await tallyMasterRefresher.RefreshVoucherTypesAsync(cancellationToken)],
+            // A typo used to fall through to "refresh everything".
+            _ => throw new RequestValidationException($"Unknown master type '{request!.MasterType}'."),
         };
         return Ok(results);
     }
