@@ -17,7 +17,6 @@ public interface ITallyXmlClient
 {
     Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default);
     Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default);
-    string EndpointDescription { get; }
 }
 
 public sealed class TallyXmlClient(
@@ -34,8 +33,6 @@ public sealed class TallyXmlClient(
     private static readonly Regex NumericCharRefs = new(
         @"&#(x[0-9a-fA-F]+|[0-9]+);",
         RegexOptions.Compiled);
-
-    public string EndpointDescription => "Tally XML endpoint resolved from cloud settings.";
 
     public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
         SendCoreAsync(request, isVoucherWrite: false, cancellationToken);

@@ -37,7 +37,31 @@ public sealed record TallyPostResponse(
     string? RemoteId,
     string? ErrorCode,
     string? ErrorMessage,
-    string? XmlShape,
     string? RequestExcerpt,
     string? ResponseExcerpt,
-    string? TallyMasterId = null);
+    string? TallyMasterId = null)
+{
+    /// <summary>Tally accepted the voucher.</summary>
+    public static TallyPostResponse Posted(
+        string? remoteId,
+        string? requestExcerpt = null,
+        string? responseExcerpt = null,
+        string? tallyMasterId = null) =>
+        new(TallyPostOutcome.Posted, remoteId, null, null, requestExcerpt, responseExcerpt, tallyMasterId);
+
+    /// <summary>Tally definitely does not hold the voucher: it was rejected, or never sent.</summary>
+    public static TallyPostResponse Failed(
+        string errorCode,
+        string? errorMessage,
+        string? requestExcerpt = null,
+        string? responseExcerpt = null) =>
+        new(TallyPostOutcome.Failed, null, errorCode, errorMessage, requestExcerpt, responseExcerpt);
+
+    /// <summary>Tally may or may not hold the voucher; the bill needs reconciliation.</summary>
+    public static TallyPostResponse Unknown(
+        string errorCode,
+        string? errorMessage,
+        string? requestExcerpt = null,
+        string? responseExcerpt = null) =>
+        new(TallyPostOutcome.Unknown, null, errorCode, errorMessage, requestExcerpt, responseExcerpt);
+}

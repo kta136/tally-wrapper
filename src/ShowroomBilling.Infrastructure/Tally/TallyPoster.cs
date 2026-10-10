@@ -36,26 +36,16 @@ public sealed class TallyPoster(
         catch (VoucherBuildException ex)
         {
             logger.LogWarning(ex, "Voucher build failed for bill {BillId}: {Code}.", request.BillId, ex.ErrorCode);
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: ex.ErrorCode,
-                ErrorMessage: ex.Message,
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: null,
-                ResponseExcerpt: null);
+            return TallyPostResponse.Failed(
+                ex.ErrorCode,
+                ex.Message);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Voucher could not be prepared for bill {BillId}; nothing was sent to Tally.", request.BillId);
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_PREPARE_FAILED",
-                ErrorMessage: $"The voucher could not be prepared, so nothing was sent to Tally: {Truncate(ex.Message, 900)}",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: null,
-                ResponseExcerpt: null);
+            return TallyPostResponse.Failed(
+                "TALLY_PREPARE_FAILED",
+                $"The voucher could not be prepared, so nothing was sent to Tally: {Truncate(ex.Message, 900)}");
         }
 
         XElement response;
@@ -66,14 +56,10 @@ public sealed class TallyPoster(
         catch (HttpRequestException ex)
         {
             logger.LogWarning(ex, "Tally HTTP call failed for bill {BillId}.", request.BillId);
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Unknown,
-                RemoteId: null,
-                ErrorCode: "TALLY_TRANSPORT_UNKNOWN",
-                ErrorMessage: $"Tally may have processed the voucher before the transport failed: {Truncate(ex.Message, 900)}",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: null);
+            return TallyPostResponse.Unknown(
+                "TALLY_TRANSPORT_UNKNOWN",
+                $"Tally may have processed the voucher before the transport failed: {Truncate(ex.Message, 900)}",
+                requestExcerpt: requestExcerpt);
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
@@ -81,39 +67,27 @@ public sealed class TallyPoster(
             // budget inside TallyXmlClient. Voucher writes are not retried. If the
             // caller DID cancel, let the exception propagate so cancellation stays fair.
             logger.LogWarning(ex, "Tally call timed out for bill {BillId}.", request.BillId);
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Unknown,
-                RemoteId: null,
-                ErrorCode: "TALLY_TIMEOUT",
-                ErrorMessage: "Tally did not respond before the configured timeout.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: null);
+            return TallyPostResponse.Unknown(
+                "TALLY_TIMEOUT",
+                "Tally did not respond before the configured timeout.",
+                requestExcerpt: requestExcerpt);
         }
         catch (TallyConfigurationException ex)
         {
             // Configuration was rejected before any voucher request was sent.
             logger.LogWarning(ex, "Tally call rejected for bill {BillId}.", request.BillId);
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_NOT_CONFIGURED",
-                ErrorMessage: Truncate(ex.Message, 1024),
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: null);
+            return TallyPostResponse.Failed(
+                "TALLY_NOT_CONFIGURED",
+                Truncate(ex.Message, 1024),
+                requestExcerpt: requestExcerpt);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Xml.XmlException)
         {
             logger.LogWarning(ex, "Tally returned an unusable response for bill {BillId}.", request.BillId);
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Unknown,
-                RemoteId: null,
-                ErrorCode: "TALLY_RESPONSE_UNKNOWN",
-                ErrorMessage: "Tally may have processed the voucher, but its response could not be verified.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: null);
+            return TallyPostResponse.Unknown(
+                "TALLY_RESPONSE_UNKNOWN",
+                "Tally may have processed the voucher, but its response could not be verified.",
+                requestExcerpt: requestExcerpt);
         }
 
         var responseXml = response.ToString(SaveOptions.DisableFormatting);
@@ -142,78 +116,60 @@ public sealed class TallyPoster(
         // duplicate it. Park the bill for reconciliation instead.
         if (reportedProblem && createdCount + alteredCount > 0)
         {
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Unknown,
-                RemoteId: null,
-                ErrorCode: "TALLY_PARTIAL_EFFECT",
-                ErrorMessage: Truncate(
+            return TallyPostResponse.Unknown(
+                "TALLY_PARTIAL_EFFECT",
+                Truncate(
                     $"Tally reported created={createdCount}, altered={alteredCount} together with errors={errors ?? 0}, exceptions={exceptions ?? 0}"
                     + (string.IsNullOrWhiteSpace(lineError) ? "." : $": {lineError}"),
                     1024),
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: responseExcerpt);
+                requestExcerpt: requestExcerpt,
+                responseExcerpt: responseExcerpt);
         }
 
         if (!string.IsNullOrWhiteSpace(lineError))
         {
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_LINEERROR",
-                ErrorMessage: Truncate(lineError!, 1024),
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: responseExcerpt);
+            return TallyPostResponse.Failed(
+                "TALLY_LINEERROR",
+                Truncate(lineError!, 1024),
+                requestExcerpt: requestExcerpt,
+                responseExcerpt: responseExcerpt);
         }
 
         if ((errors ?? 0) > 0 || (exceptions ?? 0) > 0)
         {
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_ERRORS",
-                ErrorMessage: $"Tally reported errors={errors ?? 0}, exceptions={exceptions ?? 0}.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: responseExcerpt);
+            return TallyPostResponse.Failed(
+                "TALLY_ERRORS",
+                $"Tally reported errors={errors ?? 0}, exceptions={exceptions ?? 0}.",
+                requestExcerpt: requestExcerpt,
+                responseExcerpt: responseExcerpt);
         }
 
         if (request.Operation == TallyPostOperation.Alter && createdCount > 0)
         {
             // A voucher now exists that the alter did not intend; needs a human.
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Unknown,
-                RemoteId: null,
-                ErrorCode: "TALLY_UNEXPECTED_CREATE_ON_ALTER",
-                ErrorMessage: "Tally created a voucher while processing an alter request.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: responseExcerpt);
+            return TallyPostResponse.Unknown(
+                "TALLY_UNEXPECTED_CREATE_ON_ALTER",
+                "Tally created a voucher while processing an alter request.",
+                requestExcerpt: requestExcerpt,
+                responseExcerpt: responseExcerpt);
         }
 
         if (request.Operation == TallyPostOperation.Alter && alteredCount <= 0)
         {
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_NO_EFFECT",
-                ErrorMessage: "Tally response reported no altered records for the voucher update.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: responseExcerpt);
+            return TallyPostResponse.Failed(
+                "TALLY_NO_EFFECT",
+                "Tally response reported no altered records for the voucher update.",
+                requestExcerpt: requestExcerpt,
+                responseExcerpt: responseExcerpt);
         }
 
         if (request.Operation == TallyPostOperation.Create && createdCount + alteredCount <= 0)
         {
-            return new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_NO_EFFECT",
-                ErrorMessage: "Tally response reported no created or altered records.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: requestExcerpt,
-                ResponseExcerpt: responseExcerpt);
+            return TallyPostResponse.Failed(
+                "TALLY_NO_EFFECT",
+                "Tally response reported no created or altered records.",
+                requestExcerpt: requestExcerpt,
+                responseExcerpt: responseExcerpt);
         }
 
         var lastVoucherId = FindFirst(response, "LASTVCHID");
@@ -226,15 +182,11 @@ public sealed class TallyPoster(
             ?? lastMasterId
             ?? (request.Operation == TallyPostOperation.Alter ? request.TargetTagValue : request.IdempotencyKey);
 
-        return new TallyPostResponse(
-            Outcome: TallyPostOutcome.Posted,
-            RemoteId: remoteId,
-            ErrorCode: null,
-            ErrorMessage: null,
-            XmlShape: "voucher-import-v1",
-            RequestExcerpt: requestExcerpt,
-            ResponseExcerpt: responseExcerpt,
-            TallyMasterId: tallyMasterId);
+        return TallyPostResponse.Posted(
+            remoteId,
+            requestExcerpt: requestExcerpt,
+            responseExcerpt: responseExcerpt,
+            tallyMasterId: tallyMasterId);
     }
 
     private static string? FindFirst(XElement response, string localName)

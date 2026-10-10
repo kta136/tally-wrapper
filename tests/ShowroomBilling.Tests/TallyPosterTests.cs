@@ -216,7 +216,6 @@ public sealed class TallyPosterTests
 
     private sealed class FakeXmlClient(XElement response) : ITallyXmlClient
     {
-        public string EndpointDescription => "fake";
 
         public XElement? LastRequest { get; private set; }
 
@@ -232,7 +231,6 @@ public sealed class TallyPosterTests
 
     private sealed class ThrowingXmlClient(Exception exception) : ITallyXmlClient
     {
-        public string EndpointDescription => "fake";
 
         public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
             Task.FromException<XElement>(exception);

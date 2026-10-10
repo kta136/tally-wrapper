@@ -24,8 +24,7 @@ public static class TallyXmlVoucherBuilder
         {
             throw new VoucherBuildException(
                 "MISSING_PAYMENT_MODE",
-                "Bill has no payment mode; cannot resolve a Tally party ledger.",
-                terminal: true);
+                "Bill has no payment mode; cannot resolve a Tally party ledger.");
         }
         var paymentMode = PaymentMode.Normalize(bill.Payment);
         var partyLedger = paymentMode == PaymentMode.Cash ? ledgers.CashLedger : ledgers.CreditDebitLedger;
@@ -33,29 +32,25 @@ public static class TallyXmlVoucherBuilder
         {
             throw new VoucherBuildException(
                 paymentMode == PaymentMode.Cash ? "CONFIG_MISSING_CASH_LEDGER" : "CONFIG_MISSING_CREDIT_DEBIT_LEDGER",
-                $"No Tally ledger is mapped for payment mode '{paymentMode}' in Settings.",
-                terminal: true);
+                $"No Tally ledger is mapped for payment mode '{paymentMode}' in Settings.");
         }
         if (bill.Lines.Count == 0)
         {
             throw new VoucherBuildException(
                 "NO_LINES",
-                "Bill has zero line items; cannot create a Tally voucher.",
-                terminal: true);
+                "Bill has zero line items; cannot create a Tally voucher.");
         }
         if (string.IsNullOrWhiteSpace(ledgers.SalesLedger))
         {
             throw new VoucherBuildException(
                 "CONFIG_MISSING_SALES_LEDGER",
-                "Sales ledger is not mapped in Settings.",
-                terminal: true);
+                "Sales ledger is not mapped in Settings.");
         }
         if (string.IsNullOrWhiteSpace(companyName))
         {
             throw new VoucherBuildException(
                 "CONFIG_MISSING_COMPANY",
-                "No active Tally company configured in Settings.",
-                terminal: true);
+                "No active Tally company configured in Settings.");
         }
 
         // The same split the printed invoice uses, so the two agree to the paisa.
@@ -65,29 +60,25 @@ public static class TallyXmlVoucherBuilder
         {
             throw new VoucherBuildException(
                 "CONFIG_MISSING_CGST_LEDGER",
-                "Bill has CGST but no CGST ledger is mapped in Settings.",
-                terminal: true);
+                "Bill has CGST but no CGST ledger is mapped in Settings.");
         }
         if (sgst != 0m && string.IsNullOrWhiteSpace(ledgers.SgstLedger))
         {
             throw new VoucherBuildException(
                 "CONFIG_MISSING_SGST_LEDGER",
-                "Bill has SGST but no SGST ledger is mapped in Settings.",
-                terminal: true);
+                "Bill has SGST but no SGST ledger is mapped in Settings.");
         }
         if (bill.Totals.RoundOff != 0m && string.IsNullOrWhiteSpace(ledgers.RoundOffLedger))
         {
             throw new VoucherBuildException(
                 "CONFIG_MISSING_ROUNDOFF_LEDGER",
-                "Bill has a non-zero round-off but no round-off ledger is mapped in Settings.",
-                terminal: true);
+                "Bill has a non-zero round-off but no round-off ledger is mapped in Settings.");
         }
         if (bill.Totals.DiscountTotal != 0m && string.IsNullOrWhiteSpace(ledgers.DiscountLedger))
         {
             throw new VoucherBuildException(
                 "CONFIG_MISSING_DISCOUNT_LEDGER",
-                "Bill has a non-zero discount but no discount ledger is mapped in Settings.",
-                terminal: true);
+                "Bill has a non-zero discount but no discount ledger is mapped in Settings.");
         }
 
         var voucherType = string.IsNullOrWhiteSpace(ledgers.SalesVoucherType) ? "Sales" : ledgers.SalesVoucherType;
@@ -99,8 +90,7 @@ public static class TallyXmlVoucherBuilder
             {
                 throw new VoucherBuildException(
                     "TALLY_ALTER_TARGET_MISSING",
-                    "Edited bill cannot alter Tally because the original voucher identifier is missing.",
-                    terminal: true);
+                    "Edited bill cannot alter Tally because the original voucher identifier is missing.");
             }
 
             voucherAttributes.Add(new XAttribute("VCHTYPE", voucherType));
@@ -195,8 +185,7 @@ public static class TallyXmlVoucherBuilder
         {
             throw new VoucherBuildException(
                 "VOUCHER_UNBALANCED",
-                $"Bill totals do not balance for Tally (off by {imbalance.ToString("0.00", CultureInfo.InvariantCulture)}): grand total must equal subtotal - discount + tax + round-off to the paisa. Edit and save the bill again.",
-                terminal: true);
+                $"Bill totals do not balance for Tally (off by {imbalance.ToString("0.00", CultureInfo.InvariantCulture)}): grand total must equal subtotal - discount + tax + round-off to the paisa. Edit and save the bill again.");
         }
 
         return new XElement("ENVELOPE",
@@ -288,9 +277,8 @@ public static class TallyXmlVoucherBuilder
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-public sealed class VoucherBuildException(string errorCode, string message, bool terminal)
+public sealed class VoucherBuildException(string errorCode, string message)
     : Exception(message)
 {
     public string ErrorCode { get; } = errorCode;
-    public bool Terminal { get; } = terminal;
 }

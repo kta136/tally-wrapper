@@ -1486,13 +1486,13 @@ public sealed class BillServiceTests
         Assert.Equal('7', id.ToString("N")[12]);
 
     private static TallyPostResponse PostedResponse(string? remoteId = "FAKE-VCH-1", string? tallyMasterId = null) =>
-        new(TallyPostOutcome.Posted, remoteId, null, null, "voucher-import-v1", null, null, tallyMasterId);
+        TallyPostResponse.Posted(remoteId, tallyMasterId: tallyMasterId);
 
     private static TallyPostResponse FailedResponse(string errorCode, string errorMessage) =>
-        new(TallyPostOutcome.Failed, null, errorCode, errorMessage, "voucher-import-v1", null, null);
+        TallyPostResponse.Failed(errorCode, errorMessage);
 
     private static TallyPostResponse UnknownResponse(string errorCode, string errorMessage) =>
-        new(TallyPostOutcome.Unknown, null, errorCode, errorMessage, "voucher-import-v1", null, null);
+        TallyPostResponse.Unknown(errorCode, errorMessage);
 
     internal sealed class FakeTallyPoster : ITallyPoster
     {

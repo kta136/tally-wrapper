@@ -35,7 +35,7 @@ internal static class PostgresBillTestSupport
             Notes: null);
 
     internal static TallyPostResponse PostedResponse(string? remoteId = "FAKE-VCH-1", string? tallyMasterId = null) =>
-        new(TallyPostOutcome.Posted, remoteId, null, null, "voucher-import-v1", null, null, tallyMasterId);
+        TallyPostResponse.Posted(remoteId, tallyMasterId: tallyMasterId);
 }
 
 internal sealed class RecordingTallyPoster : ITallyPoster

@@ -294,14 +294,9 @@ internal sealed class BillPostingWorkflow(
         TallyPostResponse tallyResult;
         if (operation == TallyPostOperation.Alter && targetTagValue is null)
         {
-            tallyResult = new TallyPostResponse(
-                Outcome: TallyPostOutcome.Failed,
-                RemoteId: null,
-                ErrorCode: "TALLY_ALTER_TARGET_MISSING",
-                ErrorMessage: "Edited bill cannot be pushed because the original Tally voucher master id is unavailable.",
-                XmlShape: "voucher-import-v1",
-                RequestExcerpt: null,
-                ResponseExcerpt: null);
+            tallyResult = TallyPostResponse.Failed(
+                "TALLY_ALTER_TARGET_MISSING",
+                "Edited bill cannot be pushed because the original Tally voucher master id is unavailable.");
         }
         else
         {
@@ -326,14 +321,9 @@ internal sealed class BillPostingWorkflow(
             {
                 // Once the poster has been invoked, an unexpected exception may have
                 // happened after Tally accepted the voucher. Require reconciliation.
-                tallyResult = new TallyPostResponse(
-                    Outcome: TallyPostOutcome.Unknown,
-                    RemoteId: null,
-                    ErrorCode: "TALLY_UNEXPECTED",
-                    ErrorMessage: ex.Message,
-                    XmlShape: "voucher-import-v1",
-                    RequestExcerpt: null,
-                    ResponseExcerpt: null);
+                tallyResult = TallyPostResponse.Unknown(
+                    "TALLY_UNEXPECTED",
+                    ex.Message);
             }
         }
 

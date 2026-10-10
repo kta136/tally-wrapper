@@ -32,7 +32,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
 
         var (prefix, suffix, padding) = await GetPrefixSuffixAsync(cancellationToken);
         var previewValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, prefix, suffix, sequence?.NextValue ?? 1L, cancellationToken);
+            showroomId, year, sequence?.NextValue ?? 1L, cancellationToken);
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, previewValue, year, padding);
 
         return new NumberingPreviewResponse(
@@ -144,7 +144,7 @@ FOR UPDATE")
         // that was the pre-existing design intent (see docs/04).
         var startFrom = sequence?.NextValue ?? 1L;
         var reservedValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, prefix, suffix, startFrom, cancellationToken);
+            showroomId, year, startFrom, cancellationToken);
 
         if (sequence is null)
         {
@@ -294,14 +294,9 @@ FOR UPDATE")
     private async Task<long> ComputeNextFreeCoreAsync(
         Guid showroomId,
         string fiscalYear,
-        string? prefix,
-        string? suffix,
         long startFrom,
         CancellationToken cancellationToken)
     {
-        _ = prefix;
-        _ = suffix;
-
         const int SafetyCap = 1000;
         var candidate = startFrom < 1L ? 1L : startFrom;
         var windowEnd = candidate + SafetyCap;
