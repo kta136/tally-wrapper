@@ -34,15 +34,10 @@
     </UserControl.Resources>
 
     <!--  Scrim  -->
-    <Grid Background="#61152238" DataContext="{Binding SyntheticBatch}">
-        <Border Style="{StaticResource Panel}"
+    <Grid Background="{StaticResource DialogScrimBrush}" DataContext="{Binding SyntheticBatch}">
+        <Border Style="{StaticResource DialogPanel}"
                 Width="560"
-                MaxHeight="700"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
-            </Border.Effect>
+                MaxHeight="700">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

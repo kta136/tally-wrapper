@@ -49,6 +49,25 @@
 
     <SolidColorBrush x:Key="NeutralChipBrush" Color="#FFE4E6EC" />
 
+    <!--  Dialog chrome: the scrim behind an overlay dialog, rgba(15,23,42,0.38), and the
+          shadow under its panel. Dialogs take both through the DialogPanel style.  -->
+    <SolidColorBrush x:Key="DialogScrimBrush" Color="#61152238" />
+    <DropShadowEffect x:Key="DialogShadow" BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="{StaticResource ShadowColor}" />
+
+    <!--  On a filled accent or danger surface: text, and the translucent chip that sits on it.  -->
+    <SolidColorBrush x:Key="OnFilledInkBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="OnFilledChipBrush" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="OnFilledChipBorderBrush" Color="#40FFFFFF" />
+
+    <!--  Close button hover in the title bar (the Windows close red).  -->
+    <SolidColorBrush x:Key="WindowCloseHoverBrush" Color="#FFE81123" />
+
+    <!--  Bullet of a bill-timeline entry with no particular tone.  -->
+    <SolidColorBrush x:Key="TimelineBulletBrush" Color="#FF6B7A8C" />
+
+    <!--  Wash behind a required input that is still empty.  -->
+    <SolidColorBrush x:Key="ErrWashBrush" Color="#1FE53935" />
+
     <!--  Edit banner — used on the Invoice screen when reopening a previously-posted bill.
           Distinct from the WarnSoft palette so we can tune banner saturation independently
           of inline status chips. Mirrors the design bundle's #FEF3C7 / #F0C674 / #7A4F01.  -->

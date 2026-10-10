@@ -4,16 +4,11 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
-    <Grid Background="#61152238">
-        <Border Style="{StaticResource Panel}"
+    <Grid Background="{StaticResource DialogScrimBrush}">
+        <Border Style="{StaticResource DialogPanel}"
                 Width="420"
                 MaxHeight="360"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
                 DataContext="{Binding ReasonPromptDialog}">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
-            </Border.Effect>
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

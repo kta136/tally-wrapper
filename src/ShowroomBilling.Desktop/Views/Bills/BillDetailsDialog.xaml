@@ -13,15 +13,10 @@
         <KeyBinding Key="R" Modifiers="Ctrl+Shift" Command="{Binding BillDetails.RepostCommand}" />
     </UserControl.InputBindings>
 
-    <Grid Background="#61152238">
-        <Border Style="{StaticResource Panel}"
+    <Grid Background="{StaticResource DialogScrimBrush}">
+        <Border Style="{StaticResource DialogPanel}"
                 Width="860"
-                MaxHeight="700"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
-            </Border.Effect>
+                MaxHeight="700">
 
             <Grid DataContext="{Binding BillDetails}">
                 <Grid.RowDefinitions>
@@ -303,7 +298,7 @@
                                                     <Ellipse Width="12" Height="12" VerticalAlignment="Top" Margin="0,3,0,0">
                                                         <Ellipse.Style>
                                                             <Style TargetType="Ellipse">
-                                                                <Setter Property="Fill" Value="#6B7A8C" />
+                                                                <Setter Property="Fill" Value="{StaticResource TimelineBulletBrush}" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding Tone}" Value="ok">
                                                                         <Setter Property="Fill" Value="{StaticResource OkBrush}" />

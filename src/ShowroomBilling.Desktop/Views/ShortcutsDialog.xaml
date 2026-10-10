@@ -16,15 +16,10 @@
         </Style>
     </UserControl.Resources>
     <!--  Scrim + dialog  -->
-    <Grid Background="#61152238">
-        <Border Style="{StaticResource Panel}"
+    <Grid Background="{StaticResource DialogScrimBrush}">
+        <Border Style="{StaticResource DialogPanel}"
                 Width="620"
-                MaxHeight="520"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
-            </Border.Effect>
+                MaxHeight="520">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

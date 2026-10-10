@@ -163,8 +163,8 @@
     <Style x:Key="WinChromeBtnClose" BasedOn="{StaticResource WinChromeBtn}" TargetType="{x:Type Button}">
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#FFE81123" />
-                <Setter Property="Foreground" Value="White" />
+                <Setter Property="Background" Value="{StaticResource WindowCloseHoverBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource OnFilledInkBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -362,9 +362,9 @@
           Mirrors the design's `.btn.primary .kbd-inline` treatment (15% white bg,
           25% white border, white text).  -->
     <Style x:Key="KbdHintOnPrimary" TargetType="{x:Type Border}" BasedOn="{StaticResource KbdHint}">
-        <Setter Property="Background" Value="#26FFFFFF" />
-        <Setter Property="BorderBrush" Value="#40FFFFFF" />
-        <Setter Property="TextElement.Foreground" Value="#FFFFFFFF" />
+        <Setter Property="Background" Value="{StaticResource OnFilledChipBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource OnFilledChipBorderBrush}" />
+        <Setter Property="TextElement.Foreground" Value="{StaticResource OnFilledInkBrush}" />
     </Style>
 
     <!--  ─── Chip (status badge) ─────────────────────────────────────  -->
@@ -382,6 +382,15 @@
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    </Style>
+
+    <!--  ─── Overlay dialog panel ─────────────────────────────────────
+          A dialog is a UserControl whose root Grid paints DialogScrimBrush and
+          holds one Border with this style. See AdminUnlockDialog.  -->
+    <Style x:Key="DialogPanel" BasedOn="{StaticResource Panel}" TargetType="{x:Type Border}">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Effect" Value="{StaticResource DialogShadow}" />
     </Style>
 
     <!--  ─── Banner ─────────────────────────────────────────────────  -->

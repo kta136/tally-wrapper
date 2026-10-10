@@ -6,19 +6,14 @@
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Printing"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:PrintPreviewViewModel, IsDesignTimeCreatable=False}">
-    <Grid Background="#61152238">
-        <Border Style="{StaticResource Panel}"
+    <Grid Background="{StaticResource DialogScrimBrush}">
+        <Border Style="{StaticResource DialogPanel}"
                 Width="{Binding DataContext.PrintPreview.DialogWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                 Height="{Binding DataContext.PrintPreview.DialogHeight, RelativeSource={RelativeSource AncestorType=Window}}"
                 MinWidth="760"
                 MinHeight="520"
                 MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="#0F172A" />
-            </Border.Effect>
+                MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}">
             <Grid DataContext="{Binding PrintPreview}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

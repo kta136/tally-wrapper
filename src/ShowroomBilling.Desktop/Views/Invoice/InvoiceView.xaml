@@ -187,7 +187,7 @@
                                         <DataTrigger Binding="{Binding RateMissing}" Value="True">
                                             <Setter Property="BorderBrush" Value="{StaticResource ErrBrush}" />
                                             <Setter Property="BorderThickness" Value="2" />
-                                            <Setter Property="Background" Value="#1FE53935" />
+                                            <Setter Property="Background" Value="{StaticResource ErrWashBrush}" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
