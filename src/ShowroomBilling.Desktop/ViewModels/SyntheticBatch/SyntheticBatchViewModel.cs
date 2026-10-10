@@ -44,7 +44,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
         _settings = settings;
 
         KaratOptions = new ObservableCollection<SelectableKarat>();
-        PaymentOptions = new ObservableCollection<string> { "Cash", "Credit and debit" };
+        PaymentOptions = new ObservableCollection<string> { Contracts.Bills.PaymentMode.Cash, Contracts.Bills.PaymentMode.CreditDebit };
 
         // Commands must be initialised BEFORE any [ObservableProperty] setter that
         // triggers RecomputeValidation, because the validation path calls
@@ -82,8 +82,10 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     [ObservableProperty] private long totalAmount = 1_000_000;
     [ObservableProperty] private long maxBillAmount = SyntheticBatchPlanLimits.HardMaxBillAmount;
-    [ObservableProperty] private decimal rate24Kt = 7200m;
-    [ObservableProperty] private string paymentMode = "Cash";
+    // No built-in rate: it is taken from the Invoice tab when the dialog
+    // opens, or typed. A stale default would price a whole batch wrongly.
+    [ObservableProperty] private decimal rate24Kt;
+    [ObservableProperty] private string paymentMode = Contracts.Bills.PaymentMode.Cash;
     [ObservableProperty] private int minItemsPerBill = 1;
     [ObservableProperty] private int maxItemsPerBill = 3;
     [ObservableProperty] private DateTimeOffset startAt;

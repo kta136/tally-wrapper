@@ -132,6 +132,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         OpenSyntheticBatchCommand = new RelayCommand(() =>
         {
             SyntheticBatch.RefreshKaratOptions();
+            if (SyntheticBatch.Rate24Kt <= 0m && Invoice.Rate24Kt is > 0m)
+            {
+                SyntheticBatch.Rate24Kt = Invoice.Rate24Kt.Value;
+            }
             ActiveDialog = "syntheticBatch";
         });
         OpenHealthCommand = new RelayCommand(() =>

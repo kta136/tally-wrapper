@@ -21,13 +21,22 @@ public sealed class SyntheticBatchViewModelTests
     [Fact]
     public void ValidationMessage_FlagsReversedTimeWindow()
     {
-        var vm = new SyntheticBatchViewModel();
+        var vm = new SyntheticBatchViewModel { Rate24Kt = 6000m };
         var now = DateTimeOffset.Now;
         vm.StartAt = now.AddHours(5);
         vm.EndAt = now;
 
         Assert.NotNull(vm.ValidationMessage);
         Assert.Contains("before", vm.ValidationMessage!);
+    }
+
+    [Fact]
+    public void A_new_scheduler_has_no_built_in_rate_and_says_so()
+    {
+        var vm = new SyntheticBatchViewModel();
+
+        Assert.Equal(0m, vm.Rate24Kt);
+        Assert.Equal("24kt rate must be greater than zero.", vm.ValidationMessage);
     }
 
     [Fact]
@@ -57,7 +66,7 @@ public sealed class SyntheticBatchViewModelTests
     {
         var tokenStore = new AdminTokenStore();
         var api = new FakeBillsApi();
-        var vm = new SyntheticBatchViewModel(api, tokenStore, settings: null);
+        var vm = new SyntheticBatchViewModel(api, tokenStore, settings: null) { Rate24Kt = 6000m };
         vm.KaratOptions.Add(new SelectableKarat { Label = "22K", TallyItem = "Hallmarked 22KT", IsSelected = true });
         var start = new DateTimeOffset(DateTime.Today.AddHours(9));
         var end = start.AddHours(3);
@@ -87,7 +96,7 @@ public sealed class SyntheticBatchViewModelTests
             IssuedAtUtc: DateTimeOffset.UtcNow,
             ExpiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(30)));
         var api = new FakeBillsApi();
-        var vm = new SyntheticBatchViewModel(api, tokenStore, settings: null);
+        var vm = new SyntheticBatchViewModel(api, tokenStore, settings: null) { Rate24Kt = 6000m };
         vm.KaratOptions.Add(new SelectableKarat { Label = "22K", TallyItem = "Hallmarked 22KT", IsSelected = true });
         var start = new DateTimeOffset(DateTime.Today.AddHours(9));
         vm.StartAt = start;

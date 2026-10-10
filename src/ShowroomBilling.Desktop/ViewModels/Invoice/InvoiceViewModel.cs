@@ -39,7 +39,10 @@ public partial class InvoiceViewModel : ObservableObject
     // The bill exactly as the server stored it on the last save; post-save
     // printing uses this, not the live form.
     private BillResponse? _lastSavedBill;
-    private const string InvoiceNumberPlaceholder = "SR/25-26/0000";
+    // Shown until the server assigns a number, including on an estimate
+    // printed before the bill is saved. Deliberately not shaped like a real
+    // number: the old placeholder carried a prefix and a past fiscal year.
+    private const string InvoiceNumberPlaceholder = "(assigned on save)";
     /// <summary>
     /// Upper bound on the readiness wait when <c>RefreshNextNumberAsync(waitForApi: true)</c>
     /// is called. If the API is genuinely down past this we bail to the
@@ -140,7 +143,7 @@ public partial class InvoiceViewModel : ObservableObject
     }
 
     partial void OnBillDateChanged(DateTimeOffset value) => OnPropertyChanged(nameof(BillDateLocal));
-    [ObservableProperty] private string payment = "Cash";
+    [ObservableProperty] private string payment = PaymentMode.Cash;
     [ObservableProperty] private decimal? rate24Kt;
     [ObservableProperty] private decimal discount;
     [ObservableProperty] private bool discountEnabled;

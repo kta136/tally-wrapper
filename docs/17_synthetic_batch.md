@@ -20,7 +20,7 @@ padding / business-day replay. Available in production, admin-gated.
 |---|---|---|
 | `TotalAmount` | ₹ | partitioned into bills |
 | `MaxBillAmount` | ₹ | ≤ `₹1,99,000` (compliance cap; cannot be relaxed) |
-| `Rate24Kt` | ₹/g | > 0 |
+| `Rate24Kt` | ₹/g | > 0. The dialog has no built-in rate: it starts from the Invoice tab's 24kt rate when one is set, otherwise the operator types it. |
 | `PaymentMode` | string | `Cash` → party "Cash"; else → "Credit and debit" |
 | `MinItemsPerBill` / `MaxItemsPerBill` | int | `1..25`, min ≤ max |
 | `StartAtUtc` / `EndAtUtc` | UTC | start < end; window must have ≥ bill-count minute slots |
