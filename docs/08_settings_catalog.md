@@ -88,8 +88,6 @@ Scope rules:
 | `Open Current Log` | Advanced | Open current log file | Operator/admin | Diagnostic action only |
 | `Open Logs Folder` | Advanced | Open log folder | Operator/admin | Diagnostic action only |
 | `Save Admin Passcode` | Advanced / Admin Mode | Create/update admin passcode | Admin-only | Updates admin security state |
-| `Refresh Recovery List` | Advanced / Lock Recovery | Load stale draft locks | Admin-only | Updates recovery list |
-| `Recover Selected Lock` | Advanced / Lock Recovery | Release stale edit lock | Admin-only | Frees locked draft |
 | `Save All` | Dialog shell | Persist combined settings payload | Mixed by field scope | Refreshes runtime and dependent data |
 
 ---
@@ -131,7 +129,7 @@ Scope rules:
 - preview vs save distinction for invoice numbering — shipped (Numbering uses preview-then-reserve)
 - print asset/layout controls — shipped in Phase 10 slice 5 (`/api/print-assets` + `/api/settings/print-layout` with a dedicated Print Layout nav section)
 - ledger/voucher/master fetch flows — shipped
-- admin unlock and lock recovery concept — shipped in Phase 10 slice 5 (`~` keybinding opens `AdminUnlockDialog`, `/api/admin/*` + `/api/draft-leases/active` + force-release)
+- admin unlock — shipped in Phase 10 slice 5 (`~` keybinding opens `AdminUnlockDialog`, `/api/admin/*`). Lock recovery shipped with it and was removed on 10 October 2026: nothing ever took an edit lock, so there was never one to recover
 
 ### Redesign intentionally
 

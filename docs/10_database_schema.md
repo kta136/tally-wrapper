@@ -197,27 +197,17 @@ DROP TABLE IF EXISTS
     public.dropped_20261010_tally_voucher_type_snapshots_raw_json;
 ```
 
-### 1.9 `draft_edit_leases`
+### 1.9 `draft_edit_leases` (removed)
 
-Meant as the server-owned replacement for local edit locks. **Nothing writes this table**: the Desktop never took a lease, and the acquire / renew / release endpoints were removed on 10 October 2026. The admin list and force-release still read it, and retention still purges it.
+Dropped by the `DropDraftEditLeases` migration on 10 October 2026. It was meant as the server-owned replacement for local edit locks, but no build of the Desktop ever took a lease, so nothing wrote it.
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | UUID PK | Lease ID |
-| `bill_id` | UUID FK | Draft being edited |
-| `showroom_id` | UUID | Showroom scope |
-| `owner_actor_id` | text | Desktop/device identity holding the lease |
-| `owner_counter_name` | text nullable | Operator-visible counter name |
-| `acquired_at_utc` | timestamptz | |
-| `expires_at_utc` | timestamptz | |
-| `renewed_at_utc` | timestamptz | |
-| `released_at_utc` | timestamptz nullable | Set on normal/admin release |
+The migration follows §1.8.1: if the table holds any row it is first copied to `dropped_20261010_draft_edit_leases` in the same transaction, and rolling back recreates the table, its three indexes and those rows. An empty table, the expected case, leaves no copy. When the release has settled:
 
-Indexes:
+```sql
+DROP TABLE IF EXISTS public.dropped_20261010_draft_edit_leases;
+```
 
-- unique partial index on `bill_id` where `released_at_utc IS NULL`
-- index `(showroom_id, bill_id)`
-- index `(expires_at_utc)`
+Audit rows of entity type `draft_lease` written before the removal stay in `audit_events`.
 
 ### 1.10 `admin_passcodes`
 
@@ -281,7 +271,6 @@ The table was part of the original bridge design. It was dropped once the API ab
 
 - `bills.current_revision_id` -> `bill_revisions.id`
 - `bill_revisions.bill_id` -> `bills.id`
-- `draft_edit_leases.bill_id` -> `bills.id`
 - `tally_*_snapshots.batch_id` -> `tally_master_snapshot_batches.id`
 - `print_assets` referenced by `cloud_settings.print_layout_json`
 
@@ -290,18 +279,16 @@ The table was part of the original bridge design. It was dropped once the API ab
 - one revision number per bill
 - one issued invoice number per `(showroom_id, fiscal_year)` scope (partial unique index on `bills`)
 - one logical numbering row per scope
-- active edit lease uniqueness per draft bill
 - one idempotency key per numbering reservation
 
 ---
 
 ## 3. Lock / lease semantics
 
-### 3.1 Draft edit leases
+### 3.1 ~~Draft edit leases~~ (removed)
 
-- not in use: the Desktop does not take a lease when it opens a draft, and there is no endpoint to take one
+- there are no edit locks: opening a bill does not reserve it
 - two counters editing the same bill are caught on save by the bill's row version (409 "Concurrent change")
-- the admin list and force-release remain, over a table nothing writes
 
 ### 3.2 ~~Posting job leases~~ (removed)
 
@@ -309,7 +296,7 @@ Tally Wrapper has no posting jobs and no leases on the Tally side. Push is synch
 
 ### 3.3 Operational retention
 
-`OperationalDataRetentionHostedService` runs once after database readiness with a 15-second budget. It deletes only admin sessions and expired/released draft leases older than 30 days. Bills, revisions, numbering records, posting outcomes, print assets, settings, and audit history are excluded.
+`OperationalDataRetentionHostedService` runs once after database readiness with a 15-second budget. It deletes only admin sessions that expired more than 30 days ago. Bills, revisions, numbering records, posting outcomes, print assets, settings, and audit history are excluded.
 
 ---
 
@@ -328,5 +315,5 @@ Tally Wrapper has no posting jobs and no leases on the Tally side. Push is synch
 - same-bill posted mutation model becomes immutable revision model
 - **Tally posting is synchronous in-process** — no job queue, no outbox, no retry schedule. Posting outcomes are recorded as audit events.
 - local master caches become API-owned server snapshots, refreshed synchronously on operator click (no bridge, no timer)
-- local edit locks become server leases
+- local edit locks were to become server leases; that was never wired up and the table was dropped on 10 October 2026 (§1.9)
 - posted bills can be reopened for edit by admins (sets `bills.edited_after_push = true`)

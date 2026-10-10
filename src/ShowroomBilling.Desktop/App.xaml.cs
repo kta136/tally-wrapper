@@ -121,7 +121,6 @@ public partial class App : System.Windows.Application
         builder.Services.AddApiClient<IMastersApiClient, MastersApiClient>();
         builder.Services.AddApiClient<IHealthApiClient, HealthApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddApiClient<IAdminApiClient, AdminApiClient>();
-        builder.Services.AddApiClient<IDraftLeaseApiClient, DraftLeaseApiClient>();
         builder.Services.AddApiClient<IPrintAssetApiClient, PrintAssetApiClient>();
         builder.Services.AddApiClient<IClientPresenceApiClient, ClientPresenceApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddHostedService<ClientPresenceHeartbeatService>();

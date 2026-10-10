@@ -27,8 +27,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
     public DbSet<BillRevisionEntity> BillRevisions => Set<BillRevisionEntity>();
 
-    public DbSet<DraftEditLeaseEntity> DraftEditLeases => Set<DraftEditLeaseEntity>();
-
     public DbSet<AdminPasscodeEntity> AdminPasscodes => Set<AdminPasscodeEntity>();
 
     public DbSet<AdminSessionEntity> AdminSessions => Set<AdminSessionEntity>();
@@ -242,19 +240,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
                 .WithMany(x => x.Revisions)
                 .HasForeignKey(x => x.BillId)
                 .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<DraftEditLeaseEntity>(entity =>
-        {
-            entity.ToTable("draft_edit_leases");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.OwnerActorId).HasMaxLength(128);
-            entity.Property(x => x.OwnerCounterName).HasMaxLength(128);
-            entity.HasIndex(x => new { x.ShowroomId, x.BillId });
-            entity.HasIndex(x => x.BillId)
-                .IsUnique()
-                .HasFilter("\"ReleasedAtUtc\" IS NULL");
-            entity.HasIndex(x => x.ExpiresAtUtc);
         });
 
         modelBuilder.Entity<AdminPasscodeEntity>(entity =>

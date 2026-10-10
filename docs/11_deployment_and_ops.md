@@ -92,7 +92,7 @@ No local durable business cache is allowed.
 - structured logging to rolling log files (`%APPDATA%\ShowroomBilling\logs` for embedded mode; `C:\ProgramData\ShowroomBilling\logs` for server-service installs)
 - `/api/health/live` and `/api/health/ready` endpoints
 - `StuckPostingRecoveryHostedService` runs once on boot — any bill stranded in `posting` from a prior crash moves to `reconciliation_required` with a `bill.posting.recovered` audit event
-- `OperationalDataRetentionHostedService` runs once after DB readiness and purges only admin sessions plus expired/released draft leases older than 30 days; accounting and audit records are excluded
+- `OperationalDataRetentionHostedService` runs once after DB readiness and purges only admin sessions that expired more than 30 days ago; accounting and audit records are excluded
 - API errors are returned as RFC 7807 `application/problem+json` via a global `IExceptionHandler`, with no typed-body exceptions. See [`09_api_spec.md`](./09_api_spec.md) §1.
 - API admin endpoints are gated via ASP.NET Core authentication/authorization — scheme `AdminToken` + policy `Admin`. No framework-wide authentication is required for non-admin routes.
 - Safe `ITallyXmlClient` reads have a Polly retry pipeline (2 attempts, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx). Voucher writes are excluded to prevent duplicate Tally imports; their total timeout still comes from `Connection.TimeoutSeconds`.
@@ -143,7 +143,7 @@ The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windo
 
 - `DatabaseInitializationHostedService` — applies EF migrations.
 - `StuckPostingRecoveryHostedService` — one-shot classification of stuck `posting` bills as reconciliation-required.
-- `OperationalDataRetentionHostedService` — bounded purge of stale auth-session and draft-lease rows.
+- `OperationalDataRetentionHostedService` — bounded purge of stale auth-session rows.
 - `SequenceSelfHealHostedService` and `DatabaseWarmupHostedService` — bounded sequence repair and read-path warmup after database readiness.
 
 These are bounded, single-pass startup tasks. There is no recurring posting, Tally polling, or retention worker after startup completes.
@@ -248,7 +248,6 @@ PostgreSQL is the system of record for:
 - numbering sequences and reservations
 - audit events
 - master snapshots (companies, ledgers, stock items, voucher types)
-- leases/locks (draft edit leases)
 - admin passcodes and sessions
 - print assets
 - cloud settings
@@ -398,6 +397,8 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 - deploy API compatible with next DB migration
 - `DatabaseInitializationHostedService` applies migrations on startup
 - preserve backward-compatibility window if desktop rollout is staged
+
+**A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so the moment the first new build starts and migrates the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers each counter running its own embedded API as well as an older server service. For such a release: close Billing on every counter and stop the server service, take the dump below, update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
 
 **Take a database dump before a release that carries migrations.** Production applies pending migrations by itself the first time the new API starts (`Database__AutoMigrateOnStartup=true`), so the dump has to exist before that build is started, not after. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 

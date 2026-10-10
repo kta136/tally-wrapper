@@ -15,8 +15,6 @@ public sealed class OperationalDataRetentionHostedServiceTests
         var now = DateTimeOffset.UtcNow;
         var staleSessionId = Guid.NewGuid();
         var currentSessionId = Guid.NewGuid();
-        var staleLeaseId = Guid.NewGuid();
-        var currentLeaseId = Guid.NewGuid();
         var databaseName = Guid.NewGuid().ToString();
 
         var services = new ServiceCollection();
@@ -29,9 +27,6 @@ public sealed class OperationalDataRetentionHostedServiceTests
             db.AdminSessions.AddRange(
                 Session(staleSessionId, now.AddDays(-45), now.AddDays(-40)),
                 Session(currentSessionId, now.AddDays(-2), now.AddDays(1)));
-            db.DraftEditLeases.AddRange(
-                Lease(staleLeaseId, now.AddDays(-45), now.AddDays(-40)),
-                Lease(currentLeaseId, now.AddHours(-1), now.AddHours(1)));
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -48,8 +43,7 @@ public sealed class OperationalDataRetentionHostedServiceTests
         {
             await using var scope = provider.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
-            return await db.AdminSessions.CountAsync(TestContext.Current.CancellationToken) == 1
-                && await db.DraftEditLeases.CountAsync(TestContext.Current.CancellationToken) == 1;
+            return await db.AdminSessions.CountAsync(TestContext.Current.CancellationToken) == 1;
         });
 
         await service.StopAsync(TestContext.Current.CancellationToken);
@@ -58,8 +52,6 @@ public sealed class OperationalDataRetentionHostedServiceTests
         var assertDb = assertScope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
         Assert.False(await assertDb.AdminSessions.AnyAsync(x => x.Id == staleSessionId, TestContext.Current.CancellationToken));
         Assert.True(await assertDb.AdminSessions.AnyAsync(x => x.Id == currentSessionId, TestContext.Current.CancellationToken));
-        Assert.False(await assertDb.DraftEditLeases.AnyAsync(x => x.Id == staleLeaseId, TestContext.Current.CancellationToken));
-        Assert.True(await assertDb.DraftEditLeases.AnyAsync(x => x.Id == currentLeaseId, TestContext.Current.CancellationToken));
     }
 
     private static AdminSessionEntity Session(Guid id, DateTimeOffset issuedAt, DateTimeOffset expiresAt) => new()
@@ -69,17 +61,6 @@ public sealed class OperationalDataRetentionHostedServiceTests
         TokenHash = Guid.NewGuid().ToString("N"),
         ActorLabel = "test",
         IssuedAtUtc = issuedAt,
-        ExpiresAtUtc = expiresAt,
-    };
-
-    private static DraftEditLeaseEntity Lease(Guid id, DateTimeOffset acquiredAt, DateTimeOffset expiresAt) => new()
-    {
-        Id = id,
-        BillId = Guid.NewGuid(),
-        ShowroomId = Guid.NewGuid(),
-        OwnerActorId = "test",
-        AcquiredAtUtc = acquiredAt,
-        RenewedAtUtc = acquiredAt,
         ExpiresAtUtc = expiresAt,
     };
 

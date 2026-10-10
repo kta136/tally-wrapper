@@ -238,7 +238,7 @@ public sealed class ViewSmokeTests
             billDetails: new BillDetailsViewModel(),
             printPreview: new PrintPreviewViewModel(),
             settings: new SettingsViewModel(),
-            admin: new AdminUnlockViewModel(adminApi: null!, leaseApi: null!, tokenStore),
+            admin: new AdminUnlockViewModel(adminApi: null!, tokenStore),
             setupWizard: new SetupWizardViewModel(
                 runtimeApi: null!,
                 healthApi: null!,

@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
-using ShowroomBilling.Application.Leases;
 
 namespace ShowroomBilling.Api.Middleware;
 
@@ -61,7 +60,6 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
     private static (int? Status, string Title) MapException(Exception exception) => exception switch
     {
         BillNotFoundException      => (StatusCodes.Status404NotFound,   "Bill not found"),
-        DraftLeaseNotFoundException => (StatusCodes.Status404NotFound,   "Draft lease not found"),
         TallyPreflightUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Tally unavailable"),
         BillStateConflictException => (StatusCodes.Status409Conflict,   "Bill state conflict"),
         DbUpdateConcurrencyException => (StatusCodes.Status409Conflict, "Concurrent change"),

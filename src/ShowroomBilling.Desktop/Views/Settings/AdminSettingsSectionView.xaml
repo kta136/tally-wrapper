@@ -57,7 +57,7 @@
             <TextBlock FontSize="12"
                        Foreground="{StaticResource ErrInkBrush}"
                        TextWrapping="Wrap">
-                <Run Text="Admin is locked. Press " /><Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource ErrBrush}" Text="~" /><Run Text=" (backtick) to open the unlock dialog. Draft-lock force-release is disabled until unlocked." />
+                <Run Text="Admin is locked. Press " /><Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource ErrBrush}" Text="~" /><Run Text=" (backtick) to open the unlock dialog." />
             </TextBlock>
         </Border>
 
@@ -109,98 +109,6 @@
                             Content="Save passcode"
                             Command="{Binding SetOrChangePasscodeCommand}" />
                 </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!--  Active draft locks (visible when unlocked)  -->
-        <Border Style="{StaticResource AdminSectionPanel}"
-                Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
-            <StackPanel>
-                <Grid Margin="0,0,0,8">
-                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
-                               Margin="0"
-                               Text="ACTIVE DRAFT LOCKS" />
-                    <Button HorizontalAlignment="Right"
-                            Style="{StaticResource BtnSm}"
-                            Content="Refresh"
-                            Command="{Binding RefreshLeasesCommand}" />
-                </Grid>
-
-                <DataGrid Style="{StaticResource AdminDataGrid}"
-                          ItemsSource="{Binding ActiveLeases}"
-                          SelectedItem="{Binding SelectedLease}"
-                          AutoGenerateColumns="False"
-                          IsReadOnly="True"
-                          MaxHeight="220">
-                    <DataGrid.Resources>
-                        <Style TargetType="DataGridColumnHeader">
-                            <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
-                            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-                            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
-                            <Setter Property="BorderThickness" Value="0,0,0,1" />
-                            <Setter Property="Padding" Value="10,4" />
-                            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-                            <Setter Property="FontWeight" Value="SemiBold" />
-                            <Setter Property="HorizontalContentAlignment" Value="Left" />
-                        </Style>
-                        <Style TargetType="DataGridCell">
-                            <Setter Property="Padding" Value="10,0" />
-                            <Setter Property="BorderThickness" Value="0" />
-                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="DataGridCell">
-                                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-                                            <ContentPresenter VerticalAlignment="Center" />
-                                        </Border>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                            <Style.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-                                    <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </DataGrid.Resources>
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Bill" Binding="{Binding BillId}" Width="*">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-                                    <Setter Property="VerticalAlignment" Value="Center" />
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="Owner" Binding="{Binding OwnerActorId}" Width="130" />
-                        <DataGridTextColumn Header="Counter" Binding="{Binding OwnerCounterName}" Width="110" />
-                        <DataGridTextColumn Header="Expires" Binding="{Binding ExpiresAtUtc, Converter={StaticResource UtcToLocal}, StringFormat=\{0:HH:mm:ss\}}" Width="80">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-                                    <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-                                    <Setter Property="VerticalAlignment" Value="Center" />
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-
-                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="FORCE-RELEASE REASON (REQUIRED)" />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0"
-                             Text="{Binding ForceReleaseReason, UpdateSourceTrigger=PropertyChanged}"
-                             Margin="0,0,8,0" />
-                    <Button Grid.Column="1"
-                            Style="{StaticResource BtnDanger}"
-                            Content="Force release"
-                            Command="{Binding ForceReleaseSelectedLeaseCommand}" />
-                </Grid>
             </StackPanel>
         </Border>
 

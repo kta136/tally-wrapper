@@ -1,6 +1,5 @@
 using System.IO;
 using ShowroomBilling.Contracts.Admin;
-using ShowroomBilling.Contracts.Leases;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Desktop.Configuration;
@@ -172,7 +171,6 @@ public sealed class DatabaseSettingsViewModelTests
             adminTokenStore: tokenStore);
         settings.AdminVm = new AdminUnlockViewModel(
             new StubAdminApiClient(),
-            new StubDraftLeaseApiClient(),
             tokenStore);
 
         Assert.DoesNotContain(SettingsSectionKey.Admin, settings.Sections);
@@ -542,19 +540,6 @@ public sealed class DatabaseSettingsViewModelTests
 
         public Task LogoutAsync(AdminLogoutRequest request, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
-    }
-
-    private sealed class StubDraftLeaseApiClient : IDraftLeaseApiClient
-    {
-        public Task<DraftLeaseListResponse> ListActiveAsync(string adminToken, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DraftLeaseListResponse(Array.Empty<DraftLeaseResponse>()));
-
-        public Task<DraftLeaseResponse> ForceReleaseAsync(
-            Guid leaseId,
-            DraftLeaseForceReleaseRequest request,
-            string adminToken,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     private static DatabaseConfigurationResponse Response(

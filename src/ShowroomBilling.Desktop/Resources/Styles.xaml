@@ -551,20 +551,4 @@
         <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
     </Style>
 
-    <Style x:Key="AdminDataGrid" TargetType="DataGrid">
-        <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="GridLinesVisibility" Value="None" />
-        <Setter Property="HeadersVisibility" Value="Column" />
-        <Setter Property="RowBackground" Value="{StaticResource BgPanelBrush}" />
-        <Setter Property="AlternatingRowBackground" Value="{StaticResource BgRowAltBrush}" />
-        <Setter Property="RowHeight" Value="26" />
-        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
-        <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="ColumnHeaderHeight" Value="26" />
-        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
-        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-    </Style>
-
 </ResourceDictionary>

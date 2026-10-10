@@ -6,9 +6,9 @@ using ShowroomBilling.Application.Health;
 namespace ShowroomBilling.Infrastructure.Persistence;
 
 /// <summary>
-/// Performs a bounded, one-shot startup purge of expired authentication sessions and
-/// stale draft-lease rows. Bill, revision, posting, and audit history is deliberately
-/// excluded: those records are operational and accounting evidence, not disposable cache.
+/// Performs a bounded, one-shot startup purge of expired authentication sessions.
+/// Bill, revision, posting, and audit history is deliberately excluded: those
+/// records are operational and accounting evidence, not disposable cache.
 /// </summary>
 public sealed class OperationalDataRetentionHostedService(
     IServiceScopeFactory scopeFactory,
@@ -26,35 +26,25 @@ public sealed class OperationalDataRetentionHostedService(
         var cutoff = DateTimeOffset.UtcNow.Subtract(Retention);
 
         int sessionsDeleted;
-        int leasesDeleted;
         if (db.UsesInMemoryProvider())
         {
             var sessions = await db.AdminSessions.Where(x => x.ExpiresAtUtc < cutoff).ToListAsync(timeboxed);
-            var leases = await db.DraftEditLeases
-                .Where(x => x.ExpiresAtUtc < cutoff || x.ReleasedAtUtc != null && x.ReleasedAtUtc < cutoff)
-                .ToListAsync(timeboxed);
             db.AdminSessions.RemoveRange(sessions);
-            db.DraftEditLeases.RemoveRange(leases);
             await db.SaveChangesAsync(timeboxed);
             sessionsDeleted = sessions.Count;
-            leasesDeleted = leases.Count;
         }
         else
         {
             sessionsDeleted = await db.AdminSessions
                 .Where(x => x.ExpiresAtUtc < cutoff)
                 .ExecuteDeleteAsync(timeboxed);
-            leasesDeleted = await db.DraftEditLeases
-                .Where(x => x.ExpiresAtUtc < cutoff || x.ReleasedAtUtc != null && x.ReleasedAtUtc < cutoff)
-                .ExecuteDeleteAsync(timeboxed);
         }
 
-        if (sessionsDeleted > 0 || leasesDeleted > 0)
+        if (sessionsDeleted > 0)
         {
             logger.LogInformation(
-                "Operational retention removed {SessionCount} expired admin session(s) and {LeaseCount} stale draft lease(s).",
-                sessionsDeleted,
-                leasesDeleted);
+                "Operational retention removed {SessionCount} expired admin session(s).",
+                sessionsDeleted);
         }
     }
 

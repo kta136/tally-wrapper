@@ -12,7 +12,7 @@ namespace ShowroomBilling.Infrastructure.Persistence.CompiledModels
     public partial class ShowroomBillingDbContextModel
     {
         private ShowroomBillingDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("09c1500a-b9c1-4a4c-ab9a-497265ca438b"), entityTypeCount: 16)
+            : base(skipDetectChanges: false, modelId: new Guid("145a8dab-b4ab-4629-8384-10d3cd370aef"), entityTypeCount: 15)
         {
         }
 
@@ -25,7 +25,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.CompiledModels
             var billRevisionEntity = BillRevisionEntityEntityType.Create(this);
             var cloudSettingsEntity = CloudSettingsEntityEntityType.Create(this);
             var databaseIdentityEntity = DatabaseIdentityEntityEntityType.Create(this);
-            var draftEditLeaseEntity = DraftEditLeaseEntityEntityType.Create(this);
             var invoiceNumberReservationEntity = InvoiceNumberReservationEntityEntityType.Create(this);
             var invoiceSequenceEntity = InvoiceSequenceEntityEntityType.Create(this);
             var printAssetEntity = PrintAssetEntityEntityType.Create(this);
@@ -48,7 +47,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.CompiledModels
             BillRevisionEntityEntityType.CreateAnnotations(billRevisionEntity);
             CloudSettingsEntityEntityType.CreateAnnotations(cloudSettingsEntity);
             DatabaseIdentityEntityEntityType.CreateAnnotations(databaseIdentityEntity);
-            DraftEditLeaseEntityEntityType.CreateAnnotations(draftEditLeaseEntity);
             InvoiceNumberReservationEntityEntityType.CreateAnnotations(invoiceNumberReservationEntity);
             InvoiceSequenceEntityEntityType.CreateAnnotations(invoiceSequenceEntity);
             PrintAssetEntityEntityType.CreateAnnotations(printAssetEntity);

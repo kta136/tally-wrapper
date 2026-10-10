@@ -1,5 +1,4 @@
 using ShowroomBilling.Contracts.Admin;
-using ShowroomBilling.Contracts.Leases;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 
@@ -14,7 +13,6 @@ public sealed class AdminUnlockViewModelTests
         var adminApi = new FakeAdminApiClient();
         var vm = new AdminUnlockViewModel(
             adminApi,
-            new FakeDraftLeaseApiClient(),
             tokenStore);
 
         await vm.LoadStatusAsync();
@@ -60,18 +58,5 @@ public sealed class AdminUnlockViewModelTests
 
         public Task LogoutAsync(AdminLogoutRequest request, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
-    }
-
-    private sealed class FakeDraftLeaseApiClient : IDraftLeaseApiClient
-    {
-        public Task<DraftLeaseListResponse> ListActiveAsync(string adminToken, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new DraftLeaseListResponse(Array.Empty<DraftLeaseResponse>()));
-
-        public Task<DraftLeaseResponse> ForceReleaseAsync(
-            Guid leaseId,
-            DraftLeaseForceReleaseRequest request,
-            string adminToken,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

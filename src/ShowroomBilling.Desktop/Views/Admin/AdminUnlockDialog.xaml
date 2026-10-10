@@ -209,11 +209,9 @@
                         </Border>
 
                         <!--
-                            Passcode management and active draft-lock administration
-                            moved to Settings › Admin tab so this dialog stays focused
-                            on its one job: unlock + status. Those VM commands
-                            (SetOrChangePasscodeCommand, RefreshLeasesCommand,
-                            ForceReleaseSelectedLeaseCommand, LockCommand) are now
+                            Passcode management moved to Settings › Admin tab so this
+                            dialog stays focused on its one job: unlock + status. Those
+                            VM commands (SetOrChangePasscodeCommand, LockCommand) are
                             bound from there against the same AdminUnlockViewModel.
                         -->
 

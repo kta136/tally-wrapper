@@ -481,52 +481,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.ToTable("database_identity", "public");
                 });
 
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.DraftEditLeaseEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("AcquiredAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("BillId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("ExpiresAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("OwnerActorId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("OwnerCounterName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTimeOffset?>("ReleasedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("RenewedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BillId")
-                        .IsUnique()
-                        .HasFilter("\"ReleasedAtUtc\" IS NULL");
-
-                    b.HasIndex("ExpiresAtUtc");
-
-                    b.HasIndex("ShowroomId", "BillId");
-
-                    b.ToTable("draft_edit_leases", "public");
-                });
-
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.InvoiceNumberReservationEntity", b =>
                 {
                     b.Property<Guid>("Id")
