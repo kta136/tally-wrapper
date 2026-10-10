@@ -85,7 +85,7 @@ public sealed class HealthClusterViewModelTests
             DatabaseConfigured: true,
             DatabaseReachable: true,
             SettingsLoadedFromApi: true,
-            Message: "API foundation is online and PostgreSQL is reachable (DEV).",
+            Message: "API is online and PostgreSQL is reachable (DEV).",
             DatabaseIdentity: "DEV",
             ExpectedDatabaseIdentity: "DEV",
             DatabaseIdentityMatches: true)));

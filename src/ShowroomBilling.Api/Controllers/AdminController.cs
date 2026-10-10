@@ -40,15 +40,8 @@ public sealed class AdminController(
         if (status.IsConfigured
             && !(await HttpContext.AuthenticateAsync(AdminAuthenticationHandler.SchemeName)).Succeeded)
         {
-            return new ObjectResult(new ProblemDetails
-            {
-                Title = "Admin session required",
-                Detail = "Unlock admin before changing the passcode.",
-                Status = StatusCodes.Status403Forbidden
-            })
-            {
-                StatusCode = StatusCodes.Status403Forbidden
-            };
+            return ControllerProblemDetails.Forbidden(
+                "Admin session required", "Unlock admin before changing the passcode.");
         }
 
         await adminService.SetPasscodeAsync(request, cancellationToken);

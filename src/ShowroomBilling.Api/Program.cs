@@ -19,10 +19,11 @@ builder.Host.UseWindowsService(options =>
         : windowsServiceName;
 });
 
-// Outside Development, bind only to loopback. The Desktop dials 127.0.0.1
-// directly; there is no scenario where we want the API listening on a
-// network-accessible address. `ASPNETCORE_URLS` still overrides this if
-// someone explicitly wants to run on a different port.
+// Outside Development, bind only to loopback unless told otherwise: an
+// embedded API serves the Desktop on the same PC and nobody else. The shared
+// server install is the one case that listens on the network, and it says so
+// by setting `ASPNETCORE_URLS` (see ServerInstaller); device auth then limits
+// who may call it.
 if (!builder.Environment.IsDevelopment()
     && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 {
@@ -117,8 +118,9 @@ app.MapControllers();
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Tally Wrapper API",
-    mode = "foundation",
-    docs = "/swagger",
+    environment = app.Environment.EnvironmentName,
+    // Swagger is served in Development only.
+    docs = app.Environment.IsDevelopment() ? "/swagger" : null,
 }));
 
 app.Run();

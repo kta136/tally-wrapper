@@ -80,7 +80,12 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
         return result as string;
     }
 
-    private static bool DatabaseIdentityMatches(string? databaseIdentity, string expectedDatabaseIdentity) =>
+    /// <summary>
+    /// True when the database says which environment it belongs to and it is
+    /// the one this API runs as. A production API must not be pointed at the
+    /// development database, or the other way round.
+    /// </summary>
+    internal static bool DatabaseIdentityMatches(string? databaseIdentity, string expectedDatabaseIdentity) =>
         !string.IsNullOrWhiteSpace(databaseIdentity)
         && !databaseIdentity.Trim().Equals("UNSET", StringComparison.OrdinalIgnoreCase)
         && databaseIdentity.Trim().Equals(expectedDatabaseIdentity, StringComparison.OrdinalIgnoreCase);
@@ -93,8 +98,9 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
                 || postgresException.MessageText.Contains("database_identity", StringComparison.OrdinalIgnoreCase)))
         {
             return "connected to PostgreSQL, but this database has no Tally Wrapper schema. "
-                + "If you pasted an Aiven service URI, replace '/defaultdb' with '/tally_wrapper_prod'. "
-                + "Otherwise run EF migrations and set public.database_identity before saving this database.";
+                + "Check the database name in the connection string: it must be the application database, "
+                + "not the server's default one. If the name is right, run the EF migrations and set "
+                + "public.database_identity before saving this database.";
         }
 
         return exception.Message;

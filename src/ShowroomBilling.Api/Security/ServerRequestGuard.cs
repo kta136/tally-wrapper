@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using ShowroomBilling.Api.Controllers;
 using ShowroomBilling.Api.Options;
 
 namespace ShowroomBilling.Api.Security;
@@ -19,15 +20,9 @@ public static class ServerRequestGuard
             return null;
         }
 
-        return new ObjectResult(new ProblemDetails
-        {
-            Title = "Local server setup required.",
-            Detail = "This setup or maintenance action is only allowed from the Tally server itself.",
-            Status = StatusCodes.Status403Forbidden
-        })
-        {
-            StatusCode = StatusCodes.Status403Forbidden
-        };
+        return ControllerProblemDetails.Forbidden(
+            "Local server setup required.",
+            "This setup or maintenance action is only allowed from the Tally server itself.");
     }
 
     public static ActionResult? RequireLoopback(HttpContext context)
@@ -37,14 +32,7 @@ public static class ServerRequestGuard
             return null;
         }
 
-        return new ObjectResult(new ProblemDetails
-        {
-            Title = "Local access required.",
-            Detail = "This endpoint is only available on the server machine.",
-            Status = StatusCodes.Status403Forbidden
-        })
-        {
-            StatusCode = StatusCodes.Status403Forbidden
-        };
+        return ControllerProblemDetails.Forbidden(
+            "Local access required.", "This endpoint is only available on the server machine.");
     }
 }

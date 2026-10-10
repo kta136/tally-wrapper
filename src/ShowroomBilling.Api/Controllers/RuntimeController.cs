@@ -36,7 +36,7 @@ public sealed class RuntimeController(
         var options = runtimeOptions.Value;
         var databaseIdentity = await TryGetDatabaseIdentityAsync(cancellationToken);
         var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
-        var databaseIdentityMatches = DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity);
+        var databaseIdentityMatches = DatabaseConnectionVerifier.DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity);
         var notes = new List<string>
         {
             "Desktop bootstrap is local-only. Shared settings are loaded from the API.",
@@ -58,7 +58,7 @@ public sealed class RuntimeController(
 
         var response = new RuntimeBootstrapResponse(
             options.ProductName,
-            HttpContext.RequestServices.GetRequiredService<IHostEnvironment>().EnvironmentName,
+            hostEnvironment.EnvironmentName,
             options.ApiVersion,
             "cloud",
             options.DefaultShowroomName,
@@ -91,27 +91,7 @@ public sealed class RuntimeController(
         [FromBody] UpdateDatabaseConfigurationRequest request,
         CancellationToken cancellationToken)
     {
-        var connectionString = ParseConnectionStringOrProblem(request);
-        if (connectionString.Result is not null)
-        {
-            return connectionString.Result;
-        }
-
-        var verification = await databaseConnectionVerifier.VerifyAsync(
-            connectionString.Value!,
-            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
-            cancellationToken);
-        if (!verification.Success)
-        {
-            return ControllerProblemDetails.BadRequest(verification.Message);
-        }
-
-        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
-            connectionString.Value!,
-            hostEnvironment.EnvironmentName,
-            cancellationToken);
-
-        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
+        return await VerifyAndSaveAsync(request, cancellationToken);
     }
 
     [HttpPut("database/bootstrap")]
@@ -135,27 +115,7 @@ public sealed class RuntimeController(
             });
         }
 
-        var connectionString = ParseConnectionStringOrProblem(request);
-        if (connectionString.Result is not null)
-        {
-            return connectionString.Result;
-        }
-
-        var verification = await databaseConnectionVerifier.VerifyAsync(
-            connectionString.Value!,
-            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
-            cancellationToken);
-        if (!verification.Success)
-        {
-            return ControllerProblemDetails.BadRequest(verification.Message);
-        }
-
-        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
-            connectionString.Value!,
-            hostEnvironment.EnvironmentName,
-            cancellationToken);
-
-        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
+        return await VerifyAndSaveAsync(request, cancellationToken);
     }
 
     [HttpPost("database/test")]
@@ -211,27 +171,7 @@ public sealed class RuntimeController(
             return denied;
         }
 
-        var connectionString = ParseConnectionStringOrProblem(request);
-        if (connectionString.Result is not null)
-        {
-            return connectionString.Result;
-        }
-
-        var verification = await databaseConnectionVerifier.VerifyAsync(
-            connectionString.Value!,
-            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
-            cancellationToken);
-        if (!verification.Success)
-        {
-            return ControllerProblemDetails.BadRequest(verification.Message);
-        }
-
-        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
-            connectionString.Value!,
-            hostEnvironment.EnvironmentName,
-            cancellationToken);
-
-        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
+        return await VerifyAndSaveAsync(request, cancellationToken);
     }
 
     [HttpGet("health")]
@@ -269,15 +209,15 @@ public sealed class RuntimeController(
             ? await TryGetDatabaseIdentityAsync(cancellationToken)
             : null;
         bool? databaseIdentityMatches = postgresReachable
-            ? DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity)
+            ? DatabaseConnectionVerifier.DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity)
             : null;
         var databaseReachable = postgresReachable;
 
         var message = databaseIdentityMatches == false
             ? $"Database identity mismatch: PostgreSQL is reachable, but database identity is {databaseIdentity ?? "unavailable"}; expected {expectedDatabaseIdentity} for {hostEnvironment.EnvironmentName}."
             : databaseReachable
-                ? $"API foundation is online and PostgreSQL is reachable ({databaseIdentity})."
-                : "API foundation is online. PostgreSQL must be configured and reachable for readiness.";
+                ? $"API is online and PostgreSQL is reachable ({databaseIdentity})."
+                : "API is online. PostgreSQL must be configured and reachable for readiness.";
 
         var response = new RuntimeHealthResponse(
             healthReport.Status.ToString(),
@@ -313,6 +253,38 @@ public sealed class RuntimeController(
             CanBootstrapWithoutAdmin: CanBootstrapDatabaseConfiguration());
     }
 
+    /// <summary>
+    /// The one way a connection string is accepted, whoever is allowed to send
+    /// it: it must parse, reach the database, and be the right database for
+    /// this environment before it is written to the protected override file.
+    /// </summary>
+    private async Task<ActionResult<DatabaseConfigurationResponse>> VerifyAndSaveAsync(
+        UpdateDatabaseConfigurationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var connectionString = ParseConnectionStringOrProblem(request);
+        if (connectionString.Result is not null)
+        {
+            return connectionString.Result;
+        }
+
+        var verification = await databaseConnectionVerifier.VerifyAsync(
+            connectionString.Value!,
+            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            cancellationToken);
+        if (!verification.Success)
+        {
+            return ControllerProblemDetails.BadRequest(verification.Message);
+        }
+
+        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
+            connectionString.Value!,
+            hostEnvironment.EnvironmentName,
+            cancellationToken);
+
+        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
+    }
+
     private ActionResult<string> ParseConnectionStringOrProblem(UpdateDatabaseConfigurationRequest? request)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
@@ -345,15 +317,8 @@ public sealed class RuntimeController(
         if (!Request.Headers.TryGetValue(MaintenanceTokenConstants.HeaderName, out var headerValues)
             || !maintenanceTokenStore.Validate(headerValues.ToString()))
         {
-            return new ObjectResult(new ProblemDetails
-            {
-                Title = "Maintenance token invalid.",
-                Detail = "Server maintenance actions require the local maintenance token.",
-                Status = StatusCodes.Status401Unauthorized
-            })
-            {
-                StatusCode = StatusCodes.Status401Unauthorized
-            };
+            return ControllerProblemDetails.Unauthorized(
+                "Maintenance token invalid.", "Server maintenance actions require the local maintenance token.");
         }
 
         return null;
@@ -409,11 +374,6 @@ public sealed class RuntimeController(
             : environmentName.Trim().Equals("Production", StringComparison.OrdinalIgnoreCase)
                 ? "PROD"
                 : environmentName.Trim().ToUpperInvariant();
-
-    private static bool DatabaseIdentityMatches(string? databaseIdentity, string expectedDatabaseIdentity) =>
-        !string.IsNullOrWhiteSpace(databaseIdentity)
-        && !databaseIdentity.Trim().Equals("UNSET", StringComparison.OrdinalIgnoreCase)
-        && databaseIdentity.Trim().Equals(expectedDatabaseIdentity, StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeConnectionString(string connectionString)
     {
