@@ -44,9 +44,9 @@ public sealed class SyntheticBatchExecutor(
             "karat masters");
 
         if (itemEntries.Count == 0)
-            throw new ArgumentException("No item masters are configured.", nameof(request));
+            throw new RequestValidationException("No item masters are configured.");
         if (karatEntries.Count == 0)
-            throw new ArgumentException("No karat masters are configured.", nameof(request));
+            throw new RequestValidationException("No karat masters are configured.");
 
         var floorUtc = await latestBillTimestamp.GetLatestCreatedAtUtcAsync(cancellationToken);
 

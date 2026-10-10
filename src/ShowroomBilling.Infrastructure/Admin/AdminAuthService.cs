@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -35,9 +36,8 @@ public sealed class AdminAuthService(
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.NewPasscode) || request.NewPasscode.Length < MinPasscodeLength)
         {
-            throw new ArgumentException(
-                $"New passcode must be at least {MinPasscodeLength} characters.",
-                nameof(request));
+            throw new RequestValidationException(
+                $"New passcode must be at least {MinPasscodeLength} characters.");
         }
 
         var now = DateTimeOffset.UtcNow;

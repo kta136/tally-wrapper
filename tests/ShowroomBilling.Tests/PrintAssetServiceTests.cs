@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.PrintAssets;
@@ -66,7 +67,7 @@ public sealed class PrintAssetServiceTests
         await using var db = CreateDbContext();
         var service = new PrintAssetService(db);
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<RequestValidationException>(() =>
             service.UploadAsync(new PrintAssetUploadRequest(
                 "poster",
                 "x.png",
@@ -113,7 +114,7 @@ public sealed class PrintAssetServiceTests
         await using var db = CreateDbContext();
         var service = new PrintAssetService(db);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.UploadAsync(new PrintAssetUploadRequest(
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "logo.png",
             "image/png",
@@ -133,7 +134,7 @@ public sealed class PrintAssetServiceTests
             Convert.ToBase64String(PngBytes(6))));
         Assert.Equal("image/png", response.ContentType);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.UploadAsync(new PrintAssetUploadRequest(
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "..\\logo.png",
             "image/png",

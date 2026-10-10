@@ -1,3 +1,4 @@
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
@@ -71,7 +72,7 @@ public sealed class SyntheticBillPlannerTests
     {
         var rng = new Random();
         var floor = new DateTimeOffset(2026, 4, 24, 12, 0, 0, TimeSpan.Zero);
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<RequestValidationException>(() =>
             SyntheticBillPlanner.BuildRandomSchedule(
                 billCount: 3,
                 startAtUtc: floor,
@@ -103,16 +104,16 @@ public sealed class SyntheticBillPlannerTests
 
         var negative = new SyntheticBatchRequest(-1, 199_000, 7200m, "Cash", 1, 3,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), new[] { "22K" });
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<RequestValidationException>(() =>
             planner.BuildPlan(negative, items, karats, new Random(1), null));
 
         var maxTooHigh = negative with { TotalAmount = 100_000, MaxBillAmount = 300_000 };
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<RequestValidationException>(() =>
             planner.BuildPlan(maxTooHigh, items, karats, new Random(1), null));
 
         var emptyKarat = new SyntheticBatchRequest(100_000, 199_000, 7200m, "Cash", 1, 3,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1), new[] { "NO-SUCH-KARAT" });
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<RequestValidationException>(() =>
             planner.BuildPlan(emptyKarat, items, karats, new Random(1), null));
     }
 

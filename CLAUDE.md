@@ -94,8 +94,9 @@ dotnet test --solution ShowroomBilling.sln
 
 API errors flow through a single pipeline:
 
-- `DomainExceptionHandler` (in `src/ShowroomBilling.Api/Middleware/`) is an `IExceptionHandler` that maps known domain exceptions to HTTP status + RFC 7807 ProblemDetails. Mappings: `BillNotFoundException` / `DraftLeaseNotFoundException` → 404, `BillStateConflictException` / `AdminPasscodeNotConfiguredException` → 409, `DraftLeaseOwnershipException` → 403, `AdminPasscodeInvalidException` → 401, `ArgumentException` → 400. Everything unmapped falls through to the default 500.
+- `DomainExceptionHandler` (in `src/ShowroomBilling.Api/Middleware/`) is an `IExceptionHandler` that maps known domain exceptions to HTTP status + RFC 7807 ProblemDetails. Mappings: `BillNotFoundException` / `DraftLeaseNotFoundException` → 404, `BillStateConflictException` / `AdminPasscodeNotConfiguredException` → 409, `DraftLeaseOwnershipException` → 403, `AdminPasscodeInvalidException` → 401, `RequestValidationException` / `ArgumentException` → 400. Everything unmapped falls through to the default 500.
 - **One body-shape exception:** `DraftLeaseConflictException` keeps emitting the richer `DraftLeaseConflictResponse { Error, ExistingLease }` shape because the Desktop's `DraftLeaseApiClient` parses it as a typed record. Don't fold this one into ProblemDetails without updating the client.
+- **Throw `RequestValidationException` (Application) for a user-facing input error**, with a message written for the operator and no parameter name. A plain `ArgumentException` that names a parameter gets ` (Parameter 'x')` appended by .NET; the handler strips it, but new code should not rely on that.
 - Controllers should **not** have per-action `try/catch` around domain exceptions. Let them bubble. The only legitimate controller-level error returns are null-request-body `BadRequest` guards (the binder can leave `request` null when the body is empty) and result-is-null `NotFound()` for read endpoints.
 - On the Desktop side, API clients read ProblemDetails `detail` / `title` for non-2xx responses.
 

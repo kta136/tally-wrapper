@@ -10,21 +10,21 @@ public static class CloudSettingsValidator
     public static void Validate(UpdateEffectiveSettingsRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var settings = request.Settings ?? throw new ArgumentException("Settings are required.", nameof(request));
-        var connection = settings.Connection ?? throw new ArgumentException("Connection settings are required.", nameof(request));
-        var numbering = settings.Numbering ?? throw new ArgumentException("Numbering settings are required.", nameof(request));
-        var print = settings.Print ?? throw new ArgumentException("Print settings are required.", nameof(request));
-        var ledgers = settings.Ledgers ?? throw new ArgumentException("Ledger settings are required.", nameof(request));
-        var masters = settings.Masters ?? throw new ArgumentException("Master-data settings are required.", nameof(request));
+        var settings = request.Settings ?? throw new RequestValidationException("Settings are required.");
+        var connection = settings.Connection ?? throw new RequestValidationException("Connection settings are required.");
+        var numbering = settings.Numbering ?? throw new RequestValidationException("Numbering settings are required.");
+        var print = settings.Print ?? throw new RequestValidationException("Print settings are required.");
+        var ledgers = settings.Ledgers ?? throw new RequestValidationException("Ledger settings are required.");
+        var masters = settings.Masters ?? throw new RequestValidationException("Master-data settings are required.");
 
         Require(connection.Host, "Connection.Host", 256);
         Require(connection.ActiveCompanyName, "Connection.ActiveCompanyName", 256);
-        if (connection.Port is < 1 or > 65_535) throw new ArgumentException("Connection.Port must be between 1 and 65535.", nameof(request));
-        if (connection.TimeoutSeconds is < 1 or > 300) throw new ArgumentException("Connection.TimeoutSeconds must be between 1 and 300.", nameof(request));
+        if (connection.Port is < 1 or > 65_535) throw new RequestValidationException("Connection.Port must be between 1 and 65535.");
+        if (connection.TimeoutSeconds is < 1 or > 300) throw new RequestValidationException("Connection.TimeoutSeconds must be between 1 and 300.");
 
         Max(numbering.InvoicePrefix, "Numbering.InvoicePrefix", 64);
         Max(numbering.InvoiceSuffix, "Numbering.InvoiceSuffix", 64);
-        if (numbering.InvoicePadding is < 1 or > 10) throw new ArgumentException("Numbering.InvoicePadding must be between 1 and 10.", nameof(request));
+        if (numbering.InvoicePadding is < 1 or > 10) throw new RequestValidationException("Numbering.InvoicePadding must be between 1 and 10.");
 
         Require(print.CompanyName, "Print.CompanyName", 256);
         Max(print.CompanyGstin, "Print.CompanyGstin", 32);
@@ -37,8 +37,8 @@ public static class CloudSettingsValidator
         Max(print.BankIfsc, "Print.BankIfsc", 32);
         Max(print.BankUpi, "Print.BankUpi", 256);
         Max(print.TermsAndConditions, "Print.TermsAndConditions", 10_000);
-        if (print.PrintFontSize is < 6 or > 24) throw new ArgumentException("Print.PrintFontSize must be between 6 and 24.", nameof(request));
-        if (print.PrintTermsFontSize is < 6 or > 24) throw new ArgumentException("Print.PrintTermsFontSize must be between 6 and 24.", nameof(request));
+        if (print.PrintFontSize is < 6 or > 24) throw new RequestValidationException("Print.PrintFontSize must be between 6 and 24.");
+        if (print.PrintTermsFontSize is < 6 or > 24) throw new RequestValidationException("Print.PrintTermsFontSize must be between 6 and 24.");
 
         Require(ledgers.SalesLedger, "Ledgers.SalesLedger", 256);
         Require(ledgers.CashLedger, "Ledgers.CashLedger", 256);
@@ -61,14 +61,14 @@ public static class CloudSettingsValidator
     public static void ValidatePrintLayout(UpdatePrintLayoutRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var layout = request.Layout ?? throw new ArgumentException("Layout is required.", nameof(request));
+        var layout = request.Layout ?? throw new RequestValidationException("Layout is required.");
         ValidateRange(layout.LeftMarginCm, "LeftMarginCm", 0, 5);
         ValidateRange(layout.RightMarginCm, "RightMarginCm", 0, 5);
         ValidateRange(layout.TopMarginCm, "TopMarginCm", 0, 5);
         ValidateRange(layout.BottomMarginCm, "BottomMarginCm", 0, 5);
         if (layout.LeftMarginCm + layout.RightMarginCm >= 20)
         {
-            throw new ArgumentException("Combined horizontal margins leave no printable page width.", nameof(request));
+            throw new RequestValidationException("Combined horizontal margins leave no printable page width.");
         }
         ValidatePlacement(layout.Logo, "Logo");
         ValidatePlacement(layout.Signature, "Signature");
@@ -90,7 +90,7 @@ public static class CloudSettingsValidator
         if (watermark is null) return;
         if (watermark.AssetId == Guid.Empty)
         {
-            throw new ArgumentException("Watermark.AssetId is required.");
+            throw new RequestValidationException("Watermark.AssetId is required.");
         }
 
         ValidateRange(watermark.OffsetXCm, "Watermark.OffsetXCm", 0, PrintLayoutDefaults.A4WidthCm);
@@ -101,11 +101,11 @@ public static class CloudSettingsValidator
 
         if (watermark.OffsetXCm + watermark.WidthCm > PrintLayoutDefaults.A4WidthCm)
         {
-            throw new ArgumentException("Watermark horizontal position and width must fit within the A4 page.");
+            throw new RequestValidationException("Watermark horizontal position and width must fit within the A4 page.");
         }
         if (watermark.OffsetYCm + watermark.HeightCm > PrintLayoutDefaults.A4HeightCm)
         {
-            throw new ArgumentException("Watermark vertical position and height must fit within the A4 page.");
+            throw new RequestValidationException("Watermark vertical position and height must fit within the A4 page.");
         }
     }
 
@@ -115,20 +115,20 @@ public static class CloudSettingsValidator
 
         if (!PrintPageDensity.All.Contains(pageLayout.Density, StringComparer.Ordinal))
         {
-            throw new ArgumentException(
+            throw new RequestValidationException(
                 $"PageLayout.Density must be one of: {string.Join(", ", PrintPageDensity.All)}.");
         }
         ValidateRange(pageLayout.InvoiceBorderThicknessPt, "PageLayout.InvoiceBorderThicknessPt", 0, 4);
 
         if (pageLayout.Sections is null)
         {
-            throw new ArgumentException("PageLayout.Sections is required.");
+            throw new RequestValidationException("PageLayout.Sections is required.");
         }
 
         var suppliedKeys = pageLayout.Sections.Select(section => section.SectionKey).ToArray();
         if (suppliedKeys.Any(string.IsNullOrWhiteSpace))
         {
-            throw new ArgumentException("PageLayout section keys are required.");
+            throw new RequestValidationException("PageLayout section keys are required.");
         }
 
         var unknownKeys = suppliedKeys
@@ -137,7 +137,7 @@ public static class CloudSettingsValidator
             .ToArray();
         if (unknownKeys.Length > 0)
         {
-            throw new ArgumentException($"Unknown PageLayout section key(s): {string.Join(", ", unknownKeys)}.");
+            throw new RequestValidationException($"Unknown PageLayout section key(s): {string.Join(", ", unknownKeys)}.");
         }
 
         var duplicateKeys = suppliedKeys
@@ -147,7 +147,7 @@ public static class CloudSettingsValidator
             .ToArray();
         if (duplicateKeys.Length > 0)
         {
-            throw new ArgumentException($"Duplicate PageLayout section key(s): {string.Join(", ", duplicateKeys)}.");
+            throw new RequestValidationException($"Duplicate PageLayout section key(s): {string.Join(", ", duplicateKeys)}.");
         }
 
         var missingKeys = PrintLayoutSectionKeys.All
@@ -155,14 +155,14 @@ public static class CloudSettingsValidator
             .ToArray();
         if (missingKeys.Length > 0)
         {
-            throw new ArgumentException($"Missing PageLayout section key(s): {string.Join(", ", missingKeys)}.");
+            throw new RequestValidationException($"Missing PageLayout section key(s): {string.Join(", ", missingKeys)}.");
         }
 
         foreach (var section in pageLayout.Sections)
         {
             if (PrintLayoutSectionKeys.Mandatory.Contains(section.SectionKey) && !section.IsVisible)
             {
-                throw new ArgumentException($"PageLayout section '{section.SectionKey}' is mandatory and cannot be hidden.");
+                throw new RequestValidationException($"PageLayout section '{section.SectionKey}' is mandatory and cannot be hidden.");
             }
             ValidateRange(section.SpacingBeforeMm, $"PageLayout.{section.SectionKey}.SpacingBeforeMm", 0, 20);
             ValidateRange(section.SpacingAfterMm, $"PageLayout.{section.SectionKey}.SpacingAfterMm", 0, 20);
@@ -171,7 +171,7 @@ public static class CloudSettingsValidator
         if (pageLayout.BottomPinnedFromSectionKey is { } pinnedKey
             && !PrintLayoutSectionKeys.All.Contains(pinnedKey, StringComparer.Ordinal))
         {
-            throw new ArgumentException($"PageLayout.BottomPinnedFromSectionKey '{pinnedKey}' is not a known section.");
+            throw new RequestValidationException($"PageLayout.BottomPinnedFromSectionKey '{pinnedKey}' is not a known section.");
         }
     }
 
@@ -179,36 +179,36 @@ public static class CloudSettingsValidator
     {
         if (!double.IsFinite(value) || value < min || value > max)
         {
-            throw new ArgumentException($"{field} must be between {min} and {max}.");
+            throw new RequestValidationException($"{field} must be between {min} and {max}.");
         }
     }
 
     private static void Require(string? value, string field, int maxLength)
     {
-        if (string.IsNullOrWhiteSpace(value)) throw new ArgumentException($"{field} is required.");
+        if (string.IsNullOrWhiteSpace(value)) throw new RequestValidationException($"{field} is required.");
         Max(value, field, maxLength);
     }
 
     private static void Max(string? value, string field, int maxLength)
     {
-        if (value?.Length > maxLength) throw new ArgumentException($"{field} cannot exceed {maxLength} characters.");
+        if (value?.Length > maxLength) throw new RequestValidationException($"{field} cannot exceed {maxLength} characters.");
     }
 
     private static void ValidateJsonArray(string? value, string field)
     {
         if (string.IsNullOrWhiteSpace(value)) return;
-        if (value.Length > MaxMasterJsonLength) throw new ArgumentException($"{field} cannot exceed {MaxMasterJsonLength} characters.");
+        if (value.Length > MaxMasterJsonLength) throw new RequestValidationException($"{field} cannot exceed {MaxMasterJsonLength} characters.");
         try
         {
             using var document = JsonDocument.Parse(value);
             if (document.RootElement.ValueKind != JsonValueKind.Array)
             {
-                throw new ArgumentException($"{field} must contain a JSON array.");
+                throw new RequestValidationException($"{field} must contain a JSON array.");
             }
         }
         catch (JsonException ex)
         {
-            throw new ArgumentException($"{field} must contain valid JSON.", ex);
+            throw new RequestValidationException($"{field} must contain valid JSON.", ex);
         }
     }
 }

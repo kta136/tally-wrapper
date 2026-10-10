@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Leases;
@@ -53,12 +54,21 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
             {
                 Status = status,
                 Title = title,
-                Detail = exception is DbUpdateConcurrencyException
-                    ? "This record was changed by another counter or request while you were working on it. Reload it and try again."
-                    : exception.Message
+                Detail = DetailFor(exception)
             }
         });
     }
+
+    private static string DetailFor(Exception exception) => exception switch
+    {
+        DbUpdateConcurrencyException =>
+            "This record was changed by another counter or request while you were working on it. Reload it and try again.",
+        // .NET appends " (Parameter 'x')" to the message of an ArgumentException
+        // that names a parameter. The operator reads this text; strip it.
+        ArgumentException { ParamName: { Length: > 0 } paramName } =>
+            exception.Message.Replace($" (Parameter '{paramName}')", string.Empty, StringComparison.Ordinal),
+        _ => exception.Message
+    };
 
     private static (int? Status, string Title) MapException(Exception exception) => exception switch
     {
@@ -72,6 +82,8 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         DraftLeaseOwnershipException => (StatusCodes.Status403Forbidden, "Draft lease ownership required"),
         AdminPasscodeInvalidException => (StatusCodes.Status401Unauthorized, "Admin passcode invalid"),
         AdminUnlockThrottledException => (StatusCodes.Status429TooManyRequests, "Admin unlock throttled"),
+        RequestValidationException => (StatusCodes.Status400BadRequest, "Bad request"),
+        // Guard clauses and not-yet-converted input checks. Still a client error.
         ArgumentException => (StatusCodes.Status400BadRequest, "Bad request"),
         _ => ((int?)null, string.Empty)
     };

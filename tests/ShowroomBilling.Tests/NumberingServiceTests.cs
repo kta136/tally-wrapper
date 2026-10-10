@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Numbering;
@@ -173,7 +174,7 @@ public sealed class NumberingServiceTests
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
+        await Assert.ThrowsAsync<RequestValidationException>(() =>
             service.ReserveAsync(new ReserveNumberRequest("k", "unknown_type", "2026-27", null)));
     }
 

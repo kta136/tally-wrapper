@@ -19,15 +19,8 @@ public sealed class NumberingController(INumberingService numberingService) : Co
         var resolvedType = string.IsNullOrWhiteSpace(documentType)
             ? INumberingService.DocumentTypeSalesInvoice
             : documentType;
-        try
-        {
-            var response = await numberingService.GetPreviewAsync(resolvedType, fiscalYear, cancellationToken);
-            return Ok(response);
-        }
-        catch (ArgumentException ex)
-        {
-            return ControllerProblemDetails.BadRequest(ex.Message);
-        }
+        var response = await numberingService.GetPreviewAsync(resolvedType, fiscalYear, cancellationToken);
+        return Ok(response);
     }
 
     [HttpGet("scopes")]
@@ -47,14 +40,7 @@ public sealed class NumberingController(INumberingService numberingService) : Co
         {
             return ControllerProblemDetails.BadRequest("Request body is required.");
         }
-        try
-        {
-            var response = await numberingService.ReserveAsync(request, cancellationToken);
-            return response.AlreadyExisted ? Ok(response) : Created(string.Empty, response);
-        }
-        catch (ArgumentException ex)
-        {
-            return ControllerProblemDetails.BadRequest(ex.Message);
-        }
+        var response = await numberingService.ReserveAsync(request, cancellationToken);
+        return response.AlreadyExisted ? Ok(response) : Created(string.Empty, response);
     }
 }

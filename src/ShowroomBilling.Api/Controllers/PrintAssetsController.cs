@@ -27,15 +27,8 @@ public sealed class PrintAssetsController(IPrintAssetService service) : Controll
         {
             return ControllerProblemDetails.BadRequest("Request body is required.");
         }
-        try
-        {
-            var response = await service.UploadAsync(request, cancellationToken);
-            return Created($"/api/print-assets/{response.Id}", response);
-        }
-        catch (ArgumentException ex)
-        {
-            return ControllerProblemDetails.BadRequest(ex.Message);
-        }
+        var response = await service.UploadAsync(request, cancellationToken);
+        return Created($"/api/print-assets/{response.Id}", response);
     }
 
     [HttpGet("{id:guid}")]

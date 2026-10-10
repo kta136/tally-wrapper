@@ -38,15 +38,15 @@ public sealed class SyntheticBillPlanner
         ValidateRequest(request);
 
         if (itemEntries is null || itemEntries.Count == 0)
-            throw new ArgumentException("At least one item master entry is required.", nameof(itemEntries));
+            throw new RequestValidationException("At least one item master entry is required.");
         if (karatEntries is null || karatEntries.Count == 0)
-            throw new ArgumentException("At least one karat master entry is required.", nameof(karatEntries));
+            throw new RequestValidationException("At least one karat master entry is required.");
 
         var mappedKarats = karatEntries
             .Where(k => !string.IsNullOrWhiteSpace(k.TallyItem))
             .ToList();
         if (mappedKarats.Count == 0)
-            throw new ArgumentException("At least one karat master entry must map to a Tally stock item.", nameof(karatEntries));
+            throw new RequestValidationException("At least one karat master entry must map to a Tally stock item.");
 
         if (request.SelectedKaratLabels is { Count: > 0 })
         {
@@ -58,7 +58,7 @@ public sealed class SyntheticBillPlanner
                 .Where(k => selected.Contains(k.Label.Trim()))
                 .ToList();
             if (mappedKarats.Count == 0)
-                throw new ArgumentException("Selected karats are not mapped to a Tally stock item.", nameof(request));
+                throw new RequestValidationException("Selected karats are not mapped to a Tally stock item.");
         }
 
         var billTotals = PartitionBillTotals(
@@ -112,21 +112,21 @@ public sealed class SyntheticBillPlanner
     public static void ValidateRequest(SyntheticBatchRequest request)
     {
         if (request.TotalAmount <= 0)
-            throw new ArgumentException("Total target amount must be greater than zero.", nameof(request));
+            throw new RequestValidationException("Total target amount must be greater than zero.");
         if (request.MaxBillAmount <= 0)
-            throw new ArgumentException("Max bill amount must be greater than zero.", nameof(request));
+            throw new RequestValidationException("Max bill amount must be greater than zero.");
         if (request.MaxBillAmount > SyntheticBatchPlanLimits.HardMaxBillAmount)
-            throw new ArgumentException($"Max bill amount cannot exceed ₹{SyntheticBatchPlanLimits.HardMaxBillAmount:N0}.", nameof(request));
+            throw new RequestValidationException($"Max bill amount cannot exceed ₹{SyntheticBatchPlanLimits.HardMaxBillAmount:N0}.");
         if (request.Rate24Kt <= 0m)
-            throw new ArgumentException("24kt rate must be greater than zero.", nameof(request));
+            throw new RequestValidationException("24kt rate must be greater than zero.");
         if (request.MinItemsPerBill <= 0)
-            throw new ArgumentException("Minimum items per bill must be at least 1.", nameof(request));
+            throw new RequestValidationException("Minimum items per bill must be at least 1.");
         if (request.MaxItemsPerBill < request.MinItemsPerBill)
-            throw new ArgumentException("Maximum items per bill must be >= minimum.", nameof(request));
+            throw new RequestValidationException("Maximum items per bill must be >= minimum.");
         if (request.MaxItemsPerBill > SyntheticBatchPlanLimits.MaxItemsPerBillCap)
-            throw new ArgumentException($"Maximum items per bill cannot exceed {SyntheticBatchPlanLimits.MaxItemsPerBillCap}.", nameof(request));
+            throw new RequestValidationException($"Maximum items per bill cannot exceed {SyntheticBatchPlanLimits.MaxItemsPerBillCap}.");
         if (request.StartAtUtc >= request.EndAtUtc)
-            throw new ArgumentException("Start time must be before end time.", nameof(request));
+            throw new RequestValidationException("Start time must be before end time.");
     }
 
     public static IReadOnlyList<long> PartitionBillTotals(long totalAmount, long maxBillAmount, Random rng)
@@ -160,12 +160,11 @@ public sealed class SyntheticBillPlanner
     {
         if (billCount <= 0) return Array.Empty<DateTimeOffset>();
         if (startAtUtc >= endAtUtc)
-            throw new ArgumentException("Start time must be before end time.", nameof(startAtUtc));
+            throw new RequestValidationException("Start time must be before end time.");
 
         if (floorUtc is { } floor && startAtUtc <= floor)
-            throw new ArgumentException(
-                "Start time must be later than the latest existing bill's timestamp.",
-                nameof(startAtUtc));
+            throw new RequestValidationException(
+                "Start time must be later than the latest existing bill's timestamp.");
 
         var earliest = CeilToMinute(startAtUtc);
         if (floorUtc is { } f2)
@@ -175,13 +174,12 @@ public sealed class SyntheticBillPlanner
         }
         var latest = FloorToMinute(endAtUtc);
         if (latest < earliest)
-            throw new ArgumentException("Selected time window does not contain any valid minute slots.", nameof(endAtUtc));
+            throw new RequestValidationException("Selected time window does not contain any valid minute slots.");
 
         var slotCount = (int)((latest - earliest).TotalMinutes) + 1;
         if (slotCount < billCount)
-            throw new ArgumentException(
-                $"Selected window has {slotCount} minute slot(s); {billCount} are required.",
-                nameof(billCount));
+            throw new RequestValidationException(
+                $"Selected window has {slotCount} minute slot(s); {billCount} are required.");
 
         // Reservoir-style sample without replacement: pick N unique minute offsets.
         var chosen = SampleWithoutReplacement(slotCount, billCount, rng);

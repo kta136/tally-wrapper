@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Leases;
 using ShowroomBilling.Contracts.Leases;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -20,7 +21,7 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.OwnerActorId))
         {
-            throw new ArgumentException("OwnerActorId is required.", nameof(request));
+            throw new RequestValidationException("OwnerActorId is required.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -163,7 +164,7 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
-            throw new ArgumentException("Reason is required.", nameof(request));
+            throw new RequestValidationException("Reason is required.");
         }
 
         var now = DateTimeOffset.UtcNow;

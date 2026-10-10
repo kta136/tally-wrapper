@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -51,7 +52,10 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.IdempotencyKey);
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
+        {
+            throw new RequestValidationException("Idempotency key is required.");
+        }
 
         var idempotencyKey = request.IdempotencyKey.Trim();
         var normalizedType = NormalizeDocumentType(request.DocumentType);
@@ -345,7 +349,7 @@ FOR UPDATE")
         return normalized switch
         {
             INumberingService.DocumentTypeSalesInvoice => INumberingService.DocumentTypeSalesInvoice,
-            _ => throw new ArgumentException($"Unsupported document type '{documentType}'.", nameof(documentType))
+            _ => throw new RequestValidationException($"Unsupported document type '{documentType}'.")
         };
     }
 

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
@@ -106,10 +107,13 @@ internal sealed class BillPostingWorkflow(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.IdempotencyKey);
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
+        {
+            throw new RequestValidationException("Repost idempotency key is required.");
+        }
         if (request.IdempotencyKey.Trim().Length > 128)
         {
-            throw new ArgumentException("Repost idempotency key must be 128 characters or fewer.", nameof(request));
+            throw new RequestValidationException("Repost idempotency key must be 128 characters or fewer.");
         }
 
         var bill = await LoadTrackedBillAsync(billId, cancellationToken);

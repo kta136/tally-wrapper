@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.PrintAssets;
 using ShowroomBilling.Contracts.PrintAssets;
@@ -43,30 +44,29 @@ public sealed class PrintAssetService(
 
         if (!PrintAssetKinds.All.Contains(request.AssetKind))
         {
-            throw new ArgumentException(
-                $"AssetKind must be one of: {string.Join(", ", PrintAssetKinds.All)}.",
-                nameof(request));
+            throw new RequestValidationException(
+                $"AssetKind must be one of: {string.Join(", ", PrintAssetKinds.All)}.");
         }
         if (string.IsNullOrWhiteSpace(request.FileName))
         {
-            throw new ArgumentException("FileName is required.", nameof(request));
+            throw new RequestValidationException("FileName is required.");
         }
         var fileName = request.FileName.Trim();
         if (fileName.Length > 256 || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
         {
-            throw new ArgumentException("FileName must be a plain file name of at most 256 characters.", nameof(request));
+            throw new RequestValidationException("FileName must be a plain file name of at most 256 characters.");
         }
         if (request.ContentType?.Length > 128)
         {
-            throw new ArgumentException("ContentType cannot exceed 128 characters.", nameof(request));
+            throw new RequestValidationException("ContentType cannot exceed 128 characters.");
         }
         if (string.IsNullOrWhiteSpace(request.Base64Content))
         {
-            throw new ArgumentException("Base64Content is required.", nameof(request));
+            throw new RequestValidationException("Base64Content is required.");
         }
         if (request.Base64Content.Length > MaxBase64Characters)
         {
-            throw new ArgumentException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.", nameof(request));
+            throw new RequestValidationException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.");
         }
 
         byte[] bytes;
@@ -76,20 +76,20 @@ public sealed class PrintAssetService(
         }
         catch (FormatException)
         {
-            throw new ArgumentException("Base64Content is not valid base64.", nameof(request));
+            throw new RequestValidationException("Base64Content is not valid base64.");
         }
 
         if (bytes.Length == 0)
         {
-            throw new ArgumentException("Base64Content decoded to an empty byte array.", nameof(request));
+            throw new RequestValidationException("Base64Content decoded to an empty byte array.");
         }
         if (bytes.Length > MaxBytes)
         {
-            throw new ArgumentException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.", nameof(request));
+            throw new RequestValidationException($"Asset exceeds maximum size of {MaxBytes / 1024} KB.");
         }
 
         var contentType = DetectImageContentType(bytes)
-            ?? throw new ArgumentException("Asset must be a valid PNG or JPEG image.", nameof(request));
+            ?? throw new RequestValidationException("Asset must be a valid PNG or JPEG image.");
 
         var showroomId = ResolveShowroomId(DefaultShowroomCode);
         var now = DateTimeOffset.UtcNow;

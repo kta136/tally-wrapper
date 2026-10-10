@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Settings;
@@ -131,13 +132,13 @@ public sealed class CloudSettingsServiceTests
         {
             Connection = seeded.Settings.Connection with { Port = 0 }
         });
-        await Assert.ThrowsAsync<ArgumentException>(() => service.SaveEffectiveSettingsAsync(invalidPort));
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.SaveEffectiveSettingsAsync(invalidPort));
 
         var invalidJson = new UpdateEffectiveSettingsRequest(seeded.Settings with
         {
             Masters = seeded.Settings.Masters with { ItemMasterDataJson = "not-json" }
         });
-        await Assert.ThrowsAsync<ArgumentException>(() => service.SaveEffectiveSettingsAsync(invalidJson));
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.SaveEffectiveSettingsAsync(invalidJson));
     }
 
     [Fact]
@@ -146,11 +147,11 @@ public sealed class CloudSettingsServiceTests
         await using var dbContext = CreateDbContext();
         var service = new CloudSettingsService(dbContext);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.UpdatePrintLayoutAsync(
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.UpdatePrintLayoutAsync(
             new UpdatePrintLayoutRequest(new PrintLayoutSettings(
                 double.NaN, 1, 1, 1, null, null))));
 
-        await Assert.ThrowsAsync<ArgumentException>(() => service.UpdatePrintLayoutAsync(
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.UpdatePrintLayoutAsync(
             new UpdatePrintLayoutRequest(new PrintLayoutSettings(
                 1, 1, 1, 1,
                 new PrintLayoutAssetPlacement(null, 0, 0, 25, 2),
@@ -269,7 +270,7 @@ public sealed class CloudSettingsServiceTests
 
         foreach (var invalid in invalidLayouts)
         {
-            await Assert.ThrowsAsync<ArgumentException>(() =>
+            await Assert.ThrowsAsync<RequestValidationException>(() =>
                 service.UpdatePrintLayoutAsync(new UpdatePrintLayoutRequest(invalid)));
         }
     }
