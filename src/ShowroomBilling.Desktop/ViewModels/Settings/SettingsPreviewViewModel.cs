@@ -24,8 +24,8 @@ namespace ShowroomBilling.Desktop.ViewModels.Settings;
 public partial class SettingsPreviewViewModel : ObservableObject
 {
     private const int PreviewRenderDpi = 120;
-    private const double MinZoomPercent = 35;
-    private const double MaxZoomPercent = 200;
+    private const double MinZoomPercent = PrintPreviewZoom.MinPercent;
+    private const double MaxZoomPercent = PrintPreviewZoom.MaxPercent;
     private const double ZoomStepPercent = 10;
     private const double PreviewPaneChromeWidth = 72;
     private static readonly TimeSpan DefaultDebounceInterval = TimeSpan.FromMilliseconds(300);
@@ -437,9 +437,5 @@ public partial class SettingsPreviewViewModel : ObservableObject
         }
     }
 
-    private static double NormalizeZoom(double value)
-    {
-        if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0) return 100;
-        return Math.Clamp(Math.Round(value), MinZoomPercent, MaxZoomPercent);
-    }
+    private static double NormalizeZoom(double value) => PrintPreviewZoom.Normalize(value);
 }

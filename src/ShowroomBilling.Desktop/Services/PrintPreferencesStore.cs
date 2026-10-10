@@ -6,9 +6,6 @@ namespace ShowroomBilling.Desktop.Services;
 
 public sealed class PrintPreferencesStore : IPrintPreferencesStore
 {
-    private const double DefaultZoomPercent = 100;
-    private const double MinZoomPercent = 50;
-    private const double MaxZoomPercent = 200;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -99,18 +96,14 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
         }
     }
 
-    private static double NormalizeZoom(double value)
-    {
-        if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0) return DefaultZoomPercent;
-        return Math.Clamp(Math.Round(value), MinZoomPercent, MaxZoomPercent);
-    }
+    private static double NormalizeZoom(double value) => PrintPreviewZoom.Normalize(value);
 
     private sealed record PrintPreferencesData
     {
         public string? LastPrinterName { get; init; }
         public string? LastPdfDirectory { get; init; }
         public bool DirectPrintAfterSave { get; init; }
-        public double PrintPreviewZoomPercent { get; init; } = DefaultZoomPercent;
+        public double PrintPreviewZoomPercent { get; init; } = PrintPreviewZoom.DefaultPercent;
         public PrintJobSettings PrintJobSettings { get; init; } = PrintJobSettings.Default;
     }
 }

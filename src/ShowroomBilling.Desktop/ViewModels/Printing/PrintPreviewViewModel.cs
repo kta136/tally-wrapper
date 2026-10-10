@@ -15,8 +15,8 @@ public sealed record PrintSettingOption<T>(T Value, string DisplayName);
 
 public partial class PrintPreviewViewModel : ObservableObject
 {
-    private const double MinZoomPercent = 25;
-    private const double MaxZoomPercent = 200;
+    private const double MinZoomPercent = PrintPreviewZoom.MinPercent;
+    private const double MaxZoomPercent = PrintPreviewZoom.MaxPercent;
     private const double ZoomStepPercent = 10;
     private const string PreparingPrintPagesMessage = "Preparing printer-ready pages…";
 
@@ -748,9 +748,5 @@ public partial class PrintPreviewViewModel : ObservableObject
         }
     }
 
-    private static double NormalizeZoom(double value)
-    {
-        if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0) return 100;
-        return Math.Clamp(Math.Round(value), MinZoomPercent, MaxZoomPercent);
-    }
+    private static double NormalizeZoom(double value) => PrintPreviewZoom.Normalize(value);
 }
