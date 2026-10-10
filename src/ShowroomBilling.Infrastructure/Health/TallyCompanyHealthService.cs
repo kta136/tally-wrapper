@@ -40,7 +40,7 @@ public sealed class TallyCompanyHealthService(
         if (string.IsNullOrWhiteSpace(activeCompany))
         {
             return new TallyCompanyHealthResponse(
-                Status: "warning",
+                Status: TallyHealthStatuses.Warning,
                 TallyReachable: false,
                 ActiveCompanyName: null,
                 ActiveCompanyOpen: false,
@@ -71,7 +71,7 @@ public sealed class TallyCompanyHealthService(
         if (companyOpen)
         {
             return new TallyCompanyHealthResponse(
-                Status: "healthy",
+                Status: TallyHealthStatuses.Healthy,
                 TallyReachable: true,
                 ActiveCompanyName: activeCompany,
                 ActiveCompanyOpen: true,
@@ -81,7 +81,7 @@ public sealed class TallyCompanyHealthService(
         }
 
         return new TallyCompanyHealthResponse(
-            Status: "warning",
+            Status: TallyHealthStatuses.Warning,
             TallyReachable: true,
             ActiveCompanyName: activeCompany,
             ActiveCompanyOpen: false,
@@ -92,7 +92,7 @@ public sealed class TallyCompanyHealthService(
 
     private static TallyCompanyHealthResponse Unhealthy(string? activeCompany, DateTimeOffset checkedAtUtc, string message) =>
         new(
-            Status: "unhealthy",
+            Status: TallyHealthStatuses.Unhealthy,
             TallyReachable: false,
             ActiveCompanyName: activeCompany,
             ActiveCompanyOpen: false,

@@ -30,7 +30,7 @@ namespace ShowroomBilling.Infrastructure;
 
 public static class DependencyInjection
 {
-    private const string DefaultLocalPostgresConnectionString =
+    internal const string DefaultLocalPostgresConnectionString =
         "Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres";
 
     /// <summary>
@@ -93,7 +93,13 @@ public static class DependencyInjection
         // Tally (sync, operator-initiated only — no background workers).
         // Safe XML reads retry transient transport blips. Voucher writes are
         // marked and excluded because replaying an uncertain write can duplicate it.
-        services.AddHttpClient<ITallyXmlClient, TallyXmlClient>()
+        services.AddHttpClient<ITallyXmlClient, TallyXmlClient>(client =>
+            {
+                // The client applies the operator's configured timeout to each
+                // call. HttpClient's own 100-second default would silently cut
+                // off any configured value above it.
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
             .AddResilienceHandler("tally", pipeline =>
             {
                 pipeline.AddRetry(new HttpRetryStrategyOptions

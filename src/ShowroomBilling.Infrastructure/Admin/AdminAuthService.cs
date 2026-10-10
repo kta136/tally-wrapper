@@ -6,6 +6,7 @@ using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Contracts.Admin;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
@@ -20,7 +21,7 @@ public sealed class AdminAuthService(
     private const int HashBytes = 32;
     private const int PbkdfIterations = 120_000;
     private const int TokenBytes = 32;
-    private const int MinPasscodeLength = 6;
+    private const int MinPasscodeLength = SettingLimits.MinAdminPasscodeLength;
     private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(30);
     private const string DefaultActorLabel = "admin";
 

@@ -329,8 +329,9 @@ public partial class SetupWizardViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(TallyHost)) { error = "Tally host is required."; return false; }
         if (!int.TryParse(TallyPort, NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
         { error = "Tally port must be between 1 and 65535."; return false; }
-        if (!int.TryParse(TallyTimeoutSeconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var timeout) || timeout < 1)
-        { error = "Tally timeout must be a positive integer."; return false; }
+        if (!int.TryParse(TallyTimeoutSeconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var timeout)
+            || timeout is < SettingLimits.MinTallyTimeoutSeconds or > SettingLimits.MaxTallyTimeoutSeconds)
+        { error = $"Tally timeout must be between {SettingLimits.MinTallyTimeoutSeconds} and {SettingLimits.MaxTallyTimeoutSeconds} seconds."; return false; }
         if (string.IsNullOrWhiteSpace(ActiveCompanyName)) { error = "Active company name is required."; return false; }
         if (string.IsNullOrWhiteSpace(PrintCompanyName)) { error = "Print company name is required."; return false; }
         if (!int.TryParse(InvoicePadding, NumberStyles.Integer, CultureInfo.InvariantCulture, out var padding) || padding is < 1 or > 10)

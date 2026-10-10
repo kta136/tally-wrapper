@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Masters;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
@@ -248,10 +249,10 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 : MasterSnapshotMetadataFactory.EmptyMetadata(type))
             .ToArray();
 
-        var overall = metadatas.All(m => m.Freshness == "fresh") ? "fresh"
-            : metadatas.Any(m => m.Freshness == "missing") ? "missing"
-            : metadatas.Any(m => m.Freshness == "stale") ? "stale"
-            : "aging";
+        var overall = metadatas.All(m => m.Freshness == MasterFreshness.Fresh) ? MasterFreshness.Fresh
+            : metadatas.Any(m => m.Freshness == MasterFreshness.Missing) ? MasterFreshness.Missing
+            : metadatas.Any(m => m.Freshness == MasterFreshness.Stale) ? MasterFreshness.Stale
+            : MasterFreshness.Aging;
 
         return new MasterFreshnessSummaryResponse(overall, metadatas);
     }

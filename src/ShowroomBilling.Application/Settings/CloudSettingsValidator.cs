@@ -20,7 +20,11 @@ public static class CloudSettingsValidator
         Require(connection.Host, "Connection.Host", 256);
         Require(connection.ActiveCompanyName, "Connection.ActiveCompanyName", 256);
         if (connection.Port is < 1 or > 65_535) throw new RequestValidationException("Connection.Port must be between 1 and 65535.");
-        if (connection.TimeoutSeconds is < 1 or > 300) throw new RequestValidationException("Connection.TimeoutSeconds must be between 1 and 300.");
+        if (connection.TimeoutSeconds is < SettingLimits.MinTallyTimeoutSeconds or > SettingLimits.MaxTallyTimeoutSeconds)
+        {
+            throw new RequestValidationException(
+                $"Connection.TimeoutSeconds must be between {SettingLimits.MinTallyTimeoutSeconds} and {SettingLimits.MaxTallyTimeoutSeconds}.");
+        }
 
         Max(numbering.InvoicePrefix, "Numbering.InvoicePrefix", 64);
         Max(numbering.InvoiceSuffix, "Numbering.InvoiceSuffix", 64);

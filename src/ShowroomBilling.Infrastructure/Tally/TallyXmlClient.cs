@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Infrastructure.Tally;
 
@@ -19,20 +20,18 @@ public interface ITallyXmlClient
     Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default);
 }
 
-public sealed class TallyXmlClient(
+public sealed partial class TallyXmlClient(
     HttpClient httpClient,
     ICloudSettingsService cloudSettings) : ITallyXmlClient
 {
     internal static readonly HttpRequestOptionsKey<bool> VoucherWriteRequestKey =
         new("ShowroomBilling.TallyVoucherWrite");
 
-    private static readonly Regex ControlChars = new(
-        @"[\x00-\x08\x0B\x0C\x0E-\x1F]",
-        RegexOptions.Compiled);
+    [GeneratedRegex(@"[\x00-\x08\x0B\x0C\x0E-\x1F]")]
+    private static partial Regex ControlChars();
 
-    private static readonly Regex NumericCharRefs = new(
-        @"&#(x[0-9a-fA-F]+|[0-9]+);",
-        RegexOptions.Compiled);
+    [GeneratedRegex(@"&#(x[0-9a-fA-F]+|[0-9]+);")]
+    private static partial Regex NumericCharRefs();
 
     public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
         SendCoreAsync(request, isVoucherWrite: false, cancellationToken);
@@ -54,7 +53,9 @@ public sealed class TallyXmlClient(
         }
 
         var endpoint = new Uri($"http://{conn.Host}:{conn.Port}");
-        var timeout = TimeSpan.FromSeconds(Math.Clamp(conn.TimeoutSeconds, 5, 300));
+        // A row saved before the validator enforced this range may still hold a smaller value.
+        var timeout = TimeSpan.FromSeconds(Math.Clamp(
+            conn.TimeoutSeconds, SettingLimits.MinTallyTimeoutSeconds, SettingLimits.MaxTallyTimeoutSeconds));
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
@@ -79,8 +80,8 @@ public sealed class TallyXmlClient(
 
     public static string StripInvalidXmlControlChars(string input)
     {
-        var stripped = ControlChars.Replace(input, string.Empty);
-        return NumericCharRefs.Replace(stripped, match =>
+        var stripped = ControlChars().Replace(input, string.Empty);
+        return NumericCharRefs().Replace(stripped, match =>
         {
             var token = match.Groups[1].Value;
             var isHex = token.StartsWith("x", StringComparison.OrdinalIgnoreCase);

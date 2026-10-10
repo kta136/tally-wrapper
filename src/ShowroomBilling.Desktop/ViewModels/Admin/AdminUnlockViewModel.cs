@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Leases;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.ViewModels.Admin;
@@ -204,9 +205,9 @@ public partial class AdminUnlockViewModel : ObservableObject
             ErrorMessage = "Enter a new passcode.";
             return;
         }
-        if (NewPasscode.Length < 6)
+        if (NewPasscode.Length < SettingLimits.MinAdminPasscodeLength)
         {
-            ErrorMessage = $"New passcode must be at least 6 characters (you entered {NewPasscode.Length}).";
+            ErrorMessage = $"New passcode must be at least {SettingLimits.MinAdminPasscodeLength} characters (you entered {NewPasscode.Length}).";
             return;
         }
         if (!string.Equals(NewPasscode, ConfirmNewPasscode, StringComparison.Ordinal))

@@ -529,7 +529,7 @@ internal sealed class BillPostingWorkflow(
     }
 
     private static bool IsTallyReady(TallyCompanyHealthResponse health) =>
-        string.Equals(health.Status, "healthy", StringComparison.OrdinalIgnoreCase)
+        string.Equals(health.Status, TallyHealthStatuses.Healthy, StringComparison.OrdinalIgnoreCase)
         && health.TallyReachable
         && health.ActiveCompanyOpen;
 

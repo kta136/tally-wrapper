@@ -5,6 +5,7 @@ using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
@@ -266,7 +267,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             return;
         }
 
-        var ready = string.Equals(health.Status, "healthy", StringComparison.OrdinalIgnoreCase)
+        var ready = string.Equals(health.Status, TallyHealthStatuses.Healthy, StringComparison.OrdinalIgnoreCase)
             && health.TallyReachable
             && health.ActiveCompanyOpen;
 

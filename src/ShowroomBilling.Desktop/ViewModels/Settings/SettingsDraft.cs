@@ -150,8 +150,9 @@ public partial class SettingsDraft : ObservableObject
         if (string.IsNullOrWhiteSpace(Host)) { error = "Tally host is required."; return false; }
         if (!int.TryParse(Port, NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
         { error = "Port must be an integer between 1 and 65535."; return false; }
-        if (!int.TryParse(TimeoutSeconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var timeout) || timeout < 1)
-        { error = "Timeout must be a positive integer."; return false; }
+        if (!int.TryParse(TimeoutSeconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var timeout)
+            || timeout is < SettingLimits.MinTallyTimeoutSeconds or > SettingLimits.MaxTallyTimeoutSeconds)
+        { error = $"Timeout must be between {SettingLimits.MinTallyTimeoutSeconds} and {SettingLimits.MaxTallyTimeoutSeconds} seconds."; return false; }
 
         if (string.IsNullOrWhiteSpace(PrintCompanyName)) { error = "Print company name is required."; return false; }
         if (!int.TryParse(PrintFontSize, NumberStyles.Integer, CultureInfo.InvariantCulture, out var printFont) || printFont < 1)

@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
@@ -26,13 +27,13 @@ internal static class MasterSnapshotMetadataFactory
             Freshness: ClassifyFreshness(batch.FetchedAtUtc));
 
     internal static MasterSnapshotMetadata EmptyMetadata(string masterType) =>
-        new(masterType, null, null, 0, "missing");
+        new(masterType, null, null, 0, MasterFreshness.Missing);
 
     private static string ClassifyFreshness(DateTimeOffset fetchedAtUtc)
     {
         var age = DateTimeOffset.UtcNow - fetchedAtUtc;
-        if (age < FreshThreshold) return "fresh";
-        if (age < StaleThreshold) return "aging";
-        return "stale";
+        if (age < FreshThreshold) return MasterFreshness.Fresh;
+        if (age < StaleThreshold) return MasterFreshness.Aging;
+        return MasterFreshness.Stale;
     }
 }

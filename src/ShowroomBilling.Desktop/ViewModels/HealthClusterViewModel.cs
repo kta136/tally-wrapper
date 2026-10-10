@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Shell;
 
@@ -84,9 +85,9 @@ public partial class HealthClusterViewModel : ObservableObject
         TallyTooltip = tally.Message;
         TallyDot = tally.Status switch
         {
-            "healthy" => "ok",
-            "warning" => "warn",
-            "unhealthy" => "err",
+            TallyHealthStatuses.Healthy => "ok",
+            TallyHealthStatuses.Warning => "warn",
+            TallyHealthStatuses.Unhealthy => "err",
             _ => tally.TallyReachable ? "warn" : "err",
         };
     }
