@@ -76,7 +76,4 @@
     <FontFamily x:Key="MonoFontFamily">Cascadia Mono, Consolas</FontFamily>
     <FontFamily x:Key="IconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
-    <!--  Focus-ring thicknesses  -->
-    <Thickness x:Key="FocusOutlineThickness">2</Thickness>
-
 </ResourceDictionary>

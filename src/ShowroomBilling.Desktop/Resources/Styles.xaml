@@ -170,19 +170,6 @@
     </Style>
 
     <!--  ─── Text + label ─────────────────────────────────────────────  -->
-    <Style x:Key="TxtMuted" TargetType="{x:Type TextBlock}">
-        <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-    </Style>
-
-    <Style x:Key="TxtSoft" TargetType="{x:Type TextBlock}">
-        <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
-    </Style>
-
-    <Style x:Key="TxtMono" TargetType="{x:Type TextBlock}">
-        <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-        <Setter Property="FontSize" Value="{DynamicResource FontSizeMono}" />
-    </Style>
-
     <Style x:Key="TxtLabel" TargetType="{x:Type TextBlock}">
         <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
         <Setter Property="FontWeight" Value="Medium" />
@@ -365,14 +352,6 @@
         <Setter Property="Background" Value="#26FFFFFF" />
         <Setter Property="BorderBrush" Value="#40FFFFFF" />
         <Setter Property="TextElement.Foreground" Value="#FFFFFFFF" />
-    </Style>
-
-    <!--  ─── Status dots ─────────────────────────────────────────────  -->
-    <Style x:Key="StatusDot" TargetType="{x:Type Ellipse}">
-        <Setter Property="Width" Value="7" />
-        <Setter Property="Height" Value="7" />
-        <Setter Property="VerticalAlignment" Value="Center" />
-        <Setter Property="Fill" Value="{StaticResource InkDisabledBrush}" />
     </Style>
 
     <!--  ─── Chip (status badge) ─────────────────────────────────────  -->

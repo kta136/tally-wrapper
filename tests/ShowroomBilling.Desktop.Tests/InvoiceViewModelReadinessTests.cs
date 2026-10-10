@@ -137,8 +137,6 @@ public sealed class InvoiceViewModelReadinessTests
     private sealed class RecordingNumberingApiClient : INumberingApiClient
     {
         public int PreviewCallCount { get; private set; }
-        public int ReserveCallCount { get; private set; }
-
         public Task<NumberingPreviewResponse> GetPreviewAsync(
             string? documentType = null,
             string? fiscalYear = null,
@@ -153,14 +151,6 @@ public sealed class InvoiceViewModelReadinessTests
                 FormattedNumber: "SR/26-27/0001",
                 Prefix: "SR/",
                 Suffix: null));
-        }
-
-        public Task<ReserveNumberResponse> ReserveAsync(
-            ReserveNumberRequest request,
-            CancellationToken cancellationToken = default)
-        {
-            ReserveCallCount++;
-            throw new InvalidOperationException("Reserve should not be called from preview path.");
         }
     }
 }

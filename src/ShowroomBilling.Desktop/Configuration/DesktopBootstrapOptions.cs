@@ -14,7 +14,6 @@ public sealed class DesktopBootstrapOptions
 
     public string CounterName { get; init; } = "Counter 1";
 
-    public string StartupMode { get; init; } = "OnlineOnly";
 
     public bool IsServerMode =>
         string.Equals(ConnectionMode, DesktopConnectionModes.Server, StringComparison.OrdinalIgnoreCase);

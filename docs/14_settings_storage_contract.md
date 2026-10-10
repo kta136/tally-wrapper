@@ -25,7 +25,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 
 ## Enforcement in this foundation
 
-- desktop local config is limited to `DesktopBootstrap` and `DesktopLocalPreferences`
+- desktop local config (`appsettings.json`) is limited to `DesktopBootstrap`, `ChildProcesses` and `Logging`; `ConfigFilesTests` fails if another section appears. Workstation preferences (last printer, PDF folder, preview zoom, UI density) are not configuration: the app writes them to `print-preferences.json` and `ui-preferences.json` under `%APPDATA%\ShowroomBilling`
 - server-mode bootstrap overrides are typed and narrow: the local JSON file can switch between `LocalEmbedded` and `Server`, and can set the server API URL, but it cannot override `ChildProcesses`, DB settings, Tally settings, or shared business behavior
 - the desktop writes those two bootstrap fields through **Settings -> Database -> API Connection Mode**; saving restarts Billing so startup mode changes take effect; the last non-localhost server URL is preserved for switching back to server mode
 - the desktop Database section may edit the local embedded DB override only while running in `LocalEmbedded`; server-service DB configuration remains owned by the Tally server tray

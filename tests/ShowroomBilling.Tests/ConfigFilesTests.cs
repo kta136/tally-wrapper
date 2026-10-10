@@ -11,7 +11,7 @@ public sealed class ConfigFilesTests
         var desktopSections = ReadTopLevelSections("src/ShowroomBilling.Desktop/appsettings.json");
 
         Assert.Equal(
-            ["ChildProcesses", "DesktopBootstrap", "DesktopLocalPreferences", "Logging"],
+            ["ChildProcesses", "DesktopBootstrap", "Logging"],
             desktopSections.OrderBy(section => section));
     }
 

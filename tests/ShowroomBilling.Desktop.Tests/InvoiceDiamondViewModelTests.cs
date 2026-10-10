@@ -113,9 +113,6 @@ public sealed class InvoiceDiamondViewModelTests
             await Release.Task;
             return new NumberingPreviewResponse(Guid.Empty, "2026-27", "sales_invoice", 9, "SR/26-27/0009", "SR/", null);
         }
-
-        public Task<ReserveNumberResponse> ReserveAsync(ReserveNumberRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     [Fact]

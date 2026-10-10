@@ -465,6 +465,10 @@
                                                   CommandParameter="{Binding}" />
                                         <Separator />
                                         <MenuItem Header="Print" InputGestureText="Ctrl+P" Click="OnPrintRowMenuItemClick" />
+                                        <MenuItem Header="Copy Invoice Number"
+                                                  Visibility="{Binding CanCopyInvoiceNumber, Converter={StaticResource BoolToVis}}"
+                                                  Command="{Binding PlacementTarget.Tag.CopyInvoiceNumberCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}" />
                                         <!--
                                             Admin-only (server-side [Authorize(Policy="Admin")]). ContextMenu
                                             lives in a separate visual tree, so we can't walk to the UserControl

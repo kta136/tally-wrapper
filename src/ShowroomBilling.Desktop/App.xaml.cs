@@ -107,7 +107,6 @@ public partial class App : System.Windows.Application
 
         builder.Services.AddApplicationLayer();
         builder.Services.Configure<DesktopBootstrapOptions>(builder.Configuration.GetSection(DesktopBootstrapOptions.SectionName));
-        builder.Services.Configure<DesktopLocalPreferencesOptions>(builder.Configuration.GetSection(DesktopLocalPreferencesOptions.SectionName));
         builder.Services.Configure<ChildProcessOptions>(builder.Configuration.GetSection(ChildProcessOptions.SectionName));
         builder.Services.AddSingleton<IApiEndpointResolver, ApiEndpointResolver>();
         builder.Services.AddSingleton<DesktopDeviceIdentityStore>();

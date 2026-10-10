@@ -61,9 +61,8 @@ public partial class StatusBarViewModel : ObservableObject
         _clock.Start();
     }
 
-    public void ApplyDatabaseIdentity(string? databaseIdentity, string? environmentName)
+    public void ApplyDatabaseIdentity(string? databaseIdentity)
     {
-        _ = environmentName;
         var identity = NormalizeDatabaseEnvironment(databaseIdentity);
         if (identity.Equals("UNSET", StringComparison.OrdinalIgnoreCase))
         {

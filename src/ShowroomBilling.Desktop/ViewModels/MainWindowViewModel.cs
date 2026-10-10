@@ -55,7 +55,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         IMastersApiClient mastersApiClient,
         IBillsApiClient billsApiClient,
         IOptions<DesktopBootstrapOptions> bootstrapOptions,
-        IOptions<DesktopLocalPreferencesOptions> localPreferencesOptions,
         ICompanyProfileProvider companyProfileProvider,
         IPrintLayoutOptionsProvider printLayoutOptionsProvider,
         IPrintDispatcher printDispatcher,
@@ -76,7 +75,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         _bootstrapOptions = bootstrapOptions.Value;
         _adminTokenStore = adminTokenStore;
         _adminTokenStore.Changed += OnAdminTokenChanged;
-        _ = localPreferencesOptions;
         Invoice = invoice;
         Bills = bills;
         BillDetails = billDetails;
@@ -570,12 +568,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         try
         {
             var bootstrap = await _runtimeApiClient.GetBootstrapAsync();
-            StatusBar.ApplyDatabaseIdentity(bootstrap.DatabaseIdentity, bootstrap.EnvironmentName);
+            StatusBar.ApplyDatabaseIdentity(bootstrap.DatabaseIdentity);
         }
         catch
         {
             // Health polling will classify a fully unreachable API as Limited.
-            StatusBar.ApplyDatabaseIdentity(null, null);
+            StatusBar.ApplyDatabaseIdentity(null);
         }
     }
 

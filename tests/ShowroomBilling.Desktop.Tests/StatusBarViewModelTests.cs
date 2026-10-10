@@ -7,19 +7,17 @@ namespace ShowroomBilling.Desktop.Tests;
 public sealed class StatusBarViewModelTests
 {
     [Theory]
-    [InlineData("DEV", "Production", "DB DEV")]
-    [InlineData("PROD", "Development", "DB PROD")]
-    [InlineData("UNSET", "Development", "DB UNSET")]
-    [InlineData(null, "Production", "DB ?")]
-    [InlineData(null, null, "DB ?")]
-    public void ApplyDatabaseIdentity_PrefersDatabaseOwnedMarker_WhenSet(
+    [InlineData("DEV", "DB DEV")]
+    [InlineData("PROD", "DB PROD")]
+    [InlineData("UNSET", "DB UNSET")]
+    [InlineData(null, "DB ?")]
+    public void ApplyDatabaseIdentity_ShowsTheDatabaseOwnedMarker(
         string? databaseIdentity,
-        string? environmentName,
         string expected)
     {
         var vm = new StatusBarViewModel();
 
-        vm.ApplyDatabaseIdentity(databaseIdentity, environmentName);
+        vm.ApplyDatabaseIdentity(databaseIdentity);
 
         Assert.Equal(expected, vm.DatabaseEnvironment);
     }

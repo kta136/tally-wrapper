@@ -15,10 +15,4 @@ public sealed class NumberingApiClient(HttpClient httpClient) : INumberingApiCli
         var body = await httpClient.GetFromJsonAsync<NumberingPreviewResponse>(url, cancellationToken);
         return body ?? throw new InvalidOperationException("Numbering API returned an empty preview payload.");
     }
-
-    public async Task<ReserveNumberResponse> ReserveAsync(ReserveNumberRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync("/api/numbering/reserve", request, cancellationToken);
-        return await ApiResponseReader.ReadOrThrowAsync<ReserveNumberResponse>(response, cancellationToken);
-    }
 }

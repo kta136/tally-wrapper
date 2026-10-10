@@ -28,19 +28,11 @@ public partial class BillsView : UserControl
     private BillsViewModel? ViewModel => DataContext as BillsViewModel;
     private MainWindowViewModel? ShellViewModel => Window.GetWindow(this)?.DataContext as MainWindowViewModel;
 
-    private void OnBillRowDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (ShellViewModel?.OpenBillDetailsCommand.CanExecute(null) == true)
-        {
-            ShellViewModel.OpenBillDetailsCommand.Execute(null);
-        }
-    }
-
     private void OnBillRowMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2)
         {
-            OnBillRowDoubleClick(sender, e);
+            OpenDetails();
         }
     }
 
@@ -52,41 +44,16 @@ public partial class BillsView : UserControl
         }
     }
 
-    private void OnOpenDetailsMenuItemClick(object sender, RoutedEventArgs e)
+    // Open Details and Print live on the shell view model, which the context
+    // menu cannot reach by binding (its Tag carries the Bills view model), so
+    // these two stay as click handlers.
+    private void OnOpenDetailsMenuItemClick(object sender, RoutedEventArgs e) => OpenDetails();
+
+    private void OpenDetails()
     {
         if (ShellViewModel?.OpenBillDetailsCommand.CanExecute(null) == true)
         {
             ShellViewModel.OpenBillDetailsCommand.Execute(null);
-        }
-    }
-
-    private async void OnPushSelectedMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel?.PushSelectedCommand.CanExecute(null) == true)
-        {
-            await ExecuteSafelyAsync(
-                () => ViewModel.PushSelectedCommand.ExecuteAsync(null),
-                "Push selected");
-        }
-    }
-
-    private async void OnRetrySelectedMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel?.RetrySelectedCommand.CanExecute(null) == true)
-        {
-            await ExecuteSafelyAsync(
-                () => ViewModel.RetrySelectedCommand.ExecuteAsync(null),
-                "Retry selected");
-        }
-    }
-
-    private async void OnPrintSelectedMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        if (ShellViewModel?.OpenSelectedBillsPrintPreviewCommand.CanExecute(null) == true)
-        {
-            await ExecuteSafelyAsync(
-                () => ShellViewModel.OpenSelectedBillsPrintPreviewCommand.ExecuteAsync(null),
-                "Print preview");
         }
     }
 
@@ -105,15 +72,6 @@ public partial class BillsView : UserControl
             await ExecuteSafelyAsync(
                 () => ShellViewModel.OpenSelectedBillsPrintPreviewCommand.ExecuteAsync(null),
                 "Print preview");
-        }
-    }
-
-    private void OnCopyInvoiceNumberMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        var row = RowFrom(sender);
-        if (ViewModel is not null && row is not null && ViewModel.CopyInvoiceNumberCommand.CanExecute(row))
-        {
-            ViewModel.CopyInvoiceNumberCommand.Execute(row);
         }
     }
 
@@ -136,16 +94,6 @@ public partial class BillsView : UserControl
             await ExecuteSafelyAsync(
                 () => ViewModel.ChangeNumberRowCommand.ExecuteAsync(row),
                 "Change bill number");
-        }
-    }
-
-    private async void OnDeleteSelectedMenuItemClick(object sender, RoutedEventArgs e)
-    {
-        if (ViewModel?.DeleteSelectedCommand.CanExecute(null) == true)
-        {
-            await ExecuteSafelyAsync(
-                () => ViewModel.DeleteSelectedCommand.ExecuteAsync(null),
-                "Delete selected");
         }
     }
 

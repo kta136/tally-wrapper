@@ -67,7 +67,6 @@
       MainWindow.xaml.cs supplies per-monitor maximize bounds through
       WM_GETMINMAXINFO so the custom chrome stays inside the current work area.
     -->
-    <Border>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -167,5 +166,4 @@
                             ViewType="{x:Type billsViews:ReasonPromptDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter=reasonPrompt}" />
     </Grid>
-    </Border>
 </Window>

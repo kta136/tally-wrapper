@@ -9,7 +9,6 @@
              Background="{StaticResource BgPanelBrush}"
              d:DataContext="{d:DesignInstance Type=vm:InvoiceViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
-        <conv:OneBasedIndexConverter x:Key="OneBasedIndex" />
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />

@@ -126,7 +126,6 @@ public sealed class ViewSmokeTests
             mastersApiClient: null!,
             billsApiClient: null!,
             bootstrapOptions: Options.Create(new DesktopBootstrapOptions()),
-            localPreferencesOptions: Options.Create(new DesktopLocalPreferencesOptions()),
             companyProfileProvider: null!,
             printLayoutOptionsProvider: null!,
             printDispatcher: null!,

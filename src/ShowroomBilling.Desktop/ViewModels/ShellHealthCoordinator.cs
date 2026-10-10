@@ -140,7 +140,7 @@ internal sealed class ShellHealthCoordinator(
         host.Health.Apply(snapshot);
         if (snapshot.Runtime is { DatabaseHealthSkipped: false } runtime)
         {
-            host.StatusBar.ApplyDatabaseIdentity(runtime.DatabaseIdentity, null);
+            host.StatusBar.ApplyDatabaseIdentity(runtime.DatabaseIdentity);
         }
 
         if (!snapshot.ApiReachable)
