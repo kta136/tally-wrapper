@@ -131,22 +131,20 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
         Guid billId,
         CancellationToken cancellationToken = default)
     {
-        var lease = await LoadActiveLeaseAsync(billId, cancellationToken);
-        if (lease is null)
-        {
-            return null;
-        }
-        if (lease.ExpiresAtUtc <= DateTimeOffset.UtcNow)
-        {
-            return null;
-        }
-        return MapResponse(lease);
+        var now = DateTimeOffset.UtcNow;
+        var lease = await dbContext.DraftEditLeases
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                x => x.BillId == billId && x.ReleasedAtUtc == null && x.ExpiresAtUtc > now,
+                cancellationToken);
+        return lease is null ? null : MapResponse(lease);
     }
 
     public async Task<DraftLeaseListResponse> ListActiveAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
         var leases = await dbContext.DraftEditLeases
+            .AsNoTracking()
             .Where(x => x.ReleasedAtUtc == null && x.ExpiresAtUtc > now)
             .OrderByDescending(x => x.AcquiredAtUtc)
             .ToListAsync(cancellationToken);

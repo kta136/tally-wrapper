@@ -134,15 +134,11 @@ public sealed class AdminAuthService(
         }
         var hash = HashToken(token);
         var now = DateTimeOffset.UtcNow;
-        var session = await dbContext.AdminSessions
-            .FirstOrDefaultAsync(
-                x => x.TokenHash == hash && x.RevokedAtUtc == null && x.ExpiresAtUtc > now,
-                cancellationToken);
-        if (session is null)
-        {
-            return null;
-        }
-        return new AdminSessionInfoResponse(session.Id, session.ActorLabel, session.IssuedAtUtc, session.ExpiresAtUtc);
+        return await dbContext.AdminSessions
+            .AsNoTracking()
+            .Where(x => x.TokenHash == hash && x.RevokedAtUtc == null && x.ExpiresAtUtc > now)
+            .Select(x => new AdminSessionInfoResponse(x.Id, x.ActorLabel, x.IssuedAtUtc, x.ExpiresAtUtc))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task LogoutAsync(AdminLogoutRequest request, CancellationToken cancellationToken = default)

@@ -2,15 +2,8 @@ namespace ShowroomBilling.Infrastructure.Bills;
 
 internal static class BillNumberChangeRules
 {
-    internal static bool IsDigitsOnly(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return false;
-        foreach (var c in value)
-        {
-            if (c < '0' || c > '9') return false;
-        }
-        return true;
-    }
+    internal static bool IsDigitsOnly(string value) =>
+        !string.IsNullOrEmpty(value) && value.All(char.IsAsciiDigit);
 
     internal static string? BuildWarning(bool leavesGap, bool tallyDiverges, bool reservationOrphaned)
     {

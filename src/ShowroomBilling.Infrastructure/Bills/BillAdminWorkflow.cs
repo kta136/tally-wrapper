@@ -26,14 +26,6 @@ internal sealed class BillAdminWorkflow(
         {
             throw new BillStateConflictException("Invoice number cannot be blank.");
         }
-        if (newNumber.Length > 128)
-        {
-            throw new BillStateConflictException("Invoice number is longer than 128 characters.");
-        }
-        if (newNumber.Any(char.IsWhiteSpace))
-        {
-            throw new BillStateConflictException("Invoice number cannot contain whitespace.");
-        }
 
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
@@ -51,11 +43,9 @@ internal sealed class BillAdminWorkflow(
 
         // Auto-format digit-only input so admin doesn't have to retype the
         // prefix / fiscal year / suffix boilerplate.
-        {
-            var (prefix, suffix, padding) = await numberingService.GetEffectivePrefixSuffixAsync(cancellationToken);
-            var fiscalYearForFormat = bill.FiscalYear ?? NumberingService.NormalizeFiscalYear(null);
-            newNumber = InvoiceNumberFormatter.Format(prefix, suffix, autoFormatCore, fiscalYearForFormat, padding);
-        }
+        var fiscalYear = bill.FiscalYear ?? NumberingService.NormalizeFiscalYear(null);
+        var (prefix, suffix, padding) = await numberingService.GetEffectivePrefixSuffixAsync(cancellationToken);
+        newNumber = InvoiceNumberFormatter.Format(prefix, suffix, autoFormatCore, fiscalYear, padding);
 
         if (string.Equals(bill.InvoiceNumber, newNumber, StringComparison.Ordinal))
         {
@@ -86,7 +76,6 @@ internal sealed class BillAdminWorkflow(
         }
 
         var showroomId = bill.ShowroomId;
-        var fiscalYear = bill.FiscalYear ?? NumberingService.NormalizeFiscalYear(null);
         var sequence = await dbContext.InvoiceSequences
             .AsNoTracking()
             .FirstOrDefaultAsync(
@@ -225,68 +214,62 @@ internal sealed class BillAdminWorkflow(
             WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges, reservationOrphaned));
     }
 
-    internal async Task<BillResponse> MarkPostedAsync(
+    internal Task<BillResponse> MarkPostedAsync(
         Guid billId,
         MarkBillStateRequest request,
         CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (BillStates.Pending or BillStates.Draft or BillStates.Failed or BillStates.ReconciliationRequired))
-        {
-            throw new BillStateConflictException(
-                $"Bill '{billId}' is in state '{bill.State}'; mark-as-pushed is not allowed.");
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        var fromState = bill.State;
-        bill.State = BillStates.Posted;
-        bill.EditedAfterPush = false;
-        bill.UpdatedAtUtc = now;
-
-        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
-        auditStore.Write(
-            bill.Id,
+        => MarkAsync(
+            billId,
+            request,
+            BillStateCapabilities.CanMarkPosted,
+            BillStates.Posted,
             BillAuditEvents.MarkPosted,
-            bill.State,
-            now,
-            new { fromState, reason });
-        await dbContext.SaveChangesAsync(cancellationToken);
+            "mark-as-pushed",
+            cancellationToken);
 
-        var revision = bill.CurrentRevisionId is Guid rid
-            ? await dbContext.BillRevisions.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rid, cancellationToken)
-            : null;
-        return BillSerialization.MapResponse(bill, revision);
-    }
-
-    internal async Task<BillResponse> MarkPendingAsync(
+    internal Task<BillResponse> MarkPendingAsync(
         Guid billId,
         MarkBillStateRequest request,
         CancellationToken cancellationToken = default)
+        => MarkAsync(
+            billId,
+            request,
+            BillStateCapabilities.CanMarkPending,
+            BillStates.Pending,
+            BillAuditEvents.MarkPending,
+            "mark-as-pending",
+            cancellationToken);
+
+    /// <summary>
+    /// The admin override that settles a bill's state without calling Tally:
+    /// the operator has checked Tally and says what it holds.
+    /// </summary>
+    private async Task<BillResponse> MarkAsync(
+        Guid billId,
+        MarkBillStateRequest request,
+        Func<string?, bool> isAllowedFrom,
+        string targetState,
+        string eventType,
+        string actionName,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (BillStates.Posted or BillStates.Failed or BillStates.ReconciliationRequired))
+        if (!isAllowedFrom(bill.State))
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is in state '{bill.State}'; mark-as-pending is not allowed.");
+                $"Bill '{billId}' is in state '{bill.State}'; {actionName} is not allowed.");
         }
 
         var now = DateTimeOffset.UtcNow;
         var fromState = bill.State;
-        bill.State = BillStates.Pending;
+        bill.State = targetState;
         bill.EditedAfterPush = false;
         bill.UpdatedAtUtc = now;
 
         var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
-        auditStore.Write(
-            bill.Id,
-            BillAuditEvents.MarkPending,
-            bill.State,
-            now,
-            new { fromState, reason });
+        auditStore.Write(bill.Id, eventType, bill.State, now, new { fromState, reason });
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var revision = bill.CurrentRevisionId is Guid rid
@@ -412,12 +395,6 @@ internal sealed class BillAdminWorkflow(
             {
                 items.Add(new DeleteBillItemResult(id, false, false, "Bill not found."));
                 skipped++;
-            }
-            catch (BillStateConflictException ex)
-            {
-                items.Add(new DeleteBillItemResult(id, false, false, ex.Message));
-                skipped++;
-                dbContext.ChangeTracker.Clear();
             }
             catch (Exception ex)
             {
