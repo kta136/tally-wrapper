@@ -395,12 +395,12 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 ### API / DB
 
 - deploy API compatible with next DB migration
-- `DatabaseInitializationHostedService` applies migrations on startup
+- `DatabaseInitializationHostedService` applies migrations on startup **only where `Database:AutoMigrateOnStartup` is true**. The server service has it on (the tray installer sets `Database__AutoMigrateOnStartup=true`). The Desktop's embedded API has it off (`publish-prod.ps1` writes `false` into the API it embeds), so where counters run their own embedded API the migrations are applied by hand with `dotnet ef database update --connection ...` ([DEV_SETUP.md](../DEV_SETUP.md)). A new build pointed at a database that has not had its migrations fails on its first bill query.
 - preserve backward-compatibility window if desktop rollout is staged
 
-**A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so the moment the first new build starts and migrates the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers each counter running its own embedded API as well as an older server service. For such a release: close Billing on every counter and stop the server service, take the dump below, update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
+**A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so once the migrations are applied to the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers each counter running its own embedded API as well as an older server service. For such a release: close Billing on every counter and stop the server service, take the dump below, apply the migrations (start the new server build, or run the EF command where there is no server), update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
 
-**Take a database dump before a release that carries migrations.** Production applies pending migrations by itself the first time the new API starts (`Database__AutoMigrateOnStartup=true`), so the dump has to exist before that build is started, not after. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
+**Take a database dump before a release that carries migrations.** The server service applies pending migrations by itself the first time the new build starts, so there the dump has to exist before that build is started, not after. Where migrations are applied by hand, take it before running the EF command. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 
 ```powershell
 $env:PGPASSWORD = '<password from OpenBao>'
