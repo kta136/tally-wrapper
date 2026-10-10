@@ -161,7 +161,7 @@
                             <TextBlock Text="Cloud API unreachable" FontWeight="SemiBold" />
                             <TextBlock Text="DNS resolves · TCP connect fails · verify firewall / VPN"
                                        Foreground="{StaticResource InkMutedBrush}"
-                                       FontSize="11.5" />
+                                       FontSize="{DynamicResource FontSizeLabel}" />
                         </StackPanel>
                         <TextBlock Grid.Column="2"
                                    Text="—"
@@ -180,7 +180,7 @@
                             <TextBlock Text="Tally — no response" FontWeight="SemiBold" />
                             <TextBlock Text="Check that TallyPrime is running and the XML endpoint is reachable"
                                        Foreground="{StaticResource InkMutedBrush}"
-                                       FontSize="11.5" />
+                                       FontSize="{DynamicResource FontSizeLabel}" />
                         </StackPanel>
                         <TextBlock Grid.Column="2"
                                    Text="—"
@@ -199,7 +199,7 @@
                             <TextBlock Text="Unsaved bills held in memory" FontWeight="SemiBold" />
                             <TextBlock Text="Retry Save once the cloud is back to persist them"
                                        Foreground="{StaticResource InkMutedBrush}"
-                                       FontSize="11.5" />
+                                       FontSize="{DynamicResource FontSizeLabel}" />
                         </StackPanel>
                     </Grid>
                 </StackPanel>

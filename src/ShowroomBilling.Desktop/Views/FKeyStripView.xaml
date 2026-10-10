@@ -36,7 +36,7 @@
                         <TextBlock Margin="4,0,0,0"
                                    Text="{Binding Label}"
                                    FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="10.5"
+                                   FontSize="{DynamicResource FontSizeXs}"
                                    Foreground="{StaticResource InkMutedBrush}"
                                    VerticalAlignment="Center" />
                         <Rectangle Width="1"

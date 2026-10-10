@@ -35,10 +35,10 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                    <TextBlock Text="Source" Foreground="{StaticResource InkMutedBrush}" FontSize="11" VerticalAlignment="Center" />
+                    <TextBlock Text="Source" Foreground="{StaticResource InkMutedBrush}" FontSize="{DynamicResource FontSizeSm}" VerticalAlignment="Center" />
                     <TextBlock Margin="6,0,0,0"
                                FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11.5"
+                               FontSize="{DynamicResource FontSizeLabel}"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis"
@@ -50,19 +50,19 @@
                             BorderThickness="1"
                             CornerRadius="2"
                             VerticalAlignment="Center">
-                        <TextBlock FontSize="11"
+                        <TextBlock FontSize="{DynamicResource FontSizeSm}"
                                    Foreground="{StaticResource InkSoftBrush}"
                                    TextTrimming="CharacterEllipsis"
                                    Text="{Binding Summary, TargetNullValue=''}" />
                     </Border>
                     <TextBlock Margin="12,0,0,0"
-                               FontSize="11"
+                               FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource InkMutedBrush}"
                                VerticalAlignment="Center"
                                Text="Updated" />
                     <TextBlock Margin="6,0,0,0"
                                FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11"
+                               FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource InkSoftBrush}"
                                VerticalAlignment="Center"
                                Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
@@ -72,7 +72,7 @@
                             CornerRadius="2"
                             VerticalAlignment="Center"
                             Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}">
-                        <TextBlock FontSize="10.5"
+                        <TextBlock FontSize="{DynamicResource FontSizeXs}"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource WarnInkBrush}"
                                    Text="UNSAVED CHANGES" />
@@ -81,7 +81,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <TextBlock Margin="0,0,10,0"
                                VerticalAlignment="Center"
-                               FontSize="11"
+                               FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource InkMutedBrush}"
                                Text="{Binding StatusMessage}" />
                     <Button Style="{StaticResource BtnSm}"
@@ -141,7 +141,7 @@
                                            Grid.Column="1"
                                            Margin="8,0,0,0"
                                            VerticalAlignment="Center"
-                                           FontSize="12.5"
+                                           FontSize="{DynamicResource FontSizeUi}"
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
                             </Grid>
                             <DataTemplate.Triggers>

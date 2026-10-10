@@ -22,10 +22,10 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
-                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Rows" />
+                <TextBlock FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Rows" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding Draft.ItemMasterRows.Count}" />
@@ -150,10 +150,10 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
-                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Rows" />
+                <TextBlock FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Rows" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding Draft.KaratRows.Count}" />
@@ -240,7 +240,7 @@
             </DockPanel>
         </Border>
         <TextBlock Margin="0,8,0,0"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="Bill Items describe what lines in the invoice look like (weight-based gold / diamond, pricing mode). Karats map a label + purity to a Tally stock item for posting. Karats draw from the cached Tally Stock Items list below." />
@@ -252,24 +252,24 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
-                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Cached" />
+                <TextBlock FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Cached" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding StockItemsCount, StringFormat='{}{0} item(s)'}" />
-                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Freshness" />
+                <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Freshness" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding StockItemsFreshness}" />
-                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Fetched" />
+                <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Fetched" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding StockItemsFetchedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
@@ -308,10 +308,10 @@
                                 <ColumnDefinition Width="80" />
                                 <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Grid.Column="1" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="{Binding Karat, TargetNullValue='—'}" />
-                            <TextBlock Grid.Column="2" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="{Binding BaseUnit, TargetNullValue='—'}" />
-                            <TextBlock Grid.Column="3" FontFamily="{StaticResource MonoFontFamily}" FontSize="11" Foreground="{StaticResource InkSoftBrush}" Text="{Binding HsnCode, TargetNullValue='—'}" />
+                            <TextBlock Grid.Column="0" FontFamily="{StaticResource MonoFontFamily}" FontSize="{DynamicResource FontSizeLabel}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" Text="{Binding Karat, TargetNullValue='—'}" />
+                            <TextBlock Grid.Column="2" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" Text="{Binding BaseUnit, TargetNullValue='—'}" />
+                            <TextBlock Grid.Column="3" FontFamily="{StaticResource MonoFontFamily}" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkSoftBrush}" Text="{Binding HsnCode, TargetNullValue='—'}" />
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

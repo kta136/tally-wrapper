@@ -56,11 +56,11 @@
     <SolidColorBrush x:Key="EditBannerBorderBrush" Color="#FFF0C674" />
     <SolidColorBrush x:Key="EditBannerInkBrush" Color="#FF7A4F01" />
 
-    <!--  Density — compact default (density swap for Phase 7+ is a merged-dictionary change)  -->
+    <!--  Density — compact defaults. UiDensityManager overrides these nine keys at
+          run time for Comfortable, so read them with DynamicResource, not StaticResource.  -->
     <sys:Double x:Key="RowHeight">28</sys:Double>
     <sys:Double x:Key="InputHeight">28</sys:Double>
     <sys:Double x:Key="ButtonHeight">28</sys:Double>
-    <sys:Double x:Key="CellPadding">10</sys:Double>
     <sys:Double x:Key="FontSizeUi">12.5</sys:Double>
     <sys:Double x:Key="FontSizeLabel">11.5</sys:Double>
     <sys:Double x:Key="FontSizeSm">11</sys:Double>

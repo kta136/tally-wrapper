@@ -12,7 +12,7 @@
         <conv:OneBasedIndexConverter x:Key="OneBasedIndex" />
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />
         <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="Margin" Value="0,0,0,3" />
@@ -25,7 +25,7 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Padding" Value="10,0" />
-            <Setter Property="Height" Value="{StaticResource RowHeight}" />
+            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
             <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
         <Style x:Key="CellNumBox" TargetType="TextBox" BasedOn="{StaticResource CellTextBox}">
@@ -37,10 +37,10 @@
         <Style x:Key="CellCombo" TargetType="ComboBox">
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Height" Value="{StaticResource RowHeight}" />
+            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
             <Setter Property="Padding" Value="8,0" />
             <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-            <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style x:Key="HeaderCell" TargetType="Border">
@@ -50,14 +50,14 @@
             <Setter Property="Padding" Value="10,4" />
         </Style>
         <Style x:Key="HeaderText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         </Style>
         <Style x:Key="BodyCell" TargetType="Border">
             <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="MinHeight" Value="{StaticResource RowHeight}" />
+            <Setter Property="MinHeight" Value="{DynamicResource RowHeight}" />
         </Style>
         <Style x:Key="EntryRowGrid" TargetType="Grid">
             <Setter Property="Background" Value="Transparent" />
@@ -122,7 +122,7 @@
                 BorderBrush="{StaticResource EditBannerBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Visibility="{Binding IsEditingPosted, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="11.5"
+            <TextBlock FontSize="{DynamicResource FontSizeLabel}"
                        Foreground="{StaticResource EditBannerInkBrush}"
                        TextWrapping="Wrap"
                        Text="Editing a previously-posted bill. Saving moves it back to pending and re-queues the new revision to Tally." />
@@ -263,7 +263,7 @@
                                    Margin="10,0"
                                    Fill="{StaticResource DividerBrush}" />
                         <TextBlock VerticalAlignment="Center"
-                                   FontSize="{StaticResource FontSizeXs}"
+                                   FontSize="{DynamicResource FontSizeXs}"
                                    Foreground="{StaticResource InkSoftBrush}"
                                    Text="Tab next field · Enter next row · ↑↓ move" />
                     </StackPanel>
@@ -614,7 +614,7 @@
                                      Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="8,0,0,0"
                                        VerticalAlignment="Center"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource FontSizeSm}"
                                        Foreground="{StaticResource InkMutedBrush}"
                                        Text="{Binding DiscountPercentHint}" />
                             <Rectangle Width="1"
@@ -639,7 +639,7 @@
                         </StackPanel>
                         <TextBlock Margin="14,0,0,0"
                                    VerticalAlignment="Center"
-                                   FontSize="11"
+                                   FontSize="{DynamicResource FontSizeSm}"
                                    TextTrimming="CharacterEllipsis"
                                    Foreground="{StaticResource InkMutedBrush}"
                                    Text="{Binding SaveStatus}" />
@@ -708,7 +708,7 @@
                         <DataTemplate>
                             <Grid Margin="10,6">
                                 <TextBlock Text="{Binding Name}"
-                                           FontSize="{StaticResource FontSizeUi}"
+                                           FontSize="{DynamicResource FontSizeUi}"
                                            FontWeight="Medium" />
                             </Grid>
                         </DataTemplate>
@@ -719,7 +719,7 @@
                         Background="{StaticResource BgPanelBrush}"
                         BorderBrush="{StaticResource BorderBrushTok}"
                         BorderThickness="0,1,0,0">
-                    <TextBlock Foreground="{StaticResource InkMutedBrush}" FontSize="10.5" Text="Click to add · F3 focus" />
+                    <TextBlock Foreground="{StaticResource InkMutedBrush}" FontSize="{DynamicResource FontSizeXs}" Text="Click to add · F3 focus" />
                 </Border>
             </Grid>
         </Border>

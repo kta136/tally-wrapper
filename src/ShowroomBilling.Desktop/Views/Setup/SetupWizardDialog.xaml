@@ -42,7 +42,7 @@
                             <TextBlock Margin="0,3,0,0"
                                        Text="{Binding StepLabel}"
                                        FontFamily="{StaticResource MonoFontFamily}"
-                                       FontSize="10.5"
+                                       FontSize="{DynamicResource FontSizeXs}"
                                        FontWeight="SemiBold"
                                        Foreground="{StaticResource AccentBrush}" />
                         </StackPanel>
@@ -83,7 +83,7 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource AdminSectionTitle}" Text="DATABASE" />
                                 <TextBlock Margin="0,0,0,10"
-                                           FontSize="11.5"
+                                           FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="Paste the PostgreSQL connection string for this installation. It will be encrypted for this Windows user and will not be written into the EXE or repo." />
@@ -96,7 +96,7 @@
                                          VerticalContentAlignment="Top"
                                          Padding="10,8"
                                          FontFamily="{StaticResource MonoFontFamily}"
-                                         FontSize="11.5" />
+                                         FontSize="{DynamicResource FontSizeLabel}" />
                             </StackPanel>
                         </Border>
 
@@ -105,7 +105,7 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource AdminSectionTitle}" Text="SHOWROOM BASICS" />
                                 <TextBlock Margin="0,0,0,10"
-                                           FontSize="11.5"
+                                           FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="Set the minimum shared settings needed before billing starts. Item masters, karats, print layout, and advanced setup remain in Settings." />

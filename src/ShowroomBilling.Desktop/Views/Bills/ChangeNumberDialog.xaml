@@ -8,7 +8,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="Margin" Value="0,0,0,3" />
@@ -59,7 +59,7 @@
                                  Margin="0,0,0,4"
                                  FontFamily="{StaticResource MonoFontFamily}" />
                         <TextBlock Margin="0,0,0,12"
-                                   FontSize="11"
+                                   FontSize="{DynamicResource FontSizeSm}"
                                    FontFamily="{StaticResource MonoFontFamily}"
                                    Foreground="{StaticResource InkMutedBrush}"
                                    TextWrapping="Wrap"

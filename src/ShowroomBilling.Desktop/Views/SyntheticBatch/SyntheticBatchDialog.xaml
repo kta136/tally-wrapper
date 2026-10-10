@@ -8,14 +8,14 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
 
         <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             <Setter Property="Margin" Value="0,0,0,3" />
         </Style>
 
         <Style x:Key="DlgSectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
             <Setter Property="Margin" Value="0,0,0,8" />
@@ -78,7 +78,7 @@
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
                             <TextBlock Margin="10,0,0,0"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource FontSizeSm}"
                                        Foreground="{StaticResource InkMutedBrush}"
                                        VerticalAlignment="Center"
                                        Text="V1-ported synthetic bill generator" />
@@ -232,7 +232,7 @@
                         <Border Style="{StaticResource DlgCard}">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource DlgSectionTitle}" Text="RUNTIME" />
-                                <TextBlock FontSize="11.5"
+                                <TextBlock FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkMutedBrush}"
                                            TextWrapping="Wrap"
                                            Text="{Binding StatusMessage, TargetNullValue='Ready.', FallbackValue='Ready.'}" />
@@ -249,7 +249,7 @@
                                     <TextBlock Grid.Column="1"
                                                Margin="10,0,0,0"
                                                FontFamily="{StaticResource MonoFontFamily}"
-                                               FontSize="11"
+                                               FontSize="{DynamicResource FontSizeSm}"
                                                Foreground="{StaticResource InkMutedBrush}"
                                                VerticalAlignment="Center">
                                         <Run Text="{Binding CreatedCount, Mode=OneWay}" /><Run Text=" / " /><Run Text="{Binding TotalCount, Mode=OneWay}" />

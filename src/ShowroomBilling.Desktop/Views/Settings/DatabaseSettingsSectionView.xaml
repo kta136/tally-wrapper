@@ -34,14 +34,14 @@
                 <Setter Property="VerticalAlignment" Value="Center" />
             </Style>
             <Style x:Key="CardValue" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="11.5" />
+                <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
             <Style x:Key="CardDetail" TargetType="TextBlock">
                 <Setter Property="Margin" Value="0,3,0,0" />
-                <Setter Property="FontSize" Value="10.5" />
+                <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
                 <Setter Property="LineHeight" Value="15" />
                 <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
@@ -49,14 +49,14 @@
             <Style x:Key="TableHeaderText" TargetType="TextBlock">
                 <Setter Property="Margin" Value="10,0" />
                 <Setter Property="VerticalAlignment" Value="Center" />
-                <Setter Property="FontSize" Value="{StaticResource FontSizeSectionTitle}" />
+                <Setter Property="FontSize" Value="{DynamicResource FontSizeSectionTitle}" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
             </Style>
             <Style x:Key="TableCellText" TargetType="TextBlock">
                 <Setter Property="Margin" Value="10,6" />
                 <Setter Property="VerticalAlignment" Value="Center" />
-                <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+                <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
                 <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
@@ -75,7 +75,7 @@
                    Foreground="{StaticResource InkBrush}"
                    Margin="0,0,0,3" />
         <TextBlock Margin="0,0,0,12"
-                   FontSize="11.5"
+                   FontSize="{DynamicResource FontSizeLabel}"
                    Foreground="{StaticResource InkMutedBrush}"
                    TextWrapping="Wrap"
                    Text="Manage where Billing sends data and how it connects to the database." />
@@ -140,7 +140,7 @@
                                     <TextBlock Style="{StaticResource DbIcon}" Text="&#xE7F8;" />
                                     <TextBlock Grid.Column="1"
                                                VerticalAlignment="Center"
-                                               FontSize="{StaticResource FontSizeUi}"
+                                               FontSize="{DynamicResource FontSizeUi}"
                                                FontWeight="SemiBold"
                                                TextWrapping="Wrap"
                                                Text="Desktop App (This workstation)" />
@@ -157,7 +157,7 @@
                                                    Foreground="{StaticResource OkBrush}"
                                                    Text="&#x2713;" />
                                     </Border>
-                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}" Text="OK" />
+                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{DynamicResource FontSizeSm}" Text="OK" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -178,7 +178,7 @@
                                     <TextBlock Style="{StaticResource DbIcon}" Text="&#xE753;" />
                                     <TextBlock Grid.Column="1"
                                                VerticalAlignment="Center"
-                                               FontSize="{StaticResource FontSizeUi}"
+                                               FontSize="{DynamicResource FontSizeUi}"
                                                FontWeight="SemiBold"
                                                TextWrapping="Wrap"
                                                Text="{Binding ActiveApiComponentText}" />
@@ -199,7 +199,7 @@
                                                    Foreground="{StaticResource OkBrush}"
                                                    Text="&#x2713;" />
                                     </Border>
-                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}" Text="{Binding ActiveApiStatusText}" />
+                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{DynamicResource FontSizeSm}" Text="{Binding ActiveApiStatusText}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -220,7 +220,7 @@
                                     <TextBlock Style="{StaticResource DbIcon}" Text="&#xEDA2;" />
                                     <TextBlock Grid.Column="1"
                                                VerticalAlignment="Center"
-                                               FontSize="{StaticResource FontSizeUi}"
+                                               FontSize="{DynamicResource FontSizeUi}"
                                                FontWeight="SemiBold"
                                                Text="PostgreSQL" />
                                 </Grid>
@@ -236,7 +236,7 @@
                                                    Foreground="{StaticResource OkBrush}"
                                                    Text="&#x2713;" />
                                     </Border>
-                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource FontSizeSm}" Text="{Binding ActiveDatabaseStatusText}" />
+                                    <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" FontSize="{DynamicResource FontSizeSm}" Text="{Binding ActiveDatabaseStatusText}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -250,7 +250,7 @@
                    Foreground="{StaticResource InkBrush}"
                    Text="Change where the API runs"
                    Margin="0,0,0,3" />
-        <TextBlock FontSize="{StaticResource FontSizeLabel}"
+        <TextBlock FontSize="{DynamicResource FontSizeLabel}"
                    Foreground="{StaticResource InkMutedBrush}"
                    TextWrapping="Wrap"
                    Margin="0,0,0,9"
@@ -276,11 +276,11 @@
                         <TextBox Text="{Binding ServerApiBaseUrl, UpdateSourceTrigger=PropertyChanged}"
                                  IsEnabled="{Binding IsServerApiUrlEnabled}"
                                  FontFamily="{StaticResource MonoFontFamily}"
-                                 FontSize="{StaticResource FontSizeMono}" />
+                                 FontSize="{DynamicResource FontSizeMono}" />
                     </StackPanel>
                 </Grid>
 
-                <TextBlock FontSize="{StaticResource FontSizeSm}"
+                <TextBlock FontSize="{DynamicResource FontSizeSm}"
                            Foreground="{StaticResource InkMutedBrush}"
                            TextWrapping="Wrap"
                            Margin="0,7,0,9"
@@ -341,7 +341,7 @@
                 <TextBlock Style="{StaticResource DbIcon}" FontSize="12" Foreground="{StaticResource InfoBrush}" Text="&#xE946;" />
                 <TextBlock Grid.Column="1"
                            VerticalAlignment="Center"
-                           FontSize="{StaticResource FontSizeLabel}"
+                           FontSize="{DynamicResource FontSizeLabel}"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource InfoInkBrush}"
                            Text="{Binding ApiConnectionStatus}" />
@@ -375,7 +375,7 @@
                            Text="{Binding LocalDatabaseUsageChipText}" />
             </Border>
         </Grid>
-        <TextBlock FontSize="{StaticResource FontSizeLabel}"
+        <TextBlock FontSize="{DynamicResource FontSizeLabel}"
                    LineHeight="16"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
@@ -396,12 +396,12 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Style="{StaticResource DbIcon}" FontSize="14" Foreground="{StaticResource WarnBrush}" Text="&#xE814;" />
                 <StackPanel Grid.Column="1">
-                    <TextBlock FontSize="{StaticResource FontSizeLabel}"
+                    <TextBlock FontSize="{DynamicResource FontSizeLabel}"
                                FontWeight="SemiBold"
                                Foreground="{StaticResource WarnInkBrush}"
                                Text="The active server database is not configured from this workstation." />
                     <TextBlock Margin="0,2,0,0"
-                               FontSize="{StaticResource FontSizeSm}"
+                               FontSize="{DynamicResource FontSizeSm}"
                                TextWrapping="Wrap"
                                Foreground="{StaticResource WarnInkBrush}"
                                Text="Use the Tally Wrapper server tray on the Tally server to view, test, or change its PostgreSQL connection." />
@@ -424,7 +424,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="LOCAL EMBEDDED API ENDPOINT" />
                         <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="{StaticResource FontSizeMono}"
+                                   FontSize="{DynamicResource FontSizeMono}"
                                    Foreground="{StaticResource InkBrush}"
                                    TextWrapping="Wrap"
                                    Text="{Binding LocalEmbeddedApiBaseUrl}" />
@@ -465,7 +465,7 @@
                     <TextBlock Style="{StaticResource DbIcon}" FontSize="14" Foreground="{StaticResource InfoBrush}" Text="&#xE946;" />
                     <TextBlock Grid.Column="1"
                                VerticalAlignment="Center"
-                               FontSize="{StaticResource FontSizeSm}"
+                               FontSize="{DynamicResource FontSizeSm}"
                                LineHeight="15"
                                TextWrapping="Wrap"
                                Foreground="{StaticResource InfoInkBrush}"
@@ -481,7 +481,7 @@
                 BorderThickness="1"
                 CornerRadius="{StaticResource Radius}"
                 Visibility="{Binding CanBootstrapDatabaseWithoutAdmin, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="10.5"
+            <TextBlock FontSize="{DynamicResource FontSizeXs}"
                        TextWrapping="Wrap"
                        Foreground="{StaticResource WarnInkBrush}"
                        Text="{Binding DatabaseSetupModeText}" />
@@ -502,10 +502,10 @@
                          VerticalContentAlignment="Top"
                          Padding="9,7"
                          FontFamily="{StaticResource MonoFontFamily}"
-                         FontSize="11"
+                         FontSize="{DynamicResource FontSizeSm}"
                          ToolTip="The embedded API uses this value after it is tested, saved, and restarted." />
                 <TextBlock Margin="0,4,0,8"
-                           FontSize="10.5"
+                           FontSize="{DynamicResource FontSizeXs}"
                            Foreground="{StaticResource InkMutedBrush}"
                            TextWrapping="Wrap"
                            Text="Credentials are sent to the local API for testing and saved in a Windows-encrypted override file. They are never used by the desktop to connect directly." />
@@ -539,7 +539,7 @@
             </StackPanel>
         </Border>
 
-        <TextBlock FontSize="12.5"
+        <TextBlock FontSize="{DynamicResource FontSizeUi}"
                    FontWeight="SemiBold"
                    Foreground="{StaticResource InkBrush}"
                    Text="Configuration details"
@@ -564,7 +564,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="CONNECTION VALUE (MASKED)" />
                         <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="10.5"
+                                   FontSize="{DynamicResource FontSizeXs}"
                                    LineHeight="14"
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource InkBrush}"
@@ -581,7 +581,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="SOURCE" />
-                        <TextBlock Style="{StaticResource CardValue}" FontSize="10.5" Text="{Binding DatabaseSourceText}" />
+                        <TextBlock Style="{StaticResource CardValue}" FontSize="{DynamicResource FontSizeXs}" Text="{Binding DatabaseSourceText}" />
                     </StackPanel>
                     <TextBlock Grid.Column="1" Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE72E;" />
                 </Grid>
@@ -594,7 +594,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,3" Text="API ENVIRONMENT" />
-                        <TextBlock Style="{StaticResource CardValue}" FontSize="10.5" Text="{Binding DatabaseEnvironmentName}" />
+                        <TextBlock Style="{StaticResource CardValue}" FontSize="{DynamicResource FontSizeXs}" Text="{Binding DatabaseEnvironmentName}" />
                     </StackPanel>
                     <TextBlock Grid.Column="1" Style="{StaticResource DbIcon}" FontSize="12" Text="&#xE774;" />
                 </Grid>
@@ -640,7 +640,7 @@
                     <StackPanel>
                         <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="ENCRYPTED OVERRIDE FILE" />
                         <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="10.5"
+                                   FontSize="{DynamicResource FontSizeXs}"
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource AccentBrush}"
                                    Text="{Binding DatabaseConfigPath}" />

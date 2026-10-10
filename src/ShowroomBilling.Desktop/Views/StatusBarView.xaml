@@ -8,7 +8,7 @@
     <UserControl.Resources>
         <Style x:Key="StatusText" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
             <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
         </Style>
         <Style x:Key="StatusMono" BasedOn="{StaticResource StatusText}" TargetType="TextBlock">

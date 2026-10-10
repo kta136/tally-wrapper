@@ -24,13 +24,13 @@
             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
                 <TextBlock Text="Print Layout" Style="{StaticResource SectionHeader}" Margin="0" />
                 <TextBlock Margin="12,10,0,0"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkMutedBrush}"
                            Text="Updated" />
                 <TextBlock Margin="6,10,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
@@ -106,7 +106,7 @@
                        Margin="0" />
             <TextBlock Grid.Column="1"
                        VerticalAlignment="Center"
-                       FontSize="11"
+                       FontSize="{DynamicResource FontSizeSm}"
                        Foreground="{StaticResource InkMutedBrush}"
                        Text="Drag rows or use Move Up / Move Down" />
         </Grid>
@@ -255,7 +255,7 @@
             <Border Grid.Column="0" Style="{StaticResource ReadOnlyBox}">
                 <StackPanel>
                     <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT FILE" />
-                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding LogoFileName}" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="{DynamicResource FontSizeLabel}" Text="{Binding LogoFileName}" />
                 </StackPanel>
             </Border>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Top">
@@ -301,7 +301,7 @@
             <Border Grid.Column="0" Style="{StaticResource ReadOnlyBox}">
                 <StackPanel>
                     <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT FILE" />
-                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding WatermarkFileName}" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="{DynamicResource FontSizeLabel}" Text="{Binding WatermarkFileName}" />
                 </StackPanel>
             </Border>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Top">
@@ -343,7 +343,7 @@
             </StackPanel>
         </Grid>
         <TextBlock Margin="0,0,0,4"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="The watermark repeats behind invoice content on every physical page. Position and size use full-page A4 coordinates." />
@@ -357,7 +357,7 @@
             <Border Grid.Column="0" Style="{StaticResource ReadOnlyBox}">
                 <StackPanel>
                     <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT FILE" />
-                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="11.5" Text="{Binding SignatureFileName}" />
+                    <TextBlock FontFamily="{StaticResource MonoFontFamily}" FontSize="{DynamicResource FontSizeLabel}" Text="{Binding SignatureFileName}" />
                 </StackPanel>
             </Border>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0" VerticalAlignment="Top">
@@ -395,11 +395,11 @@
         </Grid>
 
         <TextBlock Margin="0,6,0,0"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="{Binding StatusMessage}" />
         <TextBlock Margin="0,6,0,0"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="Images are capped at 2 MB. Uploading replaces the old asset reference. Layout changes are shared across the showroom and applied to live preview, printing, and PDF export." />

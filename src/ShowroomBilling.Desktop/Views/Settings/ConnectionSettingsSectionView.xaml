@@ -59,27 +59,27 @@
             </StackPanel>
         </Grid>
         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-            <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="Cached" />
+            <TextBlock FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" Text="Cached" />
             <TextBlock Margin="6,0,0,0"
                        FontFamily="{StaticResource MonoFontFamily}"
-                       FontSize="11"
+                       FontSize="{DynamicResource FontSizeSm}"
                        Foreground="{StaticResource InkSoftBrush}"
                        Text="{Binding CompaniesCount, StringFormat='{}{0} companies'}" />
-            <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="Freshness" />
+            <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" Text="Freshness" />
             <TextBlock Margin="6,0,0,0"
                        FontFamily="{StaticResource MonoFontFamily}"
-                       FontSize="11"
+                       FontSize="{DynamicResource FontSizeSm}"
                        Foreground="{StaticResource InkSoftBrush}"
                        Text="{Binding CompaniesFreshness}" />
-            <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Text="Fetched" />
+            <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" Text="Fetched" />
             <TextBlock Margin="6,0,0,0"
                        FontFamily="{StaticResource MonoFontFamily}"
-                       FontSize="11"
+                       FontSize="{DynamicResource FontSizeSm}"
                        Foreground="{StaticResource InkSoftBrush}"
                        Text="{Binding CompaniesFetchedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
         </StackPanel>
         <TextBlock Margin="0,6,0,0"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="The dropdown auto-populates from the cached cloud snapshot. Refresh from Tally re-pulls the list and updates the dropdown in one step. Set Active changes the active company via the dedicated settings endpoint (no Save needed)." />

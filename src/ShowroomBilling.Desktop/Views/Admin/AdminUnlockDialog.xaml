@@ -152,7 +152,7 @@
                                             Command="{Binding UnlockCommand}" />
                                     <TextBlock Margin="10,0,0,0"
                                                VerticalAlignment="Center"
-                                               FontSize="11"
+                                               FontSize="{DynamicResource FontSizeSm}"
                                                Foreground="{StaticResource InkSoftBrush}"
                                                Text="Unlock is valid for 30 minutes on this counter only." />
                                 </StackPanel>
@@ -168,13 +168,13 @@
                                                Margin="0"
                                                Text="SET PASSCODE" />
                                     <TextBlock HorizontalAlignment="Right"
-                                               FontSize="10.5"
+                                               FontSize="{DynamicResource FontSizeXs}"
                                                Foreground="{StaticResource InkSoftBrush}"
                                                Text="Min. 6 characters"
                                                VerticalAlignment="Center" />
                                 </Grid>
                                 <TextBlock Margin="0,0,0,10"
-                                           FontSize="11.5"
+                                           FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="No admin passcode is configured yet. Set one now to enable admin unlock on this counter — saving will also start an admin session." />

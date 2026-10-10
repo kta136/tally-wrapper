@@ -34,7 +34,7 @@
                 <Border Grid.Row="1" Padding="16,14">
                     <StackPanel>
                         <TextBlock Text="{Binding MessageText}"
-                                   FontSize="12.5"
+                                   FontSize="{DynamicResource FontSizeUi}"
                                    TextWrapping="Wrap"
                                    Foreground="{StaticResource InkBrush}" />
                         <TextBox x:Name="ReasonBox"
@@ -46,7 +46,7 @@
                                  VerticalContentAlignment="Top"
                                  Padding="8,6" />
                         <TextBlock Margin="0,6,0,0"
-                                   FontSize="10.5"
+                                   FontSize="{DynamicResource FontSizeXs}"
                                    Foreground="{StaticResource InkSoftBrush}"
                                    Text="{Binding HintText, Mode=OneWay}" />
                     </StackPanel>

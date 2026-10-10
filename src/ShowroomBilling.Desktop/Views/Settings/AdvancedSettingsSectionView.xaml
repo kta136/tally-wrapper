@@ -31,7 +31,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
                     <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="UI DENSITY" />
-                    <TextBlock FontSize="11"
+                    <TextBlock FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource InkMutedBrush}"
                                TextWrapping="Wrap"
                                Text="Compact fits more billing rows; Comfortable increases touch targets and row height on this workstation." />
@@ -59,7 +59,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="LOG FOLDER" />
                     <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11"
+                               FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource AccentBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding LogFolderPath}" />
@@ -87,7 +87,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="APP DATA FOLDER" />
                     <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11"
+                               FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource AccentBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding AppDataFolderPath}" />
@@ -115,7 +115,7 @@
                 <StackPanel Grid.Column="0">
                     <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,2" Text="INSTALL FOLDER" />
                     <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="11"
+                               FontSize="{DynamicResource FontSizeSm}"
                                Foreground="{StaticResource AccentBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding InstallFolderPath}" />
@@ -130,7 +130,7 @@
         </Border>
 
         <TextBlock Margin="0,4,0,22"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    LineHeight="18"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkSoftBrush}"

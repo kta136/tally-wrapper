@@ -1,7 +1,7 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Style x:Key="FieldLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
         <Setter Property="Margin" Value="0,0,0,2" />

@@ -23,31 +23,31 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,12,0">
-                <TextBlock FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Ledgers" />
+                <TextBlock FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Ledgers" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding LedgersCount, StringFormat='{}{0}'}" />
-                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Voucher types" />
+                <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Voucher types" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding VoucherTypesCount, StringFormat='{}{0}'}" />
-                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Freshness" />
+                <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Freshness" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding LedgersFreshness}" />
-                <TextBlock Margin="12,0,0,0" FontSize="11" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Fetched" />
+                <TextBlock Margin="12,0,0,0" FontSize="{DynamicResource FontSizeSm}" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center" Text="Fetched" />
                 <TextBlock Margin="6,0,0,0"
                            FontFamily="{StaticResource MonoFontFamily}"
-                           FontSize="11"
+                           FontSize="{DynamicResource FontSizeSm}"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
                            Text="{Binding LedgersFetchedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
@@ -110,7 +110,7 @@
             </StackPanel>
         </Grid>
         <TextBlock Margin="0,6,0,0"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="Cached ledger and voucher-type snapshots auto-populate from the cloud on load. Refresh from Tally re-pulls and updates the dropdowns in one step. Free-text entry still works if the snapshot is empty or stale." />

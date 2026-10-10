@@ -89,7 +89,7 @@
                                Text="SET PASSCODE"
                                Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource InverseBoolToVis}}" />
                     <TextBlock HorizontalAlignment="Right"
-                               FontSize="10.5"
+                               FontSize="{DynamicResource FontSizeXs}"
                                Foreground="{StaticResource InkSoftBrush}"
                                Text="Min. 6 characters"
                                VerticalAlignment="Center" />
@@ -138,7 +138,7 @@
                             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
                             <Setter Property="BorderThickness" Value="0,0,0,1" />
                             <Setter Property="Padding" Value="10,4" />
-                            <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+                            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
                             <Setter Property="FontWeight" Value="SemiBold" />
                             <Setter Property="HorizontalContentAlignment" Value="Left" />
                         </Style>

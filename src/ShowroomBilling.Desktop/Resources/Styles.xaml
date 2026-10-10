@@ -5,7 +5,7 @@
     <!--  Base text defaults — Inter with tabular nums  -->
     <Style TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
@@ -13,7 +13,7 @@
 
     <!--  ─── Buttons ───────────────────────────────────────────────  -->
     <Style x:Key="BtnBase" TargetType="{x:Type Button}">
-        <Setter Property="Height" Value="{StaticResource ButtonHeight}" />
+        <Setter Property="Height" Value="{DynamicResource ButtonHeight}" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Padding" Value="12,0" />
         <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
@@ -21,7 +21,7 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -132,7 +132,7 @@
     <Style x:Key="BtnSm" BasedOn="{StaticResource BtnBase}" TargetType="{x:Type Button}">
         <Setter Property="Height" Value="24" />
         <Setter Property="Padding" Value="8,0" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSm}" />
     </Style>
 
     <!--  Window chrome (titlebar) buttons: flat, no border, red hover on close  -->
@@ -180,18 +180,18 @@
 
     <Style x:Key="TxtMono" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeMono}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeMono}" />
     </Style>
 
     <Style x:Key="TxtLabel" TargetType="{x:Type TextBlock}">
-        <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
         <!--  Uppercase conversion is done in bindings/views where needed  -->
     </Style>
 
     <Style x:Key="TxtSectionTitle" TargetType="{x:Type TextBlock}">
-        <Setter Property="FontSize" Value="{StaticResource FontSizeSectionTitle}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeSectionTitle}" />
         <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
     </Style>
@@ -204,14 +204,14 @@
 
     <!--  ─── Inputs ──────────────────────────────────────────────────  -->
     <Style TargetType="{x:Type TextBox}">
-        <Setter Property="Height" Value="{StaticResource InputHeight}" />
+        <Setter Property="Height" Value="{DynamicResource InputHeight}" />
         <Setter Property="Padding" Value="8,0" />
         <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderInputBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="Template">
@@ -252,14 +252,14 @@
 
     <!--  PasswordBox mirrors TextBox look  -->
     <Style TargetType="{x:Type PasswordBox}">
-        <Setter Property="Height" Value="{StaticResource InputHeight}" />
+        <Setter Property="Height" Value="{DynamicResource InputHeight}" />
         <Setter Property="Padding" Value="8,0" />
         <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderInputBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Setter Property="PasswordChar" Value="●" />
@@ -306,8 +306,8 @@
           and border identical to neighbouring TextBoxes so header rows
           read as a single consistent input row.  -->
     <Style TargetType="{x:Type ComboBox}">
-        <Setter Property="Height" Value="{StaticResource InputHeight}" />
-        <Setter Property="MinHeight" Value="{StaticResource InputHeight}" />
+        <Setter Property="Height" Value="{DynamicResource InputHeight}" />
+        <Setter Property="MinHeight" Value="{DynamicResource InputHeight}" />
         <Setter Property="Padding" Value="6,0" />
         <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderInputBrush}" />
@@ -320,7 +320,7 @@
               in the Invoice header reads in InkBrush, not the system grey).  -->
         <Setter Property="TextElement.Foreground" Value="{StaticResource InkBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
@@ -331,15 +331,15 @@
           constrained by the field height so it no longer towers above
           the surrounding TextBoxes.  -->
     <Style TargetType="{x:Type DatePicker}">
-        <Setter Property="Height" Value="{StaticResource InputHeight}" />
-        <Setter Property="MinHeight" Value="{StaticResource InputHeight}" />
+        <Setter Property="Height" Value="{DynamicResource InputHeight}" />
+        <Setter Property="MinHeight" Value="{DynamicResource InputHeight}" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderInputBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
@@ -425,14 +425,14 @@
 
     <!--  ─── Admin (shared by AdminUnlockDialog + Settings › Admin tab) ───  -->
     <Style x:Key="AdminFieldLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="{StaticResource FontSizeLabel}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
         <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
 
     <Style x:Key="AdminSectionTitle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
         <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         <Setter Property="Margin" Value="0,0,0,8" />
@@ -494,7 +494,7 @@
         <Setter Property="RowBackground" Value="{StaticResource BgPanelBrush}" />
         <Setter Property="AlternatingRowBackground" Value="{StaticResource BgRowAltBrush}" />
         <Setter Property="RowHeight" Value="26" />
-        <Setter Property="FontSize" Value="{StaticResource FontSizeUi}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
         <Setter Property="ColumnHeaderHeight" Value="26" />
         <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />

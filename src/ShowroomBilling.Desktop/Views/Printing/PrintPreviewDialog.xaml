@@ -41,12 +41,12 @@
                                 <TextBlock Margin="10,0,0,0"
                                            VerticalAlignment="Center"
                                            FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="11"
+                                           FontSize="{DynamicResource FontSizeSm}"
                                            Foreground="{StaticResource InkMutedBrush}"
                                            Text="{Binding InvoiceNumber, TargetNullValue='(pending)'}" />
                             </StackPanel>
                             <TextBlock Margin="0,3,0,0"
-                                       FontSize="11"
+                                       FontSize="{DynamicResource FontSizeSm}"
                                        Foreground="{StaticResource InkMutedBrush}"
                                        Text="{Binding StatusMessage}" />
                         </StackPanel>
@@ -171,7 +171,7 @@
                                     BorderThickness="1"
                                     CornerRadius="3"
                                     Padding="8">
-                                <TextBlock FontSize="11"
+                                <TextBlock FontSize="{DynamicResource FontSizeSm}"
                                            TextWrapping="Wrap"
                                            Foreground="{StaticResource InkMutedBrush}"
                                            Text="Printing does not change bill state. Push to Tally from the Bills tab." />

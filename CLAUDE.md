@@ -31,6 +31,7 @@ If you're about to write a paragraph that duplicates one of these, link instead.
 ## Workflow rules
 
 - **Smoke-test after every slice for WPF work.** `dotnet build` validates XAML compiles — it does not validate binding paths, layout, visibility triggers, or keyboard flow. Launch the exe and exercise the changed feature before claiming done.
+- **`ViewSmokeTests` is the automated half of that.** It loads every view against the real `MainWindowViewModel` (no window is shown) and fails on a XAML load error or a binding path error, so run the Desktop tests after any XAML change. It cannot see layout, focus or keyboard flow; those still need the exe. A new view is picked up automatically; give it a data context in `DataContextFor` if `MainWindow.xaml` gives it one.
 - **Update docs in the same pass as code.** If a slice changes a setting, endpoint, shortcut, or user-visible flow, edit `docs/` and `DEV_SETUP.md` alongside the code. Don't leave them drifted.
 - **Scope discipline.** For refactors or UI audits, prefer the smallest visual/logical change that closes the gap. No pre-emptive abstractions, no unrelated cleanup, no renaming "while you're in there".
 - **Ask before rebuilding at scale.** If a request could mean "touch a handful of files" or "rewrite every view", use `AskUserQuestion` before starting. The blast radius matters.
@@ -40,6 +41,7 @@ If you're about to write a paragraph that duplicates one of these, link instead.
 
 The design target is the hi-fi prototype in [docs/design/](docs/design/), distilled into [docs/15_ui_design_reference.md](docs/15_ui_design_reference.md). Tokens live in [Resources/DesignTokens.xaml](src/ShowroomBilling.Desktop/Resources/DesignTokens.xaml); control styles in [Resources/Styles.xaml](src/ShowroomBilling.Desktop/Resources/Styles.xaml).
 
+- **Density tokens are read with `DynamicResource`.** `RowHeight`, `InputHeight`, `ButtonHeight` and the six `FontSize*` keys are overridden at run time by `UiDensityManager`, so a `StaticResource` reference or a literal `10.5` / `11` / `11.5` / `12.5` font size ignores the setting. `UiDensityTests` checks that the manager's Compact values match `DesignTokens.xaml`.
 - **Always use tokens, never hardcode hex.** If a color isn't in the token sheet, add it to `DesignTokens.xaml` — don't inline `#FF...` in a view.
 - **Typography is Windows-native.** `UiFontFamily` → `Segoe UI Variable Display, Segoe UI Variable, Segoe UI`. `MonoFontFamily` → `Cascadia Mono, Consolas`. The design calls for Inter/JetBrains Mono; those aren't installed on Windows so we use the closest native equivalents. Don't reintroduce Inter/JB Mono unless you're also bundling the TTFs.
 - **Accent color is `#4F46E5`** (Tailwind indigo-600) — this matches the design bundle's own SVG thumbnail, not the muted oklch conversion we had earlier.

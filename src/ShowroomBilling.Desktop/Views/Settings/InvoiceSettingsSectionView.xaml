@@ -107,7 +107,7 @@
         <TextBox Style="{StaticResource SettingsInputMulti}" Text="{Binding Draft.TermsAndConditions, UpdateSourceTrigger=PropertyChanged}" />
 
         <TextBlock Margin="0,10,0,0"
-                   FontSize="11"
+                   FontSize="{DynamicResource FontSizeSm}"
                    TextWrapping="Wrap"
                    Foreground="{StaticResource InkMutedBrush}"
                    Text="Logo / signature upload and margin / placement editor live under the Print Layout section." />

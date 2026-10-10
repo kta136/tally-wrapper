@@ -45,7 +45,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
                         <TextBlock FontSize="13" FontWeight="SemiBold" Text="Live preview" />
-                        <TextBlock FontSize="10.5"
+                        <TextBlock FontSize="{DynamicResource FontSizeXs}"
                                    Margin="0,2,0,0"
                                    Foreground="{StaticResource InkMutedBrush}"
                                    TextWrapping="Wrap"
@@ -137,7 +137,7 @@
                                 BorderThickness="1"
                                 CornerRadius="3"
                                 Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVis}}">
-                            <TextBlock FontSize="11"
+                            <TextBlock FontSize="{DynamicResource FontSizeSm}"
                                        Foreground="{StaticResource InkMutedBrush}"
                                        Text="Preview will appear here" />
                         </Border>
@@ -156,7 +156,7 @@
                                              IsIndeterminate="True" />
                                 <TextBlock Margin="0,8,0,0"
                                            HorizontalAlignment="Center"
-                                           FontSize="11"
+                                           FontSize="{DynamicResource FontSizeSm}"
                                            Foreground="{StaticResource InkMutedBrush}"
                                            Text="Rendering preview" />
                             </StackPanel>
@@ -170,7 +170,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
-                               FontSize="10.5"
+                               FontSize="{DynamicResource FontSizeXs}"
                                Foreground="{StaticResource InkMutedBrush}"
                                TextWrapping="Wrap"
                                Text="{Binding StatusMessage}"
@@ -178,7 +178,7 @@
                     <TextBlock Grid.Column="1"
                                Margin="8,0,0,0"
                                FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="10.5"
+                               FontSize="{DynamicResource FontSizeXs}"
                                Foreground="{StaticResource InkSoftBrush}"
                                Text="{Binding PreviewZoomDisplay}" />
                 </Grid>

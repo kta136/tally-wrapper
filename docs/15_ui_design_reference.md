@@ -67,6 +67,8 @@ The Invoice screen's **edit-mode banner** uses a dedicated palette outside the s
 
 Density is a settings-level toggle, not a Tweaks-panel affordance in production (see §9).
 
+In WPF the toggle is Settings → Advanced → UI density (Compact / Comfortable). `UiDensityManager` overrides nine keys in the application resources: `RowHeight`, `InputHeight`, `ButtonHeight` (28 → 34) and `FontSizeUi`, `FontSizeLabel`, `FontSizeSm`, `FontSizeXs`, `FontSizeSectionTitle`, `FontSizeMono`. Views and styles read these keys with `DynamicResource`, so a change applies to every open view at once. Use the keys instead of the literal sizes `10.5`, `11`, `11.5` and `12.5`; a literal does not follow the density setting. The radius and cell-padding rows above are prototype-only and are not switched in WPF.
+
 ### 3.4 Typography
 
 - UI: **Inter** (weights 400/500/600/700) with Segoe UI Variable fallback. `font-feature-settings: 'cv11', 'ss01', 'tnum'`, `line-height: 1.35`.

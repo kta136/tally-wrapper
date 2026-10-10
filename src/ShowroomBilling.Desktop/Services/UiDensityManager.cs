@@ -9,6 +9,22 @@ public static class UiDensityManager
     public const string Compact = "Compact";
     public const string Comfortable = "Comfortable";
 
+    // Token values per density. The Compact column matches the defaults in
+    // DesignTokens.xaml. Views read these keys with DynamicResource, so a
+    // change made in Settings applies to every open view at once.
+    internal static readonly IReadOnlyList<(string Key, double Compact, double Comfortable)> Tokens =
+    [
+        ("RowHeight", 28, 34),
+        ("InputHeight", 28, 34),
+        ("ButtonHeight", 28, 34),
+        ("FontSizeUi", 12.5, 13.5),
+        ("FontSizeLabel", 11.5, 12),
+        ("FontSizeSm", 11, 12),
+        ("FontSizeXs", 10.5, 11),
+        ("FontSizeSectionTitle", 10.5, 11.5),
+        ("FontSizeMono", 12, 13),
+    ];
+
     private static readonly string Folder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "ShowroomBilling");
@@ -33,38 +49,29 @@ public static class UiDensityManager
         var resources = System.Windows.Application.Current?.Resources;
         if (resources is not null)
         {
-            if (normalized == Comfortable)
+            foreach (var (key, compact, comfortable) in Tokens)
             {
-                resources["RowHeight"] = 34d;
-                resources["InputHeight"] = 34d;
-                resources["ButtonHeight"] = 34d;
-                resources["CellPadding"] = 12d;
-                resources["FontSizeUi"] = 13.5d;
-                resources["FontSizeLabel"] = 12d;
-                resources["FontSizeSm"] = 12d;
-                resources["FontSizeXs"] = 11d;
-                resources["FontSizeSectionTitle"] = 11.5d;
-                resources["FontSizeMono"] = 13d;
-            }
-            else
-            {
-                resources["RowHeight"] = 28d;
-                resources["InputHeight"] = 28d;
-                resources["ButtonHeight"] = 28d;
-                resources["CellPadding"] = 10d;
-                resources["FontSizeUi"] = 12.5d;
-                resources["FontSizeLabel"] = 11.5d;
-                resources["FontSizeSm"] = 11d;
-                resources["FontSizeXs"] = 10.5d;
-                resources["FontSizeSectionTitle"] = 10.5d;
-                resources["FontSizeMono"] = 12d;
+                resources[key] = normalized == Comfortable ? comfortable : compact;
             }
         }
 
         if (persist)
         {
+            SaveDensity(normalized);
+        }
+    }
+
+    private static void SaveDensity(string density)
+    {
+        try
+        {
             Directory.CreateDirectory(Folder);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(new UiPreferences(normalized)));
+            File.WriteAllText(FilePath, JsonSerializer.Serialize(new UiPreferences(density)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A preference that cannot be saved must not break the Settings
+            // screen; the density still applies for this session.
         }
     }
 
