@@ -395,24 +395,27 @@ public sealed class StatusForm : Form
         return null;
     }
 
-    private static OperationReport BuildOperationReport(
+    /// <summary>
+    /// Turns an API answer into what the operator is shown. A maintenance call
+    /// answers with <c>{ success, message }</c>; a refusal answers with
+    /// ProblemDetails (<c>title</c> / <c>detail</c>). Anything else is shown as it came.
+    /// </summary>
+    internal static OperationReport BuildOperationReport(
         string label,
         HttpResponseMessage response,
         string body)
     {
+        var parsed = ParseBody(body);
         if (!response.IsSuccessStatusCode)
         {
             return new OperationReport(
-                $"{label} failed: HTTP {(int)response.StatusCode}\r\n\r\n{FormatErrorBody(body)}",
+                $"{label} failed: HTTP {(int)response.StatusCode}\r\n\r\n{DescribeError(parsed, body)}",
                 MessageBoxIcon.Error);
         }
 
-        if (TryReadSuccessEnvelope(body, out var success, out var responseMessage))
+        if (parsed?.Success is { } success)
         {
-            var message = string.IsNullOrWhiteSpace(responseMessage)
-                ? body
-                : responseMessage;
-
+            var message = string.IsNullOrWhiteSpace(parsed.Message) ? body : parsed.Message;
             return success
                 ? new OperationReport($"{label} succeeded.\r\n\r\n{message}", MessageBoxIcon.Information)
                 : new OperationReport($"{label} failed.\r\n\r\n{message}", MessageBoxIcon.Error);
@@ -421,95 +424,41 @@ public sealed class StatusForm : Form
         return new OperationReport($"{label} succeeded.\r\n\r\n{body}", MessageBoxIcon.Information);
     }
 
-    private static string FormatErrorBody(string body)
+    private static string DescribeError(ResponseBody? parsed, string body)
     {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return string.Empty;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            var title = root.TryGetProperty("title", out var titleElement)
-                && titleElement.ValueKind == JsonValueKind.String
-                ? titleElement.GetString()
-                : null;
-            var detail = root.TryGetProperty("detail", out var detailElement)
-                && detailElement.ValueKind == JsonValueKind.String
-                ? detailElement.GetString()
-                : null;
-            var message = root.TryGetProperty("message", out var messageElement)
-                && messageElement.ValueKind == JsonValueKind.String
-                ? messageElement.GetString()
-                : null;
-
-            if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(detail))
-            {
-                return $"{title}: {detail}";
-            }
-
-            if (!string.IsNullOrWhiteSpace(detail))
-            {
-                return detail;
-            }
-
-            if (!string.IsNullOrWhiteSpace(title))
-            {
-                return title;
-            }
-
-            if (!string.IsNullOrWhiteSpace(message))
-            {
-                return message;
-            }
-        }
-        catch (JsonException)
-        {
-            // Fall through to raw body.
-        }
-
+        var title = parsed?.Title;
+        var detail = parsed?.Detail;
+        if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(detail)) return $"{title}: {detail}";
+        if (!string.IsNullOrWhiteSpace(detail)) return detail;
+        if (!string.IsNullOrWhiteSpace(title)) return title;
+        if (!string.IsNullOrWhiteSpace(parsed?.Message)) return parsed.Message;
         return body;
     }
 
-    private static bool TryReadSuccessEnvelope(
-        string body,
-        out bool success,
-        out string? message)
+    private static ResponseBody? ParseBody(string body)
     {
-        success = false;
-        message = null;
-
         if (string.IsNullOrWhiteSpace(body))
         {
-            return false;
+            return null;
         }
 
         try
         {
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("success", out var successElement)
-                || successElement.ValueKind is not JsonValueKind.True and not JsonValueKind.False)
-            {
-                return false;
-            }
-
-            success = successElement.GetBoolean();
-            message = root.TryGetProperty("message", out var messageElement)
-                && messageElement.ValueKind == JsonValueKind.String
-                ? messageElement.GetString()
-                : null;
-            return true;
+            return JsonSerializer.Deserialize<ResponseBody>(body, WebJson);
         }
         catch (JsonException)
         {
-            return false;
+            // Not JSON, or not an object of this shape: the raw body is shown instead.
+            return null;
         }
     }
 
-    private sealed record OperationReport(string Message, MessageBoxIcon Icon);
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
+    /// <summary>The fields of the two answer shapes the tray reads; each call sends only some of them.</summary>
+    private sealed record ResponseBody(bool? Success, string? Message, string? Title, string? Detail);
+
+    internal sealed record OperationReport(string Message, MessageBoxIcon Icon);
 
     private void HandleActionStatusChanged(object? sender, EventArgs e) => _ = RefreshAsync();
 

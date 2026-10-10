@@ -236,7 +236,7 @@
                         <TextBlock VerticalAlignment="Center"
                                    FontSize="{DynamicResource FontSizeXs}"
                                    Foreground="{StaticResource InkSoftBrush}"
-                                   Text="Tab next field · Enter next row · ↑↓ move" />
+                                   Text="Tab or Enter next field · Shift+Enter back" />
                     </StackPanel>
                 </Grid>
             </Border>
@@ -625,7 +625,7 @@
             </Border>
         </Grid>
 
-        <!--  Side picker (stub for next pass)  -->
+        <!--  Quick Add pane: search the item masters and drop one onto the next empty line  -->
         <Border Grid.Column="1"
                 Width="260"
                 Background="{StaticResource BgSunkenBrush}"
