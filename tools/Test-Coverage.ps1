@@ -1,7 +1,7 @@
 param(
     # Floor for merged line coverage of hand-written code. This is the only
     # place it is set; CI calls the script without the parameter.
-    [double]$MinimumLinePercent = 58,
+    [double]$MinimumLinePercent = 64,
     [string]$Configuration = "Release",
     [switch]$NoBuild
 )
