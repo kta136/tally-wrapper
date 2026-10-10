@@ -27,8 +27,6 @@ public sealed class SyntheticBatchExecutor(
     ILatestBillTimestampProvider latestBillTimestamp,
     ILogger<SyntheticBatchExecutor> logger) : ISyntheticBatchExecutor
 {
-    private readonly SyntheticBillPlanner _planner = new();
-
     public async Task<SyntheticBatchResponse> ExecuteAsync(
         SyntheticBatchRequest request,
         CancellationToken cancellationToken = default)
@@ -36,12 +34,10 @@ public sealed class SyntheticBatchExecutor(
         ArgumentNullException.ThrowIfNull(request);
 
         var effective = await settings.GetEffectiveSettingsAsync(cancellationToken);
-        var itemEntries = DeserializeMasters<ItemMasterEntry>(
-            effective.Settings.Masters.ItemMasterDataJson,
-            "item masters");
-        var karatEntries = DeserializeMasters<KaratMasterEntry>(
-            effective.Settings.Masters.KaratMappingDataJson,
-            "karat masters");
+        var itemEntries = ReadMasters(
+            MasterDataJson.ParseItems, effective.Settings.Masters.ItemMasterDataJson, "item masters");
+        var karatEntries = ReadMasters(
+            MasterDataJson.ParseKarats, effective.Settings.Masters.KaratMappingDataJson, "karat masters");
 
         if (itemEntries.Count == 0)
             throw new RequestValidationException("No item masters are configured.");
@@ -51,7 +47,7 @@ public sealed class SyntheticBatchExecutor(
         var floorUtc = await latestBillTimestamp.GetLatestCreatedAtUtcAsync(cancellationToken);
 
         var rng = new Random();
-        var plan = _planner.BuildPlan(request, itemEntries, karatEntries, rng, floorUtc);
+        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, floorUtc);
 
         logger.LogInformation(
             "Synthetic batch planned: {BillCount} bill(s), grand ₹{Grand:N0}, window [{Start:o}, {End:o}]",
@@ -79,13 +75,11 @@ public sealed class SyntheticBatchExecutor(
             CreatedBills: created);
     }
 
-    private static IReadOnlyList<T> DeserializeMasters<T>(string? json, string label)
+    private static IReadOnlyList<T> ReadMasters<T>(Func<string?, IReadOnlyList<T>> parse, string? json, string label)
     {
-        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<T>();
         try
         {
-            var parsed = JsonSerializer.Deserialize<List<T>>(json, JsonOpts);
-            return parsed ?? (IReadOnlyList<T>)Array.Empty<T>();
+            return parse(json);
         }
         catch (JsonException ex)
         {
@@ -93,12 +87,6 @@ public sealed class SyntheticBatchExecutor(
                 $"Failed to parse {label} JSON: {ex.Message}", ex);
         }
     }
-
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true
-    };
 }
 
 /// <summary>

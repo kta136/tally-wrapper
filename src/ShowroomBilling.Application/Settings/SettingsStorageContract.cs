@@ -46,11 +46,15 @@ public sealed class SettingsStorageContract : ISettingsStorageContract
 
     public IReadOnlyList<SettingStorageRule> Rules => KnownRules;
 
-    public IReadOnlyList<SettingStorageRule> LocalRules =>
+    private static readonly SettingStorageRule[] KnownLocalRules =
         KnownRules.Where(rule => rule.Scope != SettingStorageScope.CloudShared).ToArray();
 
-    public IReadOnlyList<SettingStorageRule> CloudRules =>
+    private static readonly SettingStorageRule[] KnownCloudRules =
         KnownRules.Where(rule => rule.Scope == SettingStorageScope.CloudShared).ToArray();
+
+    public IReadOnlyList<SettingStorageRule> LocalRules => KnownLocalRules;
+
+    public IReadOnlyList<SettingStorageRule> CloudRules => KnownCloudRules;
 
     public bool IsCloudOwned(string key)
     {

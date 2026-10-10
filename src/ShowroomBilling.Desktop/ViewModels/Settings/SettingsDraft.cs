@@ -104,8 +104,8 @@ public partial class SettingsDraft : ObservableObject
         DiscountLedger = dto.Ledgers.DiscountLedger;
         SalesVoucherType = dto.Ledgers.SalesVoucherType;
 
-        ReplaceRows(ItemMasterRows, ParseItemMasterJson(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry));
-        ReplaceRows(KaratRows, ParseKaratJson(dto.Masters.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry));
+        ReplaceRows(ItemMasterRows, MasterDataJson.ParseItemsOrEmpty(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry));
+        ReplaceRows(KaratRows, MasterDataJson.ParseKaratsOrEmpty(dto.Masters.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry));
     }
 
     /// <summary>
@@ -228,32 +228,6 @@ public partial class SettingsDraft : ObservableObject
 
         error = string.Empty;
         return true;
-    }
-
-    private static IReadOnlyList<ItemMasterEntry> ParseItemMasterJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<ItemMasterEntry>();
-        try
-        {
-            return JsonSerializer.Deserialize<List<ItemMasterEntry>>(json, JsonOptions) ?? new List<ItemMasterEntry>();
-        }
-        catch (JsonException)
-        {
-            return Array.Empty<ItemMasterEntry>();
-        }
-    }
-
-    private static IReadOnlyList<KaratMasterEntry> ParseKaratJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<KaratMasterEntry>();
-        try
-        {
-            return JsonSerializer.Deserialize<List<KaratMasterEntry>>(json, JsonOptions) ?? new List<KaratMasterEntry>();
-        }
-        catch (JsonException)
-        {
-            return Array.Empty<KaratMasterEntry>();
-        }
     }
 
     private void ReplaceRows<T>(ObservableCollection<T> target, IEnumerable<T> rows) where T : INotifyPropertyChanged

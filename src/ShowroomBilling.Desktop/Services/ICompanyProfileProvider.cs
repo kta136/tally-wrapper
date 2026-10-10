@@ -1,4 +1,3 @@
-using System.Text.Json;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Printing;
 
@@ -23,8 +22,6 @@ public interface ICompanyProfileProvider
 
 public sealed class CompanyProfileProvider : ICompanyProfileProvider
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     // Safe placeholder used until InitializeAsync() pulls real settings from the API.
     // Empty strings render as "—" in the invoice and are obviously unset at a glance.
     public CompanyProfile Current { get; private set; } = CreateDefault();
@@ -36,21 +33,7 @@ public sealed class CompanyProfileProvider : ICompanyProfileProvider
     public void ApplyMasters(MasterDataSettingsDto masters)
     {
         ArgumentNullException.ThrowIfNull(masters);
-        KaratMappings = ParseKaratMappings(masters.KaratMappingDataJson);
-    }
-
-    private static IReadOnlyList<KaratMasterEntry> ParseKaratMappings(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<KaratMasterEntry>();
-        try
-        {
-            return JsonSerializer.Deserialize<List<KaratMasterEntry>>(json, JsonOptions)
-                ?? (IReadOnlyList<KaratMasterEntry>)Array.Empty<KaratMasterEntry>();
-        }
-        catch (JsonException)
-        {
-            return Array.Empty<KaratMasterEntry>();
-        }
+        KaratMappings = MasterDataJson.ParseKaratsOrEmpty(masters.KaratMappingDataJson);
     }
 
     private static CompanyProfile CreateDefault() => new(

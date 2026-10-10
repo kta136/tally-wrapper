@@ -66,10 +66,7 @@ public static class BillCalculator
 
     public static BillTotals BuildTotals(IEnumerable<decimal> lineInclusiveTotals, decimal discount)
     {
-        var subIncl = 0m;
-        foreach (var t in lineInclusiveTotals) subIncl += t;
-
-        return BuildTotals(subIncl, discount);
+        return BuildTotals(lineInclusiveTotals.Sum(), discount);
     }
 
     public static BillTotals BuildTotals(decimal lineInclusiveTotal, decimal discount)

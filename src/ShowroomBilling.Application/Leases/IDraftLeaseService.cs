@@ -30,10 +30,10 @@ public interface IDraftLeaseService
         CancellationToken cancellationToken = default);
 }
 
-public sealed class DraftLeaseConflictException(string message, Contracts.Leases.DraftLeaseResponse existingLease)
+public sealed class DraftLeaseConflictException(string message, DraftLeaseResponse existingLease)
     : InvalidOperationException(message)
 {
-    public Contracts.Leases.DraftLeaseResponse ExistingLease { get; } = existingLease;
+    public DraftLeaseResponse ExistingLease { get; } = existingLease;
 }
 
 public sealed class DraftLeaseNotFoundException(Guid leaseId)
