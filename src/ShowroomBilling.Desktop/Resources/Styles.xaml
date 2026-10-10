@@ -376,6 +376,50 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!--  A chip coloured by tone. Put the tone ("ok", "warn", "err", "info"; anything
+          else is neutral) in Tag on the Border and on its TextBlock:
+              <Border Style="{StaticResource ToneChip}" Tag="{Binding StateTone}">
+                  <TextBlock Style="{StaticResource ToneChipText}" Tag="{Binding StateTone}" ... />
+          The view model works the tone out, so no state names appear in XAML.  -->
+    <Style x:Key="ToneChip" BasedOn="{StaticResource Chip}" TargetType="{x:Type Border}">
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="ok">
+                <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="warn">
+                <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="err">
+                <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="info">
+                <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ToneChipText" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="ok">
+                <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="warn">
+                <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="err">
+                <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
+            </Trigger>
+            <Trigger Property="Tag" Value="info">
+                <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!--  ─── Panel / card ───────────────────────────────────────────  -->
     <Style x:Key="Panel" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />

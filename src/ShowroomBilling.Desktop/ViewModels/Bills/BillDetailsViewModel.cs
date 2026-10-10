@@ -57,6 +57,10 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     public bool IsFailed => BillStateCapabilities.IsFailed(Bill?.State);
     public bool CanVoidNow => BillStateCapabilities.CanVoid(Bill?.State);
     public bool CanReviseNow => BillStateCapabilities.CanRevise(Bill?.State);
+    public string StateChipLabel => BillStateDisplay.Label(Bill?.State, Bill?.EditedAfterPush ?? false);
+
+    public string StateTone => BillStateDisplay.Tone(Bill?.State);
+
     public string InvoiceNumberDisplay => string.IsNullOrWhiteSpace(Bill?.InvoiceNumber) ? "Assigned on push" : Bill!.InvoiceNumber!;
     public string AuditEmptyMessage => IsLoading ? "Loading timeline…" : "No timeline events yet.";
 
@@ -89,6 +93,8 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         OnPropertyChanged(nameof(CanVoidNow));
         OnPropertyChanged(nameof(CanReviseNow));
         OnPropertyChanged(nameof(InvoiceNumberDisplay));
+        OnPropertyChanged(nameof(StateChipLabel));
+        OnPropertyChanged(nameof(StateTone));
         NotifyActionsChanged();
     }
 

@@ -33,70 +33,8 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock FontSize="16" FontWeight="SemiBold" Text="Bill Details" />
-                            <Border Margin="10,0,0,0"
-                                    Padding="7,0"
-                                    Height="18"
-                                    CornerRadius="2"
-                                    VerticalAlignment="Center">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="{StaticResource NeutralChipBrush}" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="pending">
-                                                <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="draft">
-                                                <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="posting">
-                                                <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="posted">
-                                                <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="failed">
-                                                <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="reconciliation_required">
-                                                <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding Bill.State}" Value="voided">
-                                                <Setter Property="Background" Value="{StaticResource NeutralChipBrush}" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <TextBlock VerticalAlignment="Center"
-                                           FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="{DynamicResource FontSizeXs}"
-                                           FontWeight="SemiBold"
-                                           Text="{Binding Bill.State, TargetNullValue='—'}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Bill.State}" Value="pending">
-                                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Bill.State}" Value="posting">
-                                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Bill.State}" Value="posted">
-                                                    <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Bill.State}" Value="failed">
-                                                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Bill.State}" Value="reconciliation_required">
-                                                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Bill.State}" Value="draft">
-                                                    <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                            <Border Margin="10,0,0,0" Style="{StaticResource ToneChip}" Tag="{Binding StateTone}">
+                                <TextBlock Style="{StaticResource ToneChipText}" Tag="{Binding StateTone}" Text="{Binding StateChipLabel}" />
                             </Border>
                         </StackPanel>
                         <TextBlock Margin="0,6,0,0"

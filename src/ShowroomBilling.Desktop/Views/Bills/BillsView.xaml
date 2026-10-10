@@ -35,62 +35,6 @@
             <Setter Property="Padding" Value="10,6" />
         </Style>
 
-        <Style x:Key="StateChipBorder" TargetType="Border">
-            <Setter Property="CornerRadius" Value="2" />
-            <Setter Property="Padding" Value="7,0" />
-            <Setter Property="Height" Value="18" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Background" Value="{StaticResource NeutralChipBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding State}" Value="pending">
-                    <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="draft">
-                    <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="posting">
-                    <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="posted">
-                    <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="failed">
-                    <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="reconciliation_required">
-                    <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="StateChipText" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding State}" Value="pending">
-                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="draft">
-                    <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="posting">
-                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="posted">
-                    <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="failed">
-                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding State}" Value="reconciliation_required">
-                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
         <Style x:Key="BillRowContainer" TargetType="ListBoxItem">
             <Setter Property="Focusable" Value="False" />
             <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
@@ -518,8 +462,8 @@
                                                FontWeight="SemiBold"
                                                Text="{Binding InvoiceNumberDisplay}" />
 
-                                    <Border Grid.Column="2" Style="{StaticResource StateChipBorder}">
-                                        <TextBlock Style="{StaticResource StateChipText}" Text="{Binding StateChipLabel}" />
+                                    <Border Grid.Column="2" Style="{StaticResource ToneChip}" HorizontalAlignment="Left" Tag="{Binding StateTone}">
+                                        <TextBlock Style="{StaticResource ToneChipText}" Tag="{Binding StateTone}" Text="{Binding StateChipLabel}" />
                                     </Border>
 
                                     <TextBlock Grid.Column="3"

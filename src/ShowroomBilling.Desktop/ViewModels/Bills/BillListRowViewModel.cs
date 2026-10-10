@@ -55,27 +55,8 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
         _ => "—"
     };
 
-    public string StateChipLabel
-    {
-        get
-        {
-            // Leading glyphs match the design bundle's chip iconography
-            // (● filled = posted/posting, ◐ half = pending, ○ empty = draft,
-            //  ✕ = failed, ↻ = revised, — em-dash = voided). Mono-friendly
-            //  characters chosen so they line up next to JetBrains/Cascadia.
-            var basic = State switch
-            {
-                BillStates.Pending => "◐ Pending",
-                BillStates.Draft => "○ Draft",
-                BillStates.Posting => "◐ Posting",
-                BillStates.Posted => "● Posted",
-                BillStates.Failed => "✕ Failed",
-                BillStates.ReconciliationRequired => "! Reconcile",
-                BillStates.Revised => "↻ Revised",
-                BillStates.Voided => "— Voided",
-                _ => State
-            };
-            return EditedAfterPush ? $"{basic} · edit" : basic;
-        }
-    }
+    public string StateChipLabel => BillStateDisplay.Label(State, EditedAfterPush);
+
+    /// <summary>Colour tone of the state chip; see <see cref="BillStateDisplay"/>.</summary>
+    public string StateTone => BillStateDisplay.Tone(State);
 }
