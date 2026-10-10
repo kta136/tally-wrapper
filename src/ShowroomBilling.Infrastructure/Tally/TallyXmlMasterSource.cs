@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Xml.Linq;
-using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Masters;
 
@@ -9,77 +8,45 @@ namespace ShowroomBilling.Infrastructure.Tally;
 /// <summary>
 /// Fetches master snapshots (companies, ledgers, stock items, voucher types) from Tally
 /// via XML queries. Called only when an operator clicks a "Refresh from Tally" button —
-/// there is no background polling.
+/// there is no background polling. A read that fails throws; callers decide how to
+/// report a timeout, a refused connection or missing settings.
 /// </summary>
 public interface ITallyMasterSource
 {
-    Task<IReadOnlyList<CompanySnapshotItem>?> FetchCompaniesAsync(CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<LedgerSnapshotItem>?> FetchLedgersAsync(CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<StockItemSnapshotItem>?> FetchStockItemsAsync(CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<VoucherTypeSnapshotItem>?> FetchVoucherTypesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CompanySnapshotItem>> FetchCompaniesAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<LedgerSnapshotItem>> FetchLedgersAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<StockItemSnapshotItem>> FetchStockItemsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<VoucherTypeSnapshotItem>> FetchVoucherTypesAsync(CancellationToken cancellationToken = default);
 }
 
 public sealed class TallyXmlMasterSource(
     ITallyXmlClient xmlClient,
-    ICloudSettingsService cloudSettings,
-    ILogger<TallyXmlMasterSource> logger) : ITallyMasterSource
+    ICloudSettingsService cloudSettings) : ITallyMasterSource
 {
     private const string CollectionCompany = "TW_Companies";
     private const string CollectionLedger = "TW_Ledgers";
     private const string CollectionStockItem = "TW_StockItems";
     private const string CollectionVoucherType = "TW_VoucherTypes";
 
-    public async Task<IReadOnlyList<CompanySnapshotItem>?> FetchCompaniesAsync(CancellationToken cancellationToken = default)
-    {
-        var request = await BuildCollectionRequest(
-            CollectionCompany,
-            tallyType: "Company",
-            fetches: new[] { "Name", "IsInactive" },
-            includeCompanyScope: false,
-            cancellationToken);
-        var response = await SendSafelyAsync(request, "companies", cancellationToken);
-        if (response is null) return null;
-        return ParseCollection(response, "COMPANY", MapCompany);
-    }
+    public Task<IReadOnlyList<CompanySnapshotItem>> FetchCompaniesAsync(CancellationToken cancellationToken = default) =>
+        FetchAsync(
+            CollectionCompany, tallyType: "Company", fetches: ["Name", "IsInactive"],
+            includeCompanyScope: false, "COMPANY", MapCompany, cancellationToken);
 
-    public async Task<IReadOnlyList<LedgerSnapshotItem>?> FetchLedgersAsync(CancellationToken cancellationToken = default)
-    {
-        var request = await BuildCollectionRequest(
-            CollectionLedger,
-            tallyType: "Ledger",
-            fetches: new[] { "Name", "Parent", "PrimaryGroup", "IsRevenue", "PartyGSTIN" },
-            includeCompanyScope: true,
-            cancellationToken);
-        var response = await SendSafelyAsync(request, "ledgers", cancellationToken);
-        if (response is null) return null;
-        return ParseCollection(response, "LEDGER", MapLedger);
-    }
+    public Task<IReadOnlyList<LedgerSnapshotItem>> FetchLedgersAsync(CancellationToken cancellationToken = default) =>
+        FetchAsync(
+            CollectionLedger, tallyType: "Ledger", fetches: ["Name", "Parent", "PrimaryGroup", "IsRevenue", "PartyGSTIN"],
+            includeCompanyScope: true, "LEDGER", MapLedger, cancellationToken);
 
-    public async Task<IReadOnlyList<StockItemSnapshotItem>?> FetchStockItemsAsync(CancellationToken cancellationToken = default)
-    {
-        var request = await BuildCollectionRequest(
-            CollectionStockItem,
-            tallyType: "Stock Item",
-            fetches: new[] { "Name", "AliasName", "BaseUnits", "GSTHSNCode" },
-            includeCompanyScope: true,
-            cancellationToken);
-        var response = await SendSafelyAsync(request, "stock items", cancellationToken);
-        if (response is null) return null;
-        return ParseCollection(response, "STOCKITEM", MapStockItem);
-    }
+    public Task<IReadOnlyList<StockItemSnapshotItem>> FetchStockItemsAsync(CancellationToken cancellationToken = default) =>
+        FetchAsync(
+            CollectionStockItem, tallyType: "Stock Item", fetches: ["Name", "AliasName", "BaseUnits", "GSTHSNCode"],
+            includeCompanyScope: true, "STOCKITEM", MapStockItem, cancellationToken);
 
-    public async Task<IReadOnlyList<VoucherTypeSnapshotItem>?> FetchVoucherTypesAsync(CancellationToken cancellationToken = default)
-    {
-        var request = await BuildCollectionRequest(
-            CollectionVoucherType,
-            tallyType: "Voucher Type",
-            fetches: new[] { "Name", "Parent", "IsDeemedPositive" },
-            includeCompanyScope: true,
-            cancellationToken);
-        var response = await SendSafelyAsync(request, "voucher types", cancellationToken);
-        if (response is null) return null;
-        return ParseCollection(response, "VOUCHERTYPE", MapVoucherType);
-    }
+    public Task<IReadOnlyList<VoucherTypeSnapshotItem>> FetchVoucherTypesAsync(CancellationToken cancellationToken = default) =>
+        FetchAsync(
+            CollectionVoucherType, tallyType: "Voucher Type", fetches: ["Name", "Parent", "IsDeemedPositive"],
+            includeCompanyScope: true, "VOUCHERTYPE", MapVoucherType, cancellationToken);
 
     private async Task<XElement> BuildCollectionRequest(
         string collectionName,
@@ -117,17 +84,18 @@ public sealed class TallyXmlMasterSource(
                                 new XElement("FETCH", string.Join(", ", fetches))))))));
     }
 
-    private async Task<XElement?> SendSafelyAsync(XElement request, string masterLabel, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<T>> FetchAsync<T>(
+        string collectionName,
+        string tallyType,
+        string[] fetches,
+        bool includeCompanyScope,
+        string elementName,
+        Func<XElement, T?> map,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            return await xmlClient.SendAsync(request, cancellationToken);
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(exception, "Tally XML fetch for {Master} failed. Skipping.", masterLabel);
-            return null;
-        }
+        var request = await BuildCollectionRequest(collectionName, tallyType, fetches, includeCompanyScope, cancellationToken);
+        var response = await xmlClient.SendAsync(request, cancellationToken);
+        return ParseCollection(response, elementName, map);
     }
 
     private static IReadOnlyList<T> ParseCollection<T>(XElement response, string elementName, Func<XElement, T?> map)

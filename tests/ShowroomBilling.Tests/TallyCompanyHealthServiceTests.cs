@@ -134,16 +134,18 @@ public sealed class TallyCompanyHealthServiceTests
 
     private sealed class FakeTallyMasterSource(IReadOnlyList<CompanySnapshotItem>? companies) : ITallyMasterSource
     {
-        public Task<IReadOnlyList<CompanySnapshotItem>?> FetchCompaniesAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(companies);
+        public Task<IReadOnlyList<CompanySnapshotItem>> FetchCompaniesAsync(CancellationToken cancellationToken = default) =>
+            companies is null
+                ? Task.FromException<IReadOnlyList<CompanySnapshotItem>>(new HttpRequestException("Connection refused"))
+                : Task.FromResult(companies);
 
-        public Task<IReadOnlyList<LedgerSnapshotItem>?> FetchLedgersAsync(CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<LedgerSnapshotItem>> FetchLedgersAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<StockItemSnapshotItem>?> FetchStockItemsAsync(CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<StockItemSnapshotItem>> FetchStockItemsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<VoucherTypeSnapshotItem>?> FetchVoucherTypesAsync(CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<VoucherTypeSnapshotItem>> FetchVoucherTypesAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 }

@@ -12,89 +12,74 @@ public sealed class TallyMasterRefresher(
     IServiceScopeFactory scopeFactory,
     ILogger<TallyMasterRefresher> logger) : ITallyMasterRefresher
 {
-    private const string ShowroomCode = "default";
+    public Task<TallyMasterRefreshResult> RefreshCompaniesAsync(CancellationToken cancellationToken = default) =>
+        RefreshAsync(
+            MasterTypes.Companies,
+            source.FetchCompaniesAsync,
+            (items, token) => snapshotService.IngestCompaniesAsync(
+                new PushCompanySnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            cancellationToken);
 
-    public async Task<TallyMasterRefreshResult> RefreshCompaniesAsync(CancellationToken cancellationToken = default)
+    public Task<TallyMasterRefreshResult> RefreshLedgersAsync(CancellationToken cancellationToken = default) =>
+        RefreshAsync(
+            MasterTypes.Ledgers,
+            source.FetchLedgersAsync,
+            (items, token) => snapshotService.IngestLedgersAsync(
+                new PushLedgerSnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            cancellationToken);
+
+    public Task<TallyMasterRefreshResult> RefreshStockItemsAsync(CancellationToken cancellationToken = default) =>
+        RefreshAsync(
+            MasterTypes.StockItems,
+            source.FetchStockItemsAsync,
+            (items, token) => snapshotService.IngestStockItemsAsync(
+                new PushStockItemSnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            cancellationToken);
+
+    public Task<TallyMasterRefreshResult> RefreshVoucherTypesAsync(CancellationToken cancellationToken = default) =>
+        RefreshAsync(
+            MasterTypes.VoucherTypes,
+            source.FetchVoucherTypesAsync,
+            (items, token) => snapshotService.IngestVoucherTypesAsync(
+                new PushVoucherTypeSnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            cancellationToken);
+
+    /// <summary>
+    /// Fetches one master from Tally and stores it. Never throws for a Tally
+    /// or database problem: the result row carries the reason, so a refresh of
+    /// all four reports each master separately.
+    /// </summary>
+    private async Task<TallyMasterRefreshResult> RefreshAsync<TItem>(
+        string masterType,
+        Func<CancellationToken, Task<IReadOnlyList<TItem>>> fetch,
+        Func<IReadOnlyList<TItem>, CancellationToken, Task<MasterSnapshotAcceptedResponse>> ingest,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var items = await source.FetchCompaniesAsync(cancellationToken);
-            if (items is null)
-            {
-                return Fail(MasterTypes.Companies, "Tally did not return a response. Check connection settings and that Tally is running.");
-            }
-            var response = await snapshotService.IngestCompaniesAsync(
-                new PushCompanySnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
-                cancellationToken);
-            return new TallyMasterRefreshResult(MasterTypes.Companies, true, response.ItemCount, response.BatchId, null);
+            var items = await fetch(cancellationToken);
+            var response = await ingest(items, cancellationToken);
+            return new TallyMasterRefreshResult(masterType, true, response.ItemCount, response.BatchId, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The caller went away; do not report that as a Tally failure.
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            logger.LogWarning(ex, "Refreshing {MasterType} from Tally timed out.", masterType);
+            return Fail(masterType, "Tally did not respond before the configured timeout.");
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogWarning(ex, "Refreshing {MasterType} could not reach Tally.", masterType);
+            return Fail(masterType, $"Could not reach Tally. Check that Tally is running and the connection settings are correct. ({ex.Message})");
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "RefreshCompaniesAsync failed.");
-            return Fail(MasterTypes.Companies, ex.Message);
-        }
-    }
-
-    public async Task<TallyMasterRefreshResult> RefreshLedgersAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var items = await source.FetchLedgersAsync(cancellationToken);
-            if (items is null)
-            {
-                return Fail(MasterTypes.Ledgers, "Tally did not return a response.");
-            }
-            var response = await snapshotService.IngestLedgersAsync(
-                new PushLedgerSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
-                cancellationToken);
-            return new TallyMasterRefreshResult(MasterTypes.Ledgers, true, response.ItemCount, response.BatchId, null);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "RefreshLedgersAsync failed.");
-            return Fail(MasterTypes.Ledgers, ex.Message);
-        }
-    }
-
-    public async Task<TallyMasterRefreshResult> RefreshStockItemsAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var items = await source.FetchStockItemsAsync(cancellationToken);
-            if (items is null)
-            {
-                return Fail(MasterTypes.StockItems, "Tally did not return a response.");
-            }
-            var response = await snapshotService.IngestStockItemsAsync(
-                new PushStockItemSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
-                cancellationToken);
-            return new TallyMasterRefreshResult(MasterTypes.StockItems, true, response.ItemCount, response.BatchId, null);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "RefreshStockItemsAsync failed.");
-            return Fail(MasterTypes.StockItems, ex.Message);
-        }
-    }
-
-    public async Task<TallyMasterRefreshResult> RefreshVoucherTypesAsync(CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var items = await source.FetchVoucherTypesAsync(cancellationToken);
-            if (items is null)
-            {
-                return Fail(MasterTypes.VoucherTypes, "Tally did not return a response.");
-            }
-            var response = await snapshotService.IngestVoucherTypesAsync(
-                new PushVoucherTypeSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, items),
-                cancellationToken);
-            return new TallyMasterRefreshResult(MasterTypes.VoucherTypes, true, response.ItemCount, response.BatchId, null);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "RefreshVoucherTypesAsync failed.");
-            return Fail(MasterTypes.VoucherTypes, ex.Message);
+            logger.LogWarning(ex, "Refreshing {MasterType} from Tally failed.", masterType);
+            return Fail(masterType, ex.Message);
         }
     }
 

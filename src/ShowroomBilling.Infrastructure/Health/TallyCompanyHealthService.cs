@@ -49,7 +49,7 @@ public sealed class TallyCompanyHealthService(
                 Message: "Active Tally company is not configured.");
         }
 
-        IReadOnlyList<CompanySnapshotItem>? companies;
+        IReadOnlyList<CompanySnapshotItem> companies;
         try
         {
             companies = await tallyMasterSource.FetchCompaniesAsync(cts.Token);
@@ -61,11 +61,6 @@ public sealed class TallyCompanyHealthService(
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Tally company health check failed.");
-            return Unhealthy(activeCompany, checkedAtUtc, "Tally is unreachable. Check that Tally is running and the connection settings are correct.");
-        }
-
-        if (companies is null)
-        {
             return Unhealthy(activeCompany, checkedAtUtc, "Tally is unreachable. Check that Tally is running and the connection settings are correct.");
         }
 
