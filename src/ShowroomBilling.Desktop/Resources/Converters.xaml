@@ -11,5 +11,6 @@
     <conv:DialogVisibilityConverter x:Key="DialogVisConverter" />
     <conv:BillDateGroupHeaderConverter x:Key="BillDateGroupHeader" />
     <conv:GroupAmountSumConverter x:Key="GroupAmountSum" />
+    <conv:UtcToLocalConverter x:Key="UtcToLocal" />
 
 </ResourceDictionary>

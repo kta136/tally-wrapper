@@ -50,7 +50,7 @@
                            FontSize="11"
                            VerticalAlignment="Center"
                            Foreground="{StaticResource InkSoftBrush}"
-                           Text="{Binding LedgersFetchedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+                           Text="{Binding LedgersFetchedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Style="{StaticResource BtnSm}"

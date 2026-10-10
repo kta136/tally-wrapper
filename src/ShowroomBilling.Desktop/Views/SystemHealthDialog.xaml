@@ -140,7 +140,7 @@
                                                 </TextBlock>
                                                 <TextBlock Grid.Column="3"
                                                            Style="{StaticResource RowMuted}"
-                                                           Text="{Binding FetchedAtUtc, StringFormat='fetched {0:HH:mm:ss}', FallbackValue='never fetched', TargetNullValue='never fetched'}" />
+                                                           Text="{Binding FetchedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='fetched {0:HH:mm:ss}', FallbackValue='never fetched', TargetNullValue='never fetched'}" />
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>

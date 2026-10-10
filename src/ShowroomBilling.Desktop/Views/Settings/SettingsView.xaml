@@ -65,7 +65,7 @@
                                FontSize="11"
                                Foreground="{StaticResource InkSoftBrush}"
                                VerticalAlignment="Center"
-                               Text="{Binding UpdatedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+                               Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
                     <Border Margin="12,0,0,0"
                             Padding="6,2"
                             Background="{StaticResource WarnSoftBrush}"

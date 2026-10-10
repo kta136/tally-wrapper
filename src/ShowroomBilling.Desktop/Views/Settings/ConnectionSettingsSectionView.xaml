@@ -76,7 +76,7 @@
                        FontFamily="{StaticResource MonoFontFamily}"
                        FontSize="11"
                        Foreground="{StaticResource InkSoftBrush}"
-                       Text="{Binding CompaniesFetchedAtUtc, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
+                       Text="{Binding CompaniesFetchedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
         </StackPanel>
         <TextBlock Margin="0,6,0,0"
                    FontSize="11"

@@ -174,7 +174,7 @@
                         </DataGridTextColumn>
                         <DataGridTextColumn Header="Owner" Binding="{Binding OwnerActorId}" Width="130" />
                         <DataGridTextColumn Header="Counter" Binding="{Binding OwnerCounterName}" Width="110" />
-                        <DataGridTextColumn Header="Expires" Binding="{Binding ExpiresAtUtc, StringFormat=\{0:HH:mm:ss\}}" Width="80">
+                        <DataGridTextColumn Header="Expires" Binding="{Binding ExpiresAtUtc, Converter={StaticResource UtcToLocal}, StringFormat=\{0:HH:mm:ss\}}" Width="80">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />

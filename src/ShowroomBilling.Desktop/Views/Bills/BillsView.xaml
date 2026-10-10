@@ -559,7 +559,7 @@
                                                FontFamily="{StaticResource MonoFontFamily}"
                                                FontSize="10.5"
                                                Foreground="{StaticResource InkMutedBrush}"
-                                               Text="{Binding UpdatedAtUtc, StringFormat='yyyy-MM-dd HH:mm'}" />
+                                               Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm'}" />
 
                                     <TextBlock Grid.Column="7"
                                                Margin="10,0"
