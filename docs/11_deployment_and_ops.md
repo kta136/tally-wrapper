@@ -119,7 +119,7 @@ The service install sets:
 - `DeviceAuth__Mode=TrustedLan`
 - `DeviceAuth__TrustedNetworks__0=<LanCidr>`
 
-It also creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt` and a Windows Firewall rule scoped to the configured LAN CIDR. The one-EXE installer uses the default LocalSystem service identity; DB configuration is written through the tray's localhost maintenance flow under `C:\ProgramData\ShowroomBilling`.
+It also creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt` and a Windows Firewall rule scoped to the configured LAN CIDR. The range must be a network in CIDR form; it is checked before anything is written. A later run that only upgrades the API (a newer `TallyWrapper.Server.exe`) keeps the range already configured on the service and does not ask again. **Install / Repair Server** in the dashboard does ask, starting from the current range. The one-EXE installer uses the default LocalSystem service identity; DB configuration is written through the tray's localhost maintenance flow under `C:\ProgramData\ShowroomBilling`.
 
 Server mode intentionally trusts clients inside the configured LAN CIDR for normal writes. Admin actions still require `X-Admin-Token`. DB override metadata, anonymous DB bootstrap, DB test, and initial admin-passcode setup are loopback-only in server mode.
 

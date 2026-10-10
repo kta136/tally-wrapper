@@ -23,10 +23,10 @@ internal static class Program
             }
             catch (Exception ex)
             {
-                TryWriteInstallFailure(options, ex);
+                ServerInstaller.Log(options, $"FAILED {ex}");
                 MessageBox.Show(
                     $"Server setup failed:\n\n{ex.Message}\n\nLog: {options.InstallLogPath}",
-                    "Tally Wrapper Server",
+                    ServerTrayOptions.ProductName,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 Environment.ExitCode = 1;
@@ -40,7 +40,7 @@ internal static class Program
         {
             MessageBox.Show(
                 "Server setup did not complete. The tray will open, but the API service may be unavailable.",
-                "Tally Wrapper Server",
+                ServerTrayOptions.ProductName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }
@@ -59,20 +59,5 @@ internal static class Program
         }
 
         return null;
-    }
-
-    private static void TryWriteInstallFailure(ServerTrayOptions options, Exception exception)
-    {
-        try
-        {
-            Directory.CreateDirectory(options.LogsPath);
-            File.AppendAllText(
-                options.InstallLogPath,
-                $"{DateTimeOffset.Now:O} FAILED {exception}{Environment.NewLine}");
-        }
-        catch
-        {
-            // Best-effort install diagnostics.
-        }
     }
 }

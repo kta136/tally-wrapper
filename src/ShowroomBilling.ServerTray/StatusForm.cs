@@ -58,7 +58,7 @@ public sealed class StatusForm : Form
 
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = "Tally Wrapper Server";
+        Text = ServerTrayOptions.ProductName;
         Icon = AppIconProvider.CreateIcon();
         BackColor = PageBackground;
         Width = 920;
@@ -123,7 +123,7 @@ public sealed class StatusForm : Form
         var text = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1 };
         text.Controls.Add(new Label
         {
-            Text = "Tally Wrapper Server",
+            Text = ServerTrayOptions.ProductName,
             AutoSize = true,
             Font = new Font(UiFontFamily(), 18, FontStyle.Bold),
             ForeColor = Ink
@@ -217,7 +217,7 @@ public sealed class StatusForm : Form
         body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         body.Controls.Add(_clients, 0, 0);
         body.Controls.Add(ButtonRow(
-            Button("Refresh Clients", async (_, _) => await RefreshClientsAsync()),
+            Button("Refresh Clients", async (_, _) => await RefreshAsync()),
             Button("Open Logs", (_, _) => _actions.OpenLogs()),
             Button("Open Config Folder", (_, _) => _actions.OpenConfigRoot()),
             Button("Open Install Log", (_, _) => _actions.OpenInstallLog())), 0, 1);
@@ -257,14 +257,14 @@ public sealed class StatusForm : Form
 
     private void RefreshServiceStatus()
     {
-        var text = _actions.GetServiceStatusText();
-        var value = text.Replace("Service:", string.Empty).Trim();
-        var color = value.Contains("Running", StringComparison.OrdinalIgnoreCase)
-            ? Good
-            : value.Contains("Stopped", StringComparison.OrdinalIgnoreCase)
-                ? Bad
-                : Warn;
-        SetStatus(_serviceStatus, value, color);
+        var status = _actions.GetServiceStatus();
+        var color = status switch
+        {
+            System.ServiceProcess.ServiceControllerStatus.Running => Good,
+            System.ServiceProcess.ServiceControllerStatus.Stopped => Bad,
+            _ => Warn,
+        };
+        SetStatus(_serviceStatus, ServerTrayActions.Describe(status), color);
     }
 
     private async Task RefreshApiStatusAsync()
@@ -364,7 +364,7 @@ public sealed class StatusForm : Form
             var report = BuildOperationReport(label, response, body);
             CopyableMessageDialog.ShowMessage(
                 this,
-                "Tally Wrapper Server",
+                ServerTrayOptions.ProductName,
                 report.Message,
                 report.Icon);
             await RefreshAsync();
@@ -373,7 +373,7 @@ public sealed class StatusForm : Form
         {
             CopyableMessageDialog.ShowMessage(
                 this,
-                "Tally Wrapper Server",
+                ServerTrayOptions.ProductName,
                 $"{label} failed: {ex.Message}",
                 MessageBoxIcon.Error);
         }
@@ -389,7 +389,7 @@ public sealed class StatusForm : Form
 
         CopyableMessageDialog.ShowMessage(
             this,
-            "Tally Wrapper Server",
+            ServerTrayOptions.ProductName,
             $"Maintenance token was not found at {path}. Run Install / Repair Server first.",
             MessageBoxIcon.Error);
         return null;

@@ -36,18 +36,11 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
         return StartService(owner);
     }
 
-    public string GetServiceStatusText()
-    {
-        try
-        {
-            using var service = new ServiceController(options.ServiceName);
-            return $"Service: {service.Status}";
-        }
-        catch
-        {
-            return "Service: not installed";
-        }
-    }
+    /// <summary>The API service's status, or null when it is not installed.</summary>
+    public ServiceControllerStatus? GetServiceStatus() => ServerInstaller.TryGetServiceStatus(options.ServiceName);
+
+    /// <summary>The status as shown to the operator, e.g. "Running" or "not installed".</summary>
+    public static string Describe(ServiceControllerStatus? status) => status?.ToString() ?? "not installed";
 
     public string GetWorkstationUrl() => ServerUrlHelper.GetWorkstationApiBaseUrl(options.ApiBaseUrl);
 
@@ -121,13 +114,7 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
 
     private static void ShowMessage(IWin32Window? owner, string text, MessageBoxIcon icon)
     {
-        const string caption = "Tally Wrapper Server";
-        if (owner is null)
-        {
-            MessageBox.Show(text, caption, MessageBoxButtons.OK, icon);
-            return;
-        }
-
-        MessageBox.Show(owner, text, caption, MessageBoxButtons.OK, icon);
+        // A null owner is fine: the box is then centred on the screen.
+        MessageBox.Show(owner, text, ServerTrayOptions.ProductName, MessageBoxButtons.OK, icon);
     }
 }

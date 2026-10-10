@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ShowroomBilling.Desktop\ShowroomBilling.Desktop.csproj" />
+    <ProjectReference Include="..\..\src\ShowroomBilling.ServerTray\ShowroomBilling.ServerTray.csproj" />
   </ItemGroup>
 
   <ItemGroup>

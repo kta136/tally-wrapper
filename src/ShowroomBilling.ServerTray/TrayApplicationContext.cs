@@ -16,7 +16,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon = new NotifyIcon
         {
             Icon = AppIconProvider.CreateIcon(),
-            Text = "Tally Wrapper Server",
+            Text = ServerTrayOptions.ProductName,
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
@@ -60,14 +60,14 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void RefreshTrayText()
     {
-        _notifyIcon.Text = _actions.GetServiceStatusText().Replace("Service:", "Tally Wrapper Server:");
+        _notifyIcon.Text = $"{ServerTrayOptions.ProductName}: {ServerTrayActions.Describe(_actions.GetServiceStatus())}";
     }
 
     private void StopServiceAndExitTray()
     {
         var result = MessageBox.Show(
             "Stop the API Windows Service and close the tray?\n\nBilling workstations will lose server access until the service is started again.",
-            "Tally Wrapper Server",
+            ServerTrayOptions.ProductName,
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Warning,
             MessageBoxDefaultButton.Button2);

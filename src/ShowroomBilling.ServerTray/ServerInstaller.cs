@@ -12,19 +12,28 @@ public static class ServerInstaller
     public const string DefaultLanCidr = "192.168.0.0/16";
     private const string RunValueName = "ShowroomBilling.ServerTray";
     private const string FirewallDisplayName = "Tally Wrapper API LAN";
-    private static readonly string LegacyFirewallDisplayName = string.Concat("Showroom", " Billing API LAN");
+    // The rule name used before the product was renamed; removed on repair.
+    private const string LegacyFirewallDisplayName = "Showroom Billing API LAN";
     private const string ApiResourceName = "ShowroomBilling.Api.exe";
+    private const string TrustedNetworkVariable = "DeviceAuth__TrustedNetworks__0";
 
-    public static bool IsServiceInstalled(string serviceName)
+    public static bool IsServiceInstalled(string serviceName) => TryGetServiceStatus(serviceName) is not null;
+
+    /// <summary>
+    /// The service's current status, or null when it is not installed.
+    /// Constructing a <see cref="ServiceController"/> never fails for a
+    /// missing service; only reading its status does.
+    /// </summary>
+    public static ServiceControllerStatus? TryGetServiceStatus(string serviceName)
     {
         try
         {
-            using var _ = new ServiceController(serviceName);
-            return true;
+            using var service = new ServiceController(serviceName);
+            return service.Status;
         }
-        catch
+        catch (InvalidOperationException)
         {
-            return false;
+            return null;
         }
     }
 
@@ -46,7 +55,14 @@ public static class ServerInstaller
             return true;
         }
 
-        var lanCidr = PromptForLanCidr(DefaultLanCidr);
+        // An automatic repair (the tray carries a newer API than the one
+        // installed) keeps the range the operator chose. Only a first install,
+        // or Install / Repair pressed by hand, asks for it, and then starts
+        // from the current value rather than the default.
+        var configuredCidr = ReadConfiguredLanCidr(options.ServiceName);
+        var lanCidr = !forceRepair && configuredCidr is not null
+            ? configuredCidr
+            : PromptForLanCidr(configuredCidr ?? DefaultLanCidr);
         if (string.IsNullOrWhiteSpace(lanCidr))
         {
             return false;
@@ -58,7 +74,7 @@ public static class ServerInstaller
         {
             MessageBox.Show(
                 $"Server setup failed. Install log:\n{options.InstallLogPath}\n\n{Tail(options.InstallLogPath, 3000)}",
-                "Tally Wrapper Server",
+                ServerTrayOptions.ProductName,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
@@ -68,6 +84,14 @@ public static class ServerInstaller
 
     public static void InstallOrRepairElevated(ServerTrayOptions options, string lanCidr)
     {
+        // Checked before anything is written: a bad range would otherwise fail
+        // at the firewall step, after the service and its settings exist.
+        if (!TryNormalizeLanCidr(lanCidr, out var normalizedCidr))
+        {
+            throw new ArgumentException($"'{lanCidr}' is not a network range such as {DefaultLanCidr}.", nameof(lanCidr));
+        }
+        lanCidr = normalizedCidr;
+
         Directory.CreateDirectory(options.ConfigRoot);
         Directory.CreateDirectory(options.LogsPath);
         Directory.CreateDirectory(options.BinPath);
@@ -104,6 +128,36 @@ public static class ServerInstaller
         Log(options, "Install/repair completed.");
     }
 
+    /// <summary>Accepts an IPv4 or IPv6 range in CIDR form and returns it trimmed.</summary>
+    internal static bool TryNormalizeLanCidr(string? text, out string normalized)
+    {
+        normalized = text?.Trim() ?? string.Empty;
+        return normalized.Contains('/') && System.Net.IPNetwork.TryParse(normalized, out _);
+    }
+
+    /// <summary>The trusted LAN range the installed service is running with, if any.</summary>
+    internal static string? ReadConfiguredLanCidr(string serviceName)
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{serviceName}");
+            return ReadLanCidr(key?.GetValue("Environment") as string[]);
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return null;
+        }
+    }
+
+    internal static string? ReadLanCidr(IEnumerable<string>? serviceEnvironment)
+    {
+        var value = serviceEnvironment?
+            .Where(line => line.StartsWith(TrustedNetworkVariable + "=", StringComparison.OrdinalIgnoreCase))
+            .Select(line => line[(TrustedNetworkVariable.Length + 1)..])
+            .FirstOrDefault();
+        return TryNormalizeLanCidr(value, out var normalized) ? normalized : null;
+    }
+
     public static void EnsureTrayStartup(ServerTrayOptions options)
     {
         using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", writable: true)
@@ -113,12 +167,25 @@ public static class ServerInstaller
 
     private static bool ApiExecutableChanged(string targetPath)
     {
-        using var stream = OpenApiResource();
-        using var memory = new MemoryStream();
-        stream.CopyTo(memory);
-        var bytes = memory.ToArray();
+        using var embedded = OpenApiResource();
+        return FileDiffersFrom(embedded, targetPath);
+    }
 
-        return !File.Exists(targetPath) || !BytesEqual(targetPath, bytes);
+    /// <summary>True when <paramref name="path"/> is missing or its content differs from <paramref name="expected"/>.</summary>
+    internal static bool FileDiffersFrom(Stream expected, string path)
+    {
+        if (!File.Exists(path))
+        {
+            return true;
+        }
+
+        using var file = File.OpenRead(path);
+        if (expected.CanSeek && expected.Length != file.Length)
+        {
+            return true;
+        }
+
+        return !SHA256.HashData(expected).AsSpan().SequenceEqual(SHA256.HashData(file));
     }
 
     private static void WriteApiExecutable(string targetPath)
@@ -142,15 +209,6 @@ public static class ServerInstaller
 
         return assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException("Embedded API executable could not be opened.");
-    }
-
-    private static bool BytesEqual(string path, byte[] expected)
-    {
-        using var current = SHA256.Create();
-        using var file = File.OpenRead(path);
-        var existingHash = current.ComputeHash(file);
-        var expectedHash = SHA256.HashData(expected);
-        return existingHash.SequenceEqual(expectedHash);
     }
 
     private static void EnsureMaintenanceToken(string configRoot)
@@ -204,7 +262,7 @@ public static class ServerInstaller
             $"Logging__File__Directory={options.LogsPath}",
             "Database__AutoMigrateOnStartup=true",
             "DeviceAuth__Mode=TrustedLan",
-            $"DeviceAuth__TrustedNetworks__0={lanCidr}"
+            $"{TrustedNetworkVariable}={lanCidr}"
         };
         key.SetValue("Environment", values, RegistryValueKind.MultiString);
     }
@@ -310,9 +368,10 @@ public static class ServerInstaller
             RedirectStandardOutput = true
         }) ?? throw new InvalidOperationException($"Failed to start {fileName}.");
 
+        var errorTask = process.StandardError.ReadToEndAsync();
         var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
+        var error = errorTask.GetAwaiter().GetResult();
         if (requireSuccess && process.ExitCode != 0)
         {
             throw new InvalidOperationException(
@@ -368,14 +427,29 @@ public static class ServerInstaller
         form.AcceptButton = ok;
         form.CancelButton = cancel;
 
-        return form.ShowDialog() == DialogResult.OK ? input.Text.Trim() : null;
+        while (form.ShowDialog() == DialogResult.OK)
+        {
+            if (TryNormalizeLanCidr(input.Text, out var normalized))
+            {
+                return normalized;
+            }
+
+            MessageBox.Show(
+                form,
+                $"'{input.Text.Trim()}' is not a network range. Enter one such as {DefaultLanCidr}.",
+                form.Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        return null;
     }
 
     private static string QuoteArgument(string value) => $"\"{value.Replace("\"", "\\\"")}\"";
 
     private static string EscapePowerShell(string value) => value.Replace("'", "''");
 
-    private static void Log(ServerTrayOptions options, string message)
+    internal static void Log(ServerTrayOptions options, string message)
     {
         try
         {

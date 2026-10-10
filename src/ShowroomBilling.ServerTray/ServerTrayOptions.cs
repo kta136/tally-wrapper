@@ -2,6 +2,9 @@ namespace ShowroomBilling.ServerTray;
 
 public sealed class ServerTrayOptions
 {
+    /// <summary>Window and message-box caption.</summary>
+    public const string ProductName = "Tally Wrapper Server";
+
     public string ServiceName { get; init; } =
         Environment.GetEnvironmentVariable("SHOWROOM_SERVERTRAY_SERVICE_NAME")
         ?? "ShowroomBilling.Api";
