@@ -18,36 +18,21 @@ public sealed class ClientPresenceRegistry
         {
             PruneExpired(now);
 
-            if (_entries.TryGetValue(deviceId, out var existing))
-            {
-                existing = existing with
-                {
-                    CounterName = Normalize(request.CounterName, "Counter"),
-                    AppVersion = Normalize(request.AppVersion, "unknown"),
-                    ConnectionMode = Normalize(request.ConnectionMode, "unknown"),
-                    MachineName = Normalize(request.MachineName, "unknown"),
-                    UserName = Normalize(request.UserName, "unknown"),
-                    RemoteAddress = remoteAddress,
-                    LastSeenAtUtc = now
-                };
-            }
-            else
-            {
-                existing = new Entry(
-                    DeviceId: deviceId,
-                    CounterName: Normalize(request.CounterName, "Counter"),
-                    AppVersion: Normalize(request.AppVersion, "unknown"),
-                    ConnectionMode: Normalize(request.ConnectionMode, "unknown"),
-                    MachineName: Normalize(request.MachineName, "unknown"),
-                    UserName: Normalize(request.UserName, "unknown"),
-                    RemoteAddress: remoteAddress,
-                    FirstSeenAtUtc: now,
-                    LastSeenAtUtc: now);
-            }
+            var firstSeen = _entries.TryGetValue(deviceId, out var known) ? known.FirstSeenAtUtc : now;
+            var entry = new Entry(
+                DeviceId: deviceId,
+                CounterName: Normalize(request.CounterName, "Counter"),
+                AppVersion: Normalize(request.AppVersion, "unknown"),
+                ConnectionMode: Normalize(request.ConnectionMode, "unknown"),
+                MachineName: Normalize(request.MachineName, "unknown"),
+                UserName: Normalize(request.UserName, "unknown"),
+                RemoteAddress: remoteAddress,
+                FirstSeenAtUtc: firstSeen,
+                LastSeenAtUtc: now);
 
-            _entries[deviceId] = existing;
+            _entries[deviceId] = entry;
             TrimOverflow();
-            return ToResponse(existing, now);
+            return ToResponse(entry, now);
         }
     }
 

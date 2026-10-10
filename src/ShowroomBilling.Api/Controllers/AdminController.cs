@@ -70,7 +70,7 @@ public sealed class AdminController(
     [Authorize(Policy = AdminPolicy.PolicyName)]
     public ActionResult<AdminSessionInfoResponse> GetSession()
     {
-        var session = HttpContext.Items[ShowroomBilling.Api.Security.AdminTokenConstants.HttpContextItemKey] as AdminSessionInfoResponse;
+        var session = HttpContext.Items[AdminAuthenticationHandler.HttpContextItemKey] as AdminSessionInfoResponse;
         return session is null ? Unauthorized() : Ok(session);
     }
 }
