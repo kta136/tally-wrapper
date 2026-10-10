@@ -112,14 +112,18 @@ public sealed class BillValidationException : Exception
     public IReadOnlyList<string> Errors { get; }
 
     public BillValidationException(IEnumerable<string> errors)
-        : base(FormatMessage(errors))
+        : this(errors.ToArray())
     {
-        Errors = errors.ToArray();
     }
 
-    private static string FormatMessage(IEnumerable<string> errors)
+    private BillValidationException(string[] errors)
+        : base(FormatMessage(errors))
     {
-        var list = errors.ToArray();
+        Errors = errors;
+    }
+
+    private static string FormatMessage(string[] list)
+    {
         return list.Length switch
         {
             0 => "Bill payload is invalid.",

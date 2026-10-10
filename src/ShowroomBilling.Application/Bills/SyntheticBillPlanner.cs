@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 
@@ -82,7 +83,7 @@ public sealed class SyntheticBillPlanner
                 request: request,
                 itemEntries: itemEntries,
                 karatEntries: mappedKarats,
-                voucherDate: DateOnly.FromDateTime(scheduledAt.LocalDateTime),
+                voucherDate: IndiaTime.DateOf(scheduledAt),
                 scheduledAtUtc: scheduledAt,
                 rng: rng);
             planned.Add(bill);

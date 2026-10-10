@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml;
+using ShowroomBilling.Contracts;
 using ShowroomBilling.Contracts.Bills;
 
 namespace ShowroomBilling.Application.Bills;
@@ -39,15 +40,15 @@ public static class BillValidator
 
         if (payload.Lines is null || payload.Lines.Count == 0)
         {
-            throw new BillValidationException(new[] { "Bill must have at least one line item." });
+            throw new BillValidationException(["Bill must have at least one line item."]);
         }
         if (payload.Lines.Count > MaxLineItems)
         {
-            throw new BillValidationException(new[] { $"Bill cannot contain more than {MaxLineItems} line items." });
+            throw new BillValidationException([$"Bill cannot contain more than {MaxLineItems} line items."]);
         }
         if (payload.Totals is null)
         {
-            throw new BillValidationException(new[] { "Totals block is required." });
+            throw new BillValidationException(["Totals block is required."]);
         }
 
         var errors = new List<string>();
@@ -62,7 +63,7 @@ public static class BillValidator
             errors.Add($"Rate24Kt must be non-negative (got {payload.Rate24Kt}).");
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var today = IndiaTime.Today();
         if (payload.BillDate < today.AddYears(-1) || payload.BillDate > today.AddDays(1))
         {
             errors.Add($"BillDate '{payload.BillDate:yyyy-MM-dd}' is outside the allowed window (today -1 year to +1 day).");
@@ -123,18 +124,9 @@ public static class BillValidator
         AddPaise(errors, nameof(totals.TaxTotal), totals.TaxTotal);
         AddPaise(errors, nameof(totals.RoundOff), totals.RoundOff);
         AddPaise(errors, nameof(totals.GrandTotal), totals.GrandTotal);
-        if (totals.DiscountTotal < 0m)
-        {
-            errors.Add($"DiscountTotal must be non-negative (got {totals.DiscountTotal}).");
-        }
-        if (totals.Subtotal < 0m)
-        {
-            errors.Add($"Subtotal must be non-negative (got {totals.Subtotal}).");
-        }
-        if (totals.TaxTotal < 0m)
-        {
-            errors.Add($"TaxTotal must be non-negative (got {totals.TaxTotal}).");
-        }
+        AddNonNegative(errors, nameof(totals.DiscountTotal), totals.DiscountTotal);
+        AddNonNegative(errors, nameof(totals.Subtotal), totals.Subtotal);
+        AddNonNegative(errors, nameof(totals.TaxTotal), totals.TaxTotal);
         if (Math.Abs(totals.RoundOff) > RoundOffCap)
         {
             errors.Add($"|RoundOff| must be <= {RoundOffCap} (got {totals.RoundOff}).");
@@ -219,10 +211,13 @@ public static class BillValidator
         string prefix,
         string field,
         decimal? value)
+        => AddNonNegative(errors, $"{prefix}: {field}", value);
+
+    private static void AddNonNegative(List<string> errors, string field, decimal? value)
     {
         if (value < 0m)
         {
-            errors.Add($"{prefix}: {field} must be non-negative (got {value}).");
+            errors.Add($"{field} must be non-negative (got {value}).");
         }
     }
 
