@@ -198,15 +198,7 @@ public sealed class ChildProcessSupervisor : IChildProcessSupervisor, IDisposabl
     }
 
     private static IEnumerable<int> ProbePorts(ChildProcessSpec spec)
-    {
-        if (spec.AlreadyRunningProbePorts is { Length: > 0 })
-        {
-            foreach (var port in spec.AlreadyRunningProbePorts.Where(port => port > 0).Distinct())
-                yield return port;
-            yield break;
-        }
-
-    }
+        => (spec.AlreadyRunningProbePorts ?? []).Where(port => port > 0).Distinct();
 
     private static string ResolvePath(string path)
     {

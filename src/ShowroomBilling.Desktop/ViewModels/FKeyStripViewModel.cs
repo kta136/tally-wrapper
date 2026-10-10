@@ -35,7 +35,6 @@ public partial class FKeyStripViewModel : ObservableObject
     private static readonly IReadOnlyList<FKeyItem> BillsKeys =
     [
         new("Enter", "Details"),
-        new("Button", "Push to Tally"),
         new("Ctrl+P", "Print Selected"),
         new("Ctrl+R", "Retry Push"),
         new("F5", "Refresh"),

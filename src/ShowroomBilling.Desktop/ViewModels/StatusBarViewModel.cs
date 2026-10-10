@@ -53,13 +53,21 @@ public partial class StatusBarViewModel : ObservableObject
 
     public StatusBarViewModel()
     {
-        fiscalYear = $"FY {InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow)}";
+        fiscalYear = CurrentFiscalYear();
         workstation = $"WS: {Environment.MachineName}";
 
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _clock.Tick += (_, _) => Time = DateTime.Now.ToString("HH:mm:ss");
+        _clock.Tick += (_, _) =>
+        {
+            Time = DateTime.Now.ToString("HH:mm:ss");
+            // An app left open across 1 April moves to the new year with the clock.
+            FiscalYear = CurrentFiscalYear();
+        };
         _clock.Start();
     }
+
+    private static string CurrentFiscalYear()
+        => $"FY {InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow)}";
 
     public void ApplyDatabaseIdentity(string? databaseIdentity)
     {

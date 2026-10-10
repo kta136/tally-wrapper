@@ -1,6 +1,7 @@
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Shell;
+using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels;
 
@@ -23,9 +24,13 @@ internal sealed class ShellHealthCoordinator(
     IMastersApiClient mastersApiClient,
     IShellHealthHost host)
 {
-    private static readonly TimeSpan TallyHealthPollInterval = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan DatabaseHealthPollInterval = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MasterFreshnessPollInterval = TimeSpan.FromMinutes(30);
+    // The 15-second health poll only asks whether the API answers. The Tally
+    // company, database and master-freshness checks cost a round trip each, so
+    // each is repeated only this often unless the operator asks.
+    private static readonly TimeSpan SlowCheckInterval = TimeSpan.FromMinutes(30);
+
+    private const string CloudUnavailableBanner =
+        "Cloud unavailable — the desktop can prepare bills but cannot save. Retrying…";
 
     private int _healthPollInFlight;
     private DateTimeOffset? _lastDatabaseHealthCheckedAtUtc;
@@ -38,7 +43,7 @@ internal sealed class ShellHealthCoordinator(
         host.BannerText = value switch
         {
             SystemState.Degraded => "Cloud reachable — Tally posting is manual. Click Push on a bill to send it to Tally.",
-            SystemState.Limited => "Cloud unavailable — the desktop can prepare bills but cannot save. Retrying…",
+            SystemState.Limited => CloudUnavailableBanner,
             _ => string.Empty,
         };
     }
@@ -53,22 +58,11 @@ internal sealed class ShellHealthCoordinator(
             var results = await mastersApiClient.RequestRefreshAsync(
                 new MasterRefreshRequest(null, "desktop-health-dialog"));
 
-            var failed = results.Where(r => !r.Succeeded).ToList();
-            if (failed.Count > 0)
-            {
-                var first = failed[0];
-                var more = failed.Count > 1 ? $" (+{failed.Count - 1} more)" : string.Empty;
-                host.MastersRefreshMessage = $"Refresh failed for {first.MasterType}: {first.ErrorMessage}{more}";
-            }
-            else
-            {
-                var counts = string.Join(", ", results.Select(r => $"{r.MasterType} ({r.ItemCount})"));
-                host.MastersRefreshMessage = $"Refreshed · {counts}";
-            }
+            host.MastersRefreshMessage = SettingsRefreshSummaryFormatter.Summarize(results);
         }
         catch (Exception ex)
         {
-            host.MastersRefreshMessage = $"Refresh failed: {ex.Message}";
+            host.MastersRefreshMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -85,9 +79,9 @@ internal sealed class ShellHealthCoordinator(
         try
         {
             SystemHealthSnapshot snapshot;
-            var checkTallyCompany = ShouldCheckTallyCompany(forceTallyCompany);
-            var checkDatabase = forceTallyCompany || ShouldCheckDatabaseHealth();
-            var checkMasterFreshness = forceTallyCompany || ShouldCheckMasterFreshness();
+            var checkTallyCompany = forceTallyCompany || IsDue(_lastTallyHealthCheckedAtUtc);
+            var checkDatabase = forceTallyCompany || IsDue(_lastDatabaseHealthCheckedAtUtc);
+            var checkMasterFreshness = forceTallyCompany || IsDue(_lastMasterFreshnessCheckedAtUtc);
             try
             {
                 snapshot = await healthApiClient.GetSnapshotAsync(
@@ -146,7 +140,7 @@ internal sealed class ShellHealthCoordinator(
         if (!snapshot.ApiReachable)
         {
             host.SystemState = SystemState.Limited;
-            host.BannerText = "Cloud unavailable — the desktop can prepare bills but cannot save. Retrying…";
+            host.BannerText = CloudUnavailableBanner;
             host.StatusBar.StatusText = "CLOUD DOWN";
             return;
         }
@@ -181,22 +175,6 @@ internal sealed class ShellHealthCoordinator(
         host.StatusBar.StatusText = "READY";
     }
 
-    private bool ShouldCheckTallyCompany(bool forceTallyCompany)
-    {
-        if (forceTallyCompany) return true;
-        if (_lastTallyHealthCheckedAtUtc is null) return true;
-        return DateTimeOffset.UtcNow - _lastTallyHealthCheckedAtUtc.Value >= TallyHealthPollInterval;
-    }
-
-    private bool ShouldCheckDatabaseHealth()
-    {
-        if (_lastDatabaseHealthCheckedAtUtc is null) return true;
-        return DateTimeOffset.UtcNow - _lastDatabaseHealthCheckedAtUtc.Value >= DatabaseHealthPollInterval;
-    }
-
-    private bool ShouldCheckMasterFreshness()
-    {
-        if (_lastMasterFreshnessCheckedAtUtc is null) return true;
-        return DateTimeOffset.UtcNow - _lastMasterFreshnessCheckedAtUtc.Value >= MasterFreshnessPollInterval;
-    }
+    private static bool IsDue(DateTimeOffset? lastCheckedAtUtc)
+        => lastCheckedAtUtc is null || DateTimeOffset.UtcNow - lastCheckedAtUtc.Value >= SlowCheckInterval;
 }

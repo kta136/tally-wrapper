@@ -149,7 +149,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         RemoveInvoiceRowCommand = new RelayCommand(
             () => Invoice.RemoveFocusedRowCommand.Execute(null),
             () => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null));
-        PrintEstimateCommand = new AsyncRelayCommand(PrintEstimateAsync);
+        PrintEstimateCommand = new RelayCommand(PrintEstimate);
         OpenDatabaseSettingsCommand = new RelayCommand(() =>
         {
             OpenDatabaseSettings();
@@ -185,9 +185,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             }
         });
         OpenBillDetailsCommand = new RelayCommand(OpenSelectedBillDetails, () => Bills.SelectedBill is not null);
-        OpenInvoicePreviewCommand = new AsyncRelayCommand(OpenInvoicePreviewAsync);
         OpenSelectedBillsPrintPreviewCommand = new AsyncRelayCommand(OpenSelectedBillsPrintPreviewAsync, () => Bills.CanPrintSelected);
-        OpenFinalPrintPreviewCommand = new AsyncRelayCommand(OpenFinalPrintPreviewAsync, () => BillDetails.Bill is not null);
+        OpenFinalPrintPreviewCommand = new RelayCommand(_printCoordinator.OpenFinalPrintPreview, () => BillDetails.Bill is not null);
         Bills.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(BillsViewModel.SelectedBill))
@@ -391,12 +390,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IAsyncRelayCommand SaveActiveCommand { get; }
     public IRelayCommand AddInvoiceRowCommand { get; }
     public IRelayCommand RemoveInvoiceRowCommand { get; }
-    public IAsyncRelayCommand PrintEstimateCommand { get; }
+    public IRelayCommand PrintEstimateCommand { get; }
     public IRelayCommand CloseDialogCommand { get; }
     public IRelayCommand OpenBillDetailsCommand { get; }
-    public IAsyncRelayCommand OpenInvoicePreviewCommand { get; }
     public IAsyncRelayCommand OpenSelectedBillsPrintPreviewCommand { get; }
-    public IAsyncRelayCommand OpenFinalPrintPreviewCommand { get; }
+    public IRelayCommand OpenFinalPrintPreviewCommand { get; }
 
     [ObservableProperty]
     private NavTab activeTab = NavTab.Invoice;
@@ -505,11 +503,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
     }
 
-    private async Task PrintEstimateAsync(CancellationToken cancellationToken)
+    private void PrintEstimate()
     {
         if (!IsAnyDialogOpen && ActiveTab == NavTab.Invoice)
         {
-            await OpenInvoicePreviewAsync(cancellationToken);
+            _printCoordinator.OpenInvoicePreview();
         }
     }
 
@@ -519,16 +517,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         if (selected is null) return;
         ActiveDialog = ShellDialogs.BillDetails;
         _ = BillDetails.LoadAsync(selected.Id);
-    }
-
-    private async Task OpenInvoicePreviewAsync(CancellationToken cancellationToken)
-    {
-        await _printCoordinator.OpenInvoicePreviewAsync(cancellationToken);
-    }
-
-    private async Task OpenFinalPrintPreviewAsync(CancellationToken cancellationToken)
-    {
-        await _printCoordinator.OpenFinalPrintPreviewAsync(cancellationToken);
     }
 
     private async Task OpenSelectedBillsPrintPreviewAsync(CancellationToken cancellationToken)

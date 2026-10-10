@@ -7,8 +7,11 @@ public partial class TitleBarViewModel : ObservableObject
     [ObservableProperty]
     private string appName = "Tally Wrapper";
 
+    // <Version> in the project file is the one place the number is written.
     [ObservableProperty]
-    private string version = "v1.0";
+    private string version = typeof(TitleBarViewModel).Assembly.GetName().Version is { } assemblyVersion
+        ? $"v{assemblyVersion.Major}.{assemblyVersion.Minor}"
+        : string.Empty;
 
     [ObservableProperty]
     private string company = "—";

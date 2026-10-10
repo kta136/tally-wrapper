@@ -136,12 +136,7 @@ public partial class BillLineViewModel : ObservableObject
             _restoringPayloadValues = false;
         }
 
-        OnPropertyChanged(nameof(ResolvedItemCategory));
-        OnPropertyChanged(nameof(IsDiamond));
-        OnPropertyChanged(nameof(IsGoldLine));
-        OnPropertyChanged(nameof(NetWeight));
-        OnPropertyChanged(nameof(ResolvedPricingMode));
-        Raise();
+        RaiseDerived();
     }
 
     partial void OnItemNameChanged(string value)
@@ -180,11 +175,7 @@ public partial class BillLineViewModel : ObservableObject
     {
         if (!_restoringPayloadValues)
             NormalizeDiamondFields();
-        OnPropertyChanged(nameof(ResolvedItemCategory));
-        OnPropertyChanged(nameof(IsDiamond));
-        OnPropertyChanged(nameof(IsGoldLine));
-        OnPropertyChanged(nameof(NetWeight));
-        Raise();
+        RaiseDerived();
     }
     partial void OnPricingModeChanged(string value)
     {
@@ -211,6 +202,12 @@ public partial class BillLineViewModel : ObservableObject
         }
         if (!_restoringPayloadValues && !preservePayloadValues)
             NormalizeDiamondFields();
+        RaiseDerived();
+    }
+
+    // Everything worked out from the item, its category and its pricing mode.
+    private void RaiseDerived()
+    {
         OnPropertyChanged(nameof(ResolvedItemCategory));
         OnPropertyChanged(nameof(IsDiamond));
         OnPropertyChanged(nameof(IsGoldLine));

@@ -25,10 +25,8 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly INumberingApiClient? _numberingApi;
     private readonly SettingsViewModel? _settings;
     private readonly IApiReadinessSignal? _apiReadiness;
-    private readonly InvoiceQuickAddWorkflow _quickAdd;
     private readonly InvoiceLineCollectionObserver _lineCollectionObserver;
     private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
-    private Dictionary<string, ItemMasterRowVm>? _itemMasterByName;
     private bool _deferLineCollectionRecompute;
     private bool _syncingLinkedTotals;
     private Guid? _draftBillId;
@@ -77,15 +75,6 @@ public partial class InvoiceViewModel : ObservableObject
             OnLineMutated,
             OnLineCollectionChanged);
         QuickAddResults = new ObservableCollection<ItemMasterRowVm>();
-        _quickAdd = new InvoiceQuickAddWorkflow(
-            () => ItemMasters,
-            Lines,
-            QuickAddResults,
-            CreateBlankRow,
-            () => QuickAddQuery,
-            value => QuickAddQuery = value,
-            () => QuickAddSelection,
-            value => QuickAddSelection = value);
         QuickAddCommitCommand = new RelayCommand<ItemMasterRowVm?>(CommitQuickAdd);
         AttachItemMasterObservers();
         RefreshQuickAddResults();
@@ -108,7 +97,7 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private string quickAddQuery = string.Empty;
     [ObservableProperty] private ItemMasterRowVm? quickAddSelection;
 
-    partial void OnQuickAddQueryChanged(string value) => _quickAdd.RefreshResults();
+    partial void OnQuickAddQueryChanged(string value) => RefreshQuickAddResults();
 
     [ObservableProperty] private string saveStatus = string.Empty;
     [ObservableProperty] private DateTimeOffset? lastSavedAtUtc;
@@ -172,7 +161,7 @@ public partial class InvoiceViewModel : ObservableObject
 
         if (value < 0m)
         {
-            SetDiscountFromLinkedTotals(0m);
+            SetFromLinkedTotals(() => Discount = 0m);
             SaveStatus = "Discount cannot be negative.";
             RecomputeTotalsFromCurrentLines();
             return;
@@ -180,7 +169,7 @@ public partial class InvoiceViewModel : ObservableObject
 
         if (value > 0m && !DiscountEnabled)
         {
-            SetDiscountEnabledFromLinkedTotals(true);
+            SetFromLinkedTotals(() => DiscountEnabled = true);
         }
 
         RecomputeTotalsFromCurrentLines();
@@ -237,34 +226,12 @@ public partial class InvoiceViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(line.ItemName)) return;
 
         var typed = line.ItemName.Trim();
-        if (GetItemMasterNameIndex().TryGetValue(typed, out var master))
+        var master = ItemMasters?.FirstOrDefault(
+            candidate => string.Equals(candidate.Name?.Trim(), typed, StringComparison.OrdinalIgnoreCase));
+        if (master is not null)
         {
             line.ItemMaster = master;
         }
-    }
-
-    private IReadOnlyDictionary<string, ItemMasterRowVm> GetItemMasterNameIndex()
-    {
-        if (_itemMasterByName is not null)
-        {
-            return _itemMasterByName;
-        }
-
-        var index = new Dictionary<string, ItemMasterRowVm>(StringComparer.OrdinalIgnoreCase);
-        if (ItemMasters is not null)
-        {
-            foreach (var master in ItemMasters)
-            {
-                var name = master.Name?.Trim();
-                if (!string.IsNullOrWhiteSpace(name))
-                {
-                    index.TryAdd(name, master);
-                }
-            }
-        }
-
-        _itemMasterByName = index;
-        return _itemMasterByName;
     }
 
     private void AttachItemMasterObservers()
@@ -304,7 +271,7 @@ public partial class InvoiceViewModel : ObservableObject
                 AttachItemMaster(master);
         }
 
-        InvalidateItemMasterIndexes();
+        RefreshQuickAddResults();
     }
 
     private void AttachItemMaster(ItemMasterRowVm master)
@@ -322,13 +289,7 @@ public partial class InvoiceViewModel : ObservableObject
     private void OnItemMasterPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(ItemMasterRowVm.Name))
-            InvalidateItemMasterIndexes();
-    }
-
-    private void InvalidateItemMasterIndexes()
-    {
-        _itemMasterByName = null;
-        _quickAdd.InvalidateIndex();
+            RefreshQuickAddResults();
     }
 
     private void AddTrailingBlankRow(bool deferCollectionRecompute = false)
@@ -373,10 +334,7 @@ public partial class InvoiceViewModel : ObservableObject
     private void RemoveFocusedRow()
     {
         if (Lines.Count <= 1) return;
-        var idx = Math.Clamp(FocusedRowIndex, 0, Lines.Count - 1);
-        Lines.RemoveAt(idx);
-        if (Lines.Count == 0 || !Lines[^1].IsEmpty) AddTrailingBlankRow();
-        FocusedRowIndex = Math.Clamp(idx, 0, Lines.Count - 1);
+        RemoveRowAt(Math.Clamp(FocusedRowIndex, 0, Lines.Count - 1));
     }
 
     private void RemoveLine(BillLineViewModel? line)
@@ -384,9 +342,15 @@ public partial class InvoiceViewModel : ObservableObject
         if (line is null || Lines.Count <= 1) return;
         var idx = Lines.IndexOf(line);
         if (idx < 0) return;
-        Lines.RemoveAt(idx);
+        RemoveRowAt(idx);
+    }
+
+    // The grid always ends in one blank row, and focus stays where the removed row was.
+    private void RemoveRowAt(int index)
+    {
+        Lines.RemoveAt(index);
         if (Lines.Count == 0 || !Lines[^1].IsEmpty) AddTrailingBlankRow();
-        FocusedRowIndex = Math.Clamp(idx, 0, Lines.Count - 1);
+        FocusedRowIndex = Math.Clamp(index, 0, Lines.Count - 1);
     }
 
     private void Recompute()
@@ -421,7 +385,7 @@ public partial class InvoiceViewModel : ObservableObject
         // Tally voucher legs balance exactly.
         var effectiveDiscount = Math.Round(Math.Max(0m, Discount), 2, MidpointRounding.AwayFromZero);
         if (effectiveDiscount != Discount)
-            SetDiscountFromLinkedTotals(effectiveDiscount);
+            SetFromLinkedTotals(() => Discount = effectiveDiscount);
 
         var totals = BillCalculator.BuildTotals(inclusiveTotal, effectiveDiscount);
         Subtotal = totals.SubtotalBase;
@@ -429,7 +393,7 @@ public partial class InvoiceViewModel : ObservableObject
         Sgst = totals.Sgst;
         RoundOff = totals.RoundOff;
         GrandTotal = totals.GrandTotal;
-        SetFinalAmountFromLinkedTotals(totals.GrandTotal);
+        SetFromLinkedTotals(() => FinalAmount = totals.GrandTotal);
         ItemCount = count;
         TotalWeight = weight;
         DiscountPercentHint = (effectiveDiscount > 0m && Subtotal > 0m)
@@ -463,7 +427,7 @@ public partial class InvoiceViewModel : ObservableObject
 
         if (targetGrand >= undiscounted.GrandTotal)
         {
-            SetDiscountFromLinkedTotals(0m);
+            SetFromLinkedTotals(() => Discount = 0m);
             RecomputeTotalsFromCurrentLines();
             if (targetGrand > undiscounted.GrandTotal && undiscounted.GrandTotal > 0m)
             {
@@ -479,50 +443,23 @@ public partial class InvoiceViewModel : ObservableObject
             MidpointRounding.AwayFromZero);
 
         if (!DiscountEnabled)
-            SetDiscountEnabledFromLinkedTotals(true);
+            SetFromLinkedTotals(() => DiscountEnabled = true);
 
-        SetDiscountFromLinkedTotals(computedDiscount);
+        SetFromLinkedTotals(() => Discount = computedDiscount);
         RecomputeTotalsFromCurrentLines();
     }
 
-    private void SetDiscountFromLinkedTotals(decimal value)
+    /// <summary>
+    /// Discount, its tick box and the final amount drive each other. A value
+    /// written here is the result of that link, so its own change handler
+    /// must not start the calculation again.
+    /// </summary>
+    private void SetFromLinkedTotals(Action assign)
     {
-        if (Discount == value) return;
-
         _syncingLinkedTotals = true;
         try
         {
-            Discount = value;
-        }
-        finally
-        {
-            _syncingLinkedTotals = false;
-        }
-    }
-
-    private void SetDiscountEnabledFromLinkedTotals(bool value)
-    {
-        if (DiscountEnabled == value) return;
-
-        _syncingLinkedTotals = true;
-        try
-        {
-            DiscountEnabled = value;
-        }
-        finally
-        {
-            _syncingLinkedTotals = false;
-        }
-    }
-
-    private void SetFinalAmountFromLinkedTotals(decimal value)
-    {
-        if (FinalAmount == value) return;
-
-        _syncingLinkedTotals = true;
-        try
-        {
-            FinalAmount = value;
+            assign();
         }
         finally
         {
@@ -616,13 +553,38 @@ public partial class InvoiceViewModel : ObservableObject
         RoundOff,
         GrandTotal);
 
-    private void RefreshQuickAddResults() => _quickAdd.RefreshResults();
+    private void RefreshQuickAddResults()
+    {
+        var query = (QuickAddQuery ?? string.Empty).Trim();
+        var matches = (ItemMasters ?? [])
+            .Where(master => !string.IsNullOrWhiteSpace(master.Name)
+                && (query.Length == 0 || master.Name.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .Take(50)
+            .ToList();
 
+        QuickAddResults.Clear();
+        foreach (var match in matches)
+            QuickAddResults.Add(match);
+
+        QuickAddSelection = QuickAddResults.FirstOrDefault();
+    }
+
+    /// <summary>Puts the picked item on the first empty line, adding one if every line is in use.</summary>
     private void CommitQuickAdd(ItemMasterRowVm? master)
     {
-        var target = _quickAdd.Commit(master);
-        if (target is not null)
-            QuickAddCommitted?.Invoke(this, target);
+        master ??= QuickAddSelection ?? QuickAddResults.FirstOrDefault();
+        if (master is null) return;
+
+        var target = Lines.FirstOrDefault(line => line.IsEmpty);
+        if (target is null)
+        {
+            target = CreateBlankRow();
+            Lines.Add(target);
+        }
+
+        target.ItemMaster = master;
+        QuickAddQuery = string.Empty;
+        QuickAddCommitted?.Invoke(this, target);
     }
 
     private void ClearInvoice()

@@ -53,12 +53,8 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
                 && !IsSettingActiveCompany
                 && !IsFetchingCompanies
                 && !string.Equals(SelectedCompany.Name, ActiveCompanyName, StringComparison.Ordinal));
-        FetchLedgersAndVoucherTypesCommand = new AsyncRelayCommand(FetchLedgersAndVoucherTypesAsync,
-            () => _mastersApi is not null && !IsFetchingLedgers);
         RequestLedgerRefreshCommand = new AsyncRelayCommand(RequestLedgerRefreshAsync,
             () => _mastersApi is not null && !IsFetchingLedgers);
-        FetchStockItemsCommand = new AsyncRelayCommand(FetchStockItemsAsync,
-            () => _mastersApi is not null && !IsFetchingStockItems);
         RequestStockItemRefreshCommand = new AsyncRelayCommand(RequestStockItemRefreshAsync,
             () => _mastersApi is not null && !IsFetchingStockItems);
 
@@ -103,9 +99,7 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
 
     public IAsyncRelayCommand RequestCompanyRefreshCommand { get; }
     public IAsyncRelayCommand SetActiveCompanyCommand { get; }
-    public IAsyncRelayCommand FetchLedgersAndVoucherTypesCommand { get; }
     public IAsyncRelayCommand RequestLedgerRefreshCommand { get; }
-    public IAsyncRelayCommand FetchStockItemsCommand { get; }
     public IAsyncRelayCommand RequestStockItemRefreshCommand { get; }
     public IRelayCommand AddItemMasterRowCommand { get; }
     public IRelayCommand<ItemMasterRowVm> RemoveItemMasterRowCommand { get; }
@@ -143,17 +137,8 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
     partial void OnIsSettingActiveCompanyChanged(bool value) => NotifyCompanyCommandsChanged();
     partial void OnSelectedCompanyChanged(CompanySnapshotItem? value) => SetActiveCompanyCommand.NotifyCanExecuteChanged();
 
-    partial void OnIsFetchingLedgersChanged(bool value)
-    {
-        FetchLedgersAndVoucherTypesCommand.NotifyCanExecuteChanged();
-        RequestLedgerRefreshCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnIsFetchingStockItemsChanged(bool value)
-    {
-        FetchStockItemsCommand.NotifyCanExecuteChanged();
-        RequestStockItemRefreshCommand.NotifyCanExecuteChanged();
-    }
+    partial void OnIsFetchingLedgersChanged(bool value) => RequestLedgerRefreshCommand.NotifyCanExecuteChanged();
+    partial void OnIsFetchingStockItemsChanged(bool value) => RequestStockItemRefreshCommand.NotifyCanExecuteChanged();
 
     public async Task LoadMissingSnapshotsAsync(CancellationToken cancellationToken)
     {

@@ -18,10 +18,3 @@ public interface ITallyMasterRefresher
     Task<TallyMasterRefreshResult> RefreshVoucherTypesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TallyMasterRefreshResult>> RefreshAllAsync(CancellationToken cancellationToken = default);
 }
-
-public sealed record TallyMasterRefreshResult(
-    string MasterType,
-    bool Succeeded,
-    int ItemCount,
-    string? BatchId,
-    string? ErrorMessage);

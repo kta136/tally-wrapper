@@ -46,24 +46,24 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
     }
 
     [Fact]
-    public async Task Invoice_preview_opens_the_preview_dialog_when_the_invoice_has_a_line()
+    public void Invoice_preview_opens_the_preview_dialog_when_the_invoice_has_a_line()
     {
         var host = new FakePrintHost();
         var coordinator = CreateCoordinator(host);
         PopulateInvoice(host.Invoice);
 
-        await coordinator.OpenInvoicePreviewAsync(CancellationToken.None);
+        coordinator.OpenInvoicePreview();
 
         Assert.Equal("printPreview", host.ActiveDialog);
     }
 
     [Fact]
-    public async Task Invoice_preview_with_no_lines_explains_why_nothing_opened()
+    public void Invoice_preview_with_no_lines_explains_why_nothing_opened()
     {
         var host = new FakePrintHost();
         var coordinator = CreateCoordinator(host);
 
-        await coordinator.OpenInvoicePreviewAsync(CancellationToken.None);
+        coordinator.OpenInvoicePreview();
 
         Assert.Null(host.ActiveDialog);
         Assert.Equal("Add a line before previewing the invoice.", host.Invoice.SaveStatus);

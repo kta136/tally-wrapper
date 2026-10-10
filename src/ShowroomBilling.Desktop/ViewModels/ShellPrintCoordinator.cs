@@ -119,11 +119,10 @@ internal sealed class ShellPrintCoordinator(
         }
 
         _invoiceAwaitingPostPrintReset = true;
-        host.ActiveDialog = ShellDialogs.PrintPreview;
-        host.PrintPreview.Initialize(content, layout, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
+        OpenPreview([content], layout);
     }
 
-    public async Task OpenInvoicePreviewAsync(CancellationToken cancellationToken)
+    public void OpenInvoicePreview()
     {
         var content = host.Invoice.BuildPrintContent(companyProfileProvider.Current);
         if (content is null)
@@ -131,18 +130,16 @@ internal sealed class ShellPrintCoordinator(
             host.Invoice.SaveStatus = "Add a line before previewing the invoice.";
             return;
         }
-        host.ActiveDialog = ShellDialogs.PrintPreview;
-        host.PrintPreview.Initialize(content, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
+        OpenPreview([content], printLayoutOptionsProvider.Current);
     }
 
-    public async Task OpenFinalPrintPreviewAsync(CancellationToken cancellationToken)
+    public void OpenFinalPrintPreview()
     {
         var content = host.BillDetails.BuildPrintContent(
             companyProfileProvider.Current,
             companyProfileProvider.KaratMappings);
         if (content is null) return;
-        host.ActiveDialog = ShellDialogs.PrintPreview;
-        host.PrintPreview.Initialize(content, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
+        OpenPreview([content], printLayoutOptionsProvider.Current);
     }
 
     public async Task OpenSelectedBillsPrintPreviewAsync(CancellationToken cancellationToken)
@@ -166,8 +163,13 @@ internal sealed class ShellPrintCoordinator(
 
         if (contents.Count == 0) return;
 
+        OpenPreview(contents, printLayoutOptionsProvider.Current);
+    }
+
+    private void OpenPreview(IReadOnlyList<BillPrintContent> contents, PrintLayoutOptions? layout)
+    {
         host.ActiveDialog = ShellDialogs.PrintPreview;
-        host.PrintPreview.Initialize(contents, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
+        host.PrintPreview.Initialize(contents, layout, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
     }
 
     public Task WarmUpPrintPipelineAsync() => Task.Run(() =>
