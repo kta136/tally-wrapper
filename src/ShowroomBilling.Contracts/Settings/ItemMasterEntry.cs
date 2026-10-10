@@ -7,7 +7,7 @@ public static class ItemCategories
     public const string GoldBased = "gold_based";
     public const string Diamond = "diamond";
 
-    public static IReadOnlyList<string> All { get; } = new[] { GoldBased, Diamond };
+    public static IReadOnlyList<string> All { get; } = [GoldBased, Diamond];
 }
 
 public static class PricingModes
@@ -16,7 +16,7 @@ public static class PricingModes
     public const string Labour = "labour";
     public const string Both = "both";
 
-    public static IReadOnlyList<string> All { get; } = new[] { Wastage, Labour, Both };
+    public static IReadOnlyList<string> All { get; } = [Wastage, Labour, Both];
 }
 
 public static class ItemUnits
@@ -24,7 +24,7 @@ public static class ItemUnits
     public const string Gram = "gm";
     public const string Carat = "ct";
 
-    public static IReadOnlyList<string> All { get; } = new[] { Gram, Carat };
+    public static IReadOnlyList<string> All { get; } = [Gram, Carat];
 }
 
 public sealed record ItemMasterEntry(

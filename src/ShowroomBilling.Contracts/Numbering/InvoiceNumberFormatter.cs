@@ -13,8 +13,8 @@ public static class InvoiceNumberFormatter
     {
         var width = padding < 1 ? DefaultPadding : padding;
         var core = value.ToString($"D{width}");
-        var prefixPart = string.IsNullOrWhiteSpace(prefix) ? string.Empty : prefix!;
-        var suffixPart = string.IsNullOrWhiteSpace(suffix) ? string.Empty : suffix!;
+        var prefixPart = string.IsNullOrWhiteSpace(prefix) ? string.Empty : prefix;
+        var suffixPart = string.IsNullOrWhiteSpace(suffix) ? string.Empty : suffix;
         if (ContainsFiscalYear(prefixPart, fiscalYear) || ContainsFiscalYear(suffixPart, fiscalYear))
         {
             return $"{prefixPart}{core}{suffixPart}";
@@ -41,7 +41,7 @@ public static class InvoiceNumberFormatter
 
         var end = invoiceNumber.Length;
         var start = end;
-        while (start > 0 && invoiceNumber[start - 1] >= '0' && invoiceNumber[start - 1] <= '9')
+        while (start > 0 && char.IsAsciiDigit(invoiceNumber[start - 1]))
         {
             start--;
         }
@@ -54,7 +54,7 @@ public static class InvoiceNumberFormatter
     }
 
     /// <summary>India Standard Time. The fiscal year turns over at 00:00 IST on 1 April, not 00:00 UTC.</summary>
-    public static readonly TimeSpan IndiaOffset = TimeSpan.FromMinutes(330);
+    private static readonly TimeSpan IndiaOffset = TimeSpan.FromMinutes(330);
 
     /// <summary>Returns the Indian fiscal-year label (e.g. <c>2026-27</c>) for the given instant, read on the IST calendar.</summary>
     public static string ComputeFiscalYear(DateTimeOffset instant) =>
@@ -70,13 +70,13 @@ public static class InvoiceNumberFormatter
 
     private static bool ContainsFiscalYear(string value, string fiscalYear)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        // Format passes either an empty string or a part with visible text.
+        if (value.Length == 0)
         {
             return false;
         }
 
-        var normalized = value.Trim();
-        if (normalized.Contains(fiscalYear, StringComparison.OrdinalIgnoreCase))
+        if (value.Contains(fiscalYear, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -89,6 +89,6 @@ public static class InvoiceNumberFormatter
 
         var shortStart = parts[0][^2..];
         var shortYear = $"{shortStart}-{parts[1]}";
-        return normalized.Contains(shortYear, StringComparison.OrdinalIgnoreCase);
+        return value.Contains(shortYear, StringComparison.OrdinalIgnoreCase);
     }
 }

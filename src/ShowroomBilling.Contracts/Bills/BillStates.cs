@@ -18,11 +18,4 @@ public static class BillStates
     public const string ReconciliationRequired = "reconciliation_required";
     public const string Revised = "revised";
     public const string Voided = "voided";
-
-    /// <summary>
-    /// States that represent unfinished work an operator can push — <c>pending</c>
-    /// plus the legacy <c>draft</c> alias. Keep these together in every filter /
-    /// sort that treats "not yet sent to Tally" as one bucket.
-    /// </summary>
-    public static readonly string[] OpenForPush = [Pending, Draft];
 }

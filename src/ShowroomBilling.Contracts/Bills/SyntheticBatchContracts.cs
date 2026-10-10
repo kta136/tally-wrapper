@@ -40,7 +40,3 @@ public sealed record SyntheticBatchResponse(
     int BillCount,
     decimal TotalAmount,
     IReadOnlyList<SyntheticBatchCreatedBill> CreatedBills);
-
-public sealed record SyntheticBatchCountBoundsResponse(
-    int MinBillCount,
-    int MaxBillCount);
