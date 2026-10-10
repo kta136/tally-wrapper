@@ -55,7 +55,7 @@ public sealed class StartupStatus : IStartupStatus
         }
         // Awaiters of WaitForDatabaseReadyAsync (e.g. stuck-posting recovery) get
         // a fault rather than hanging forever — they should treat it as "skip this run".
-        _databaseReadyTcs.TrySetException(new InvalidOperationException(error));
+        _databaseReadyTcs.TrySetException(new DatabaseNotReadyException(error));
     }
 
     public Task WaitForDatabaseReadyAsync(CancellationToken cancellationToken = default)

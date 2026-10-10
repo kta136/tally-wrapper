@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -16,118 +15,74 @@ namespace ShowroomBilling.Infrastructure.Numbering;
 ///
 /// Idempotent: scopes already in sync are no-ops. Best-effort like the
 /// stuck-posting recovery: failures log a warning but never throw, so a
-/// transient DB hiccup can't take the API offline. Defers behind
-/// <see cref="IStartupStatus.WaitForDatabaseReadyAsync"/> so a fresh DB whose
-/// migrations are still applying doesn't trigger spurious failures.
+/// transient DB hiccup can't take the API offline.
 /// </summary>
 public sealed class SequenceSelfHealHostedService(
     IServiceScopeFactory scopeFactory,
     IStartupStatus startupStatus,
-    ILogger<SequenceSelfHealHostedService> logger) : IHostedService
+    ILogger<SequenceSelfHealHostedService> logger) : DatabaseStartupTask(startupStatus)
 {
-    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(30);
-    private Task? _task;
-    private CancellationTokenSource? _cts;
+    protected override TimeSpan Timeout => TimeSpan.FromSeconds(30);
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task RunAsync(CancellationToken timeboxed, CancellationToken hostStopping)
     {
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _task = Task.Run(() => RunAsync(_cts.Token), _cts.Token);
-        return Task.CompletedTask;
-    }
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
 
-    private async Task RunAsync(CancellationToken cancellationToken)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(StartupTimeout);
+        // Pull (showroom, fiscalYear) pairs from the sequence table; the
+        // reclaimer scopes its FOR UPDATE by document type internally.
+        var scopes = await db.InvoiceSequences
+            .AsNoTracking()
+            .Select(s => new { s.ShowroomId, s.FiscalYear })
+            .Distinct()
+            .ToListAsync(timeboxed);
 
-        try
-        {
-            await startupStatus.WaitForDatabaseReadyAsync(cts.Token);
-
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
-
-            // Pull (showroom, fiscalYear) pairs from the sequence table; the
-            // reclaimer scopes its FOR UPDATE by document type internally.
-            var scopes = await db.InvoiceSequences
-                .AsNoTracking()
-                .Select(s => new { s.ShowroomId, s.FiscalYear })
-                .Distinct()
-                .ToListAsync(cts.Token);
-
-            var moved = 0;
-            foreach (var s in scopes)
-            {
-                try
-                {
-                    // The reclaimer's FOR UPDATE only holds the sequence row
-                    // inside a transaction; without one a concurrent
-                    // reservation could allocate the core being rolled back.
-                    await using var transaction = db.UsesInMemoryProvider()
-                        ? null
-                        : await db.Database.BeginTransactionAsync(cts.Token);
-                    if (await NumberingSequenceReclaimer.ReclaimAsync(
-                        db, s.ShowroomId, s.FiscalYear, "startup-self-heal", cts.Token))
-                    {
-                        moved++;
-                    }
-                    if (transaction is not null)
-                    {
-                        await transaction.CommitAsync(cts.Token);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    db.ChangeTracker.Clear();
-                    // One bad scope shouldn't block the others.
-                    logger.LogWarning(ex,
-                        "Sequence self-heal failed for scope ({ShowroomId}, {FiscalYear}); other scopes will still be reconciled.",
-                        s.ShowroomId, s.FiscalYear);
-                }
-            }
-
-            if (moved > 0)
-            {
-                logger.LogInformation(
-                    "Sequence self-heal: rolled back NextValue in {Count} scope(s) to match remaining bills.",
-                    moved);
-            }
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            logger.LogWarning("Sequence self-heal timed out after {Seconds}s; will retry next API restart.",
-                (int)StartupTimeout.TotalSeconds);
-        }
-        catch (OperationCanceledException)
-        {
-            // Host shutdown — nothing to log.
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Length > 0)
-        {
-            // WaitForDatabaseReadyAsync faulted because RecordDatabaseFailure
-            // was called. DatabaseInit has already surfaced the root cause.
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Sequence self-heal failed; will retry next API restart.");
-        }
-    }
-
-    public async Task StopAsync(CancellationToken cancellationToken)
-    {
-        try { _cts?.Cancel(); } catch { }
-        if (_task is not null)
+        var moved = 0;
+        foreach (var s in scopes)
         {
             try
             {
-                await _task.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
+                // The reclaimer's FOR UPDATE only holds the sequence row
+                // inside a transaction; without one a concurrent
+                // reservation could allocate the core being rolled back.
+                await using var transaction = db.UsesInMemoryProvider()
+                    ? null
+                    : await db.Database.BeginTransactionAsync(timeboxed);
+                if (await NumberingSequenceReclaimer.ReclaimAsync(
+                    db, s.ShowroomId, s.FiscalYear, "startup-self-heal", timeboxed))
+                {
+                    moved++;
+                }
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(timeboxed);
+                }
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Don't block shutdown for a slow self-heal.
+                db.ChangeTracker.Clear();
+                // One bad scope shouldn't block the others.
+                logger.LogWarning(ex,
+                    "Sequence self-heal failed for scope ({ShowroomId}, {FiscalYear}); other scopes will still be reconciled.",
+                    s.ShowroomId, s.FiscalYear);
             }
         }
-        _cts?.Dispose();
+
+        if (moved > 0)
+        {
+            logger.LogInformation(
+                "Sequence self-heal: rolled back NextValue in {Count} scope(s) to match remaining bills.",
+                moved);
+        }
     }
+
+    protected override void OnTimedOut() =>
+        logger.LogWarning("Sequence self-heal timed out after {Seconds}s; will retry next API restart.",
+            (int)Timeout.TotalSeconds);
+
+    protected override void OnDatabaseNotReady(string reason) =>
+        logger.LogInformation("Sequence self-heal skipped: database not ready ({Reason}).", reason);
+
+    protected override void OnFailed(Exception exception) =>
+        logger.LogWarning(exception, "Sequence self-heal failed; will retry next API restart.");
 }

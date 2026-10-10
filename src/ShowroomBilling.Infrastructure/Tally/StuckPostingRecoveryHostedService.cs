@@ -1,6 +1,4 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -19,82 +17,27 @@ namespace ShowroomBilling.Infrastructure.Tally;
 /// are recovered. Younger claims are re-checked once they are old enough; by
 /// then a live push has settled and the conditional transition leaves it alone.
 ///
-/// Recovery is best-effort: any failure is logged + recorded on
-/// <see cref="IStartupStatus"/> but never throws, so a transient DB hiccup can't
-/// take the API offline.
+/// Recovery is best-effort and runs in the background: operators cannot push a
+/// stuck bill anyway (the claim in <c>PushInternalAsync</c> short-circuits on
+/// <c>posting</c>), so a short window before it has run is harmless. Any
+/// failure is logged and recorded on <see cref="IStartupStatus"/>, never thrown.
 /// </summary>
 public sealed class StuckPostingRecoveryHostedService(
     IServiceScopeFactory scopeFactory,
     IStartupStatus startupStatus,
-    ILogger<StuckPostingRecoveryHostedService> logger) : IHostedService
+    ILogger<StuckPostingRecoveryHostedService> logger) : DatabaseStartupTask(startupStatus)
 {
-    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(30);
-    private Task? _recoveryTask;
-    private CancellationTokenSource? _recoveryCts;
+    private readonly IStartupStatus _startupStatus = startupStatus;
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    protected override TimeSpan Timeout => TimeSpan.FromSeconds(30);
+
+    protected override async Task RunAsync(CancellationToken timeboxed, CancellationToken hostStopping)
     {
-        // Recovery used to run synchronously inside StartAsync, which serialised
-        // it after DatabaseInitializationHostedService and could add up to 30 s
-        // to API boot on top of the 15 s migration window. It's safe to defer:
-        // - operators can't push a stuck bill anyway (the conditional UPDATE in
-        //   PushInternalAsync short-circuits when state='posting'), so a brief
-        //   window where recovery hasn't run yet is benign;
-        // - the IStartupStatus snapshot continues to surface the "RecoveryRan"
-        //   flag via /api/health/startup, so the Desktop's limited-mode banner
-        //   still works.
-        // We wait for the database to be ready first so a fresh DB whose
-        // migrations are still applying doesn't trigger spurious recovery
-        // failures against a missing schema.
-        _recoveryCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _recoveryTask = Task.Run(() => RunRecoveryAsync(_recoveryCts.Token), _recoveryCts.Token);
-        return Task.CompletedTask;
-    }
+        var nextCheck = await RecoverOnceAsync(timeboxed, recordOnStartupStatus: true);
 
-    private async Task RunRecoveryAsync(CancellationToken cancellationToken)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(StartupTimeout);
-
-        try
-        {
-            // Block until migrations have completed (or fail). This faults if
-            // RecordDatabaseFailure was called, which we treat as "skip recovery
-            // this boot — it'll re-run next time the API comes up healthy".
-            await startupStatus.WaitForDatabaseReadyAsync(cts.Token);
-
-            DateTimeOffset? nextCheck;
-            using (var scope = scopeFactory.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
-                (var recovered, nextCheck) = await AbandonedPostingRecovery.RecoverAsync(db, DateTimeOffset.UtcNow, cts.Token);
-                startupStatus.RecordRecoveryComplete(recovered);
-                LogRecovered(recovered);
-            }
-
-            await WatchYoungClaimsAsync(nextCheck, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-        {
-            var msg = $"Stuck-posting recovery timed out after {(int)StartupTimeout.TotalSeconds}s; will retry on next API restart.";
-            logger.LogWarning(msg);
-            startupStatus.RecordRecoveryFailure(msg);
-        }
-        catch (OperationCanceledException)
-        {
-            // Host shutdown — nothing to record.
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Length > 0)
-        {
-            // Faulted via WaitForDatabaseReadyAsync because RecordDatabaseFailure was called.
-            // DatabaseInit has already logged the underlying cause.
-            startupStatus.RecordRecoveryFailure($"Skipped: database not ready ({ex.Message}).");
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Stuck-posting recovery failed; will retry on next API restart.");
-            startupStatus.RecordRecoveryFailure(ex.Message);
-        }
+        // Re-checking young claims waits minutes by design, so it runs on the
+        // host token, outside the start-up timeout.
+        await WatchYoungClaimsAsync(nextCheck, hostStopping);
     }
 
     private async Task WatchYoungClaimsAsync(DateTimeOffset? nextCheck, CancellationToken cancellationToken)
@@ -109,10 +52,7 @@ public sealed class StuckPostingRecoveryHostedService(
 
             try
             {
-                using var scope = scopeFactory.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
-                (var recovered, nextCheck) = await AbandonedPostingRecovery.RecoverAsync(db, DateTimeOffset.UtcNow, cancellationToken);
-                LogRecovered(recovered);
+                nextCheck = await RecoverOnceAsync(cancellationToken, recordOnStartupStatus: false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -122,32 +62,40 @@ public sealed class StuckPostingRecoveryHostedService(
         }
     }
 
-    private void LogRecovered(int recovered)
+    /// <returns>When the youngest remaining claim becomes old enough to recover, if any.</returns>
+    private async Task<DateTimeOffset?> RecoverOnceAsync(CancellationToken cancellationToken, bool recordOnStartupStatus)
     {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
+        var (recovered, nextCheck) = await AbandonedPostingRecovery.RecoverAsync(db, DateTimeOffset.UtcNow, cancellationToken);
+        if (recordOnStartupStatus)
+        {
+            _startupStatus.RecordRecoveryComplete(recovered);
+        }
+
         if (recovered > 0)
         {
             logger.LogWarning(
                 "Recovery: {Count} bill(s) were stuck in 'posting' and now require Tally reconciliation.",
                 recovered);
         }
+
+        return nextCheck;
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    protected override void OnTimedOut()
     {
-        // Cancel any in-flight recovery and give it a moment to drain so we
-        // don't tear down the DI scope mid-query.
-        try { _recoveryCts?.Cancel(); } catch { }
-        if (_recoveryTask is not null)
-        {
-            try
-            {
-                await _recoveryTask.WaitAsync(TimeSpan.FromSeconds(2), cancellationToken);
-            }
-            catch
-            {
-                // Don't block shutdown for a slow recovery.
-            }
-        }
-        _recoveryCts?.Dispose();
+        var msg = $"Stuck-posting recovery timed out after {(int)Timeout.TotalSeconds}s; will retry on next API restart.";
+        logger.LogWarning(msg);
+        _startupStatus.RecordRecoveryFailure(msg);
+    }
+
+    protected override void OnDatabaseNotReady(string reason) =>
+        _startupStatus.RecordRecoveryFailure($"Skipped: database not ready ({reason}).");
+
+    protected override void OnFailed(Exception exception)
+    {
+        logger.LogWarning(exception, "Stuck-posting recovery failed; will retry on next API restart.");
+        _startupStatus.RecordRecoveryFailure(exception.Message);
     }
 }
