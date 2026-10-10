@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -10,26 +11,22 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
 {
     private const string SortWorkflow = "workflow";
     private const string SortCreatedDesc = "created_desc";
+    private const int MaxBatchGetIds = 200;
 
     internal async Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
     {
-        var bill = await dbContext.Bills
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == billId, cancellationToken);
-        if (bill is null)
-        {
-            return null;
-        }
+        // One round trip for the bill and its current revision; the database
+        // is across the network from the showroom.
+        var row = await (
+            from bill in dbContext.Bills.AsNoTracking()
+            join rev in dbContext.BillRevisions.AsNoTracking()
+                on bill.CurrentRevisionId equals rev.Id into revs
+            from rev in revs.DefaultIfEmpty()
+            where bill.Id == billId
+            select new { bill, rev })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        BillRevisionEntity? currentRevision = null;
-        if (bill.CurrentRevisionId is Guid revisionId)
-        {
-            currentRevision = await dbContext.BillRevisions
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == revisionId, cancellationToken);
-        }
-
-        return BillSerialization.MapResponse(bill, currentRevision);
+        return row is null ? null : BillSerialization.MapResponse(row.bill, row.rev);
     }
 
     internal async Task<BillBatchGetResponse> GetManyAsync(
@@ -43,7 +40,13 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
             return new BillBatchGetResponse(Array.Empty<BillResponse>());
         }
 
-        var requested = orderedIds.Take(200).ToArray();
+        if (orderedIds.Count > MaxBatchGetIds)
+        {
+            throw new RequestValidationException(
+                $"At most {MaxBatchGetIds} bills can be fetched at once (got {orderedIds.Count}).");
+        }
+
+        var requested = orderedIds.ToArray();
         var bills = await dbContext.Bills
             .AsNoTracking()
             .Where(x => requested.Contains(x.Id))
@@ -132,10 +135,10 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         var total = includeTotal ? await query.CountAsync(cancellationToken) : 0;
         // Workflow sort:
         //   1. Pending/Draft above everything else (operator's work queue).
-        //   2. Within each state group: highest invoice number first.
-        //      Tied invoice length first puts unpadded /48 above /9 (natural
-        //      numeric order); the string compare on InvoiceNumber then
-        //      orders within a length bucket.
+        //   2. Within each state group: highest invoice number first, read
+        //      from the stored core so padding and suffixes do not matter.
+        //      Legacy numbers without a core come after, longest text first
+        //      (natural order for unpadded numbers), then by text.
         //   3. CreatedAtUtc desc is only a last-resort tiebreak for bills
         //      that share fiscal year + invoice number (effectively only
         //      bills with no InvoiceNumber yet).
@@ -151,6 +154,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
                         ? 0
                         : 1)
                 .ThenByDescending(x => x.bill.FiscalYear)
+                .ThenByDescending(x => x.bill.InvoiceCore ?? -1L)
                 .ThenByDescending(x => x.bill.InvoiceNumber == null ? 0 : x.bill.InvoiceNumber.Length)
                 .ThenByDescending(x => x.bill.InvoiceNumber)
                 .ThenByDescending(x => x.bill.CreatedAtUtc);

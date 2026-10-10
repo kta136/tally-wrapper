@@ -56,8 +56,11 @@ internal sealed class BillAuditStore(
         Guid billId,
         CancellationToken cancellationToken = default)
     {
-        var bill = await dbContext.Bills.AsNoTracking().FirstOrDefaultAsync(b => b.Id == billId, cancellationToken);
-        if (bill is null) return null;
+        var billState = await dbContext.Bills.AsNoTracking()
+            .Where(b => b.Id == billId)
+            .Select(b => b.State)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (billState is null) return null;
 
         // Single round-trip for both audit lookups. Each side of the Concat picks
         // its own most-recent row using the covering
@@ -92,7 +95,7 @@ internal sealed class BillAuditStore(
 
         return new BillPostingStatusResponse(
             BillId: billId,
-            BillState: bill.State,
+            BillState: billState,
             LastErrorCode: lastErrorCode,
             LastErrorMessage: lastErrorMessage,
             LastRemoteId: lastRemoteId);

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
@@ -15,6 +16,46 @@ namespace ShowroomBilling.Tests;
 
 public sealed class BillServiceTests
 {
+    [Fact]
+    public async Task GetMany_MoreThanTheLimit_IsRejectedInsteadOfSilentlyCutShort()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var ids = Enumerable.Range(0, 201).Select(_ => Guid.NewGuid()).ToArray();
+
+        var ex = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.GetManyAsync(new BillBatchGetRequest(ids)));
+
+        Assert.Equal("At most 200 bills can be fetched at once (got 201).", ex.Message);
+    }
+
+    [Fact]
+    public async Task Search_OrdersByTheNumericInvoiceCore_WhateverThePaddingOrSuffix()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var nine = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var fortyEight = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        var sevenWithSuffix = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+        await RenumberAsync(db, nine.Id, "SR/9", 9);
+        await RenumberAsync(db, fortyEight.Id, "SR/48", 48);
+        // The longest text, but the lowest number: a text sort put it first.
+        await RenumberAsync(db, sevenWithSuffix.Id, "SR/7-A", 7);
+
+        var response = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
+
+        Assert.Equal(["SR/48", "SR/9", "SR/7-A"], response.Items.Select(item => item.InvoiceNumber));
+    }
+
+    private static async Task RenumberAsync(ShowroomBillingDbContext db, Guid billId, string invoiceNumber, long core)
+    {
+        var bill = await db.Bills.SingleAsync(b => b.Id == billId);
+        bill.InvoiceNumber = invoiceNumber;
+        bill.InvoiceCore = core;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+    }
+
     [Fact]
     public async Task CreateDraft_StampsTheDefaultShowroomId_WhichMustNeverChange()
     {
@@ -878,6 +919,8 @@ public sealed class BillServiceTests
         {
             row.State = BillStates.Posted;
             row.FiscalYear = "2026-27";
+            // A legacy row has no stored core, so the sort falls back to the text.
+            row.InvoiceCore = null;
         }
 
         rows.Single(x => x.Id == bill9.Id).InvoiceNumber = "DDAJR/26-27/9";
