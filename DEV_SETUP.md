@@ -248,6 +248,15 @@ The script refuses to start the app when something already listens on port 9000 
 
 The app starts like a fresh install: no admin passcode, placeholder company. The database keeps its data between runs until the container stops. `-NoLaunch` prepares without starting the app, `-Reset` starts over with an empty database, `-Remove` deletes the container and the folder. A plain `dotnet run` or F5 does none of this and uses whatever connection this PC has saved.
 
+**Starting from a copy of real data.** `-RestoreFrom C:\path\copy.dump` loads a dump made with `pg_dump --format=custom --no-owner` (the command in [docs/11 §11](docs/11_deployment_and_ops.md)) into a new scratch database. The script never connects to the database the dump came from; taking the dump is a separate step for whoever holds that database's credentials. After the restore it:
+
+- marks the copy `DEV` and deletes the admin sessions that came with it (the admin passcode itself is the copy's);
+- points the copy's Tally connection at the stand-in, and from then on refuses to start the app while that connection is anything else;
+- applies the migrations the copy has not had. With a dump of production this rehearses the next release on real data, including the tables a destructive migration copies aside;
+- writes the copy's company and master lists to `artifacts\scratch\tally-masters.json`, which the stand-in Tally serves, so "Refresh from Tally" returns the same lists and the company in Settings counts as open.
+
+Such a copy holds real customer data on the Docker host until `-Reset` or `-Remove`. Keep the dump file outside `artifacts\scratch`, and do not hand out anything printed from the copy: its invoice numbers continue the real series.
+
 ## VS Code F5
 
 - shared VS Code debug config is checked into [.vscode/launch.json](.vscode/launch.json)

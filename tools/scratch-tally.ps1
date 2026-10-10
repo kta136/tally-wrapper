@@ -13,60 +13,83 @@
 [CmdletBinding()]
 param(
     [int]$Port = 9000,
-    [string]$LogPath
+    [string]$LogPath,
+    # Lists to serve instead of the built-in ones: the file run-scratch.ps1
+    # writes after restoring a dump, so a refresh returns the copy's own masters.
+    [string]$MastersPath
 )
 
 $ErrorActionPreference = 'Stop'
 
+function Yes([bool]$value) { if ($value) { 'Yes' } else { 'No' } }
+
 $companies = @(
-    @{ Name = 'Scratch Jewellers (Test Books)'; Inactive = 'No' },
-    @{ Name = 'Scratch Jewellers 2025-26'; Inactive = 'No' }
+    @{ name = 'Scratch Jewellers (Test Books)'; active = $true },
+    @{ name = 'Scratch Jewellers 2025-26'; active = $true }
 )
-# Name, parent, primary group, is revenue. The first seven are the ledger names a new database starts with.
+# The first seven are the ledger names a new database starts with.
 $ledgers = @(
-    @('Sales', 'Sales Accounts', 'Sales Accounts', 'Yes'),
-    @('Cash', 'Cash-in-Hand', 'Cash-in-Hand', 'No'),
-    @('Card / UPI', 'Bank Accounts', 'Bank Accounts', 'No'),
-    @('CGST', 'Duties & Taxes', 'Duties & Taxes', 'No'),
-    @('SGST', 'Duties & Taxes', 'Duties & Taxes', 'No'),
-    @('Round Off', 'Indirect Expenses', 'Indirect Expenses', 'Yes'),
-    @('Discount', 'Indirect Expenses', 'Indirect Expenses', 'Yes'),
-    @('Sales - Gold', 'Sales Accounts', 'Sales Accounts', 'Yes'),
-    @('HDFC Bank', 'Bank Accounts', 'Bank Accounts', 'No')
+    @{ name = 'Sales'; parent = 'Sales Accounts'; primaryGroup = 'Sales Accounts'; isRevenue = $true },
+    @{ name = 'Cash'; parent = 'Cash-in-Hand'; primaryGroup = 'Cash-in-Hand' },
+    @{ name = 'Card / UPI'; parent = 'Bank Accounts'; primaryGroup = 'Bank Accounts' },
+    @{ name = 'CGST'; parent = 'Duties & Taxes'; primaryGroup = 'Duties & Taxes' },
+    @{ name = 'SGST'; parent = 'Duties & Taxes'; primaryGroup = 'Duties & Taxes' },
+    @{ name = 'Round Off'; parent = 'Indirect Expenses'; primaryGroup = 'Indirect Expenses'; isRevenue = $true },
+    @{ name = 'Discount'; parent = 'Indirect Expenses'; primaryGroup = 'Indirect Expenses'; isRevenue = $true },
+    @{ name = 'Sales - Gold'; parent = 'Sales Accounts'; primaryGroup = 'Sales Accounts'; isRevenue = $true },
+    @{ name = 'HDFC Bank'; parent = 'Bank Accounts'; primaryGroup = 'Bank Accounts' }
 )
-# Name, alias, unit, HSN.
 $stockItems = @(
-    @('Gold Ornaments 22KT', 'G22', 'GMS', '7113'),
-    @('Gold Ornaments 18KT', 'G18', 'GMS', '7113'),
-    @('Gold Ornaments 14KT', 'G14', 'GMS', '7113'),
-    @('Gold Coin 24KT', 'G24', 'GMS', '7118'),
-    @('Silver Articles', 'SLV', 'GMS', '7114')
+    @{ name = 'Gold Ornaments 22KT'; alias = 'G22'; unit = 'GMS'; hsn = '7113' },
+    @{ name = 'Gold Ornaments 18KT'; alias = 'G18'; unit = 'GMS'; hsn = '7113' },
+    @{ name = 'Gold Ornaments 14KT'; alias = 'G14'; unit = 'GMS'; hsn = '7113' },
+    @{ name = 'Gold Coin 24KT'; alias = 'G24'; unit = 'GMS'; hsn = '7118' },
+    @{ name = 'Silver Articles'; alias = 'SLV'; unit = 'GMS'; hsn = '7114' }
 )
-# Name, parent.
 $voucherTypes = @(
-    @('Sales', 'Sales'),
-    @('Sales - Showroom', 'Sales'),
-    @('Receipt', 'Receipt')
+    @{ name = 'Sales'; parent = 'Sales' },
+    @{ name = 'Sales - Showroom'; parent = 'Sales' },
+    @{ name = 'Receipt'; parent = 'Receipt' }
 )
 
+$mastersSource = 'built-in test lists'
+if ($MastersPath -and (Test-Path -LiteralPath $MastersPath)) {
+    $file = Get-Content -LiteralPath $MastersPath -Raw | ConvertFrom-Json
+    # A list the copy does not have stays on the built-in one.
+    if (@($file.companies).Count -gt 0) { $companies = @($file.companies) }
+    if (@($file.ledgers).Count -gt 0) { $ledgers = @($file.ledgers) }
+    if (@($file.stockItems).Count -gt 0) { $stockItems = @($file.stockItems) }
+    if (@($file.voucherTypes).Count -gt 0) { $voucherTypes = @($file.voucherTypes) }
+    # Push checks that the company in Settings is open in Tally.
+    if ($file.activeCompany -and -not (@($companies | ForEach-Object { $_.name }) -contains $file.activeCompany)) {
+        $companies += @{ name = $file.activeCompany; active = $true }
+    }
+    $mastersSource = "lists from $MastersPath"
+}
+
 function Escape-Xml([string]$text) { [System.Security.SecurityElement]::Escape($text) }
+
+# An element, or nothing when there is no value: Tally leaves empty fields out.
+function Tag([string]$name, [string]$value) {
+    if ([string]::IsNullOrWhiteSpace($value)) { '' } else { "<$name>$(Escape-Xml $value)</$name>" }
+}
 
 function Get-Collection([string]$body) {
     $rows = if ($body -match '<ID>TW_Companies</ID>') {
         $companies | ForEach-Object {
-            "<COMPANY NAME=`"$(Escape-Xml $_.Name)`"><NAME>$(Escape-Xml $_.Name)</NAME><ISINACTIVE>$($_.Inactive)</ISINACTIVE></COMPANY>"
+            "<COMPANY NAME=`"$(Escape-Xml $_.name)`">$(Tag 'NAME' $_.name)<ISINACTIVE>$(Yes (-not $_.active))</ISINACTIVE></COMPANY>"
         }
     } elseif ($body -match '<ID>TW_Ledgers</ID>') {
         $ledgers | ForEach-Object {
-            "<LEDGER NAME=`"$(Escape-Xml $_[0])`"><PARENT>$(Escape-Xml $_[1])</PARENT><PRIMARYGROUP>$(Escape-Xml $_[2])</PRIMARYGROUP><ISREVENUE>$($_[3])</ISREVENUE></LEDGER>"
+            "<LEDGER NAME=`"$(Escape-Xml $_.name)`">$(Tag 'PARENT' $_.parent)$(Tag 'PRIMARYGROUP' $_.primaryGroup)<ISREVENUE>$(Yes ([bool]$_.isRevenue))</ISREVENUE>$(Tag 'PARTYGSTIN' $_.gstin)</LEDGER>"
         }
     } elseif ($body -match '<ID>TW_StockItems</ID>') {
         $stockItems | ForEach-Object {
-            "<STOCKITEM NAME=`"$(Escape-Xml $_[0])`"><ALIASNAME>$($_[1])</ALIASNAME><BASEUNITS>$($_[2])</BASEUNITS><GSTHSNCODE>$($_[3])</GSTHSNCODE></STOCKITEM>"
+            "<STOCKITEM NAME=`"$(Escape-Xml $_.name)`">$(Tag 'ALIASNAME' $_.alias)$(Tag 'BASEUNITS' $_.unit)$(Tag 'GSTHSNCODE' $_.hsn)</STOCKITEM>"
         }
     } elseif ($body -match '<ID>TW_VoucherTypes</ID>') {
         $voucherTypes | ForEach-Object {
-            "<VOUCHERTYPE NAME=`"$(Escape-Xml $_[0])`"><PARENT>$(Escape-Xml $_[1])</PARENT><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE></VOUCHERTYPE>"
+            "<VOUCHERTYPE NAME=`"$(Escape-Xml $_.name)`">$(Tag 'PARENT' $_.parent)<ISDEEMEDPOSITIVE>$(Yes ([bool]$_.deemedPositive))</ISDEEMEDPOSITIVE></VOUCHERTYPE>"
         }
     } else {
         return $null
@@ -92,7 +115,7 @@ function Write-Log([string]$message) {
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
 $listener.Start()
-Write-Log "Stand-in Tally listening on http://127.0.0.1:$Port (not TallyPrime; nothing is kept)."
+Write-Log "Stand-in Tally listening on http://127.0.0.1:$Port (not TallyPrime; nothing is kept). Serving $mastersSource."
 
 $nextVoucherId = 1001
 try {
