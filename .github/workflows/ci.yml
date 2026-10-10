@@ -48,7 +48,7 @@ jobs:
 
       - name: Test and enforce coverage
         shell: pwsh
-        run: ./tools/Test-Coverage.ps1 -MinimumLinePercent 27 -NoBuild
+        run: ./tools/Test-Coverage.ps1 -NoBuild
 
       - name: Upload test results
         if: always()

@@ -377,7 +377,7 @@ Run formatting, warning, dependency, and coverage gates:
 dotnet list ShowroomBilling.sln package --vulnerable --include-transitive
 dotnet format style ShowroomBilling.sln --verify-no-changes --no-restore
 dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
-.\tools\Test-Coverage.ps1 -MinimumLinePercent 27 -NoBuild
+.\tools\Test-Coverage.ps1 -NoBuild
 ```
 
 Run API contract tests only:

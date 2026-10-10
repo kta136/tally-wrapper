@@ -113,10 +113,10 @@ Run the same local quality gates used by the Windows CI job:
 dotnet list ShowroomBilling.sln package --vulnerable --include-transitive
 dotnet format style ShowroomBilling.sln --verify-no-changes --no-restore
 dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
-.\tools\Test-Coverage.ps1 -MinimumLinePercent 27 -NoBuild
+.\tools\Test-Coverage.ps1 -NoBuild
 ```
 
-`Test-Coverage.ps1` builds by default when used on its own; pass `-NoBuild` only after building the same configuration. CI publishes TRX and Cobertura artifacts, enforces a 27% aggregate line floor, and runs the Postgres category in a separate Ubuntu/Docker job. Package versions are centrally pinned in `Directory.Packages.props`; the package-audit command must stay clean before dependency updates are merged.
+`Test-Coverage.ps1` builds by default when used on its own; pass `-NoBuild` only after building the same configuration. CI publishes TRX and Cobertura artifacts, enforces a 58% line floor on hand-written code (generated EF migrations and the compiled model are excluded, the two test projects' reports are merged per source line, and the floor is the script's default), and runs the Postgres category in a separate Ubuntu/Docker job. Package versions are centrally pinned in `Directory.Packages.props`; the package-audit command must stay clean before dependency updates are merged.
 
 Postgres integration tests are opt-in because they require either a local Docker
 endpoint reachable by Testcontainers or an explicit remote Postgres test
