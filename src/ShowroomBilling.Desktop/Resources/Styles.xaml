@@ -2,7 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
-    <!--  Base text defaults — Inter with tabular nums  -->
+    <!--  Base text defaults: the Windows-native UI font (see UiFontFamily in DesignTokens.xaml)  -->
     <Style TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
@@ -11,8 +11,21 @@
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
     </Style>
 
-    <!--  ─── Buttons ───────────────────────────────────────────────  -->
+    <!--  ─── Buttons ───────────────────────────────────────────────
+          One template for every button. A style changes how a button looks,
+          including on hover, press and when disabled, by setting Background /
+          BorderBrush / Foreground in its own triggers; the template only draws
+          them and the focus ring. Do not set those three properties directly
+          on a Button in a view: a local value beats the style's triggers.  -->
     <Style x:Key="BtnBase" TargetType="{x:Type Button}">
+        <Style.Resources>
+            <!--  Text inside a button takes the button's Foreground. Without this the
+                  app-wide TextBlock style gives it InkBrush, so a primary button would
+                  show dark text on the accent fill and a disabled one would not grey out.  -->
+            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+                <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" />
+            </Style>
+        </Style.Resources>
         <Setter Property="Height" Value="{DynamicResource ButtonHeight}" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Padding" Value="12,0" />
@@ -45,27 +58,37 @@
                             <ContentPresenter Margin="{TemplateBinding Padding}"
                                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                                              TextElement.Foreground="{TemplateBinding Foreground}">
+                                <ContentPresenter.Resources>
+                                    <!--  The same rule for the TextBlock made from a plain-text Content,
+                                          which cannot see the style's resources.  -->
+                                    <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+                                        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" />
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
                         </Border>
                     </Grid>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource BgHoverBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource BgSelectedBrush}" />
-                        </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="focusRing" Property="BorderThickness" Value="2" />
-                        </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource BgSunkenBrush}" />
-                            <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource BgHoverBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{StaticResource BgSelectedBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style BasedOn="{StaticResource BtnBase}" TargetType="{x:Type Button}" />
@@ -74,48 +97,21 @@
         <Setter Property="Background" Value="{StaticResource AccentBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
         <Setter Property="Foreground" Value="{StaticResource InkInverseBrush}" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type Button}">
-                    <Grid>
-                        <Border x:Name="focusRing"
-                                Margin="-3"
-                                BorderBrush="{StaticResource AccentBrush}"
-                                BorderThickness="0"
-                                CornerRadius="5" />
-                        <Border x:Name="bd"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="{StaticResource Radius}"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter Margin="{TemplateBinding Padding}"
-                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                              TextElement.Foreground="{TemplateBinding Foreground}" />
-                        </Border>
-                    </Grid>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentHoverBrush}" />
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentPressedBrush}" />
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="focusRing" Property="BorderThickness" Value="2" />
-                        </Trigger>
-                        <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource BgSunkenBrush}" />
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
-                            <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{StaticResource AccentPressedBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPressedBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
+                <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style x:Key="BtnGhost" BasedOn="{StaticResource BtnBase}" TargetType="{x:Type Button}">

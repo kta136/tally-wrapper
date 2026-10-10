@@ -39,11 +39,13 @@ public sealed class ViewSmokeTests
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
+    private static readonly Size ViewSize = new(1280, 800);
+
     private static List<string> LoadEveryView()
     {
         var problems = new List<string>();
         var shell = CreateShell();
-        var window = new Window { DataContext = shell, Width = 1280, Height = 800 };
+        var window = new Window { DataContext = shell };
 
         using var bindingErrors = BindingErrorListener.Attach();
         foreach (var viewType in ViewTypes())
@@ -56,13 +58,26 @@ public sealed class ViewSmokeTests
                     view.DataContext = dataContext;
                 }
 
-                // Measuring the window applies its template, which puts the
-                // view under a Window so AncestorType=Window bindings resolve.
+                // The window is never shown; it is the view's logical parent so
+                // AncestorType=Window bindings resolve. The view itself is
+                // measured and arranged, which applies its templates and
+                // creates its rows exactly as a real layout pass would.
                 window.Content = view;
-                window.Measure(new Size(window.Width, window.Height));
-                window.Arrange(new Rect(0, 0, window.Width, window.Height));
-                window.UpdateLayout();
-                WpfTestHost.DrainDispatcher();
+                if (viewType == typeof(SettingsView))
+                {
+                    // A collapsed section is never measured, so each one is shown in turn.
+                    foreach (var section in Enum.GetValues<SettingsSectionKey>())
+                    {
+                        shell.Settings.SelectedSection = section;
+                        Layout(view);
+                        ViewSnapshot.Save(view, $"{viewType.Name}-{section}");
+                    }
+                }
+                else
+                {
+                    Layout(view);
+                    ViewSnapshot.Save(view, viewType.Name);
+                }
             }
             catch (Exception ex)
             {
@@ -74,6 +89,20 @@ public sealed class ViewSmokeTests
         }
 
         return problems;
+    }
+
+    private static void Layout(FrameworkElement view)
+    {
+        // Bindings resolve at a lower dispatcher priority than layout, so the
+        // first pass sizes the view and the second lays out what the bindings
+        // then filled in.
+        for (var pass = 0; pass < 2; pass++)
+        {
+            view.Measure(ViewSize);
+            view.Arrange(new Rect(ViewSize));
+            view.UpdateLayout();
+            WpfTestHost.DrainDispatcher();
+        }
     }
 
     /// <summary>
@@ -105,21 +134,33 @@ public sealed class ViewSmokeTests
     private static MainWindowViewModel CreateShell()
     {
         var tokenStore = new AdminTokenStore();
-        var bills = new BillsViewModel();
-        // One row, so the row template and its context menu are realised.
-        bills.Items.Add(new BillListRowViewModel(new BillSummaryItem(
-            Guid.NewGuid(),
-            BillStates.Posted,
-            "SR/2026-27/0001",
-            "Walk-in Customer",
-            new DateOnly(2026, 10, 10),
-            1000m,
-            DateTimeOffset.UtcNow,
-            DateTimeOffset.UtcNow)));
+        var bills = new BillsViewModel { HideFullyPostedDays = false };
+        // One row per state, so the row template, its context menu and every
+        // chip tone are realised.
+        var number = 0;
+        foreach (var state in new[]
+        {
+            BillStates.Posted, BillStates.Pending, BillStates.Draft, BillStates.Posting, BillStates.Failed,
+            BillStates.ReconciliationRequired, BillStates.Revised, BillStates.Voided,
+        })
+        {
+            number++;
+            bills.Items.Add(new BillListRowViewModel(new BillSummaryItem(
+                Guid.NewGuid(),
+                state,
+                $"SR/2026-27/{number:0000}",
+                "Walk-in Customer",
+                new DateOnly(2026, 10, number <= 4 ? 10 : 9),
+                1000m * number,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow)));
+        }
+
+        bills.Items[1].IsSelected = true;
 
         // The constructors only store their clients; no view-model method that
         // would call one is invoked here.
-        return new MainWindowViewModel(
+        var shell = new MainWindowViewModel(
             runtimeApiClient: null!,
             settingsApiClient: null!,
             healthApiClient: null!,
@@ -144,6 +185,10 @@ public sealed class ViewSmokeTests
                 childProcessSupervisor: null,
                 completionStore: null!),
             syntheticBatch: new SyntheticBatchViewModel());
+
+        // Left open so the confirm overlay has its texts; nothing awaits the answer.
+        _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));
+        return shell;
     }
 
     /// <summary>Collects WPF data-binding errors, which are only ever traced.</summary>
