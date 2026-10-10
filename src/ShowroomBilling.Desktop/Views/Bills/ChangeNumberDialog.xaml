@@ -5,14 +5,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-        <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-            <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Setter Property="Margin" Value="0,0,0,3" />
-        </Style>
     </UserControl.Resources>
 
     <!--  Scrim matches AdminUnlockDialog — rgba(15,23,42,0.38)  -->
@@ -47,13 +39,13 @@
                 <!--  dialog-body  -->
                 <Border Grid.Row="1" Padding="16,14">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="CURRENT NUMBER" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT NUMBER" />
                         <TextBox Text="{Binding CurrentNumberDisplay, Mode=OneWay}"
                                  Margin="0,0,0,12"
                                  IsReadOnly="True"
                                  FontFamily="{StaticResource MonoFontFamily}" />
 
-                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="NEW NUMBER" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="NEW NUMBER" />
                         <TextBox x:Name="NewNumberBox"
                                  Text="{Binding NewNumberRaw, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,0,0,4"
@@ -65,7 +57,7 @@
                                    TextWrapping="Wrap"
                                    Text="{Binding PreviewText}" />
 
-                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="REASON (OPTIONAL)" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="REASON (OPTIONAL)" />
                         <TextBox Text="{Binding Reason, UpdateSourceTrigger=PropertyChanged}"
                                  MinHeight="52"
                                  AcceptsReturn="True"

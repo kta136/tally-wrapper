@@ -5,7 +5,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </UserControl.Resources>
 
     <Grid Background="#61152238">
@@ -81,13 +80,13 @@
                         <Border Style="{StaticResource AdminSectionPanel}"
                                 Visibility="{Binding IsDatabaseStep, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource AdminSectionTitle}" Text="DATABASE" />
+                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="DATABASE" />
                                 <TextBlock Margin="0,0,0,10"
                                            FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="Paste the PostgreSQL connection string for this installation. It will be encrypted for this Windows user and will not be written into the EXE or repo." />
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="POSTGRESQL CONNECTION STRING" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="POSTGRESQL CONNECTION STRING" />
                                 <TextBox Text="{Binding DatabaseConnectionString, UpdateSourceTrigger=PropertyChanged}"
                                          AcceptsReturn="True"
                                          TextWrapping="Wrap"
@@ -103,7 +102,7 @@
                         <Border Style="{StaticResource AdminSectionPanel}"
                                 Visibility="{Binding IsBasicsStep, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource AdminSectionTitle}" Text="SHOWROOM BASICS" />
+                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="SHOWROOM BASICS" />
                                 <TextBlock Margin="0,0,0,10"
                                            FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkSoftBrush}"
@@ -119,15 +118,15 @@
                                         <ColumnDefinition Width="110" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="TALLY HOST" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="TALLY HOST" />
                                         <TextBox Text="{Binding TallyHost, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="PORT" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="PORT" />
                                         <TextBox Text="{Binding TallyPort, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="4">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="TIMEOUT" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="TIMEOUT" />
                                         <TextBox Text="{Binding TallyTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
@@ -139,11 +138,11 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="ACTIVE TALLY COMPANY" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="ACTIVE TALLY COMPANY" />
                                         <TextBox Text="{Binding ActiveCompanyName, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="PRINT COMPANY NAME" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="PRINT COMPANY NAME" />
                                         <TextBox Text="{Binding PrintCompanyName, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
@@ -157,50 +156,50 @@
                                         <ColumnDefinition Width="90" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="INVOICE PREFIX" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="INVOICE PREFIX" />
                                         <TextBox Text="{Binding InvoicePrefix, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="INVOICE SUFFIX" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="INVOICE SUFFIX" />
                                         <TextBox Text="{Binding InvoiceSuffix, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="4">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="PADDING" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="PADDING" />
                                         <TextBox Text="{Binding InvoicePadding, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </Grid>
 
                                 <UniformGrid Columns="2" Margin="0,0,0,2">
                                     <StackPanel Margin="0,0,6,8">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="SALES LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="SALES LEDGER" />
                                         <TextBox Text="{Binding SalesLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="6,0,0,8">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="CASH LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="CASH LEDGER" />
                                         <TextBox Text="{Binding CashLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="0,0,6,8">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="CARD / UPI LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="CARD / UPI LEDGER" />
                                         <TextBox Text="{Binding CreditDebitLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="6,0,0,8">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="SALES VOUCHER TYPE" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="SALES VOUCHER TYPE" />
                                         <TextBox Text="{Binding SalesVoucherType, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="0,0,6,8">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="CGST LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="CGST LEDGER" />
                                         <TextBox Text="{Binding CgstLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="6,0,0,8">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="SGST LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="SGST LEDGER" />
                                         <TextBox Text="{Binding SgstLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="0,0,6,0">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="ROUND OFF LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="ROUND OFF LEDGER" />
                                         <TextBox Text="{Binding RoundOffLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                     <StackPanel Margin="6,0,0,0">
-                                        <TextBlock Style="{StaticResource AdminFieldLabel}" Text="DISCOUNT LEDGER" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="DISCOUNT LEDGER" />
                                         <TextBox Text="{Binding DiscountLedger, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
                                 </UniformGrid>

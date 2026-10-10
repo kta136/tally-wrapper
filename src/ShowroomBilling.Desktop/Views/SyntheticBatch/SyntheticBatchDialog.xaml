@@ -5,22 +5,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-
-        <Style x:Key="DlgFieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-            <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Setter Property="Margin" Value="0,0,0,3" />
-        </Style>
-
-        <Style x:Key="DlgSectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
-            <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-        </Style>
-
         <Style x:Key="DlgCard" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
@@ -121,7 +105,7 @@
                         <!--  Generation bounds  -->
                         <Border Style="{StaticResource DlgCard}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource DlgSectionTitle}" Text="GENERATION BOUNDS" />
+                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="GENERATION BOUNDS" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -129,24 +113,24 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="TOTAL TARGET AMOUNT (₹)" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="TOTAL TARGET AMOUNT (₹)" />
                                         <TextBox Text="{Binding TotalAmount, UpdateSourceTrigger=PropertyChanged}"
                                                  FontFamily="{StaticResource MonoFontFamily}" />
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="24KT RATE (₹/G)" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="24KT RATE (₹/G)" />
                                         <TextBox Text="{Binding Rate24Kt, UpdateSourceTrigger=PropertyChanged}"
                                                  FontFamily="{StaticResource MonoFontFamily}" />
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="MIN ITEMS / BILL" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="MIN ITEMS / BILL" />
                                         <TextBox Text="{Binding MinItemsPerBill, UpdateSourceTrigger=PropertyChanged}"
                                                  FontFamily="{StaticResource MonoFontFamily}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="MAX BILL AMOUNT (₹ ≤ 1,99,000)" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="MAX BILL AMOUNT (₹ ≤ 1,99,000)" />
                                         <TextBox Text="{Binding MaxBillAmount, UpdateSourceTrigger=PropertyChanged}"
                                                  FontFamily="{StaticResource MonoFontFamily}" />
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="PAYMENT MODE" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="PAYMENT MODE" />
                                         <ComboBox ItemsSource="{Binding PaymentOptions}"
                                                   SelectedItem="{Binding PaymentMode}" />
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Margin="0,10,0,3" Text="MAX ITEMS / BILL" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="MAX ITEMS / BILL" />
                                         <TextBox Text="{Binding MaxItemsPerBill, UpdateSourceTrigger=PropertyChanged}"
                                                  FontFamily="{StaticResource MonoFontFamily}" />
                                     </StackPanel>
@@ -157,7 +141,7 @@
                         <!--  Time window  -->
                         <Border Style="{StaticResource DlgCard}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource DlgSectionTitle}" Text="TIME WINDOW (LOCAL)" />
+                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="TIME WINDOW (LOCAL)" />
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -165,13 +149,13 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="START (YYYY-MM-DD HH:MM)" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="START (YYYY-MM-DD HH:MM)" />
                                         <TextBox x:Name="StartAtBox"
                                                  FontFamily="{StaticResource MonoFontFamily}"
                                                  LostFocus="OnStartAtLostFocus" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource DlgFieldLabel}" Text="END (YYYY-MM-DD HH:MM)" />
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="END (YYYY-MM-DD HH:MM)" />
                                         <TextBox x:Name="EndAtBox"
                                                  FontFamily="{StaticResource MonoFontFamily}"
                                                  LostFocus="OnEndAtLostFocus" />
@@ -184,7 +168,7 @@
                         <Border Style="{StaticResource DlgCard}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Style="{StaticResource DlgSectionTitle}" Margin="0" Text="TALLY-MAPPED KARATS" />
+                                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Margin="0" Text="TALLY-MAPPED KARATS" />
                                     <StackPanel HorizontalAlignment="Right"
                                                 Orientation="Horizontal"
                                                 Visibility="{Binding HasKaratOptions, Converter={StaticResource BoolToVis}}">
@@ -231,7 +215,7 @@
                         <!--  Runtime status  -->
                         <Border Style="{StaticResource DlgCard}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource DlgSectionTitle}" Text="RUNTIME" />
+                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="RUNTIME" />
                                 <TextBlock FontSize="{DynamicResource FontSizeLabel}"
                                            Foreground="{StaticResource InkMutedBrush}"
                                            TextWrapping="Wrap"

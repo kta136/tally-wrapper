@@ -28,23 +28,11 @@
     </UserControl.InputBindings>
 
     <UserControl.Resources>
-        <Style x:Key="PageTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-        </Style>
-
         <Style x:Key="TableHeaderBorder" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="10,6" />
-        </Style>
-
-        <Style x:Key="TableHeaderText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         </Style>
 
         <Style x:Key="StateChipBorder" TargetType="Border">
@@ -149,7 +137,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Style="{StaticResource PageTitle}" Text="Bills &amp; Sync History" />
+                <TextBlock Style="{StaticResource TxtPageTitle}" Text="Bills &amp; Sync History" />
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button Style="{StaticResource BtnSm}"

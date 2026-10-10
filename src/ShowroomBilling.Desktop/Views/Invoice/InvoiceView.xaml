@@ -10,12 +10,6 @@
              d:DataContext="{d:DesignInstance Type=vm:InvoiceViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-            <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Setter Property="Margin" Value="0,0,0,3" />
-        </Style>
         <Style x:Key="FieldPanel" TargetType="StackPanel">
             <Setter Property="Margin" Value="0,0,14,0" />
         </Style>
@@ -47,11 +41,6 @@
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="Padding" Value="10,4" />
-        </Style>
-        <Style x:Key="HeaderText" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
         </Style>
         <Style x:Key="BodyCell" TargetType="Border">
             <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
@@ -296,19 +285,19 @@
                                 <ColumnDefinition Width="120" />
                                 <ColumnDefinition Width="32" />
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="#" /></Border>
-                            <Border Grid.Column="1" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="ITEM / STOCK NAME" /></Border>
-                            <Border Grid.Column="2" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="GROSS WT" TextAlignment="Right" ToolTip="Gross weight" /></Border>
-                            <Border Grid.Column="3" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="LESS WT" TextAlignment="Right" ToolTip="Editable. Net Wt = Gross Wt − Less Wt; editing Net Wt recalculates this value." /></Border>
-                            <Border Grid.Column="4" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="NET WT" TextAlignment="Right" ToolTip="Editable. Less Wt is recalculated as Gross Wt − Net Wt." /></Border>
-                            <Border Grid.Column="5" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="UNIT" /></Border>
-                            <Border Grid.Column="6" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="KARAT" /></Border>
-                            <Border Grid.Column="7" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="WASTAGE %" TextAlignment="Right" /></Border>
-                            <Border Grid.Column="8" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="LABOUR" TextAlignment="Right" /></Border>
-                            <Border Grid.Column="9" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="DIAMOND RATE" TextAlignment="Right" ToolTip="Flat rate for diamond-category items (GST-inclusive). Ignored for gold lines." /></Border>
-                            <Border Grid.Column="10" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="EXTRA" TextAlignment="Right" /></Border>
-                            <Border Grid.Column="11" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="EFF. RATE" TextAlignment="Right" ToolTip="GST-inclusive effective rate per V1 formula" /></Border>
-                            <Border Grid.Column="12" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource HeaderText}" Text="LINE TOTAL" TextAlignment="Right" ToolTip="GST-inclusive line total" /></Border>
+                            <Border Grid.Column="0" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="#" /></Border>
+                            <Border Grid.Column="1" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="ITEM / STOCK NAME" /></Border>
+                            <Border Grid.Column="2" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="GROSS WT" TextAlignment="Right" ToolTip="Gross weight" /></Border>
+                            <Border Grid.Column="3" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="LESS WT" TextAlignment="Right" ToolTip="Editable. Net Wt = Gross Wt − Less Wt; editing Net Wt recalculates this value." /></Border>
+                            <Border Grid.Column="4" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="NET WT" TextAlignment="Right" ToolTip="Editable. Less Wt is recalculated as Gross Wt − Net Wt." /></Border>
+                            <Border Grid.Column="5" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="UNIT" /></Border>
+                            <Border Grid.Column="6" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="KARAT" /></Border>
+                            <Border Grid.Column="7" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="WASTAGE %" TextAlignment="Right" /></Border>
+                            <Border Grid.Column="8" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="LABOUR" TextAlignment="Right" /></Border>
+                            <Border Grid.Column="9" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="DIAMOND RATE" TextAlignment="Right" ToolTip="Flat rate for diamond-category items (GST-inclusive). Ignored for gold lines." /></Border>
+                            <Border Grid.Column="10" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="EXTRA" TextAlignment="Right" /></Border>
+                            <Border Grid.Column="11" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="EFF. RATE" TextAlignment="Right" ToolTip="GST-inclusive effective rate per V1 formula" /></Border>
+                            <Border Grid.Column="12" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="LINE TOTAL" TextAlignment="Right" ToolTip="GST-inclusive line total" /></Border>
                             <Border Grid.Column="13" Style="{StaticResource HeaderCell}" />
                         </Grid>
 

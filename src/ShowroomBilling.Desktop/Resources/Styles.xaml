@@ -170,16 +170,29 @@
     </Style>
 
     <!--  ─── Text + label ─────────────────────────────────────────────  -->
-    <Style x:Key="TxtLabel" TargetType="{x:Type TextBlock}">
+    <!--  Label above an input. The text is written in upper case in the view.  -->
+    <Style x:Key="FieldLabel" TargetType="{x:Type TextBlock}">
         <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-        <!--  Uppercase conversion is done in bindings/views where needed  -->
+        <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
 
     <Style x:Key="TxtSectionTitle" TargetType="{x:Type TextBlock}">
         <Setter Property="FontSize" Value="{DynamicResource FontSizeSectionTitle}" />
         <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+    </Style>
+
+    <!--  Section title followed by a block of fields.  -->
+    <Style x:Key="TxtSectionTitleSpaced" BasedOn="{StaticResource TxtSectionTitle}" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <!--  Column heading of a table.  -->
+    <Style x:Key="TableHeaderText" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
     </Style>
 
@@ -402,63 +415,36 @@
         </Setter>
     </Style>
 
-    <!--  ─── Admin (shared by AdminUnlockDialog + Settings › Admin tab) ───  -->
-    <Style x:Key="AdminFieldLabel" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-        <Setter Property="FontWeight" Value="Medium" />
-        <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-        <Setter Property="Margin" Value="0,0,0,3" />
+    <!--  ─── Inline banners (a bordered box inside a form or dialog) ───  -->
+    <Style x:Key="InlineBanner" TargetType="Border">
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <Style x:Key="AdminSectionTitle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="{DynamicResource FontSizeXs}" />
-        <Setter Property="FontWeight" Value="Bold" />
-        <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
-        <Setter Property="Margin" Value="0,0,0,8" />
-    </Style>
-
-    <Style x:Key="AdminBannerWarn" TargetType="Border">
+    <Style x:Key="AdminBannerWarn" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="3" />
-        <Setter Property="Padding" Value="10,8" />
-        <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <Style x:Key="AdminBannerErr" TargetType="Border">
+    <Style x:Key="AdminBannerErr" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource ErrBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="3" />
-        <Setter Property="Padding" Value="10,8" />
-        <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <Style x:Key="AdminBannerInfo" TargetType="Border">
+    <Style x:Key="AdminBannerInfo" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource InfoBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="3" />
-        <Setter Property="Padding" Value="10,8" />
-        <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <Style x:Key="AdminSectionPanel" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+    <Style x:Key="AdminSectionPanel" BasedOn="{StaticResource Panel}" TargetType="Border">
         <Setter Property="Padding" Value="14,12" />
         <Setter Property="Margin" Value="0,0,0,12" />
     </Style>
 
-    <Style x:Key="StateChipLocked" TargetType="Border">
+    <Style x:Key="StateChipLocked" BasedOn="{StaticResource Chip}" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
-        <Setter Property="CornerRadius" Value="2" />
-        <Setter Property="Padding" Value="7,0" />
-        <Setter Property="Height" Value="18" />
-        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style x:Key="StateChipUnlocked" TargetType="Border" BasedOn="{StaticResource StateChipLocked}">
         <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />

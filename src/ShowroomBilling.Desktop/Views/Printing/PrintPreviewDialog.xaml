@@ -131,7 +131,7 @@
 
                             <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINT SETTINGS" />
                             <StackPanel Margin="0,6,0,14">
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="DUPLEX" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="DUPLEX" />
                                 <ComboBox Margin="0,4,0,10"
                                           Tag="Duplex"
                                           ItemsSource="{Binding DuplexOptions}"
@@ -141,7 +141,7 @@
                                           SelectionChanged="OnPrintSettingSelectionChanged"
                                           IsEnabled="{Binding HasSelectedPrinter}" />
 
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="COLOR" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="COLOR" />
                                 <ComboBox Margin="0,4,0,10"
                                           Tag="Color"
                                           ItemsSource="{Binding ColorOptions}"
@@ -151,7 +151,7 @@
                                           SelectionChanged="OnPrintSettingSelectionChanged"
                                           IsEnabled="{Binding HasSelectedPrinter}" />
 
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="COLLATION" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="COLLATION" />
                                 <ComboBox Margin="0,4,0,0"
                                           Tag="Collation"
                                           ItemsSource="{Binding CollationOptions}"

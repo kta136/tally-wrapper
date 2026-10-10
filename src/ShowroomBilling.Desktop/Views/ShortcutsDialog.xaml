@@ -38,7 +38,7 @@
                         BorderBrush="{StaticResource DividerBrush}"
                         BorderThickness="0,0,0,1">
                     <Grid>
-                        <TextBlock Text="Keyboard Shortcuts" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="Keyboard Shortcuts" Style="{StaticResource TxtPageTitle}" VerticalAlignment="Center" />
                         <Button HorizontalAlignment="Right"
                                 Style="{StaticResource BtnGhost}"
                                 Width="28"

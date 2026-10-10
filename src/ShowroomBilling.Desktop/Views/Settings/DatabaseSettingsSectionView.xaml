@@ -46,7 +46,7 @@
                 <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
                 <Setter Property="TextWrapping" Value="Wrap" />
             </Style>
-            <Style x:Key="TableHeaderText" TargetType="TextBlock">
+            <Style x:Key="DbTableHeaderText" TargetType="TextBlock">
                 <Setter Property="Margin" Value="10,0" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="FontSize" Value="{DynamicResource FontSizeSectionTitle}" />
@@ -117,10 +117,10 @@
                                     <ColumnDefinition Width="35*" />
                                     <ColumnDefinition Width="15*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Style="{StaticResource TableHeaderText}" Text="COMPONENT" />
-                                <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderText}" Text="MODE" />
-                                <TextBlock Grid.Column="2" Style="{StaticResource TableHeaderText}" Text="DETAILS" />
-                                <TextBlock Grid.Column="3" Style="{StaticResource TableHeaderText}" Text="STATUS" />
+                                <TextBlock Grid.Column="0" Style="{StaticResource DbTableHeaderText}" Text="COMPONENT" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource DbTableHeaderText}" Text="MODE" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource DbTableHeaderText}" Text="DETAILS" />
+                                <TextBlock Grid.Column="3" Style="{StaticResource DbTableHeaderText}" Text="STATUS" />
                             </Grid>
                         </Border>
 

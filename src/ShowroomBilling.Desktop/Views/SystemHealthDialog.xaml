@@ -47,7 +47,7 @@
                         BorderThickness="0,0,0,1">
                     <Grid>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="System Health" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Text="System Health" Style="{StaticResource TxtPageTitle}" VerticalAlignment="Center" />
                             <TextBlock Margin="12,0,0,0"
                                        VerticalAlignment="Center"
                                        Foreground="{StaticResource InkMutedBrush}"

@@ -5,7 +5,6 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
     </UserControl.Resources>
 
     <!--  Scrim — matches design: rgba(15,23,42,0.38)  -->
@@ -140,8 +139,8 @@
                         <Border Style="{StaticResource AdminSectionPanel}"
                                 Visibility="{Binding ShowUnlockForm, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource AdminSectionTitle}" Text="UNLOCK" />
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="PASSCODE" />
+                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="UNLOCK" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="PASSCODE" />
                                 <PasswordBox x:Name="UnlockPasswordBox"
                                              PasswordChanged="UnlockPasswordBox_PasswordChanged"
                                              KeyDown="UnlockPasswordBox_KeyDown" />
@@ -164,7 +163,7 @@
                                 Visibility="{Binding ShowInitialSetupForm, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <Grid Margin="0,0,0,8">
-                                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
                                                Margin="0"
                                                Text="SET PASSCODE" />
                                     <TextBlock HorizontalAlignment="Right"
@@ -178,10 +177,10 @@
                                            Foreground="{StaticResource InkSoftBrush}"
                                            TextWrapping="Wrap"
                                            Text="No admin passcode is configured yet. Set one now to enable admin unlock on this counter — saving will also start an admin session." />
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Text="NEW PASSCODE" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="NEW PASSCODE" />
                                 <PasswordBox x:Name="InitialNewPasscodeBox"
                                              PasswordChanged="InitialNewPasscodeBox_PasswordChanged" />
-                                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
                                 <PasswordBox x:Name="InitialConfirmPasscodeBox"
                                              PasswordChanged="InitialConfirmPasscodeBox_PasswordChanged"
                                              KeyDown="InitialConfirmPasscodeBox_KeyDown" />

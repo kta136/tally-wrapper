@@ -17,7 +17,7 @@
     <StackPanel>
         <TextBlock Text="Advanced" Style="{StaticResource SectionHeader}" Margin="0,0,0,16" />
 
-        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Display" Margin="0,0,0,10" />
+        <TextBlock Style="{StaticResource TxtPageTitle}" Text="Display" Margin="0,0,0,10" />
         <Border Margin="0,0,0,18"
                 Padding="10,7"
                 Background="{StaticResource BgSunkenBrush}"
@@ -43,7 +43,7 @@
         </Border>
 
         <!--  Logs & Diagnostics  -->
-        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Logs &amp; Diagnostics" Margin="0,0,0,10" />
+        <TextBlock Style="{StaticResource TxtPageTitle}" Text="Logs &amp; Diagnostics" Margin="0,0,0,10" />
 
         <Border Margin="0,0,0,8"
                 Padding="10,7"
@@ -137,7 +137,7 @@
                    Text="Logs are best-effort local files. If the folder is empty, the current session may not have emitted file logs yet — use the Install folder for console-redirected output." />
 
         <!--  Storage Scopes  -->
-        <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="Storage Scopes" Margin="0,0,0,10" />
+        <TextBlock Style="{StaticResource TxtPageTitle}" Text="Storage Scopes" Margin="0,0,0,10" />
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />

@@ -80,11 +80,11 @@
         <Border Style="{StaticResource AdminSectionPanel}">
             <StackPanel>
                 <Grid Margin="0,0,0,8">
-                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
                                Margin="0"
                                Text="CHANGE PASSCODE"
                                Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}" />
-                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
                                Margin="0"
                                Text="SET PASSCODE"
                                Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource InverseBoolToVis}}" />
@@ -95,12 +95,12 @@
                                VerticalAlignment="Center" />
                 </Grid>
                 <StackPanel Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Style="{StaticResource AdminFieldLabel}" Text="CURRENT PASSCODE" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT PASSCODE" />
                     <PasswordBox x:Name="AdminCurrentPasscodeBox" PasswordChanged="AdminCurrentPasscodeBox_PasswordChanged" />
                 </StackPanel>
-                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,8,0,3" Text="NEW PASSCODE" />
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="NEW PASSCODE" />
                 <PasswordBox x:Name="AdminNewPasscodeBox" PasswordChanged="AdminNewPasscodeBox_PasswordChanged" />
-                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
                 <PasswordBox x:Name="AdminConfirmNewPasscodeBox" PasswordChanged="AdminConfirmNewPasscodeBox_PasswordChanged" />
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Style="{StaticResource BtnPrimary}"
@@ -116,7 +116,7 @@
                 Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
             <StackPanel>
                 <Grid Margin="0,0,0,8">
-                    <TextBlock Style="{StaticResource AdminSectionTitle}"
+                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
                                Margin="0"
                                Text="ACTIVE DRAFT LOCKS" />
                     <Button HorizontalAlignment="Right"
@@ -186,7 +186,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <TextBlock Style="{StaticResource AdminFieldLabel}" Margin="0,10,0,3" Text="FORCE-RELEASE REASON (REQUIRED)" />
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,10,0,3" Text="FORCE-RELEASE REASON (REQUIRED)" />
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -212,7 +212,7 @@
         <Border Style="{StaticResource AdminSectionPanel}"
                 Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-                <TextBlock Style="{StaticResource AdminSectionTitle}" Margin="0,0,0,8" Text="BATCH DATA SCHEDULER" />
+                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Margin="0,0,0,8" Text="BATCH DATA SCHEDULER" />
                 <TextBlock FontSize="12"
                            LineHeight="19"
                            TextWrapping="Wrap"
