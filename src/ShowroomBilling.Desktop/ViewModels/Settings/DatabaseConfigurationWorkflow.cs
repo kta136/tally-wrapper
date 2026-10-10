@@ -63,13 +63,9 @@ internal sealed class DatabaseConfigurationWorkflow(
                 ? "Database configuration loaded. Restart the API or desktop app to apply the saved override."
                 : "Database configuration loaded.";
         }
-        catch (HttpRequestException ex)
-        {
-            host.DatabaseConfigStatus = $"Load failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.DatabaseConfigStatus = $"Load failed: {ex.Message}";
+            host.DatabaseConfigStatus = $"Load failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -90,13 +86,9 @@ internal sealed class DatabaseConfigurationWorkflow(
                 cancellationToken);
             host.DatabaseConfigStatus = response.Message;
         }
-        catch (HttpRequestException ex)
-        {
-            host.DatabaseConfigStatus = $"Test failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.DatabaseConfigStatus = $"Test failed: {ex.Message}";
+            host.DatabaseConfigStatus = $"Test failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -157,13 +149,9 @@ internal sealed class DatabaseConfigurationWorkflow(
                 ? "Saved. Restart the API or desktop app for the new database to be used."
                 : "Saved. Database is ready.";
         }
-        catch (HttpRequestException ex)
-        {
-            host.DatabaseConfigStatus = $"Save failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.DatabaseConfigStatus = $"Save failed: {ex.Message}";
+            host.DatabaseConfigStatus = $"Save failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

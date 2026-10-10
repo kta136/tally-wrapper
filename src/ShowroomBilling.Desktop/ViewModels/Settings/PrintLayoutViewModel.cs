@@ -207,13 +207,9 @@ public partial class PrintLayoutViewModel : ObservableObject
             UpdatedAtUtc = (await layoutTask).UpdatedAtUtc;
             StatusMessage = $"Loaded · {assets.Count} asset(s)";
         }
-        catch (HttpRequestException ex)
-        {
-            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            StatusMessage = $"Load failed: {ex.Message}";
+            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -262,13 +258,9 @@ public partial class PrintLayoutViewModel : ObservableObject
             UpdatedAtUtc = response.UpdatedAtUtc;
             StatusMessage = "Saved.";
         }
-        catch (HttpRequestException ex)
-        {
-            StatusMessage = $"Save failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            StatusMessage = $"Save failed: {ex.Message}";
+            StatusMessage = $"Save failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -351,13 +343,9 @@ public partial class PrintLayoutViewModel : ObservableObject
             await RefreshAssetsAsync();
             StatusMessage = $"Uploaded {kind} · {asset.FileName}";
         }
-        catch (HttpRequestException ex)
-        {
-            HandleUploadFailure(kind, ApiResponseReader.FormatError(ex), ex.StatusCode);
-        }
         catch (Exception ex)
         {
-            HandleUploadFailure(kind, ex.Message);
+            HandleUploadFailure(kind, ApiResponseReader.FormatError(ex), (ex as HttpRequestException)?.StatusCode);
         }
         finally
         {
@@ -435,13 +423,9 @@ public partial class PrintLayoutViewModel : ObservableObject
             await RefreshAssetsAsync();
             StatusMessage = $"Deleted {kind}.";
         }
-        catch (HttpRequestException ex)
-        {
-            StatusMessage = $"Delete failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            StatusMessage = $"Delete failed: {ex.Message}";
+            StatusMessage = $"Delete failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

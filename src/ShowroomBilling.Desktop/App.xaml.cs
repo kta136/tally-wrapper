@@ -116,68 +116,16 @@ public partial class App : System.Windows.Application
         builder.Services.AddSingleton<DeviceTokenProvider>();
         builder.Services.AddTransient<CorrelationIdHandler>();
         builder.Services.AddTransient<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IRuntimeApiClient, RuntimeApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<ISettingsApiClient, SettingsApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IBillsApiClient, BillsApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<INumberingApiClient, NumberingApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IMastersApiClient, MastersApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IHealthApiClient, HealthApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-            client.Timeout = TimeSpan.FromSeconds(5);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IAdminApiClient, AdminApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IDraftLeaseApiClient, DraftLeaseApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IPrintAssetApiClient, PrintAssetApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
-        builder.Services.AddHttpClient<IClientPresenceApiClient, ClientPresenceApiClient>((services, client) =>
-        {
-            var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-            client.BaseAddress = new Uri(endpoint.BaseUrl);
-            client.Timeout = TimeSpan.FromSeconds(5);
-        }).AddHttpMessageHandler<CorrelationIdHandler>()
-          .AddHttpMessageHandler<DeviceTokenHandler>();
+        builder.Services.AddApiClient<IRuntimeApiClient, RuntimeApiClient>();
+        builder.Services.AddApiClient<ISettingsApiClient, SettingsApiClient>();
+        builder.Services.AddApiClient<IBillsApiClient, BillsApiClient>();
+        builder.Services.AddApiClient<INumberingApiClient, NumberingApiClient>();
+        builder.Services.AddApiClient<IMastersApiClient, MastersApiClient>();
+        builder.Services.AddApiClient<IHealthApiClient, HealthApiClient>(TimeSpan.FromSeconds(5));
+        builder.Services.AddApiClient<IAdminApiClient, AdminApiClient>();
+        builder.Services.AddApiClient<IDraftLeaseApiClient, DraftLeaseApiClient>();
+        builder.Services.AddApiClient<IPrintAssetApiClient, PrintAssetApiClient>();
+        builder.Services.AddApiClient<IClientPresenceApiClient, ClientPresenceApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddHostedService<ClientPresenceHeartbeatService>();
         builder.Services.AddSingleton<AdminTokenStore>();
         // Set by MainWindow.OnLoaded after the API child is reachable; awaited

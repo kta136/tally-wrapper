@@ -1,33 +1,21 @@
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Json;
 using ShowroomBilling.Contracts.Admin;
 
 namespace ShowroomBilling.Desktop.Services;
 
 public sealed class AdminApiClient(HttpClient httpClient) : IAdminApiClient
 {
-    public async Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetFromJsonAsync<AdminPasscodeStatusResponse>(
-            "/api/admin/passcode", cancellationToken);
-        return response ?? new AdminPasscodeStatusResponse(false);
-    }
+    public Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default)
+        => httpClient.GetApiAsync<AdminPasscodeStatusResponse>("/api/admin/passcode", cancellationToken);
 
     public async Task SetPasscodeAsync(
         AdminSetPasscodeRequest request,
         string? adminToken = null,
         CancellationToken cancellationToken = default)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/admin/passcode")
-        {
-            Content = JsonContent.Create(request)
-        };
-        if (!string.IsNullOrWhiteSpace(adminToken))
-        {
-            message.Headers.TryAddWithoutValidation(AdminTokenConstants.HeaderName, adminToken);
-        }
-        var http = await httpClient.SendAsync(message, cancellationToken);
+        using var message = ApiHttpClientExtensions.CreateRequest(HttpMethod.Post, "/api/admin/passcode", request, adminToken);
+        using var http = await httpClient.SendAsync(message, cancellationToken);
         if (http.StatusCode is HttpStatusCode.Unauthorized)
         {
             throw new AdminUnlockFailedException("Current passcode is invalid.");
@@ -48,7 +36,8 @@ public sealed class AdminApiClient(HttpClient httpClient) : IAdminApiClient
 
     public async Task<AdminUnlockResponse> UnlockAsync(AdminUnlockRequest request, CancellationToken cancellationToken = default)
     {
-        var http = await httpClient.PostAsJsonAsync("/api/admin/unlock", request, cancellationToken);
+        using var message = ApiHttpClientExtensions.CreateRequest(HttpMethod.Post, "/api/admin/unlock", request);
+        using var http = await httpClient.SendAsync(message, cancellationToken);
         if (http.StatusCode is HttpStatusCode.Unauthorized)
         {
             throw new AdminUnlockFailedException("Passcode is invalid.");
@@ -62,7 +51,8 @@ public sealed class AdminApiClient(HttpClient httpClient) : IAdminApiClient
 
     public async Task LogoutAsync(AdminLogoutRequest request, CancellationToken cancellationToken = default)
     {
-        var http = await httpClient.PostAsJsonAsync("/api/admin/logout", request, cancellationToken);
+        using var message = ApiHttpClientExtensions.CreateRequest(HttpMethod.Post, "/api/admin/logout", request);
+        using var http = await httpClient.SendAsync(message, cancellationToken);
         await ApiResponseReader.EnsureSuccessOrThrowAsync(http, cancellationToken);
     }
 }

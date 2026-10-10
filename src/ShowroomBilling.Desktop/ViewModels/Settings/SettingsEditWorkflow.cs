@@ -69,13 +69,9 @@ internal sealed class SettingsEditWorkflow(
             host.IsEditing = false;
             host.StatusMessage = $"Saved · {response.SavedSections.Count} section(s)";
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Save failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Save failed: {ex.Message}";
+            host.StatusMessage = $"Save failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

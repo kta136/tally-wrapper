@@ -1,48 +1,26 @@
 using System.Net.Http;
-using System.Net.Http.Json;
-using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Bills;
 
 namespace ShowroomBilling.Desktop.Services;
 
 public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
 {
-    public async Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync("/api/bills/drafts", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillResponse>("/api/bills/drafts", request, cancellationToken);
 
-    public async Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PutAsJsonAsync($"/api/bills/drafts/{billId}", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PutApiAsync<BillResponse>($"/api/bills/drafts/{billId}", request, cancellationToken);
 
-    public async Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync($"/api/bills/{billId}/push", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillResponse>($"/api/bills/{billId}/push", request, cancellationToken);
 
-    public async Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync("/api/bills/push-selected", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadBatchAsync(response, cancellationToken);
-    }
+    public Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillBatchPushResponse>("/api/bills/push-selected", request, cancellationToken);
 
-    public async Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync("/api/bills/push-pending", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadBatchAsync(response, cancellationToken);
-    }
+    public Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillBatchPushResponse>("/api/bills/push-pending", request, cancellationToken);
 
-    public async Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
+    public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
     {
         var qp = new List<string>();
         if (!string.IsNullOrWhiteSpace(filter.State)) qp.Add($"state={Uri.EscapeDataString(filter.State!)}");
@@ -54,155 +32,48 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
         if (filter.IncludeTotal is not null) qp.Add($"includeTotal={filter.IncludeTotal.Value.ToString().ToLowerInvariant()}");
         if (!string.IsNullOrWhiteSpace(filter.Search)) qp.Add($"search={Uri.EscapeDataString(filter.Search!)}");
         var url = qp.Count == 0 ? "/api/bills" : $"/api/bills?{string.Join('&', qp)}";
-        var body = await httpClient.GetFromJsonAsync<BillListResponse>(url, cancellationToken);
-        return body ?? throw new InvalidOperationException("Bills API returned an empty list payload.");
+        return httpClient.GetApiAsync<BillListResponse>(url, cancellationToken);
     }
 
-    public async Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetAsync($"/api/bills/{billId}", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<BillResponse>(cancellationToken: cancellationToken);
-    }
+    public Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
+        => httpClient.GetApiOrNullAsync<BillResponse>($"/api/bills/{billId}", cancellationToken);
 
-    public async Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync("/api/bills/batch", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<BillBatchGetResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Bills API returned an empty batch get payload.");
-    }
+    public Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillBatchGetResponse>("/api/bills/batch", request, cancellationToken);
 
-    public async Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetAsync($"/api/bills/{billId}/audit", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<BillAuditResponse>(cancellationToken: cancellationToken);
-    }
+    public Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
+        => httpClient.GetApiOrNullAsync<BillAuditResponse>($"/api/bills/{billId}/audit", cancellationToken);
 
-    public async Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetAsync($"/api/bills/{billId}/posting-status", cancellationToken);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<BillPostingStatusResponse>(cancellationToken: cancellationToken);
-    }
+    public Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default)
+        => httpClient.GetApiOrNullAsync<BillPostingStatusResponse>($"/api/bills/{billId}/posting-status", cancellationToken);
 
-    public async Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync($"/api/bills/{billId}/retry", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<BillPostingStatusResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Bills API returned an empty retry payload.");
-    }
+    public Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillPostingStatusResponse>($"/api/bills/{billId}/retry", request, cancellationToken);
 
-    public async Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync($"/api/bills/{billId}/repost", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<BillPostingStatusResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Bills API returned an empty repost payload.");
-    }
+    public Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillPostingStatusResponse>($"/api/bills/{billId}/repost", request, cancellationToken);
 
-    public async Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync($"/api/bills/{billId}/void", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillResponse>($"/api/bills/{billId}/void", request, cancellationToken);
 
-    public async Task<BillResponse> ReviseAsync(Guid billId, ReviseBillRequest request, CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.PostAsJsonAsync($"/api/bills/{billId}/revise", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> ReviseAsync(Guid billId, ReviseBillRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillResponse>($"/api/bills/{billId}/revise", request, cancellationToken);
 
-    public async Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(Guid billId, ChangeBillNumberRequest request, string adminToken, CancellationToken cancellationToken = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/bills/{billId}/change-number")
-        {
-            Content = JsonContent.Create(request)
-        };
-        req.Headers.Add(AdminTokenConstants.HeaderName, adminToken);
-        var response = await httpClient.SendAsync(req, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<ChangeBillNumberResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Empty change-number response.");
-    }
+    public Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(Guid billId, ChangeBillNumberRequest request, string adminToken, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<ChangeBillNumberResponse>($"/api/bills/{billId}/change-number", request, cancellationToken, adminToken);
 
-    public async Task<BillResponse> MarkPostedAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/bills/{billId}/mark-posted")
-        {
-            Content = JsonContent.Create(request)
-        };
-        req.Headers.Add(AdminTokenConstants.HeaderName, adminToken);
-        var response = await httpClient.SendAsync(req, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> MarkPostedAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillResponse>($"/api/bills/{billId}/mark-posted", request, cancellationToken, adminToken);
 
-    public async Task<BillResponse> MarkPendingAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/bills/{billId}/mark-pending")
-        {
-            Content = JsonContent.Create(request)
-        };
-        req.Headers.Add(AdminTokenConstants.HeaderName, adminToken);
-        var response = await httpClient.SendAsync(req, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        return await ReadAsync(response, cancellationToken);
-    }
+    public Task<BillResponse> MarkPendingAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillResponse>($"/api/bills/{billId}/mark-pending", request, cancellationToken, adminToken);
 
-    public async Task<DeleteBillResponse> DeleteAsync(Guid billId, DeleteBillRequest request, string adminToken, CancellationToken cancellationToken = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Delete, $"/api/bills/{billId}")
-        {
-            Content = JsonContent.Create(request)
-        };
-        req.Headers.Add(AdminTokenConstants.HeaderName, adminToken);
-        var response = await httpClient.SendAsync(req, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<DeleteBillResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Empty delete response.");
-    }
+    public Task<DeleteBillResponse> DeleteAsync(Guid billId, DeleteBillRequest request, string adminToken, CancellationToken cancellationToken = default)
+        => httpClient.SendApiAsync<DeleteBillResponse>(HttpMethod.Delete, $"/api/bills/{billId}", request, cancellationToken, adminToken);
 
-    public async Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(DeleteSelectedBillsRequest request, string adminToken, CancellationToken cancellationToken = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/bills/delete-selected")
-        {
-            Content = JsonContent.Create(request)
-        };
-        req.Headers.Add(AdminTokenConstants.HeaderName, adminToken);
-        var response = await httpClient.SendAsync(req, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(response, cancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<DeleteSelectedBillsResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Empty delete-selected response.");
-    }
+    public Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(DeleteSelectedBillsRequest request, string adminToken, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<DeleteSelectedBillsResponse>("/api/bills/delete-selected", request, cancellationToken, adminToken);
 
-    public async Task<SyntheticBatchResponse> CreateSyntheticBatchAsync(SyntheticBatchRequest request, string adminToken, CancellationToken cancellationToken = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/bills/synthetic-batch")
-        {
-            Content = JsonContent.Create(request)
-        };
-        req.Headers.Add(AdminTokenConstants.HeaderName, adminToken);
-        var response = await httpClient.SendAsync(req, cancellationToken);
-        return await ApiResponseReader.ReadOrThrowAsync<SyntheticBatchResponse>(response, cancellationToken);
-    }
-
-    private static async Task<BillResponse> ReadAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        var body = await response.Content.ReadFromJsonAsync<BillResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Bills API returned an empty payload.");
-    }
-
-    private static async Task<BillBatchPushResponse> ReadBatchAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        var body = await response.Content.ReadFromJsonAsync<BillBatchPushResponse>(cancellationToken: cancellationToken);
-        return body ?? throw new InvalidOperationException("Bills API returned an empty batch payload.");
-    }
+    public Task<SyntheticBatchResponse> CreateSyntheticBatchAsync(SyntheticBatchRequest request, string adminToken, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<SyntheticBatchResponse>("/api/bills/synthetic-batch", request, cancellationToken, adminToken);
 }

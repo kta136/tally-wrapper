@@ -1,5 +1,4 @@
 using System.Net.Http;
-using System.Net.Http.Json;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Masters;
 
@@ -7,53 +6,30 @@ namespace ShowroomBilling.Desktop.Services;
 
 public sealed class MastersApiClient(HttpClient httpClient) : IMastersApiClient
 {
-    public async Task<CompanySnapshotResponse> GetCompaniesAsync(
+    public Task<CompanySnapshotResponse> GetCompaniesAsync(
         MasterSnapshotQuery? query = null,
         CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetFromJsonAsync<CompanySnapshotResponse>(
-            BuildUrl("/api/masters/companies", query),
-            cancellationToken);
-        return response ?? throw new InvalidOperationException("API returned an empty companies payload.");
-    }
+        => httpClient.GetApiAsync<CompanySnapshotResponse>(BuildUrl("/api/masters/companies", query), cancellationToken);
 
-    public async Task<LedgerSnapshotResponse> GetLedgersAsync(
+    public Task<LedgerSnapshotResponse> GetLedgersAsync(
         MasterSnapshotQuery? query = null,
         CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetFromJsonAsync<LedgerSnapshotResponse>(
-            BuildUrl("/api/masters/ledgers", query),
-            cancellationToken);
-        return response ?? throw new InvalidOperationException("API returned an empty ledgers payload.");
-    }
+        => httpClient.GetApiAsync<LedgerSnapshotResponse>(BuildUrl("/api/masters/ledgers", query), cancellationToken);
 
-    public async Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
+    public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
         MasterSnapshotQuery? query = null,
         CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetFromJsonAsync<VoucherTypeSnapshotResponse>(
-            BuildUrl("/api/masters/voucher-types", query),
-            cancellationToken);
-        return response ?? throw new InvalidOperationException("API returned an empty voucher-types payload.");
-    }
+        => httpClient.GetApiAsync<VoucherTypeSnapshotResponse>(BuildUrl("/api/masters/voucher-types", query), cancellationToken);
 
-    public async Task<StockItemSnapshotResponse> GetStockItemsAsync(
+    public Task<StockItemSnapshotResponse> GetStockItemsAsync(
         MasterSnapshotQuery? query = null,
         CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetFromJsonAsync<StockItemSnapshotResponse>(
-            BuildUrl("/api/masters/stock-items", query),
-            cancellationToken);
-        return response ?? throw new InvalidOperationException("API returned an empty stock-items payload.");
-    }
+        => httpClient.GetApiAsync<StockItemSnapshotResponse>(BuildUrl("/api/masters/stock-items", query), cancellationToken);
 
-    public async Task<IReadOnlyList<TallyMasterRefreshResult>> RequestRefreshAsync(
+    public Task<IReadOnlyList<TallyMasterRefreshResult>> RequestRefreshAsync(
         MasterRefreshRequest request,
         CancellationToken cancellationToken = default)
-    {
-        var http = await httpClient.PostAsJsonAsync("/api/masters/refresh", request, cancellationToken);
-        return await ApiResponseReader.ReadOrThrowAsync<IReadOnlyList<TallyMasterRefreshResult>>(http, cancellationToken);
-    }
+        => httpClient.PostApiAsync<IReadOnlyList<TallyMasterRefreshResult>>("/api/masters/refresh", request, cancellationToken);
 
     private static string BuildUrl(string path, MasterSnapshotQuery? query)
     {

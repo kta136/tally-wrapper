@@ -420,13 +420,9 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
                     ? $"Showing {Skip + 1}–{Skip + Items.Count}"
                     : $"Showing {Skip + 1}–{Skip + Items.Count} of {list.Total}";
         }
-        catch (HttpRequestException ex)
-        {
-            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            StatusMessage = $"Load failed: {ex.Message}";
+            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

@@ -587,13 +587,9 @@ public partial class InvoiceViewModel : ObservableObject
             savedBillId = bill.Id;
             _lastSavedBill = bill;
         }
-        catch (HttpRequestException ex)
-        {
-            SaveStatus = $"Save failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            SaveStatus = $"Save failed: {ex.Message}";
+            SaveStatus = $"Save failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

@@ -22,10 +22,8 @@ namespace ShowroomBilling.Desktop.Services;
 /// </summary>
 internal static class ApiResponseReader
 {
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
+    // The same options ReadFromJsonAsync uses when it is given none.
+    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     public static async Task EnsureSuccessOrThrowAsync(
         HttpResponseMessage response,
@@ -55,21 +53,19 @@ internal static class ApiResponseReader
     }
 
     /// <summary>
-    /// Renders a short user-facing string from an <see cref="HttpRequestException"/>.
-    /// For <see cref="ApiException"/> (write-path failures wrapped by this reader)
-    /// returns the server's <c>detail</c>/<c>title</c>. For raw HRE (typically reads
-    /// using <c>GetFromJsonAsync</c>) falls back to the status code, then to
-    /// <c>"network error"</c>. Use in viewmodels:
+    /// Renders a short user-facing string from a failed call, so a view model
+    /// needs one <c>catch (Exception ex)</c>:
     /// <c>StatusMessage = $"Save failed: {ApiResponseReader.FormatError(ex)}";</c>
+    /// An <see cref="ApiException"/> gives the server's <c>detail</c>/<c>title</c>;
+    /// a request that never got an answer gives its status code or
+    /// <c>"network error"</c>; anything else gives its own message.
     /// </summary>
-    public static string FormatError(HttpRequestException ex)
+    public static string FormatError(Exception ex) => ex switch
     {
-        if (ex is ApiException)
-        {
-            return ex.Message;
-        }
-        return ex.StatusCode?.ToString() ?? "network error";
-    }
+        ApiException => ex.Message,
+        HttpRequestException http => http.StatusCode?.ToString() ?? "network error",
+        _ => ex.Message
+    };
 
     private static (string? Title, string? Detail) ParseProblemDetails(string? body)
     {

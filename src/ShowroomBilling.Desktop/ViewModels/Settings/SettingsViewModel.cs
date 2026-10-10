@@ -362,13 +362,9 @@ public partial class SettingsViewModel : ObservableObject,
             // "Refresh from Tally" button now re-pulls and re-fetches in one go.
             await MasterData.LoadMissingSnapshotsAsync(cancellationToken);
         }
-        catch (HttpRequestException ex)
-        {
-            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            StatusMessage = $"Load failed: {ex.Message}";
+            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

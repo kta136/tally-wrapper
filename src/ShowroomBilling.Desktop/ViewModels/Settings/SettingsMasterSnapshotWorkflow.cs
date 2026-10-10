@@ -64,13 +64,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
                 ? "No companies cached — try Refresh from Tally."
                 : $"{host.Companies.Count} compan{(host.Companies.Count == 1 ? "y" : "ies")} loaded · {response.Metadata.Freshness}";
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Fetch companies failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Fetch companies failed: {ex.Message}";
+            host.StatusMessage = $"Fetch companies failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -93,13 +89,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
             refreshOk = response.All(r => r.Succeeded);
             host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Refresh failed: {ex.Message}";
+            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -129,13 +121,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
             await reloadSettings(cancellationToken);
             host.StatusMessage = $"Active company set to {targetName}.";
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Set active failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Set active failed: {ex.Message}";
+            host.StatusMessage = $"Set active failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -171,13 +159,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
 
             host.StatusMessage = $"{host.LedgerOptions.Count} ledger(s) · {host.VoucherTypeOptions.Count} voucher type(s) · {ledgersResponse.Metadata.Freshness}";
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Fetch ledgers failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Fetch ledgers failed: {ex.Message}";
+            host.StatusMessage = $"Fetch ledgers failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -200,13 +184,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
             refreshOk = response.All(r => r.Succeeded);
             host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Refresh failed: {ex.Message}";
+            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -240,13 +220,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
                 ? "No stock items cached — try Refresh from Tally."
                 : $"{host.StockItems.Count} stock item(s) loaded · {response.Metadata.Freshness}";
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Fetch stock items failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Fetch stock items failed: {ex.Message}";
+            host.StatusMessage = $"Fetch stock items failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
@@ -269,13 +245,9 @@ internal sealed class SettingsMasterSnapshotWorkflow(
             refreshOk = response.All(r => r.Succeeded);
             host.StatusMessage = SettingsRefreshSummaryFormatter.Summarize(response);
         }
-        catch (HttpRequestException ex)
-        {
-            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            host.StatusMessage = $"Refresh failed: {ex.Message}";
+            host.StatusMessage = $"Refresh failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {

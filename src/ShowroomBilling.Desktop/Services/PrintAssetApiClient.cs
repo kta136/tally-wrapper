@@ -1,26 +1,16 @@
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Json;
 using ShowroomBilling.Contracts.PrintAssets;
 
 namespace ShowroomBilling.Desktop.Services;
 
 public sealed class PrintAssetApiClient(HttpClient httpClient) : IPrintAssetApiClient
 {
-    public async Task<PrintAssetListResponse> ListAsync(CancellationToken cancellationToken = default)
-    {
-        var response = await httpClient.GetFromJsonAsync<PrintAssetListResponse>(
-            "/api/print-assets", cancellationToken);
-        return response ?? new PrintAssetListResponse(Array.Empty<PrintAssetResponse>());
-    }
+    public Task<PrintAssetListResponse> ListAsync(CancellationToken cancellationToken = default)
+        => httpClient.GetApiAsync<PrintAssetListResponse>("/api/print-assets", cancellationToken);
 
-    public async Task<PrintAssetResponse> UploadAsync(PrintAssetUploadRequest request, CancellationToken cancellationToken = default)
-    {
-        var http = await httpClient.PostAsJsonAsync("/api/print-assets", request, cancellationToken);
-        await ApiResponseReader.EnsureSuccessOrThrowAsync(http, cancellationToken);
-        var response = await http.Content.ReadFromJsonAsync<PrintAssetResponse>(cancellationToken: cancellationToken);
-        return response ?? throw new InvalidOperationException("Empty upload response.");
-    }
+    public Task<PrintAssetResponse> UploadAsync(PrintAssetUploadRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<PrintAssetResponse>("/api/print-assets", request, cancellationToken);
 
     public async Task<byte[]?> DownloadAsync(Guid id, CancellationToken cancellationToken = default)
     {

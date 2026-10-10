@@ -218,13 +218,9 @@ public partial class SetupWizardViewModel : ObservableObject
 
             await CompleteAsync(cancellationToken);
         }
-        catch (HttpRequestException ex)
-        {
-            SetError(ApiResponseReader.FormatError(ex));
-        }
         catch (Exception ex)
         {
-            SetError(ex.Message);
+            SetError(ApiResponseReader.FormatError(ex));
         }
         finally
         {
@@ -254,13 +250,9 @@ public partial class SetupWizardViewModel : ObservableObject
             await _settingsApi.SaveEffectiveSettingsAsync(new UpdateEffectiveSettingsRequest(dto), cancellationToken);
             await CompleteAsync(cancellationToken);
         }
-        catch (HttpRequestException ex)
-        {
-            SetError(ApiResponseReader.FormatError(ex));
-        }
         catch (Exception ex)
         {
-            SetError(ex.Message);
+            SetError(ApiResponseReader.FormatError(ex));
         }
         finally
         {

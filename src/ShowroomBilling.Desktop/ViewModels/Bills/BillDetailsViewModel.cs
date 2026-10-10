@@ -165,13 +165,9 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
 
             StatusMessage = string.Empty;
         }
-        catch (HttpRequestException ex)
-        {
-            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
-        }
         catch (Exception ex)
         {
-            StatusMessage = $"Load failed: {ex.Message}";
+            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
         }
         finally
         {
