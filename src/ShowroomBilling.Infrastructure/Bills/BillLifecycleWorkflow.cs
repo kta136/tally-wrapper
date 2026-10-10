@@ -15,7 +15,6 @@ internal sealed class BillLifecycleWorkflow(
     INumberingService numberingService,
     BillAuditStore auditStore)
 {
-    private const string DefaultShowroomCode = "default";
     private const string BillTypeSales = "sales";
 
     internal Task<BillResponse> CreateDraftAsync(
@@ -156,7 +155,7 @@ internal sealed class BillLifecycleWorkflow(
         // The revised bill is a new bill and needs its own number, exactly
         // like a fresh draft. Reservation, new bill, supersession and audit
         // commit together so a failure leaves the original bill untouched.
-        await using var transaction = UsesInMemoryProvider()
+        await using var transaction = dbContext.UsesInMemoryProvider()
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -319,7 +318,7 @@ internal sealed class BillLifecycleWorkflow(
     }
 
     private bool IsUniqueViolation(DbUpdateException exception) =>
-        !UsesInMemoryProvider()
+        !dbContext.UsesInMemoryProvider()
         && exception.GetBaseException() is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation };
 
     private async Task<BillResponse> CreateNewDraftAsync(
@@ -327,12 +326,12 @@ internal sealed class BillLifecycleWorkflow(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var billId = Guid.CreateVersion7();
 
         // Reservation + bill/revision/audit share one transaction so a failed
         // bill persist doesn't leave an orphaned reserved number behind.
-        await using var transaction = UsesInMemoryProvider()
+        await using var transaction = dbContext.UsesInMemoryProvider()
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -417,13 +416,4 @@ internal sealed class BillLifecycleWorkflow(
         return bill;
     }
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
-
-    private bool UsesInMemoryProvider() =>
-        string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
 }

@@ -41,7 +41,7 @@ public sealed class OperationalDataRetentionHostedService(
 
             int sessionsDeleted;
             int leasesDeleted;
-            if (string.Equals(db.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal))
+            if (db.UsesInMemoryProvider())
             {
                 var sessions = await db.AdminSessions.Where(x => x.ExpiresAtUtc < cutoff).ToListAsync(timeout.Token);
                 var leases = await db.DraftEditLeases

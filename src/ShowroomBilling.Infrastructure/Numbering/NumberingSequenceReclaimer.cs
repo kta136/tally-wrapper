@@ -33,7 +33,6 @@ namespace ShowroomBilling.Infrastructure.Numbering;
 /// </summary>
 internal static class NumberingSequenceReclaimer
 {
-    private const string InMemoryProviderName = "Microsoft.EntityFrameworkCore.InMemory";
 
     /// <summary>
     /// Reconcile the sequence row for one (showroom, fiscalYear) scope.
@@ -58,8 +57,7 @@ internal static class NumberingSequenceReclaimer
         long? keepCoreReserved = null)
     {
         const string documentType = INumberingService.DocumentTypeSalesInvoice;
-        var isInMemory = string.Equals(
-            dbContext.Database.ProviderName, InMemoryProviderName, StringComparison.Ordinal);
+        var isInMemory = dbContext.UsesInMemoryProvider();
 
         InvoiceSequenceEntity? sequence;
         if (isInMemory)

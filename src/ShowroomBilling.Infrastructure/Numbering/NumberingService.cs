@@ -13,8 +13,6 @@ namespace ShowroomBilling.Infrastructure.Numbering;
 
 public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumberingService
 {
-    private const string DefaultShowroomCode = "default";
-    private const string InMemoryProviderName = "Microsoft.EntityFrameworkCore.InMemory";
     private const int MaxReservationAttempts = 3;
 
     public async Task<NumberingPreviewResponse> GetPreviewAsync(
@@ -24,7 +22,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
     {
         var normalizedType = NormalizeDocumentType(documentType);
         var year = NormalizeFiscalYear(fiscalYear);
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
 
         var sequence = await dbContext.InvoiceSequences
             .AsNoTracking()
@@ -60,7 +58,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
         var idempotencyKey = request.IdempotencyKey.Trim();
         var normalizedType = NormalizeDocumentType(request.DocumentType);
         var year = NormalizeFiscalYear(request.FiscalYear);
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
 
         for (var attempt = 1; attempt <= MaxReservationAttempts; attempt++)
         {
@@ -108,8 +106,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
                 AlreadyExisted: true);
         }
 
-        var providerName = dbContext.Database.ProviderName ?? string.Empty;
-        var isInMemory = providerName.Equals(InMemoryProviderName, StringComparison.Ordinal);
+        var isInMemory = dbContext.UsesInMemoryProvider();
         var ambientTransaction = dbContext.Database.CurrentTransaction;
 
         // If the caller already opened a transaction, enlist in it and leave
@@ -229,7 +226,7 @@ FOR UPDATE")
 
     private bool IsRetryableReservationConflict(DbUpdateException exception)
     {
-        if (UsesInMemoryProvider())
+        if (dbContext.UsesInMemoryProvider())
         {
             return false;
         }
@@ -365,13 +362,4 @@ FOR UPDATE")
     public static string ComputeCurrentFiscalYear(DateTimeOffset now) =>
         InvoiceNumberFormatter.ComputeFiscalYear(now);
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
-
-    private bool UsesInMemoryProvider() =>
-        string.Equals(dbContext.Database.ProviderName, InMemoryProviderName, StringComparison.Ordinal);
 }

@@ -16,6 +16,19 @@ namespace ShowroomBilling.Tests;
 public sealed class BillServiceTests
 {
     [Fact]
+    public async Task CreateDraft_StampsTheDefaultShowroomId_WhichMustNeverChange()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        // Every stored row carries this id: the MD5 of "default" read as a Guid.
+        var stored = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
+        Assert.Equal(new Guid("9b961fc2-035f-3dd3-43e0-4f8f136e7682"), stored.ShowroomId);
+    }
+
+    [Fact]
     public async Task CreateDraft_PersistsBillWithRevisionOneAndReservesSerial()
     {
         await using var db = CreateDbContext();

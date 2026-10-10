@@ -10,7 +10,6 @@ namespace ShowroomBilling.Infrastructure.Bills;
 
 internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
 {
-    private const string DefaultShowroomCode = "default";
     private const string SortWorkflow = "workflow";
     private const string SortCreatedDesc = "created_desc";
 
@@ -91,7 +90,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         var skip = Math.Max(0, filter.Skip ?? 0);
         var take = Math.Clamp(filter.Take ?? 50, 1, 200);
         var sort = NormalizeSort(filter.Sort);
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
 
         var query = from bill in dbContext.Bills.AsNoTracking()
                     join rev in dbContext.BillRevisions.AsNoTracking()
@@ -185,12 +184,6 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         return new BillListResponse(total, skip, take, rows, hasMore);
     }
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
 
     private static string NormalizeSort(string? sort)
     {

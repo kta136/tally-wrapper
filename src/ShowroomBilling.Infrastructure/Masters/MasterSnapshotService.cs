@@ -30,7 +30,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         ArgumentNullException.ThrowIfNull(request);
         ValidateCommon(request.ShowroomCode);
 
-        var showroomId = MasterSnapshotNormalization.ResolveShowroomId(request.ShowroomCode);
+        var showroomId = Showrooms.IdFor(request.ShowroomCode);
         var items = request.Companies ?? [];
 
         return await ReplaceSnapshotAsync(
@@ -57,7 +57,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         ArgumentNullException.ThrowIfNull(request);
         ValidateCommon(request.ShowroomCode);
 
-        var showroomId = MasterSnapshotNormalization.ResolveShowroomId(request.ShowroomCode);
+        var showroomId = Showrooms.IdFor(request.ShowroomCode);
         var items = request.Ledgers ?? [];
 
         return await ReplaceSnapshotAsync(
@@ -87,7 +87,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         ArgumentNullException.ThrowIfNull(request);
         ValidateCommon(request.ShowroomCode);
 
-        var showroomId = MasterSnapshotNormalization.ResolveShowroomId(request.ShowroomCode);
+        var showroomId = Showrooms.IdFor(request.ShowroomCode);
         var items = request.StockItems ?? [];
 
         return await ReplaceSnapshotAsync(
@@ -117,7 +117,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         ArgumentNullException.ThrowIfNull(request);
         ValidateCommon(request.ShowroomCode);
 
-        var showroomId = MasterSnapshotNormalization.ResolveShowroomId(request.ShowroomCode);
+        var showroomId = Showrooms.IdFor(request.ShowroomCode);
         var items = request.VoucherTypes ?? [];
 
         return await ReplaceSnapshotAsync(
@@ -263,7 +263,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         Action<TallyMasterSnapshotBatchEntity> addRows,
         CancellationToken cancellationToken)
     {
-        await using var transaction = UsesInMemoryProvider()
+        await using var transaction = dbContext.UsesInMemoryProvider()
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -375,7 +375,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         var priorActive = dbContext.TallyMasterSnapshotBatches
             .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType && x.Status == "active");
 
-        if (UsesInMemoryProvider())
+        if (dbContext.UsesInMemoryProvider())
         {
             var rows = await priorActive.ToListAsync(cancellationToken);
             foreach (var row in rows)
@@ -408,7 +408,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         }
 
         var stale = dbContext.TallyMasterSnapshotBatches.Where(x => idsToDelete.Contains(x.Id));
-        if (UsesInMemoryProvider())
+        if (dbContext.UsesInMemoryProvider())
         {
             dbContext.TallyMasterSnapshotBatches.RemoveRange(await stale.ToListAsync(cancellationToken));
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -417,9 +417,6 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
 
         await stale.ExecuteDeleteAsync(cancellationToken);
     }
-
-    private bool UsesInMemoryProvider() =>
-        string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
 
     private static void ValidateCommon(string showroomCode)
     {

@@ -11,7 +11,6 @@ namespace ShowroomBilling.Infrastructure.Leases;
 
 public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDraftLeaseService
 {
-    private const string DefaultShowroomCode = "default";
     private static readonly TimeSpan LeaseTtl = TimeSpan.FromMinutes(2);
 
     public async Task<DraftLeaseAcquireResult> AcquireAsync(
@@ -52,7 +51,7 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var lease = new DraftEditLeaseEntity
         {
             Id = Guid.CreateVersion7(),
@@ -229,10 +228,4 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
             lease.RenewedAtUtc,
             lease.ReleasedAtUtc);
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
 }

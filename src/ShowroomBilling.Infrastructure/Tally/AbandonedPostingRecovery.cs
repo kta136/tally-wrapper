@@ -20,7 +20,6 @@ public static class AbandonedPostingRecovery
 {
     public static readonly TimeSpan AbandonAfter = TimeSpan.FromMinutes(10);
 
-    private const string InMemoryProviderName = "Microsoft.EntityFrameworkCore.InMemory";
 
     /// <returns>
     /// How many bills were recovered, and when the youngest remaining
@@ -66,7 +65,7 @@ public static class AbandonedPostingRecovery
         CancellationToken cancellationToken)
     {
         int affected;
-        if (string.Equals(db.Database.ProviderName, InMemoryProviderName, StringComparison.Ordinal))
+        if (db.UsesInMemoryProvider())
         {
             var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == billId, cancellationToken);
             affected = bill is { State: BillStates.Posting } && bill.UpdatedAtUtc == claimedAtUtc ? 1 : 0;

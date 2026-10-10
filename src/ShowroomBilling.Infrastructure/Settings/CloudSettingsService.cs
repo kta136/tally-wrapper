@@ -19,7 +19,7 @@ public sealed class CloudSettingsService(
 
     public async Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
     {
-        if (!UsesInMemoryProvider())
+        if (!dbContext.UsesInMemoryProvider())
         {
             lock (EffectiveSettingsCacheLock)
             {
@@ -32,7 +32,7 @@ public sealed class CloudSettingsService(
 
         var entity = await GetOrCreateAsync(cancellationToken);
         var response = MapResponse(entity);
-        if (!UsesInMemoryProvider())
+        if (!dbContext.UsesInMemoryProvider())
         {
             CacheEffectiveSettings(response);
         }
@@ -307,9 +307,6 @@ public sealed class CloudSettingsService(
 
     private static string NormalizeJson(string value) =>
         string.IsNullOrWhiteSpace(value) ? "[]" : value.Trim();
-
-    private bool UsesInMemoryProvider() =>
-        string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
 
     private static void CacheEffectiveSettings(EffectiveSettingsResponse response)
     {

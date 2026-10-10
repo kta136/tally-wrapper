@@ -15,13 +15,12 @@ public sealed class PrintAssetService(
     ShowroomBillingDbContext dbContext,
     IAuditActorContext? actorContext = null) : IPrintAssetService
 {
-    private const string DefaultShowroomCode = "default";
     private const long MaxBytes = 2 * 1024 * 1024;
     private const int MaxBase64Characters = 2_800_000;
 
     public async Task<PrintAssetListResponse> ListAsync(CancellationToken cancellationToken = default)
     {
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var rows = await dbContext.PrintAssets
             .AsNoTracking()
             .Where(x => x.ShowroomId == showroomId)
@@ -91,7 +90,7 @@ public sealed class PrintAssetService(
         var contentType = DetectImageContentType(bytes)
             ?? throw new RequestValidationException("Asset must be a valid PNG or JPEG image.");
 
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var now = DateTimeOffset.UtcNow;
         var entity = new PrintAssetEntity
         {
@@ -172,12 +171,6 @@ public sealed class PrintAssetService(
         return true;
     }
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
 
     private static string? DetectImageContentType(ReadOnlySpan<byte> bytes)
     {

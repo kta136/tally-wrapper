@@ -179,7 +179,7 @@ internal sealed class BillAdminWorkflow(
         // recent reservation) immediately reclaims the freed slot for the next
         // ReserveAsync. Without the rollback, NextValue would stay anchored past
         // the now-empty core and the next bill would skip 94 forever.
-        await using var transaction = UsesInMemoryProvider()
+        await using var transaction = dbContext.UsesInMemoryProvider()
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -349,7 +349,7 @@ internal sealed class BillAdminWorkflow(
         // Backref-clear + delete + sequence-rollback share one transaction so
         // a failed delete doesn't leave dangling cleared references on prior
         // bills, and a failed rollback doesn't leak an inconsistent NextValue.
-        await using var transaction = UsesInMemoryProvider()
+        await using var transaction = dbContext.UsesInMemoryProvider()
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -446,7 +446,7 @@ internal sealed class BillAdminWorkflow(
         CancellationToken cancellationToken)
     {
         var query = dbContext.Bills.Where(b => b.SupersededByBillId == billId);
-        if (UsesInMemoryProvider())
+        if (dbContext.UsesInMemoryProvider())
         {
             var rows = await query.ToListAsync(cancellationToken);
             foreach (var row in rows)
@@ -464,7 +464,4 @@ internal sealed class BillAdminWorkflow(
                 .SetProperty(b => b.UpdatedAtUtc, updatedAt),
             cancellationToken);
     }
-
-    private bool UsesInMemoryProvider() =>
-        string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
 }

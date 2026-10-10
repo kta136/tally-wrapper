@@ -15,7 +15,6 @@ public sealed class AdminAuthService(
     IAdminUnlockThrottle unlockThrottle,
     ILogger<AdminAuthService> logger) : IAdminAuthService
 {
-    private const string DefaultShowroomCode = "default";
     private const int SaltBytes = 16;
     private const int HashBytes = 32;
     private const int PbkdfIterations = 120_000;
@@ -26,7 +25,7 @@ public sealed class AdminAuthService(
 
     public async Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default)
     {
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var exists = await dbContext.AdminPasscodes.AnyAsync(x => x.ShowroomId == showroomId, cancellationToken);
         return new AdminPasscodeStatusResponse(exists);
     }
@@ -41,7 +40,7 @@ public sealed class AdminAuthService(
         }
 
         var now = DateTimeOffset.UtcNow;
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var existing = await dbContext.AdminPasscodes
             .FirstOrDefaultAsync(x => x.ShowroomId == showroomId, cancellationToken);
 
@@ -84,7 +83,7 @@ public sealed class AdminAuthService(
     public async Task<AdminUnlockResponse> UnlockAsync(AdminUnlockRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
 
         // Throttle BEFORE we touch the DB so that a hammering caller can't
         // even cause repeated PBKDF2 work, and a 4xx is returned cheaply.
@@ -222,7 +221,7 @@ public sealed class AdminAuthService(
         {
             Id = Guid.CreateVersion7(),
             EntityType = "admin",
-            EntityId = ResolveShowroomId(DefaultShowroomCode).ToString(),
+            EntityId = Showrooms.DefaultId.ToString(),
             EventType = eventType,
             ActorType = "admin",
             ActorId = actorLabel,
@@ -231,10 +230,4 @@ public sealed class AdminAuthService(
         });
     }
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
 }

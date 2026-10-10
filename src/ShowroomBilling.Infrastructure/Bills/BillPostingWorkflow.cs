@@ -26,7 +26,6 @@ internal sealed class BillPostingWorkflow(
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
-    private const string DefaultShowroomCode = "default";
     private const string TallyAlterTargetTagName = "MASTER ID";
 
     // Once the bill is committed to `posting`, the outcome must be written
@@ -67,7 +66,7 @@ internal sealed class BillPostingWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var maxBills = Math.Clamp(request.MaxBills ?? 200, 1, 500);
-        var showroomId = ResolveShowroomId(DefaultShowroomCode);
+        var showroomId = Showrooms.DefaultId;
         var targetIds = await dbContext.Bills
             .AsNoTracking()
             .Where(x => x.ShowroomId == showroomId && (x.State == BillStates.Pending || x.State == BillStates.Draft))
@@ -194,7 +193,7 @@ internal sealed class BillPostingWorkflow(
         //      Tally round-trip, so StuckPostingRecoveryHostedService can heal
         //      a stuck row if the API crashes mid-call. Do NOT wrap this flip
         //      and the Tally call in a single transaction.
-        if (UsesInMemoryProvider())
+        if (dbContext.UsesInMemoryProvider())
         {
             // ExecuteUpdateAsync is not reliably supported on the InMemory provider
             // used in unit tests, and those tests don't simulate real concurrency
@@ -599,15 +598,6 @@ internal sealed class BillPostingWorkflow(
         return bill;
     }
 
-    private static Guid ResolveShowroomId(string showroomCode)
-    {
-        var bytes = Encoding.UTF8.GetBytes(showroomCode.Trim().ToLowerInvariant());
-        var hash = MD5.HashData(bytes);
-        return new Guid(hash);
-    }
-
-    private bool UsesInMemoryProvider() =>
-        string.Equals(dbContext.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
 
     private static string? ReadDetailsString(string? payloadJson, string propertyName)
     {
