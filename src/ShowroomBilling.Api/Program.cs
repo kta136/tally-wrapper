@@ -30,9 +30,10 @@ if (!builder.Environment.IsDevelopment()
 }
 
 // Precedence (last wins): env var > local DPAPI-encrypted override > appsettings.
+string? databaseOverrideLoadError = null;
 var overrideConnectionString =
     DatabaseConfigurationStore.GetEnvironmentConnectionString() is { Length: > 0 } envCs ? envCs
-    : DatabaseConfigurationStore.LoadPostgresConnectionString(builder.Environment.EnvironmentName);
+    : DatabaseConfigurationStore.LoadPostgresConnectionString(builder.Environment.EnvironmentName, out databaseOverrideLoadError);
 
 if (!string.IsNullOrWhiteSpace(overrideConnectionString))
 {
@@ -81,6 +82,14 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+if (databaseOverrideLoadError is not null)
+{
+    app.Logger.LogWarning(
+        "The saved database connection override at {Path} was ignored because {Reason}. The API is using the fallback connection string.",
+        DatabaseConfigurationStore.ConfigPathForEnvironment(app.Environment.EnvironmentName),
+        databaseOverrideLoadError);
+}
 
 // Ensure the device token file exists on disk before the Desktop tries to
 // read it. First-run idempotent; no-op on subsequent boots.

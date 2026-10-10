@@ -33,9 +33,18 @@ public static class DatabaseConfigurationStore
     public static string? GetEnvironmentConnectionString() =>
         Normalize(Environment.GetEnvironmentVariable(PostgresConnectionStringEnvironmentVariable));
 
-    public static string? LoadPostgresConnectionString(string? environmentName)
+    public static string? LoadPostgresConnectionString(string? environmentName) =>
+        LoadPostgresConnectionString(environmentName, out _);
+
+    /// <param name="loadError">
+    /// Why an override file that exists could not be used (for example it was
+    /// encrypted by a different Windows user), or null when there was no file
+    /// or it loaded. The caller logs it: without that, the API starts on the
+    /// fallback connection string and nothing explains why.
+    /// </param>
+    public static string? LoadPostgresConnectionString(string? environmentName, out string? loadError)
     {
-        return TryLoadPostgresConnectionString(ConfigPathForEnvironment(environmentName), out var connectionString)
+        return TryLoadPostgresConnectionString(ConfigPathForEnvironment(environmentName), out var connectionString, out loadError)
             ? connectionString
             : null;
     }
@@ -62,9 +71,10 @@ public static class DatabaseConfigurationStore
             cancellationToken);
     }
 
-    private static bool TryLoadPostgresConnectionString(string path, out string? connectionString)
+    private static bool TryLoadPostgresConnectionString(string path, out string? connectionString, out string? loadError)
     {
         connectionString = null;
+        loadError = null;
         if (!File.Exists(path))
         {
             return false;
@@ -80,11 +90,21 @@ public static class DatabaseConfigurationStore
             {
                 var protectedBytes = Convert.FromBase64String(protectedValue.GetString() ?? string.Empty);
                 connectionString = Normalize(Unprotect(protectedBytes));
+                if (connectionString is null)
+                {
+                    loadError = "it holds an empty connection string";
+                }
                 return connectionString is not null;
             }
+
+            loadError = "it has no protected connection string";
         }
-        catch
+        catch (Exception ex)
         {
+            // Never fail start-up over this file; report it instead.
+            loadError = ex is CryptographicException
+                ? "it could not be decrypted; it was probably saved by a different Windows user"
+                : ex.Message;
             return false;
         }
 

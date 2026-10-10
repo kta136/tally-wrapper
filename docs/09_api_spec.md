@@ -223,7 +223,7 @@ These are the five admin-gated Bill endpoints listed in §2.2:
 |---|---|---|---|
 | `GET` | `/api/health/live` | Liveness probe | basic OK |
 | `GET` | `/api/health/ready` | Readiness probe | DB, migrations |
-| `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages |
+| `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages; `503` problem details when the database cannot be read |
 | `GET` | `/api/health/tally-company` | Operator-triggered Tally reachability + active-company check | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
 | `GET` | `/api/health/startup` | Startup hosted-service status (DB migration + stuck-posting recovery) | `{ startedAtUtc, databaseReady, databaseError?, recoveryRan, recoveryHealedCount, recoveryError? }` |
 | `GET` | `/api/runtime/health` | Cheap runtime health by default; full DB health only with `?forceDatabase=true` | `{ status, apiAvailable, databaseConfigured, databaseReachable, settingsLoadedFromApi, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, databaseHealthSkipped, databaseHealthSkipReason?, activeClientCount }` |

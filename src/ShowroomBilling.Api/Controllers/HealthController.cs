@@ -12,7 +12,8 @@ public sealed class HealthController(
     IMasterSnapshotService masterSnapshotService,
     HealthCheckService healthCheckService,
     ITallyCompanyHealthService tallyCompanyHealthService,
-    IStartupStatus startupStatus) : ControllerBase
+    IStartupStatus startupStatus,
+    ILogger<HealthController> logger) : ControllerBase
 {
     [HttpGet("startup")]
     public ActionResult<StartupStatusResponse> Startup() => Ok(startupStatus.Snapshot());
@@ -51,14 +52,16 @@ public sealed class HealthController(
             var summary = await masterSnapshotService.GetFreshnessSummaryAsync(cancellationToken);
             return Ok(summary);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return Ok(new
-            {
-                status = "Unavailable",
-                note = "Master freshness reporting is unavailable. PostgreSQL may be unreachable.",
-                error = exception.Message
-            });
+            // A 200 with a different shape deserialized into an empty summary
+            // on the client, and the body carried the raw exception text to
+            // an unauthenticated caller. Answer 503 and keep the cause in the log.
+            logger.LogWarning(exception, "Master freshness summary is unavailable.");
+            return Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Master freshness unavailable",
+                detail: "Master freshness reporting is unavailable. PostgreSQL may be unreachable.");
         }
     }
 
