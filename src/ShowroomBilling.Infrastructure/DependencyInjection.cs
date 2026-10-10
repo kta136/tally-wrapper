@@ -128,6 +128,7 @@ public static class DependencyInjection
         services.AddScoped<ITallyMasterRefresher, TallyMasterRefresher>();
 
         services.AddSingleton<IStartupStatus, StartupStatus>();
+        services.AddSingleton<IDatabaseSchemaState, DatabaseSchemaState>();
         services.AddHostedService<DatabaseInitializationHostedService>();
         services.AddHostedService<StuckPostingRecoveryHostedService>();
         services.AddHostedService<OperationalDataRetentionHostedService>();

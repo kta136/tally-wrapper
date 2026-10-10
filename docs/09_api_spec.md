@@ -212,9 +212,11 @@ These are the five admin-gated Bill endpoints listed in §2.2:
 | `GET` | `/api/health/ready` | Readiness probe | DB, migrations |
 | `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages; `503` problem details when the database cannot be read |
 | `GET` | `/api/health/tally-company` | Operator-triggered Tally reachability + active-company check | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
-| `GET` | `/api/runtime/health` | Cheap runtime health by default; full DB health only with `?forceDatabase=true` | `{ status, apiAvailable, databaseConfigured, databaseReachable, settingsLoadedFromApi, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, databaseHealthSkipped, databaseHealthSkipReason?, activeClientCount }` |
+| `GET` | `/api/runtime/health` | Cheap runtime health by default; full DB health only with `?forceDatabase=true` | `{ status, apiAvailable, databaseConfigured, databaseReachable, settingsLoadedFromApi, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, databaseHealthSkipped, databaseHealthSkipReason?, activeClientCount, pendingMigrationCount? }` |
 
 The DB-init and stuck-posting-recovery hosted services are bounded (DB init: 15s, recovery: 30s) and never throw, so a Postgres outage during startup leaves the API up. Their failures go to the API log; `/api/health/ready` and `/api/runtime/health?forceDatabase=true` report whether the database answers now.
+
+`pendingMigrationCount` is how many of this build's schema migrations the database has not had: `null` until something has looked, `0` when up to date. Above zero the database is reachable but unusable, so a forced check then answers `status: "Unhealthy"` with a message that says so. The cheap probe carries the last count found (by the start-up migration or by a forced check) without asking the database, which is what lets the Desktop and the server tray keep showing it. Requests whose SQL PostgreSQL rejects for a missing column or table (SQLSTATE `42703` / `42P01`) are answered `503` with the title `Database upgrade needed` instead of a bare `500`.
 
 `/api/runtime/health` intentionally avoids PostgreSQL unless `forceDatabase=true` is passed. This lets background desktop/server-tray health checks keep the API status current without unnecessary managed-Postgres wakeups. Full DB truth is requested on startup, explicit System Health refreshes, database setup waits, and the desktop's slower scheduled DB probe.
 

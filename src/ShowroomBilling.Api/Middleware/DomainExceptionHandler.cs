@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
@@ -46,8 +47,23 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         });
     }
 
+    public const string SchemaBehindDetail =
+        "The database has not had the schema migrations this version needs, so this request cannot be served. "
+        + "Ask the administrator to apply them as the database owner, then try again.";
+
+    /// <summary>
+    /// PostgreSQL rejected the SQL because a column or table this build names
+    /// does not exist: the database has not had this build's migrations.
+    /// </summary>
+    private static bool IsSchemaBehind(Exception exception) =>
+        exception.GetBaseException() is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UndefinedColumn or PostgresErrorCodes.UndefinedTable
+        };
+
     private static string DetailFor(Exception exception) => exception switch
     {
+        _ when IsSchemaBehind(exception) => SchemaBehindDetail,
         DbUpdateConcurrencyException =>
             "This record was changed by another counter or request while you were working on it. Reload it and try again.",
         // .NET appends " (Parameter 'x')" to the message of an ArgumentException
@@ -70,6 +86,7 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         RequestValidationException => (StatusCodes.Status400BadRequest, "Bad request"),
         // Guard clauses and not-yet-converted input checks. Still a client error.
         ArgumentException => (StatusCodes.Status400BadRequest, "Bad request"),
+        _ when IsSchemaBehind(exception) => (StatusCodes.Status503ServiceUnavailable, "Database upgrade needed"),
         _ => ((int?)null, string.Empty)
     };
 }

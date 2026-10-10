@@ -67,6 +67,49 @@ public sealed class DomainExceptionHandlerTests
         Assert.Equal("4", context.Response.Headers["Retry-After"].ToString());
     }
 
+    /// <summary>
+    /// 10 October 2026: a new build ran against a database that had not had its
+    /// migrations. Every bill request ended in a bare 500 and nobody could tell why.
+    /// </summary>
+    [Theory]
+    [InlineData("42703")] // undefined column
+    [InlineData("42P01")] // undefined table
+    public async Task Sql_that_names_a_missing_column_or_table_says_the_database_needs_its_migrations(string sqlState)
+    {
+        var rejected = new Npgsql.PostgresException("column b.InvoiceCore does not exist", "ERROR", "ERROR", sqlState);
+
+        var (handled, context, problem) = await HandleAsync(rejected);
+
+        Assert.True(handled);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
+        Assert.Equal("Database upgrade needed", problem!.Title);
+        Assert.Equal(DomainExceptionHandler.SchemaBehindDetail, problem.Detail);
+        // The operator gets what to do, not PostgreSQL's wording.
+        Assert.DoesNotContain("InvoiceCore", problem.Detail);
+    }
+
+    [Fact]
+    public async Task The_same_holds_when_a_save_wraps_it()
+    {
+        var rejected = new DbUpdateException(
+            "An error occurred while saving the entity changes.",
+            new Npgsql.PostgresException("column \"TotalsJson\" does not exist", "ERROR", "ERROR", "42703"));
+
+        var (handled, _, problem) = await HandleAsync(rejected);
+
+        Assert.True(handled);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, problem!.Status);
+    }
+
+    [Fact]
+    public async Task Other_database_errors_are_not_called_a_missing_upgrade()
+    {
+        var (handled, _, _) = await HandleAsync(
+            new Npgsql.PostgresException("duplicate key value violates unique constraint", "ERROR", "ERROR", "23505"));
+
+        Assert.False(handled);
+    }
+
     [Fact]
     public async Task An_unknown_exception_is_left_for_the_default_handler()
     {

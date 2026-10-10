@@ -107,6 +107,16 @@ public partial class HealthClusterViewModel : ObservableObject
             ? "DB ?"
             : $"DB {identity}";
 
+        // Before "idle": the cheap probe still carries the last count found,
+        // and a database that is behind is not idle, it is unusable.
+        if (runtime.PendingMigrationCount > 0)
+        {
+            DatabaseDot = "err";
+            DatabaseLabel = "DB BEHIND";
+            DatabaseTooltip = ShellHealthCoordinator.SchemaBehindBanner(runtime.PendingMigrationCount.Value);
+            return;
+        }
+
         if (runtime.DatabaseHealthSkipped)
         {
             DatabaseDot = "neutral";

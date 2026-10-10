@@ -158,6 +158,43 @@ public sealed class BillsActionTests
         Assert.Equal(expected, BillsStatusFormatter.FormatBatchPushStatus(response));
     }
 
+    /// <summary>
+    /// 10 October 2026: the server answered every bill request with an error
+    /// and the Bills tab showed an empty list, with nothing to say why.
+    /// </summary>
+    [Fact]
+    public async Task A_failed_load_says_so_and_a_successful_one_takes_it_back()
+    {
+        var api = new FakeBillsApi
+        {
+            // What the client makes of the server's 503 problem answer.
+            SearchFailure = new ApiException(
+                System.Net.HttpStatusCode.ServiceUnavailable,
+                "Database upgrade needed",
+                "The database has not had the schema migrations this version needs.",
+                rawBody: null)
+        };
+        var vm = new BillsViewModel(api);
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        await vm.LoadAsync();
+
+        Assert.True(vm.HasLoadError);
+        Assert.Contains("schema migrations", vm.LoadError);
+        Assert.Empty(vm.Items);
+        Assert.False(vm.IsLoading);
+        Assert.Contains(nameof(vm.HasLoadError), raised);
+
+        api.SearchFailure = null;
+        api.Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001")]);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.False(vm.HasLoadError);
+        Assert.Null(vm.LoadError);
+        Assert.Single(vm.Items);
+    }
+
     [Fact]
     public async Task Without_a_confirm_overlay_nothing_destructive_runs()
     {

@@ -13,6 +13,7 @@ public sealed class DatabaseInitializationHostedService(
     IOptions<DatabaseOptions> databaseOptions,
     IHostEnvironment hostEnvironment,
     IStartupStatus startupStatus,
+    IDatabaseSchemaState schemaState,
     ILogger<DatabaseInitializationHostedService> logger) : IHostedService
 {
     // Bounded so a slow / unreachable Postgres can't hold the API's startup
@@ -38,6 +39,7 @@ public sealed class DatabaseInitializationHostedService(
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(StartupTimeout);
 
+        var pendingCount = 0;
         try
         {
             logger.LogInformation(
@@ -45,27 +47,50 @@ public sealed class DatabaseInitializationHostedService(
                 hostEnvironment.EnvironmentName,
                 (int)StartupTimeout.TotalSeconds);
 
-            var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync(cts.Token);
-            if (!pendingMigrations.Any())
+            var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync(cts.Token)).ToList();
+            pendingCount = pendingMigrations.Count;
+            if (pendingCount == 0)
             {
                 logger.LogInformation("No pending database migrations found.");
+                schemaState.Record(0);
                 startupStatus.RecordDatabaseReady();
                 return;
             }
 
             await dbContext.Database.MigrateAsync(cts.Token);
+            schemaState.Record(0);
             startupStatus.RecordDatabaseReady();
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             var msg = $"Database migration on startup timed out after {(int)StartupTimeout.TotalSeconds}s. API will remain online but DB-backed features stay unavailable until PostgreSQL is reachable.";
             logger.LogWarning(msg);
+            RecordPending(pendingCount);
             startupStatus.RecordDatabaseFailure(msg);
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception, "Database migration on startup failed. API will remain online but DB-backed features stay unavailable until PostgreSQL is reachable.");
+            // Not only "PostgreSQL is down": on production this service's
+            // database role may not alter the schema, so its attempt is refused
+            // (SQLSTATE 42501) and the migrations have to be applied by hand.
+            logger.LogWarning(
+                exception,
+                "Database migration on startup failed with {PendingCount} migration(s) pending. The API stays online, but bill and numbering requests fail until they are applied. If this service's database role may not alter the schema, apply them by hand as the role that owns the tables.",
+                pendingCount);
+            RecordPending(pendingCount);
             startupStatus.RecordDatabaseFailure(exception.Message);
+        }
+    }
+
+    /// <summary>
+    /// What was pending stays pending when the attempt failed. Zero means the
+    /// failure came before the database could be asked, so nothing is known.
+    /// </summary>
+    private void RecordPending(int pendingCount)
+    {
+        if (pendingCount > 0)
+        {
+            schemaState.Record(pendingCount);
         }
     }
 

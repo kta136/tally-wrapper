@@ -8,9 +8,11 @@ using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
+using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
+using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Api.Controllers;
@@ -28,7 +30,8 @@ public sealed class RuntimeController(
     IOptions<ApiRuntimeOptions> runtimeOptions,
     IOptions<DeviceAuthOptions> deviceAuthOptions,
     MaintenanceTokenStore maintenanceTokenStore,
-    ClientPresenceRegistry clientPresenceRegistry) : ControllerBase
+    ClientPresenceRegistry clientPresenceRegistry,
+    IDatabaseSchemaState schemaState) : ControllerBase
 {
     [HttpGet("bootstrap")]
     public async Task<ActionResult<RuntimeBootstrapResponse>> GetBootstrap(CancellationToken cancellationToken)
@@ -199,7 +202,8 @@ public sealed class RuntimeController(
                 DatabaseIdentityMatches: null,
                 DatabaseHealthSkipped: true,
                 DatabaseHealthSkipReason: reason,
-                ActiveClientCount: activeClientCount));
+                ActiveClientCount: activeClientCount,
+                PendingMigrationCount: schemaState.PendingMigrationCount));
         }
 
         var healthReport = await healthCheckService.CheckHealthAsync(_ => true, cancellationToken);
@@ -212,15 +216,21 @@ public sealed class RuntimeController(
             ? DatabaseConnectionVerifier.DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity)
             : null;
         var databaseReachable = postgresReachable;
+        var pendingMigrations = postgresReachable
+            ? await TryCountPendingMigrationsAsync(cancellationToken)
+            : schemaState.PendingMigrationCount;
+        var schemaBehind = pendingMigrations > 0;
 
         var message = databaseIdentityMatches == false
             ? $"Database identity mismatch: PostgreSQL is reachable, but database identity is {databaseIdentity ?? "unavailable"}; expected {expectedDatabaseIdentity} for {hostEnvironment.EnvironmentName}."
-            : databaseReachable
-                ? $"API is online and PostgreSQL is reachable ({databaseIdentity})."
-                : "API is online. PostgreSQL must be configured and reachable for readiness.";
+            : schemaBehind
+                ? $"Database upgrade needed: PostgreSQL is reachable ({databaseIdentity}), but {pendingMigrations} schema migration(s) this version needs have not been applied. Bills and invoice numbers cannot be read or saved until the database owner applies them."
+                : databaseReachable
+                    ? $"API is online and PostgreSQL is reachable ({databaseIdentity})."
+                    : "API is online. PostgreSQL must be configured and reachable for readiness.";
 
         var response = new RuntimeHealthResponse(
-            healthReport.Status.ToString(),
+            schemaBehind ? HealthStatus.Unhealthy.ToString() : healthReport.Status.ToString(),
             ApiAvailable: true,
             DatabaseConfigured: databaseConfigured,
             DatabaseReachable: databaseReachable,
@@ -231,7 +241,8 @@ public sealed class RuntimeController(
             DatabaseIdentityMatches: databaseIdentityMatches,
             DatabaseHealthSkipped: false,
             DatabaseHealthSkipReason: null,
-            ActiveClientCount: activeClientCount);
+            ActiveClientCount: activeClientCount,
+            PendingMigrationCount: pendingMigrations);
 
         return Ok(response);
     }
@@ -350,6 +361,19 @@ public sealed class RuntimeController(
             NormalizeConnectionString(connectionString),
             NormalizeConnectionString(appliedDatabaseConfiguration.PostgresConnectionString),
             StringComparison.Ordinal);
+
+    /// <summary>The last known count if the database cannot be asked right now.</summary>
+    private async Task<int?> TryCountPendingMigrationsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await DatabaseSchemaState.CheckAsync(dbContext, schemaState, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return schemaState.PendingMigrationCount;
+        }
+    }
 
     private async Task<string?> TryGetDatabaseIdentityAsync(CancellationToken cancellationToken)
     {

@@ -38,6 +38,48 @@ public sealed class ShellHealthCoordinatorTests
         Assert.False(host.DatabaseConfigurationAttentionRequired);
     }
 
+    [Fact]
+    public async Task RefreshHealthAsync_SaysTheDatabaseNeedsItsMigrations_AndKeepsAskingUntilItHasThem()
+    {
+        var host = new FakeShellHealthHost();
+        var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, null, null, Runtime(pending: 6)));
+        var coordinator = new ShellHealthCoordinator(client, new FakeMastersApiClient(), host);
+
+        await coordinator.RefreshHealthAsync();
+
+        Assert.Equal(SystemState.Limited, host.SystemState);
+        Assert.Equal("DB BEHIND", host.StatusBar.StatusText);
+        Assert.Equal("err", host.Health.DatabaseDot);
+        Assert.Contains("6 schema migration(s)", host.BannerText);
+        Assert.Contains("administrator", host.BannerText);
+
+        // The next poll would normally be the cheap one (the database was
+        // checked a moment ago). While it is behind, the full check is asked for.
+        client.Snapshot = new SystemHealthSnapshot(true, null, null, Runtime(pending: 0));
+        await coordinator.RefreshHealthAsync();
+
+        Assert.True(client.LastForceDatabaseHealth);
+        Assert.Equal(SystemState.Healthy, host.SystemState);
+        Assert.Equal("READY", host.StatusBar.StatusText);
+        Assert.Equal(string.Empty, host.BannerText);
+
+        // Up to date again: back to the cheap probe.
+        await coordinator.RefreshHealthAsync();
+        Assert.False(client.LastForceDatabaseHealth);
+    }
+
+    private static RuntimeHealthResponse Runtime(int pending) => new(
+        pending > 0 ? "Unhealthy" : "Healthy",
+        ApiAvailable: true,
+        DatabaseConfigured: true,
+        DatabaseReachable: true,
+        SettingsLoadedFromApi: true,
+        Message: "from the server",
+        DatabaseIdentity: "PROD",
+        ExpectedDatabaseIdentity: "PROD",
+        DatabaseIdentityMatches: true,
+        PendingMigrationCount: pending);
+
     private sealed class FakeShellHealthHost : IShellHealthHost
     {
         public HealthClusterViewModel Health { get; } = new();
@@ -54,12 +96,19 @@ public sealed class ShellHealthCoordinatorTests
 
     private sealed class FakeHealthApiClient(SystemHealthSnapshot snapshot) : IHealthApiClient
     {
+        public SystemHealthSnapshot Snapshot { get; set; } = snapshot;
+
+        public bool LastForceDatabaseHealth { get; private set; }
+
         public Task<SystemHealthSnapshot> GetSnapshotAsync(
             bool includeTallyCompany,
             bool includeMasterFreshness = true,
             bool forceDatabaseHealth = false,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(snapshot);
+            CancellationToken cancellationToken = default)
+        {
+            LastForceDatabaseHealth = forceDatabaseHealth;
+            return Task.FromResult(Snapshot);
+        }
     }
 
     private sealed class FakeMastersApiClient : IMastersApiClient

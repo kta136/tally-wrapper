@@ -60,11 +60,16 @@ internal sealed class FakeBillsApi : IBillsApiClient
             ? null
             : new BillRevisionResponse(Guid.NewGuid(), 1, DateTimeOffset.UtcNow, null, null, null, payload));
 
+    /// <summary>When set, every search fails with it.</summary>
+    public Exception? SearchFailure { get; set; }
+
     public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
     {
         LastFilter = filter;
         SearchCount++;
-        return Task.FromResult(Response);
+        return SearchFailure is { } failure
+            ? Task.FromException<BillListResponse>(failure)
+            : Task.FromResult(Response);
     }
 
     public Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)

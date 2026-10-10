@@ -135,6 +135,52 @@ public sealed class HealthClusterViewModelTests
         Assert.Contains("skipped", vm.DatabaseTooltip);
     }
 
+    [Theory]
+    [InlineData(true)]  // the cheap probe, which carries the last count found
+    [InlineData(false)] // a full check
+    public void Apply_MapsADatabaseThatIsBehindToErr_EvenOnTheCheapProbe(bool skipped)
+    {
+        var vm = new HealthClusterViewModel();
+
+        vm.Apply(Snapshot(new RuntimeHealthResponse(
+            skipped ? "Skipped" : "Unhealthy",
+            ApiAvailable: true,
+            DatabaseConfigured: true,
+            DatabaseReachable: !skipped,
+            SettingsLoadedFromApi: !skipped,
+            Message: "whatever the server says",
+            DatabaseIdentity: skipped ? null : "PROD",
+            ExpectedDatabaseIdentity: "PROD",
+            DatabaseIdentityMatches: skipped ? null : true,
+            DatabaseHealthSkipped: skipped,
+            PendingMigrationCount: 6)));
+
+        Assert.Equal("err", vm.DatabaseDot);
+        Assert.Equal("DB BEHIND", vm.DatabaseLabel);
+        Assert.Contains("6 schema migration(s)", vm.DatabaseTooltip);
+    }
+
+    [Fact]
+    public void Apply_TreatsZeroPendingMigrationsAsNothingToReport()
+    {
+        var vm = new HealthClusterViewModel();
+
+        vm.Apply(Snapshot(new RuntimeHealthResponse(
+            "Healthy",
+            ApiAvailable: true,
+            DatabaseConfigured: true,
+            DatabaseReachable: true,
+            SettingsLoadedFromApi: true,
+            Message: "API is online and PostgreSQL is reachable (PROD).",
+            DatabaseIdentity: "PROD",
+            ExpectedDatabaseIdentity: "PROD",
+            DatabaseIdentityMatches: true,
+            PendingMigrationCount: 0)));
+
+        Assert.Equal("ok", vm.DatabaseDot);
+        Assert.Equal("DB PROD", vm.DatabaseLabel);
+    }
+
     private static SystemHealthSnapshot Snapshot(TallyCompanyHealthResponse tally) =>
         new(ApiReachable: true, Masters: null, TallyCompany: tally);
 

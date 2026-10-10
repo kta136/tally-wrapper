@@ -388,7 +388,8 @@ public sealed class DatabaseConfigurationTests
             Options.Create(new ApiRuntimeOptions()),
             Options.Create(deviceAuthOptions ?? new DeviceAuthOptions()),
             new MaintenanceTokenStore(),
-            new ClientPresenceRegistry());
+            new ClientPresenceRegistry(),
+            new ShowroomBilling.Infrastructure.Health.DatabaseSchemaState());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()

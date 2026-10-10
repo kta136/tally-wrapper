@@ -278,28 +278,39 @@ public sealed class StatusForm : Form
                 live.IsSuccessStatusCode ? Good : Warn);
 
             var runtime = await _httpClient.GetFromJsonAsync<RuntimeHealthResponse>("/api/runtime/health");
-            if (runtime is null)
-            {
-                SetStatus(_databaseStatus, "unknown", Warn);
-                return;
-            }
-
-            if (runtime.DatabaseHealthSkipped)
-            {
-                SetStatus(_databaseStatus, "idle", Muted);
-                return;
-            }
-
-            SetStatus(
-                _databaseStatus,
-                runtime.DatabaseReachable ? "ready" : "not ready",
-                runtime.DatabaseReachable ? Good : Bad);
+            var (text, color) = DescribeDatabase(runtime);
+            SetStatus(_databaseStatus, text, color);
         }
         catch (Exception ex)
         {
             SetStatus(_apiStatus, ShortError(ex.Message), Bad);
             SetStatus(_databaseStatus, "unknown", Warn);
         }
+    }
+
+    /// <summary>
+    /// The database line of the dashboard. A database that has not had this
+    /// build's migrations comes first: the service then runs and answers, and
+    /// "idle" or "ready" would hide that no bill can be read.
+    /// </summary>
+    internal static (string Text, Color Color) DescribeDatabase(RuntimeHealthResponse? runtime)
+    {
+        if (runtime is null)
+        {
+            return ("unknown", Warn);
+        }
+
+        if (runtime.PendingMigrationCount > 0)
+        {
+            return ($"upgrade needed: {runtime.PendingMigrationCount} migration(s) not applied", Bad);
+        }
+
+        if (runtime.DatabaseHealthSkipped)
+        {
+            return ("idle", Muted);
+        }
+
+        return runtime.DatabaseReachable ? ("ready", Good) : ("not ready", Bad);
     }
 
     private async Task RefreshClientsAsync()

@@ -12,4 +12,9 @@ public sealed record RuntimeHealthResponse(
     bool? DatabaseIdentityMatches = null,
     bool DatabaseHealthSkipped = false,
     string? DatabaseHealthSkipReason = null,
-    int ActiveClientCount = 0);
+    int ActiveClientCount = 0,
+    // How many of this build's schema migrations the database has not had.
+    // Null: not checked yet. Above zero, bills and numbering cannot work even
+    // though the database is reachable. The cheap probe reports the last
+    // value found; a forced check asks the database again.
+    int? PendingMigrationCount = null);

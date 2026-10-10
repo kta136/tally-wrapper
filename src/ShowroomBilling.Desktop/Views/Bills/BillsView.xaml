@@ -214,6 +214,7 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -256,7 +257,33 @@
                     </Border>
                 </Grid>
 
-                <ListBox Grid.Row="1"
+                <!--  A failed load: without this the list is just empty.  -->
+                <Border Grid.Row="1"
+                        Padding="14,8"
+                        Background="{StaticResource ErrSoftBrush}"
+                        BorderBrush="{StaticResource ErrBrush}"
+                        BorderThickness="0,0,0,1"
+                        Visibility="{Binding HasLoadError, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center"
+                                   Foreground="{StaticResource ErrInkBrush}"
+                                   TextWrapping="Wrap">
+                            <Run FontWeight="SemiBold" Text="Bills could not be loaded. " /><Run Text="{Binding LoadError, Mode=OneWay}" />
+                        </TextBlock>
+                        <Button Grid.Column="1"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BtnSm}"
+                                Command="{Binding RefreshCommand}"
+                                Content="Try again" />
+                    </Grid>
+                </Border>
+
+                <ListBox Grid.Row="2"
                          ItemsSource="{Binding GroupedItems}"
                          SelectionMode="Extended"
                          BorderThickness="0"

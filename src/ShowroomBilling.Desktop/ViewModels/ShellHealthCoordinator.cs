@@ -32,6 +32,14 @@ internal sealed class ShellHealthCoordinator(
     private const string CloudUnavailableBanner =
         "Cloud unavailable — the desktop can prepare bills but cannot save. Retrying…";
 
+    /// <summary>
+    /// The server is up and the database answers, but it has not had the
+    /// migrations this version needs, so no bill can be read or saved.
+    /// </summary>
+    internal static string SchemaBehindBanner(int pendingMigrations) =>
+        $"Database upgrade needed — this version expects {pendingMigrations} schema migration(s) the database has not had. "
+        + "Bills cannot be loaded or saved until the administrator applies them.";
+
     private int _healthPollInFlight;
     private DateTimeOffset? _lastDatabaseHealthCheckedAtUtc;
     private DateTimeOffset? _lastMasterFreshnessCheckedAtUtc;
@@ -80,7 +88,11 @@ internal sealed class ShellHealthCoordinator(
         {
             SystemHealthSnapshot snapshot;
             var checkTallyCompany = forceTallyCompany || IsDue(_lastTallyHealthCheckedAtUtc);
-            var checkDatabase = forceTallyCompany || IsDue(_lastDatabaseHealthCheckedAtUtc);
+            // While the database is behind, ask it again on every poll, so
+            // the banner goes within seconds of the migrations being applied.
+            var checkDatabase = forceTallyCompany
+                || IsDue(_lastDatabaseHealthCheckedAtUtc)
+                || host.LastHealthSnapshot?.Runtime?.PendingMigrationCount > 0;
             var checkMasterFreshness = forceTallyCompany || IsDue(_lastMasterFreshnessCheckedAtUtc);
             try
             {
@@ -142,6 +154,14 @@ internal sealed class ShellHealthCoordinator(
             host.SystemState = SystemState.Limited;
             host.BannerText = CloudUnavailableBanner;
             host.StatusBar.StatusText = "CLOUD DOWN";
+            return;
+        }
+
+        if (snapshot.Runtime?.PendingMigrationCount > 0)
+        {
+            host.SystemState = SystemState.Limited;
+            host.BannerText = SchemaBehindBanner(snapshot.Runtime.PendingMigrationCount.Value);
+            host.StatusBar.StatusText = "DB BEHIND";
             return;
         }
 

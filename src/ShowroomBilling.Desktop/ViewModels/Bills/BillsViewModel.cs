@@ -443,6 +443,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             ResetRows(list.Items);
             _hasMorePages = list.HasMore == true;
             Total = list.Total;
+            LoadError = null;
 
             _selectingInBulk = true;
             try
@@ -465,6 +466,10 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         catch (Exception ex)
         {
             StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
+            if (generation == _loadGeneration)
+            {
+                LoadError = ApiResponseReader.FormatError(ex);
+            }
         }
         finally
         {
@@ -474,6 +479,16 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             }
         }
     }
+
+    /// <summary>
+    /// Why the last load failed, or null. The view shows it above the list:
+    /// an empty list by itself looks exactly like "there are no bills".
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLoadError))]
+    private string? loadError;
+
+    public bool HasLoadError => !string.IsNullOrEmpty(LoadError);
 
     private void ResetRows(IReadOnlyList<BillSummaryItem> rows)
     {
