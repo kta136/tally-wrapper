@@ -1,14 +1,14 @@
 using System.Diagnostics;
 using System.IO;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
 internal static class SettingsFolderLauncher
 {
-    public static string AppDataFolderPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShowroomBilling");
+    public static string AppDataFolderPath => AppPaths.DataDirectory;
 
-    public static string LogFolderPath => Path.Combine(AppDataFolderPath, "logs");
+    public static string LogFolderPath => AppPaths.LogsDirectory;
 
     public static void OpenLogFolder() => OpenCreatingFolder(LogFolderPath);
 

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Services;
 
@@ -17,9 +18,7 @@ public sealed class PrintPreferencesStore : IPrintPreferencesStore
 
     public PrintPreferencesStore()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ShowroomBilling");
+        var dir = AppPaths.DataDirectory;
         Directory.CreateDirectory(dir);
         _filePath = Path.Combine(dir, "print-preferences.json");
         _data = Load() ?? new PrintPreferencesData();

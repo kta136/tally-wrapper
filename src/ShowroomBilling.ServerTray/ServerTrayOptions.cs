@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts;
 namespace ShowroomBilling.ServerTray;
 
 public sealed class ServerTrayOptions
@@ -14,7 +15,7 @@ public sealed class ServerTrayOptions
         ?? "http://127.0.0.1:5107";
 
     public string ConfigRoot { get; init; } =
-        Environment.GetEnvironmentVariable("SHOWROOM_BILLING_APPDATA")
+        Environment.GetEnvironmentVariable(AppPaths.DataDirectoryEnvironmentVariable)
         ?? @"C:\ProgramData\ShowroomBilling";
 
     public string LogsPath => Path.Combine(ConfigRoot, "logs");

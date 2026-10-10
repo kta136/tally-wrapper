@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Services;
 
@@ -25,9 +26,7 @@ public static class UiDensityManager
         ("FontSizeMono", 12, 13),
     ];
 
-    private static readonly string Folder = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "ShowroomBilling");
+    private static readonly string Folder = AppPaths.DataDirectory;
 
     private static readonly string FilePath = Path.Combine(Folder, "ui-preferences.json");
 

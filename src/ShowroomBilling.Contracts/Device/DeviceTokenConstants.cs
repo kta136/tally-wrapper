@@ -14,9 +14,5 @@ public static class DeviceTokenConstants
     /// under LocalApplicationData (not Roaming) keeps the token machine-local;
     /// roaming would leak it onto other machines a user signs into.
     /// </summary>
-    public static string ResolveTokenFilePath()
-    {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(root, "ShowroomBilling", "device_token.txt");
-    }
+    public static string ResolveTokenFilePath() => Path.Combine(AppPaths.LocalDirectory, "device_token.txt");
 }

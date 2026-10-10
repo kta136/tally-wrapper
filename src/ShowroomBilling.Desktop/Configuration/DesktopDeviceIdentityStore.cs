@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Configuration;
 
@@ -17,10 +18,7 @@ public sealed class DesktopDeviceIdentityStore
 
     public DesktopDeviceIdentityStore()
     {
-        var directory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ShowroomBilling");
-        _path = Path.Combine(directory, "desktop-identity.local.json");
+        _path = Path.Combine(AppPaths.DataDirectory, "desktop-identity.local.json");
     }
 
     public string Resolve(string configuredDeviceId)

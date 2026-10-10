@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Services.ProcessSupervision;
 
@@ -49,9 +50,7 @@ public static class EmbeddedApiExtractor
             hash = Convert.ToHexString(SHA256.HashData(hashStream)).ToLowerInvariant();
         }
 
-        var rootDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ShowroomBilling", "runtime", "api");
+        var rootDir = Path.Combine(AppPaths.LocalDirectory, "runtime", "api");
         var hashFile = Path.Combine(rootDir, ".payload-hash");
         var apiExe = Path.Combine(rootDir, ApiExeName);
 

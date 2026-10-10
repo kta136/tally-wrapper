@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts;
 namespace ShowroomBilling.Application.Logging;
 
 public sealed class RollingFileLoggerOptions
@@ -19,9 +20,5 @@ public sealed class RollingFileLoggerOptions
 
     public string MinLevel { get; set; } = "Information";
 
-    public static string DefaultDirectory()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "ShowroomBilling", "logs");
-    }
+    public static string DefaultDirectory() => AppPaths.LogsDirectory;
 }

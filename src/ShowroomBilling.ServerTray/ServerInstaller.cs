@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.ServiceProcess;
 using Microsoft.Win32;
+using ShowroomBilling.Contracts;
 using ShowroomBilling.Contracts.Maintenance;
 
 namespace ShowroomBilling.ServerTray;
@@ -258,7 +259,7 @@ public static class ServerInstaller
             "DOTNET_ENVIRONMENT=Production",
             "ASPNETCORE_URLS=http://0.0.0.0:5107",
             $"SHOWROOM_BILLING_SERVICE_NAME={options.ServiceName}",
-            $"SHOWROOM_BILLING_APPDATA={options.ConfigRoot}",
+            $"{AppPaths.DataDirectoryEnvironmentVariable}={options.ConfigRoot}",
             $"Logging__File__Directory={options.LogsPath}",
             "Database__AutoMigrateOnStartup=true",
             "DeviceAuth__Mode=TrustedLan",

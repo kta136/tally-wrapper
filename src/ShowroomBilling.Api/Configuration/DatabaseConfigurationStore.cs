@@ -1,12 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Api.Configuration;
 
 public static class DatabaseConfigurationStore
 {
-    private const string AppDataOverrideEnvironmentVariable = "SHOWROOM_BILLING_APPDATA";
     public const string PostgresConnectionStringEnvironmentVariable = "SHOWROOM_BILLING_POSTGRES";
     private const string ProtectionScheme = "windows-dpapi-current-user";
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -15,10 +15,7 @@ public static class DatabaseConfigurationStore
         WriteIndented = true
     };
 
-    public static string DirectoryPath =>
-        Environment.GetEnvironmentVariable(AppDataOverrideEnvironmentVariable) is { Length: > 0 } appDataOverride
-            ? appDataOverride
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShowroomBilling");
+    public static string DirectoryPath => AppPaths.DataDirectory;
 
     public static string ConfigPath => ConfigPathForEnvironment(GetCurrentEnvironmentName());
 

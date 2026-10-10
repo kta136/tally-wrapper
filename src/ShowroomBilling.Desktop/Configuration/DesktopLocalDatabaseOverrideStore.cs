@@ -2,17 +2,14 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Configuration;
 
 public static class DesktopLocalDatabaseOverrideStore
 {
-    private const string AppDataOverrideEnvironmentVariable = "SHOWROOM_BILLING_APPDATA";
 
-    public static string DirectoryPath =>
-        Environment.GetEnvironmentVariable(AppDataOverrideEnvironmentVariable) is { Length: > 0 } appDataOverride
-            ? appDataOverride
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShowroomBilling");
+    public static string DirectoryPath => AppPaths.DataDirectory;
 
     public static string ConfigPath => ConfigPathForEnvironment(GetCurrentEnvironmentName());
 

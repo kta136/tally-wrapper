@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Services;
 
@@ -18,8 +19,7 @@ public sealed class SetupWizardCompletionStore : ISetupWizardCompletionStore
         WriteIndented = true
     };
 
-    public static string DirectoryPath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShowroomBilling");
+    public static string DirectoryPath => AppPaths.DataDirectory;
 
     public static string FilePath => Path.Combine(DirectoryPath, "setup-wizard.json");
 

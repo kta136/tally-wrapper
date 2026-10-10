@@ -36,27 +36,8 @@ public sealed class DeviceTokenProvider
                 return _cached;
             }
 
-            if (File.Exists(_path))
-            {
-                var existing = File.ReadAllText(_path).Trim();
-                if (!string.IsNullOrWhiteSpace(existing))
-                {
-                    _cached = existing;
-                    return _cached;
-                }
-            }
-
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var bytes = RandomNumberGenerator.GetBytes(32);
-            var token = Convert.ToBase64String(bytes);
-            File.WriteAllText(_path, token);
-            _cached = token;
-            return token;
+            _cached = DeviceTokenFile.ReadOrCreate(_path);
+            return _cached;
         }
     }
 }

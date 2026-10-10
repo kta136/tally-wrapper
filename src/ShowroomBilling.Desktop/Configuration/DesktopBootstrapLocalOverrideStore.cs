@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using ShowroomBilling.Contracts;
 
 namespace ShowroomBilling.Desktop.Configuration;
 
@@ -11,10 +12,7 @@ public static class DesktopBootstrapLocalOverrideStore
         WriteIndented = true
     };
 
-    public static string DirectoryPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "ShowroomBilling");
+    public static string DirectoryPath => AppPaths.DataDirectory;
 
     public static string ConfigPath => Path.Combine(DirectoryPath, "desktop-bootstrap.local.json");
 
