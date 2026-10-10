@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Xml.Linq;
 using ShowroomBilling.Contracts.Bills;
@@ -20,63 +21,45 @@ public static class TallyXmlVoucherBuilder
         // V1 parity (tally/xml_builder.py): the Tally party ledger is resolved from the
         // payment mode via the operator-configured ledger map, not from the free-text
         // customer name. bill.PartyName is print-only; it flows into NARRATION below.
-        if (string.IsNullOrWhiteSpace(bill.Payment))
-        {
-            throw new VoucherBuildException(
-                "MISSING_PAYMENT_MODE",
-                "Bill has no payment mode; cannot resolve a Tally party ledger.");
-        }
+        Require(bill.Payment, "MISSING_PAYMENT_MODE", "Bill has no payment mode; cannot resolve a Tally party ledger.");
         var paymentMode = PaymentMode.Normalize(bill.Payment);
         var partyLedger = paymentMode == PaymentMode.Cash ? ledgers.CashLedger : ledgers.CreditDebitLedger;
-        if (string.IsNullOrWhiteSpace(partyLedger))
-        {
-            throw new VoucherBuildException(
-                paymentMode == PaymentMode.Cash ? "CONFIG_MISSING_CASH_LEDGER" : "CONFIG_MISSING_CREDIT_DEBIT_LEDGER",
-                $"No Tally ledger is mapped for payment mode '{paymentMode}' in Settings.");
-        }
+        Require(
+            partyLedger,
+            paymentMode == PaymentMode.Cash ? "CONFIG_MISSING_CASH_LEDGER" : "CONFIG_MISSING_CREDIT_DEBIT_LEDGER",
+            $"No Tally ledger is mapped for payment mode '{paymentMode}' in Settings.");
         if (bill.Lines.Count == 0)
         {
             throw new VoucherBuildException(
                 "NO_LINES",
                 "Bill has zero line items; cannot create a Tally voucher.");
         }
-        if (string.IsNullOrWhiteSpace(ledgers.SalesLedger))
-        {
-            throw new VoucherBuildException(
-                "CONFIG_MISSING_SALES_LEDGER",
-                "Sales ledger is not mapped in Settings.");
-        }
-        if (string.IsNullOrWhiteSpace(companyName))
-        {
-            throw new VoucherBuildException(
-                "CONFIG_MISSING_COMPANY",
-                "No active Tally company configured in Settings.");
-        }
+        Require(ledgers.SalesLedger, "CONFIG_MISSING_SALES_LEDGER", "Sales ledger is not mapped in Settings.");
+        Require(companyName, "CONFIG_MISSING_COMPANY", "No active Tally company configured in Settings.");
 
         // The same split the printed invoice uses, so the two agree to the paisa.
         var (cgst, sgst) = JewelleryGst.Split(bill.Totals.TaxTotal);
 
-        if (cgst != 0m && string.IsNullOrWhiteSpace(ledgers.CgstLedger))
+        // A ledger is needed only for an amount the bill actually carries.
+        if (cgst != 0m)
         {
-            throw new VoucherBuildException(
-                "CONFIG_MISSING_CGST_LEDGER",
-                "Bill has CGST but no CGST ledger is mapped in Settings.");
+            Require(ledgers.CgstLedger, "CONFIG_MISSING_CGST_LEDGER", "Bill has CGST but no CGST ledger is mapped in Settings.");
         }
-        if (sgst != 0m && string.IsNullOrWhiteSpace(ledgers.SgstLedger))
+        if (sgst != 0m)
         {
-            throw new VoucherBuildException(
-                "CONFIG_MISSING_SGST_LEDGER",
-                "Bill has SGST but no SGST ledger is mapped in Settings.");
+            Require(ledgers.SgstLedger, "CONFIG_MISSING_SGST_LEDGER", "Bill has SGST but no SGST ledger is mapped in Settings.");
         }
-        if (bill.Totals.RoundOff != 0m && string.IsNullOrWhiteSpace(ledgers.RoundOffLedger))
+        if (bill.Totals.RoundOff != 0m)
         {
-            throw new VoucherBuildException(
+            Require(
+                ledgers.RoundOffLedger,
                 "CONFIG_MISSING_ROUNDOFF_LEDGER",
                 "Bill has a non-zero round-off but no round-off ledger is mapped in Settings.");
         }
-        if (bill.Totals.DiscountTotal != 0m && string.IsNullOrWhiteSpace(ledgers.DiscountLedger))
+        if (bill.Totals.DiscountTotal != 0m)
         {
-            throw new VoucherBuildException(
+            Require(
+                ledgers.DiscountLedger,
                 "CONFIG_MISSING_DISCOUNT_LEDGER",
                 "Bill has a non-zero discount but no discount ledger is mapped in Settings.");
         }
@@ -162,19 +145,19 @@ public static class TallyXmlVoucherBuilder
 
         if (cgst != 0m)
         {
-            voucherElement.Add(BuildLedgerEntry(ledgers.CgstLedger!, cgst, deemedPositive: false));
+            voucherElement.Add(BuildLedgerEntry(ledgers.CgstLedger, cgst, deemedPositive: false));
         }
         if (sgst != 0m)
         {
-            voucherElement.Add(BuildLedgerEntry(ledgers.SgstLedger!, sgst, deemedPositive: false));
+            voucherElement.Add(BuildLedgerEntry(ledgers.SgstLedger, sgst, deemedPositive: false));
         }
         if (bill.Totals.DiscountTotal != 0m)
         {
-            voucherElement.Add(BuildLedgerEntry(ledgers.DiscountLedger!, -bill.Totals.DiscountTotal, deemedPositive: false));
+            voucherElement.Add(BuildLedgerEntry(ledgers.DiscountLedger, -bill.Totals.DiscountTotal, deemedPositive: false));
         }
         if (bill.Totals.RoundOff != 0m)
         {
-            voucherElement.Add(BuildLedgerEntry(ledgers.RoundOffLedger!, bill.Totals.RoundOff, deemedPositive: false));
+            voucherElement.Add(BuildLedgerEntry(ledgers.RoundOffLedger, bill.Totals.RoundOff, deemedPositive: false));
         }
 
         // Tally rejects a voucher whose ledger legs do not net to zero, with an
@@ -225,7 +208,7 @@ public static class TallyXmlVoucherBuilder
         var qtyText = FormatQuantity(line.Quantity, line.Unit);
         var perUnitRate = line.Quantity == 0m ? 0m : netAmount / line.Quantity;
         var rateText = FormatRate(perUnitRate, line.Unit);
-        var stockName = string.IsNullOrWhiteSpace(line.StockName) ? line.ItemName : line.StockName!;
+        var stockName = string.IsNullOrWhiteSpace(line.StockName) ? line.ItemName : line.StockName;
 
         return new XElement("INVENTORYALLOCATIONS.LIST",
             new XElement("STOCKITEMNAME", stockName),
@@ -275,6 +258,15 @@ public static class TallyXmlVoucherBuilder
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Fails the build with a coded error the operator can act on when a needed value is blank.</summary>
+    private static void Require([NotNull] string? value, string errorCode, string message)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new VoucherBuildException(errorCode, message);
+        }
+    }
 }
 
 public sealed class VoucherBuildException(string errorCode, string message)

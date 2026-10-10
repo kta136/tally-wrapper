@@ -83,6 +83,7 @@ public static class DependencyInjection
         services.AddScoped<IBillService, BillService>();
         services.AddScoped<ILatestBillTimestampProvider, LatestBillTimestampProvider>();
         services.AddScoped<ISyntheticBatchExecutor, SyntheticBatchExecutor>();
+        services.AddSingleton<EffectiveSettingsCache>();
         services.AddScoped<ICloudSettingsService, CloudSettingsService>();
         services.AddScoped<IDraftLeaseService, DraftLeaseService>();
         services.AddScoped<IAdminAuthService, AdminAuthService>();

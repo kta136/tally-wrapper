@@ -4,6 +4,14 @@ namespace ShowroomBilling.Infrastructure.Persistence;
 
 internal static class CloudSettingsDefaults
 {
+    // Placeholders a real showroom replaces; "setup required" is judged on these.
+    public const string ActiveCompanyName = "Development Company";
+    public const string PrintCompanyName = "Tally Wrapper";
+    public const string InvoicePrefix = "DEV-";
+
+    /// <summary>The print company name seeded by earlier builds.</summary>
+    public const string LegacyPrintCompanyName = "Showroom Billing V2";
+
     public static CloudSettingsEntity Create()
     {
         return new CloudSettingsEntity
@@ -12,10 +20,10 @@ internal static class CloudSettingsDefaults
             Host = "127.0.0.1",
             Port = 9000,
             TimeoutSeconds = 30,
-            ActiveCompanyName = "Development Company",
-            PrintCompanyName = "Tally Wrapper",
+            ActiveCompanyName = ActiveCompanyName,
+            PrintCompanyName = PrintCompanyName,
             CompanyCountry = "India",
-            InvoicePrefix = "DEV-",
+            InvoicePrefix = InvoicePrefix,
             InvoiceSuffix = string.Empty,
             InvoicePadding = 4,
             CopyOriginalDefault = true,

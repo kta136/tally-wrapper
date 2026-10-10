@@ -10,32 +10,19 @@ namespace ShowroomBilling.Infrastructure.Settings;
 
 public sealed class CloudSettingsService(
     ShowroomBillingDbContext dbContext,
-    IAuditActorContext? actorContext = null) : ICloudSettingsService
+    IAuditActorContext? actorContext = null,
+    EffectiveSettingsCache? cache = null) : ICloudSettingsService
 {
-    private static readonly object EffectiveSettingsCacheLock = new();
-    private static readonly TimeSpan EffectiveSettingsCacheTtl = TimeSpan.FromSeconds(5);
-    private static EffectiveSettingsResponse? cachedEffectiveSettings;
-    private static DateTimeOffset cachedEffectiveSettingsUntilUtc;
-
     public async Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
     {
-        if (!dbContext.UsesInMemoryProvider())
+        if (cache is not null && cache.TryGet(out var cached))
         {
-            lock (EffectiveSettingsCacheLock)
-            {
-                if (cachedEffectiveSettings is not null && DateTimeOffset.UtcNow < cachedEffectiveSettingsUntilUtc)
-                {
-                    return cachedEffectiveSettings;
-                }
-            }
+            return cached;
         }
 
         var entity = await GetOrCreateAsync(cancellationToken);
         var response = MapResponse(entity);
-        if (!dbContext.UsesInMemoryProvider())
-        {
-            CacheEffectiveSettings(response);
-        }
+        cache?.Set(response);
         return response;
     }
 
@@ -85,7 +72,7 @@ public sealed class CloudSettingsService(
 
         WriteAuditEvent("settings.updated", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
-        InvalidateEffectiveSettingsCache();
+        cache?.Clear();
 
         return new SettingsUpdateResponse(
             SettingsSource: "cloud",
@@ -114,7 +101,7 @@ public sealed class CloudSettingsService(
 
         WriteAuditEvent("settings.company_selected", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
-        InvalidateEffectiveSettingsCache();
+        cache?.Clear();
 
         return new SettingsUpdateResponse(
             SettingsSource: "cloud",
@@ -143,7 +130,7 @@ public sealed class CloudSettingsService(
 
         WriteAuditEvent("settings.print_layout_updated", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
-        InvalidateEffectiveSettingsCache();
+        cache?.Clear();
 
         return new PrintLayoutResponse(request.Layout, entity.UpdatedAtUtc);
     }
@@ -197,7 +184,7 @@ public sealed class CloudSettingsService(
         dbContext.CloudSettings.Add(entity);
         WriteAuditEvent("settings.seeded", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
-        InvalidateEffectiveSettingsCache();
+        cache?.Clear();
         return entity;
     }
 
@@ -259,20 +246,23 @@ public sealed class CloudSettingsService(
             RequiresInitialSetup: RequiresInitialSetup(entity));
     }
 
+    /// <summary>
+    /// True while the settings still carry a placeholder nobody would keep:
+    /// the seeded company names, the seeded invoice prefix, or no items or
+    /// karats at all. The ledger and voucher-type defaults are not placeholders
+    /// in that sense: "Sales" and "Cash" are what those are really called in
+    /// most Tally companies, so matching them says nothing.
+    /// </summary>
     private static bool RequiresInitialSetup(CloudSettingsEntity entity) =>
-        string.Equals(entity.ActiveCompanyName, "Development Company", StringComparison.OrdinalIgnoreCase)
-        || IsDefaultPrintCompanyName(entity.PrintCompanyName)
-        || string.Equals(entity.InvoicePrefix, "DEV-", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(entity.SalesLedger, "Sales", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(entity.CashLedger, "Cash", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(entity.CreditDebitLedger, "Card / UPI", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(entity.SalesVoucherType, "Sales", StringComparison.OrdinalIgnoreCase)
+        IsPlaceholder(entity.ActiveCompanyName, CloudSettingsDefaults.ActiveCompanyName)
+        || IsPlaceholder(entity.PrintCompanyName, CloudSettingsDefaults.PrintCompanyName)
+        || IsPlaceholder(entity.PrintCompanyName, CloudSettingsDefaults.LegacyPrintCompanyName)
+        || IsPlaceholder(entity.InvoicePrefix, CloudSettingsDefaults.InvoicePrefix)
         || IsEmptyJsonArray(entity.ItemMasterDataJson)
         || IsEmptyJsonArray(entity.KaratMappingDataJson);
 
-    private static bool IsDefaultPrintCompanyName(string? value) =>
-        string.Equals(value, "Tally Wrapper", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(value, string.Concat("Showroom", " Billing ", "V", "2"), StringComparison.OrdinalIgnoreCase);
+    private static bool IsPlaceholder(string? value, string placeholder) =>
+        string.Equals(value, placeholder, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsEmptyJsonArray(string? value)
     {
@@ -296,21 +286,4 @@ public sealed class CloudSettingsService(
     private static string NormalizeJson(string value) =>
         string.IsNullOrWhiteSpace(value) ? "[]" : value.Trim();
 
-    private static void CacheEffectiveSettings(EffectiveSettingsResponse response)
-    {
-        lock (EffectiveSettingsCacheLock)
-        {
-            cachedEffectiveSettings = response;
-            cachedEffectiveSettingsUntilUtc = DateTimeOffset.UtcNow.Add(EffectiveSettingsCacheTtl);
-        }
-    }
-
-    private static void InvalidateEffectiveSettingsCache()
-    {
-        lock (EffectiveSettingsCacheLock)
-        {
-            cachedEffectiveSettings = null;
-            cachedEffectiveSettingsUntilUtc = default;
-        }
-    }
 }
