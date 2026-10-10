@@ -71,7 +71,6 @@ public partial class InvoiceViewModel : ObservableObject
         RemoveLineCommand = new RelayCommand<BillLineViewModel?>(RemoveLine, line => line is not null && Lines.Count > 1);
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, CanSaveDraft);
         ClearCommand = new RelayCommand(ClearInvoice);
-        PrintPreviewCommand = new RelayCommand(PrintPreview);
         _lineCollectionObserver = new InvoiceLineCollectionObserver(
             Lines,
             OnLineMutated,
@@ -102,7 +101,6 @@ public partial class InvoiceViewModel : ObservableObject
     public IRelayCommand<BillLineViewModel?> RemoveLineCommand { get; }
     public IAsyncRelayCommand SaveDraftCommand { get; }
     public IRelayCommand ClearCommand { get; }
-    public IRelayCommand PrintPreviewCommand { get; }
     public IRelayCommand<ItemMasterRowVm?> QuickAddCommitCommand { get; }
     public ObservableCollection<ItemMasterRowVm> QuickAddResults { get; }
 
@@ -760,19 +758,6 @@ public partial class InvoiceViewModel : ObservableObject
         {
             IsSaving = false;
         }
-    }
-
-    private void PrintPreview()
-    {
-        // The MainWindowViewModel hooks F9 / Preview to open the Print Preview dialog;
-        // this command is kept as a fallback status hint when the preview is unavailable
-        // (e.g. bootstrap not finished wiring dialog commands).
-        if (ItemCount == 0)
-        {
-            SaveStatus = "Add a line before previewing the invoice.";
-            return;
-        }
-        SaveStatus = $"Opening invoice preview · Grand ₹{GrandTotal:N0} · {ItemCount} items";
     }
 
     public BillPrintContent? BuildPrintContent(CompanyProfile company)

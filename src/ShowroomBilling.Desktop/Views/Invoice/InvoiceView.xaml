@@ -571,7 +571,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <Button Style="{StaticResource BtnBase}" Command="{Binding PrintPreviewCommand}">
+                        <Button Style="{StaticResource BtnBase}"
+                                Command="{Binding DataContext.PrintEstimateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Print Estimate" VerticalAlignment="Center" />
                                 <Border Style="{StaticResource KbdHint}" Margin="6,0,0,0">

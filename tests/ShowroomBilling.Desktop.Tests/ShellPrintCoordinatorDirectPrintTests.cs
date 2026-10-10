@@ -45,6 +45,38 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         Assert.Null(host.ActiveDialog);
     }
 
+    [Fact]
+    public async Task Invoice_preview_opens_the_preview_dialog_when_the_invoice_has_a_line()
+    {
+        var host = new FakePrintHost();
+        var coordinator = CreateCoordinator(host);
+        PopulateInvoice(host.Invoice);
+
+        await coordinator.OpenInvoicePreviewAsync(CancellationToken.None);
+
+        Assert.Equal("printPreview", host.ActiveDialog);
+    }
+
+    [Fact]
+    public async Task Invoice_preview_with_no_lines_explains_why_nothing_opened()
+    {
+        var host = new FakePrintHost();
+        var coordinator = CreateCoordinator(host);
+
+        await coordinator.OpenInvoicePreviewAsync(CancellationToken.None);
+
+        Assert.Null(host.ActiveDialog);
+        Assert.Equal("Add a line before previewing the invoice.", host.Invoice.SaveStatus);
+    }
+
+    private static ShellPrintCoordinator CreateCoordinator(FakePrintHost host) => new(
+        billsApiClient: null!,
+        companyProfileProvider: new FakeCompanyProfileProvider(),
+        printLayoutOptionsProvider: new FakePrintLayoutOptionsProvider(),
+        printDispatcher: new FakePrintDispatcher(),
+        printPreferences: new FakePrintPreferencesStore(),
+        host: host);
+
     private static void PopulateInvoice(InvoiceViewModel invoice)
     {
         invoice.InvoiceNumber = "INV/005";

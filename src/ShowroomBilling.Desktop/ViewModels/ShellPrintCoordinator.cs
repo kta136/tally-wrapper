@@ -125,7 +125,11 @@ internal sealed class ShellPrintCoordinator(
     public async Task OpenInvoicePreviewAsync(CancellationToken cancellationToken)
     {
         var content = host.Invoice.BuildPrintContent(companyProfileProvider.Current);
-        if (content is null) return;
+        if (content is null)
+        {
+            host.Invoice.SaveStatus = "Add a line before previewing the invoice.";
+            return;
+        }
         host.ActiveDialog = "printPreview";
         host.PrintPreview.Initialize(content, printLayoutOptionsProvider.Current, ResolveCopyDefaults(), onPrintSucceeded: () => host.ActiveDialog = null);
     }
