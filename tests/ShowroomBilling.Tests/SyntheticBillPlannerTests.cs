@@ -135,6 +135,30 @@ public sealed class SyntheticBillPlannerTests
             Assert.Equal(plan1.Bills[i].ScheduledAtUtc, plan2.Bills[i].ScheduledAtUtc);
     }
 
+    [Theory]
+    [InlineData("Cash", PaymentMode.Cash)]
+    [InlineData("cash", PaymentMode.Cash)]
+    [InlineData("Credit and debit", PaymentMode.CreditDebit)]
+    [InlineData("UPI", PaymentMode.CreditDebit)]
+    public void BuildPlan_NamesThePartyAfterThePaymentMode(string requested, string expected)
+    {
+        var planner = new SyntheticBillPlanner();
+        var start = new DateTimeOffset(2026, 4, 24, 9, 0, 0, TimeSpan.Zero);
+        var req = new SyntheticBatchRequest(300_000, 199_000, 7200m, requested, 1, 2,
+            start, start.AddHours(5), new[] { "22K" });
+
+        var plan = planner.BuildPlan(req, DummyItems(), DummyKarats(), new Random(7), null);
+
+        Assert.NotEmpty(plan.Bills);
+        Assert.All(plan.Bills, bill =>
+        {
+            // One spelling: the party label and the payment mode are the same string.
+            Assert.Equal(expected, bill.Payload.PartyName);
+            Assert.Equal(expected, bill.Payload.Payment);
+            Assert.Equal(SyntheticBatchPlanLimits.DefaultNarration, bill.Payload.Notes);
+        });
+    }
+
     [Fact]
     public void BuildPlan_BillsAreWithinMaxBillCap()
     {

@@ -21,7 +21,7 @@ padding / business-day replay. Available in production, admin-gated.
 | `TotalAmount` | ₹ | partitioned into bills |
 | `MaxBillAmount` | ₹ | ≤ `₹1,99,000` (compliance cap; cannot be relaxed) |
 | `Rate24Kt` | ₹/g | > 0. The dialog has no built-in rate: it starts from the Invoice tab's 24kt rate when one is set, otherwise the operator types it. |
-| `PaymentMode` | string | `Cash` → party "Cash"; else → "Credit and debit" |
+| `PaymentMode` | string | `Cash` → party "Cash"; else → "Credit and debit". The party is the normalized payment-mode label itself (`PaymentMode.Normalize`), so the two cannot be spelled differently. Until 10 October 2026 the planner wrote "Credit and Debit" with a capital D; bills made before then keep that spelling. The party goes into the Tally narration, so new vouchers read `Credit and debit \| Cash`. |
 | `MinItemsPerBill` / `MaxItemsPerBill` | int | `1..25`, min ≤ max |
 | `StartAtUtc` / `EndAtUtc` | UTC | start < end; window must have ≥ bill-count minute slots |
 | `SelectedKaratLabels` | list | must be non-empty subset of Tally-mapped karats |

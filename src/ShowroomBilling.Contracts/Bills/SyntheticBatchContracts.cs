@@ -10,8 +10,8 @@ public static class SyntheticBatchPlanLimits
     public const int HardMaxBillAmount = 199_000;
     public const int MinItemTarget = 500;
     public const decimal MinQty = 0.001m;
-    public const string CashPartyName = "Cash";
-    public const string NonCashPartyName = "Credit and Debit";
+
+    /// <summary>The note every synthetic bill carries, whatever its payment mode (V1).</summary>
     public const string DefaultNarration = "Cash";
     public const int MaxItemsPerBillCap = 25;
     public const int LineCountRetryAttempts = 8;

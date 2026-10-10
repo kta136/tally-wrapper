@@ -261,12 +261,12 @@ public sealed class SyntheticBillPlanner
         }
 
         var totals = BillCalculator.BuildTotals(lines.Select(l => l.LineTotal), discount: 0m);
-        var partyName = PaymentMode.IsCash(request.PaymentMode)
-            ? SyntheticBatchPlanLimits.CashPartyName
-            : SyntheticBatchPlanLimits.NonCashPartyName;
+        // V1: a synthetic bill has no customer, so its party is the payment-mode
+        // label, spelled the way every other bill spells it.
+        var paymentMode = PaymentMode.Normalize(request.PaymentMode);
 
         var payload = new BillPayloadDto(
-            PartyName: partyName,
+            PartyName: paymentMode,
             PartyGstin: null,
             PartyPhone: null,
             PartyAddress: null,
@@ -279,7 +279,7 @@ public sealed class SyntheticBillPlanner
                 RoundOff: totals.RoundOff,
                 GrandTotal: totals.GrandTotal),
             Notes: SyntheticBatchPlanLimits.DefaultNarration,
-            Payment: PaymentMode.Normalize(request.PaymentMode),
+            Payment: paymentMode,
             Rate24Kt: request.Rate24Kt);
 
         return new PlannedBill(payload, scheduledAtUtc);
