@@ -83,7 +83,7 @@ public sealed class CloudSettingsService(
         entity.KaratMappingDataJson = NormalizeJson(request.Settings.Masters.KaratMappingDataJson);
         entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        await WriteAuditEventAsync("settings.updated", entity.Id.ToString(), cancellationToken);
+        WriteAuditEvent("settings.updated", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateEffectiveSettingsCache();
 
@@ -112,7 +112,7 @@ public sealed class CloudSettingsService(
         entity.ActiveCompanyName = companyName.Trim();
         entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        await WriteAuditEventAsync("settings.company_selected", entity.Id.ToString(), cancellationToken);
+        WriteAuditEvent("settings.company_selected", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateEffectiveSettingsCache();
 
@@ -141,7 +141,7 @@ public sealed class CloudSettingsService(
         entity.PrintLayoutJson = JsonSerializer.Serialize(request.Layout, PrintLayoutJsonOptions);
         entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        await WriteAuditEventAsync("settings.print_layout_updated", entity.Id.ToString(), cancellationToken);
+        WriteAuditEvent("settings.print_layout_updated", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateEffectiveSettingsCache();
 
@@ -195,7 +195,7 @@ public sealed class CloudSettingsService(
 
         entity = CloudSettingsDefaults.Create();
         dbContext.CloudSettings.Add(entity);
-        await WriteAuditEventAsync("settings.seeded", entity.Id.ToString(), cancellationToken);
+        WriteAuditEvent("settings.seeded", entity.Id.ToString());
         await dbContext.SaveChangesAsync(cancellationToken);
         InvalidateEffectiveSettingsCache();
         return entity;
@@ -284,22 +284,10 @@ public sealed class CloudSettingsService(
         return string.Equals(value.Trim(), "[]", StringComparison.Ordinal);
     }
 
-    private async Task WriteAuditEventAsync(string eventType, string entityId, CancellationToken cancellationToken)
+    private void WriteAuditEvent(string eventType, string entityId)
     {
-        var actor = actorContext?.Current ?? new AuditActor("system", null);
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "settings",
-            EntityId = entityId,
-            EventType = eventType,
-            ActorType = actor.ActorType,
-            ActorId = actor.ActorId,
-            PayloadJson = "{}",
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        });
-
-        await Task.CompletedTask;
+        var actor = actorContext?.Current ?? AuditRow.System;
+        dbContext.AuditEvents.Add(AuditRow.Create("settings", entityId, eventType, actor, DateTimeOffset.UtcNow));
     }
 
     private static string? Normalize(string? value) =>

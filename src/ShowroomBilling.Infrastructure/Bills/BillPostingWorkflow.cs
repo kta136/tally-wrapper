@@ -258,7 +258,7 @@ internal sealed class BillPostingWorkflow(
         var trimmedReason = string.IsNullOrWhiteSpace(reason) ? "manual-push" : reason.Trim();
         auditStore.Write(
             bill.Id,
-            "bill.push.requested",
+            BillAuditEvents.PushRequested,
             bill.State,
             now,
             new
@@ -278,7 +278,7 @@ internal sealed class BillPostingWorkflow(
             bill.UpdatedAtUtc = DateTimeOffset.UtcNow;
             auditStore.Write(
                 bill.Id,
-                "bill.push.cancelled",
+                BillAuditEvents.PushCancelled,
                 bill.State,
                 bill.UpdatedAtUtc,
                 new { reason = "request cancelled before sending to Tally" });
@@ -348,7 +348,7 @@ internal sealed class BillPostingWorkflow(
             bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,
-                "tally.posted",
+                BillAuditEvents.TallyPosted,
                 bill.State,
                 settleAt,
                 new
@@ -370,7 +370,7 @@ internal sealed class BillPostingWorkflow(
             bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,
-                "tally.failed",
+                BillAuditEvents.TallyFailed,
                 bill.State,
                 settleAt,
                 new
@@ -397,7 +397,7 @@ internal sealed class BillPostingWorkflow(
             bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,
-                "tally.outcome.unknown",
+                BillAuditEvents.TallyOutcomeUnknown,
                 bill.State,
                 settleAt,
                 new
@@ -560,7 +560,7 @@ internal sealed class BillPostingWorkflow(
         var lastReopen = await dbContext.AuditEvents.AsNoTracking()
             .Where(e => e.EntityType == "bill"
                 && e.EntityId == billIdText
-                && e.EventType == "bill.edit.reopened")
+                && e.EventType == BillAuditEvents.EditReopened)
             .OrderByDescending(e => e.CreatedAtUtc)
             .ThenByDescending(e => e.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -573,7 +573,7 @@ internal sealed class BillPostingWorkflow(
         var lastPreEditSuccess = await dbContext.AuditEvents.AsNoTracking()
             .Where(e => e.EntityType == "bill"
                 && e.EntityId == billIdText
-                && e.EventType == "tally.posted"
+                && e.EventType == BillAuditEvents.TallyPosted
                 && e.CreatedAtUtc < lastReopen.CreatedAtUtc)
             .OrderByDescending(e => e.CreatedAtUtc)
             .ThenByDescending(e => e.Id)

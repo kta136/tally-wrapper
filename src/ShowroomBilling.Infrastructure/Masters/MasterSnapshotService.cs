@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Masters;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -326,17 +327,13 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         TallyMasterSnapshotBatchEntity batch,
         CancellationToken cancellationToken)
     {
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "masters",
-            EntityId = batch.Id.ToString(),
-            EventType = $"masters.{batch.MasterType}.ingested",
-            ActorType = "api",
-            ActorId = "api",
-            PayloadJson = $"{{\"itemCount\":{batch.ItemCount},\"masterType\":\"{batch.MasterType}\"}}",
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        });
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "masters",
+            batch.Id.ToString(),
+            $"masters.{batch.MasterType}.ingested",
+            new AuditActor("api", "api"),
+            DateTimeOffset.UtcNow,
+            new { itemCount = batch.ItemCount, masterType = batch.MasterType }));
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await PruneSupersededBatchesAsync(batch.ShowroomId, batch.MasterType, cancellationToken);

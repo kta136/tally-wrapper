@@ -7,32 +7,45 @@ internal static class BillAuditTrailMapper
 {
     public static BillAuditTrailItemViewModel Map(BillAuditEventDto audit)
     {
-        var title = audit.EventType switch
-        {
-            "bill.pending.created" => "Bill saved",
-            "bill.pending.updated" => "Bill updated",
-            "bill.push.requested" => "Push requested",
-            "bill.revised" => "Revision created",
-            "bill.voided" => "Bill voided",
-            "tally.retry.requested" => "Retry requested",
-            "tally.repost.requested" => "Repost requested",
-            _ when audit.EventType.StartsWith("tally.", StringComparison.OrdinalIgnoreCase) => HumanizeEvent(audit.EventType),
-            _ => HumanizeEvent(audit.EventType)
-        };
-
+        var title = TitleFor(audit.EventType) ?? HumanizeEvent(audit.EventType);
         var detail = BuildAuditDetail(audit);
         var tone = audit.EventType switch
         {
-            "bill.pending.created" or "bill.pending.updated" => "info",
-            "bill.push.requested" or "tally.retry.requested" or "tally.repost.requested" => "warn",
-            "bill.voided" => "err",
-            _ when audit.EventType.Contains("failed", StringComparison.OrdinalIgnoreCase) => "err",
-            _ when audit.EventType.Contains("posted", StringComparison.OrdinalIgnoreCase) => "ok",
+            BillAuditEvents.TallyPosted or BillAuditEvents.MarkPosted => "ok",
+            BillAuditEvents.TallyFailed or BillAuditEvents.Voided or BillAuditEvents.Deleted => "err",
+            BillAuditEvents.PushRequested
+                or BillAuditEvents.TallyOutcomeUnknown
+                or BillAuditEvents.PostingRecovered => "warn",
             _ => "info"
         };
 
         return new BillAuditTrailItemViewModel(audit.Id, audit.CreatedAtUtc, title, detail, tone, audit);
     }
+
+    /// <summary>
+    /// The operator-facing title for a server event, or null for one this
+    /// build does not know. Every name in <see cref="BillAuditEvents"/> has a
+    /// title; a test checks that, so a new server event cannot ship untitled.
+    /// </summary>
+    internal static string? TitleFor(string eventType) => eventType switch
+    {
+        BillAuditEvents.PendingCreated => "Bill saved",
+        BillAuditEvents.PendingUpdated => "Bill updated",
+        BillAuditEvents.Revised => "Revision created",
+        BillAuditEvents.Voided => "Bill voided",
+        BillAuditEvents.EditReopened => "Reopened for editing",
+        BillAuditEvents.NumberChanged => "Invoice number changed",
+        BillAuditEvents.MarkPosted => "Marked as pushed",
+        BillAuditEvents.MarkPending => "Marked as pending",
+        BillAuditEvents.Deleted => "Bill deleted",
+        BillAuditEvents.PushRequested => "Push requested",
+        BillAuditEvents.PushCancelled => "Push cancelled",
+        BillAuditEvents.PostingRecovered => "Stuck push recovered",
+        BillAuditEvents.TallyPosted => "Posted to Tally",
+        BillAuditEvents.TallyFailed => "Tally rejected the voucher",
+        BillAuditEvents.TallyOutcomeUnknown => "Tally outcome unknown",
+        _ => null
+    };
 
     private static string BuildAuditDetail(BillAuditEventDto audit)
     {
@@ -47,7 +60,9 @@ internal static class BillAuditTrailMapper
             return errorMessage ?? errorCode!;
         }
 
-        if (TryGetNestedString(audit.Payload, "details", "reason") is { Length: > 0 } reason)
+        // Recovery rows written before the shared payload shape keep the reason at the root.
+        if ((TryGetNestedString(audit.Payload, "details", "reason") ?? TryGetString(audit.Payload, "reason"))
+            is { Length: > 0 } reason)
         {
             return reason;
         }

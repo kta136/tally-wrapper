@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Admin;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
@@ -217,17 +218,8 @@ public sealed class AdminAuthService(
 
     private void WriteAudit(string eventType, DateTimeOffset at, string? actorLabel)
     {
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "admin",
-            EntityId = Showrooms.DefaultId.ToString(),
-            EventType = eventType,
-            ActorType = "admin",
-            ActorId = actorLabel,
-            PayloadJson = "{}",
-            CreatedAtUtc = at
-        });
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "admin", Showrooms.DefaultId.ToString(), eventType, new AuditActor("admin", actorLabel), at));
     }
 
 }

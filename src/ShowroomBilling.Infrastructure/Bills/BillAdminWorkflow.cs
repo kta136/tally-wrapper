@@ -146,7 +146,7 @@ internal sealed class BillAdminWorkflow(
 
         auditStore.Write(
             bill.Id,
-            "bill.number.changed",
+            BillAuditEvents.NumberChanged,
             bill.State,
             now,
             new
@@ -162,7 +162,7 @@ internal sealed class BillAdminWorkflow(
         {
             auditStore.Write(
                 bill.Id,
-                "bill.edit.reopened",
+                BillAuditEvents.EditReopened,
                 bill.State,
                 now,
                 new
@@ -248,7 +248,7 @@ internal sealed class BillAdminWorkflow(
         var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
         auditStore.Write(
             bill.Id,
-            "bill.mark_posted",
+            BillAuditEvents.MarkPosted,
             bill.State,
             now,
             new { fromState, reason });
@@ -283,7 +283,7 @@ internal sealed class BillAdminWorkflow(
         var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
         auditStore.Write(
             bill.Id,
-            "bill.mark_pending",
+            BillAuditEvents.MarkPending,
             bill.State,
             now,
             new { fromState, reason });
@@ -333,7 +333,7 @@ internal sealed class BillAdminWorkflow(
             : null;
         auditStore.Write(
             bill.Id,
-            "bill.deleted",
+            BillAuditEvents.Deleted,
             lastState,
             now,
             new

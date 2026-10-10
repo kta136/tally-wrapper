@@ -128,23 +128,20 @@ FOR UPDATE")
         sequence.NextValue = target;
         sequence.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "numbering",
-            EntityId = $"{showroomId}|{fiscalYear}|{documentType}",
-            EventType = $"numbering.{documentType}.rolled_back",
-            ActorType = "system",
-            PayloadJson = JsonSerializer.Serialize(new
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "numbering",
+            $"{showroomId}|{fiscalYear}|{documentType}",
+            $"numbering.{documentType}.rolled_back",
+            AuditRow.System,
+            sequence.UpdatedAtUtc,
+            new
             {
                 fiscalYear,
                 from = startedAt,
                 to = sequence.NextValue,
                 maxOccupiedCore,
                 trigger
-            }),
-            CreatedAtUtc = sequence.UpdatedAtUtc
-        });
+            }));
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;

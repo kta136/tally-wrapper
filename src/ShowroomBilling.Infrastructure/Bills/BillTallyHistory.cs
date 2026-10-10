@@ -15,9 +15,9 @@ namespace ShowroomBilling.Infrastructure.Bills;
 /// </summary>
 internal static class BillTallyHistory
 {
-    private const string TallyPosted = "tally.posted";
-    private const string MarkPosted = "bill.mark_posted";
-    private const string MarkPending = "bill.mark_pending";
+    private const string TallyPosted = BillAuditEvents.TallyPosted;
+    private const string MarkPosted = BillAuditEvents.MarkPosted;
+    private const string MarkPending = BillAuditEvents.MarkPending;
 
     internal static async Task<bool> IsInTallyAsync(
         ShowroomBillingDbContext dbContext,

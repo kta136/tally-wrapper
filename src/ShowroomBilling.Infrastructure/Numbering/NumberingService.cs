@@ -182,21 +182,18 @@ FOR UPDATE")
         };
         dbContext.InvoiceNumberReservations.Add(reservation);
 
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "numbering",
-            EntityId = reservation.Id.ToString(),
-            EventType = $"numbering.{normalizedType}.reserved",
-            ActorType = "system",
-            PayloadJson = JsonSerializer.Serialize(new
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "numbering",
+            reservation.Id.ToString(),
+            $"numbering.{normalizedType}.reserved",
+            AuditRow.System,
+            reservation.ReservedAtUtc,
+            new
             {
                 fiscalYear = year,
                 reservedValue,
                 formatted
-            }),
-            CreatedAtUtc = reservation.ReservedAtUtc
-        });
+            }));
 
         // Inside a caller-owned transaction the caller's SaveChanges persists
         // the reservation, sequence and audit together with its own rows: one

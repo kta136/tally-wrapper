@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
@@ -92,16 +93,20 @@ public static class AbandonedPostingRecovery
             return false;
         }
 
-        db.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "bill",
-            EntityId = billId.ToString(),
-            EventType = "bill.posting.recovered",
-            ActorType = "system",
-            PayloadJson = "{\"reason\":\"A push was left in posting longer than any push can run (API stopped mid-post); Tally may have accepted the voucher. Reconciliation is required before another write.\"}",
-            CreatedAtUtc = nowUtc,
-        });
+        // Same { state, details } shape as every other bill event, so the bill
+        // timeline shows the reason.
+        db.AuditEvents.Add(AuditRow.Create(
+            "bill",
+            billId.ToString(),
+            BillAuditEvents.PostingRecovered,
+            AuditRow.System,
+            nowUtc,
+            BillAuditStore.BuildPayload(
+                BillStates.ReconciliationRequired,
+                new
+                {
+                    reason = "A push was left in posting longer than any push can run (API stopped mid-post); Tally may have accepted the voucher. Reconciliation is required before another write.",
+                })));
         await db.SaveChangesAsync(cancellationToken);
         return true;
     }

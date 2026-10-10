@@ -18,22 +18,16 @@ internal sealed class BillAuditStore(
         DateTimeOffset at,
         object? details = null)
     {
-        var payload = details is null
+        var actor = actorContext?.Current ?? AuditRow.System;
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "bill", billId.ToString(), eventType, actor, at, BuildPayload(state, details)));
+    }
+
+    /// <summary>The <c>{ state, details }</c> shape every bill event carries; the Desktop reads <c>details</c>.</summary>
+    internal static string BuildPayload(string state, object? details) =>
+        details is null
             ? JsonSerializer.Serialize(new { state }, BillSerialization.JsonOptions)
             : JsonSerializer.Serialize(new { state, details }, BillSerialization.JsonOptions);
-        var actor = actorContext?.Current ?? new AuditActor("system", null);
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "bill",
-            EntityId = billId.ToString(),
-            EventType = eventType,
-            ActorType = actor.ActorType,
-            ActorId = actor.ActorId,
-            PayloadJson = payload,
-            CreatedAtUtc = at
-        });
-    }
 
     internal async Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
     {
@@ -73,17 +67,17 @@ internal sealed class BillAuditStore(
         var lastProblemQuery = dbContext.AuditEvents.AsNoTracking()
             .Where(e => e.EntityType == "bill"
                 && e.EntityId == billIdText
-                && (e.EventType == "tally.failed" || e.EventType == "tally.outcome.unknown"))
+                && (e.EventType == BillAuditEvents.TallyFailed || e.EventType == BillAuditEvents.TallyOutcomeUnknown))
             .OrderByDescending(e => e.CreatedAtUtc)
             .Take(1);
         var lastSuccessQuery = dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill" && e.EntityId == billIdText && e.EventType == "tally.posted")
+            .Where(e => e.EntityType == "bill" && e.EntityId == billIdText && e.EventType == BillAuditEvents.TallyPosted)
             .OrderByDescending(e => e.CreatedAtUtc)
             .Take(1);
         var combined = await lastProblemQuery.Concat(lastSuccessQuery).ToListAsync(cancellationToken);
         var lastProblem = combined.FirstOrDefault(e =>
-            e.EventType is "tally.failed" or "tally.outcome.unknown");
-        var lastSuccess = combined.FirstOrDefault(e => e.EventType == "tally.posted");
+            e.EventType is BillAuditEvents.TallyFailed or BillAuditEvents.TallyOutcomeUnknown);
+        var lastSuccess = combined.FirstOrDefault(e => e.EventType == BillAuditEvents.TallyPosted);
 
         string? lastErrorCode = null, lastErrorMessage = null, lastRemoteId = null;
         if (lastProblem is not null)

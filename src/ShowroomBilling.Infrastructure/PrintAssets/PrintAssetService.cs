@@ -104,18 +104,10 @@ public sealed class PrintAssetService(
             CreatedAtUtc = now
         };
         dbContext.PrintAssets.Add(entity);
-        var actor = actorContext?.Current ?? new AuditActor("system", null);
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "print_asset",
-            EntityId = entity.Id.ToString(),
-            EventType = "print_asset.uploaded",
-            ActorType = actor.ActorType,
-            ActorId = actor.ActorId,
-            PayloadJson = JsonSerializer.Serialize(new { kind = entity.AssetKind, size = entity.ByteLength }),
-            CreatedAtUtc = now
-        });
+        var actor = actorContext?.Current ?? AuditRow.System;
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "print_asset", entity.Id.ToString(), "print_asset.uploaded", actor, now,
+            new { kind = entity.AssetKind, size = entity.ByteLength }));
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new PrintAssetResponse(
@@ -155,18 +147,10 @@ public sealed class PrintAssetService(
             return false;
         }
         dbContext.PrintAssets.Remove(entity);
-        var actor = actorContext?.Current ?? new AuditActor("system", null);
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "print_asset",
-            EntityId = id.ToString(),
-            EventType = "print_asset.deleted",
-            ActorType = actor.ActorType,
-            ActorId = actor.ActorId,
-            PayloadJson = JsonSerializer.Serialize(new { kind = entity.AssetKind }),
-            CreatedAtUtc = DateTimeOffset.UtcNow
-        });
+        var actor = actorContext?.Current ?? AuditRow.System;
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "print_asset", id.ToString(), "print_asset.deleted", actor, DateTimeOffset.UtcNow,
+            new { kind = entity.AssetKind }));
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }

@@ -148,7 +148,7 @@ Most command methods are a single `SaveChangesAsync` — EF wraps that in an imp
 
 **Do NOT wrap `PushInternalAsync` or `RepostAsync`'s pre-flip save in a single transaction.** Those are intentionally split so `posting` is visible to `StuckPostingRecoveryHostedService` if the API crashes mid-push. Wrapping them would defeat crash recovery.
 
-Audit payloads are built via the typed `WriteAudit(billId, eventType, state, at, object? details)` overload in `BillService`. **Do not build audit JSON by string-concat** — the old pattern had escape bugs where an invoice number or reason containing a quote would break the JSON silently. The wire shape is `{ "state": "...", "details": { ... } }` and the Desktop's `BillDetailsViewModel` reads `details.reason` / `details.invoiceNumber` / `details.fiscalYear`; keep that.
+Audit payloads are built via the typed `WriteAudit(billId, eventType, state, at, object? details)` overload in `BillService`. **Do not build audit JSON by string-concat** — the old pattern had escape bugs where an invoice number or reason containing a quote would break the JSON silently. The wire shape is `{ "state": "...", "details": { ... } }` and the Desktop's `BillDetailsViewModel` reads `details.reason` / `details.invoiceNumber` / `details.fiscalYear`; keep that. Every other audit row (settings, numbering, leases, masters, print assets, admin, start-up recovery) is built with `AuditRow.Create` in `Infrastructure/Persistence`, which serializes its payload from an object. Bill event names are the constants in `Contracts.Bills.BillAuditEvents`; when you add one, add its title to the Desktop's `BillAuditTrailMapper.TitleFor` (a test fails otherwise).
 
 ## Shared constants and helpers you must use
 

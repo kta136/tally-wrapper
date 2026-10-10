@@ -103,7 +103,7 @@ internal sealed class BillLifecycleWorkflow(
             bill.EditedAfterPush = inTally;
             auditStore.Write(
                 bill.Id,
-                "bill.edit.reopened",
+                BillAuditEvents.EditReopened,
                 bill.State,
                 now,
                 new
@@ -115,7 +115,7 @@ internal sealed class BillLifecycleWorkflow(
         }
         else
         {
-            auditStore.Write(bill.Id, "bill.pending.updated", bill.State, now);
+            auditStore.Write(bill.Id, BillAuditEvents.PendingUpdated, bill.State, now);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -192,10 +192,10 @@ internal sealed class BillLifecycleWorkflow(
 
         dbContext.Bills.Add(newBill);
         dbContext.BillRevisions.Add(newRevision);
-        auditStore.Write(priorBill.Id, "bill.revised", priorBill.State, now, new { supersededByBillId = newBill.Id });
+        auditStore.Write(priorBill.Id, BillAuditEvents.Revised, priorBill.State, now, new { supersededByBillId = newBill.Id });
         auditStore.Write(
             newBill.Id,
-            "bill.pending.created",
+            BillAuditEvents.PendingCreated,
             newBill.State,
             now,
             new
@@ -244,7 +244,7 @@ internal sealed class BillLifecycleWorkflow(
         bill.UpdatedAtUtc = now;
 
         var reason = string.IsNullOrWhiteSpace(request.Reason) ? "unspecified" : request.Reason.Trim();
-        auditStore.Write(bill.Id, "bill.voided", bill.State, now, new { reason });
+        auditStore.Write(bill.Id, BillAuditEvents.Voided, bill.State, now, new { reason });
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -367,7 +367,7 @@ internal sealed class BillLifecycleWorkflow(
         dbContext.BillRevisions.Add(revision);
         auditStore.Write(
             bill.Id,
-            "bill.pending.created",
+            BillAuditEvents.PendingCreated,
             bill.State,
             now,
             new

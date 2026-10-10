@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application;
+using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Leases;
 using ShowroomBilling.Contracts.Leases;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -182,7 +183,7 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
             "lease.force_released",
             now,
             request.AdminActorLabel,
-            extraPayloadJson: $"{{\"reason\":{System.Text.Json.JsonSerializer.Serialize(request.Reason)}}}");
+            details: new { reason = request.Reason });
         await dbContext.SaveChangesAsync(cancellationToken);
         return MapResponse(lease);
     }
@@ -198,22 +199,13 @@ public sealed class DraftLeaseService(ShowroomBillingDbContext dbContext) : IDra
         string eventType,
         DateTimeOffset at,
         string actorId,
-        string? extraPayloadJson = null)
+        object? details = null)
     {
-        var payload = extraPayloadJson is null
-            ? $"{{\"billId\":\"{lease.BillId}\",\"leaseId\":\"{lease.Id}\"}}"
-            : $"{{\"billId\":\"{lease.BillId}\",\"leaseId\":\"{lease.Id}\",\"details\":{extraPayloadJson}}}";
-        dbContext.AuditEvents.Add(new AuditEventEntity
-        {
-            Id = Guid.CreateVersion7(),
-            EntityType = "draft_lease",
-            EntityId = lease.Id.ToString(),
-            EventType = eventType,
-            ActorType = "user",
-            ActorId = actorId,
-            PayloadJson = payload,
-            CreatedAtUtc = at
-        });
+        object payload = details is null
+            ? new { billId = lease.BillId, leaseId = lease.Id }
+            : new { billId = lease.BillId, leaseId = lease.Id, details };
+        dbContext.AuditEvents.Add(AuditRow.Create(
+            "draft_lease", lease.Id.ToString(), eventType, new AuditActor("user", actorId), at, payload));
     }
 
     private static DraftLeaseResponse MapResponse(DraftEditLeaseEntity lease) =>
