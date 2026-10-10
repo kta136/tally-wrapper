@@ -6,6 +6,11 @@ internal static class BillsStatusFormatter
 {
     public static string FormatBatchPushStatus(BillBatchPushResponse response)
     {
+        if (response.Cancelled)
+        {
+            return $"Pushed {response.Succeeded} of {response.Matched} bill(s); the run was stopped before the rest.";
+        }
+
         if (response.Failed == 0)
         {
             return response.Succeeded == 0

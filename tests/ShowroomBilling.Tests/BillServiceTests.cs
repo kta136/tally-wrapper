@@ -374,6 +374,22 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task UpdateDraft_OnAVoidedBill_SaysItIsVoided_EvenWhenTheDateIsAlsoWrong()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(
+            null, SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 4, 1) }));
+        await service.VoidAsync(bill.Id, new VoidBillRequest("user cancelled"));
+
+        var ex = await Assert.ThrowsAsync<BillStateConflictException>(() => service.UpdateDraftAsync(
+            bill.Id,
+            new UpdateBillDraftRequest(SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 3, 31) })));
+
+        Assert.Contains(BillStates.Voided, ex.Message);
+    }
+
+    [Fact]
     public async Task UpdateDraft_OnPostedBill_ReopensAsPendingWithEditedAfterPush()
     {
         await using var db = CreateDbContext();
@@ -1283,6 +1299,36 @@ public sealed class BillServiceTests
     }
 
     [Fact]
+    public async Task PushSelected_CancelledBetweenBills_SaysItWasCutShort()
+    {
+        await using var db = CreateDbContext();
+        using var requestCts = new CancellationTokenSource();
+        var service = BuildService(db, new PostThenCancelTallyPoster(requestCts));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+
+        var response = await service.PushSelectedAsync(
+            new PushSelectedBillsRequest([first.Id, second.Id], "batch"), requestCts.Token);
+
+        // One posted, none failed: without the flag this reads as a finished run.
+        Assert.True(response.Cancelled);
+        Assert.False(response.StoppedOnFailure);
+        Assert.Equal(2, response.Matched);
+        Assert.Equal(1, response.Succeeded);
+        Assert.Equal(BillStates.Pending, (await db.Bills.AsNoTracking().SingleAsync(b => b.Id == second.Id)).State);
+    }
+
+    [Fact]
+    public async Task Retry_WithoutARequest_IsRefusedLikePushAndRepost()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => service.RetryAsync(bill.Id, null!));
+    }
+
+    [Fact]
     public async Task Push_TallyTakesLongerThanTheSettleBudget_StillRecordsTheOutcome()
     {
         await using var db = CreateDbContext();
@@ -1328,6 +1374,15 @@ public sealed class BillServiceTests
         {
             clock.Advance(duration);
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class PostThenCancelTallyPoster(CancellationTokenSource requestCts) : ITallyPoster
+    {
+        public Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default)
+        {
+            requestCts.Cancel();
+            return Task.FromResult(TallyPostResponse.Posted("remote-1"));
         }
     }
 

@@ -143,6 +143,21 @@ public sealed class BillsActionTests
         Assert.All(api.AdminTokens, token => Assert.Equal("admin-token", token));
     }
 
+    [Theory]
+    [InlineData(3, 3, 0, false, null, "Pushed 3 bill(s).")]
+    [InlineData(3, 0, 0, false, null, "No bills were pushed.")]
+    [InlineData(3, 1, 1, false, "Ledger missing", "Pushed 1 bill(s); stopped on failure: Ledger missing")]
+    [InlineData(3, 0, 1, false, "Ledger missing", "Push stopped immediately: Ledger missing")]
+    [InlineData(3, 1, 0, true, null, "Pushed 1 of 3 bill(s); the run was stopped before the rest.")]
+    public void A_batch_push_is_summed_up_in_one_line(
+        int matched, int succeeded, int failed, bool cancelled, string? failure, string expected)
+    {
+        var response = new BillBatchPushResponse(
+            matched, succeeded, failed, failed > 0, failed > 0 ? Guid.NewGuid() : null, failure, [], cancelled);
+
+        Assert.Equal(expected, BillsStatusFormatter.FormatBatchPushStatus(response));
+    }
+
     [Fact]
     public async Task Without_a_confirm_overlay_nothing_destructive_runs()
     {

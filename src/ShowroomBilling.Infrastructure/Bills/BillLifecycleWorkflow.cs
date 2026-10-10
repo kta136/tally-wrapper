@@ -41,12 +41,12 @@ internal sealed class BillLifecycleWorkflow(
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot be edited while its Tally outcome is unresolved.");
         }
-        EnsureBillDateMatchesFiscalYear(bill, request.Payload);
         if (bill.State is BillStates.Voided or BillStates.Revised)
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}' and cannot be edited.");
         }
+        EnsureBillDateMatchesFiscalYear(bill, request.Payload);
 
         if (request.ExpectedRevisionId is Guid expectedRevisionId && bill.CurrentRevisionId != expectedRevisionId)
         {
@@ -139,12 +139,21 @@ internal sealed class BillLifecycleWorkflow(
             ? await dbContext.BillRevisions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             : null;
 
-        var payload = request.InitialPayload ?? (priorRevision is not null ? BillSerialization.DeserializePayload(priorRevision) : throw new BillStateConflictException(
-            $"Bill '{billId}' has no current revision; cannot derive payload for revise."));
-
+        BillPayloadDto payload;
         if (request.InitialPayload is not null)
         {
             BillValidator.Validate(request.InitialPayload);
+            payload = request.InitialPayload;
+        }
+        else if (priorRevision is not null)
+        {
+            // A replay of what is already stored; it was validated when it was saved.
+            payload = BillSerialization.DeserializePayload(priorRevision);
+        }
+        else
+        {
+            throw new BillStateConflictException(
+                $"Bill '{billId}' has no current revision; cannot derive payload for revise.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -157,30 +166,13 @@ internal sealed class BillLifecycleWorkflow(
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var reservation = await numberingService.ReserveAsync(
-            new ReserveNumberRequest(
-                IdempotencyKey: $"draft:{newBillId:N}",
-                DocumentType: INumberingService.DocumentTypeSalesInvoice,
-                FiscalYear: InvoiceNumberFormatter.ComputeFiscalYear(payload.BillDate),
-                ReservedForReference: newBillId.ToString()),
-            cancellationToken);
+        var reservation = await ReserveNumberAsync(newBillId, payload.BillDate, cancellationToken);
 
         // A reservation retry clears the change tracker; re-attach the prior bill.
         priorBill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
 
-        var newBill = new BillEntity
-        {
-            Id = newBillId,
-            ShowroomId = priorBill.ShowroomId,
-            CounterId = priorBill.CounterId,
-            BillType = priorBill.BillType,
-            State = BillStates.Pending,
-            InvoiceNumber = reservation.FormattedNumber,
-            FiscalYear = reservation.FiscalYear,
-            InvoiceCore = reservation.ReservedValue,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now
-        };
+        var newBill = NewPendingBill(
+            newBillId, priorBill.ShowroomId, priorBill.CounterId, priorBill.BillType, reservation, now);
         var newRevision = BillSerialization.BuildRevision(newBill.Id, payload, revisionNo: 1, supersedes: priorBill.CurrentRevisionId, createdAt: now);
         newBill.CurrentRevisionId = newRevision.Id;
 
@@ -333,30 +325,10 @@ internal sealed class BillLifecycleWorkflow(
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var reservation = await numberingService.ReserveAsync(
-            new ReserveNumberRequest(
-                IdempotencyKey: $"draft:{billId:N}",
-                DocumentType: INumberingService.DocumentTypeSalesInvoice,
-                // The bill date decides the series: a 31 March bill entered on
-                // 1 April still belongs to the year that is closing.
-                FiscalYear: InvoiceNumberFormatter.ComputeFiscalYear(request.Payload.BillDate),
-                ReservedForReference: billId.ToString()),
-            cancellationToken);
+        var reservation = await ReserveNumberAsync(billId, request.Payload.BillDate, cancellationToken);
 
-        var bill = new BillEntity
-        {
-            Id = billId,
-            ShowroomId = showroomId,
-            CounterId = request.CounterId,
-            BillType = BillTypeSales,
-            State = BillStates.Pending,
-            InvoiceNumber = reservation.FormattedNumber,
-            FiscalYear = reservation.FiscalYear,
-            InvoiceCore = reservation.ReservedValue,
-            CreateOperationId = request.ClientOperationId,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now
-        };
+        var bill = NewPendingBill(billId, showroomId, request.CounterId, BillTypeSales, reservation, now);
+        bill.CreateOperationId = request.ClientOperationId;
 
         var revision = BillSerialization.BuildRevision(bill.Id, request.Payload, revisionNo: 1, supersedes: null, createdAt: now);
         bill.CurrentRevisionId = revision.Id;
@@ -383,6 +355,42 @@ internal sealed class BillLifecycleWorkflow(
 
         return BillSerialization.MapResponse(bill, revision);
     }
+
+    /// <summary>
+    /// Reserves the invoice number for a bill that is about to be created. The
+    /// bill date decides the series: a 31 March bill entered on 1 April still
+    /// belongs to the year that is closing.
+    /// </summary>
+    private Task<ReserveNumberResponse> ReserveNumberAsync(Guid billId, DateOnly billDate, CancellationToken cancellationToken)
+        => numberingService.ReserveAsync(
+            new ReserveNumberRequest(
+                IdempotencyKey: $"draft:{billId:N}",
+                DocumentType: INumberingService.DocumentTypeSalesInvoice,
+                FiscalYear: InvoiceNumberFormatter.ComputeFiscalYear(billDate),
+                ReservedForReference: billId.ToString()),
+            cancellationToken);
+
+    /// <summary>A new bill, pending, carrying the number just reserved for it.</summary>
+    private static BillEntity NewPendingBill(
+        Guid billId,
+        Guid showroomId,
+        Guid? counterId,
+        string billType,
+        ReserveNumberResponse reservation,
+        DateTimeOffset now) => new()
+        {
+            Id = billId,
+            ShowroomId = showroomId,
+            CounterId = counterId,
+            BillType = billType,
+            State = BillStates.Pending,
+            InvoiceNumber = reservation.FormattedNumber,
+            FiscalYear = reservation.FiscalYear,
+            // Occupancy is read from this, never from the display text.
+            InvoiceCore = reservation.ReservedValue,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        };
 
     /// <summary>
     /// The invoice number was reserved in the bill date's fiscal-year series.

@@ -80,6 +80,7 @@ internal sealed class BillPostingWorkflow(
         RetryBillPostingRequest request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
         if (bill.State != BillStates.Failed)
         {
@@ -89,7 +90,7 @@ internal sealed class BillPostingWorkflow(
         await EnsureTallyReadyAsync(cancellationToken);
         await PushInternalAsync(
             billId,
-            reason: request?.Reason ?? "retry",
+            reason: request.Reason ?? "retry",
             requireTallyPreflight: false,
             allowPostedSource: false,
             idempotencyKeyOverride: null,
@@ -431,12 +432,14 @@ internal sealed class BillPostingWorkflow(
         var succeeded = 0;
         Guid? failedBillId = null;
         string? failureMessage = null;
+        var cancelled = false;
 
         foreach (var billId in orderedBillIds)
         {
             if (cancellationToken.IsCancellationRequested)
             {
                 // Stop starting new pushes; any in-flight one has already settled.
+                cancelled = true;
                 break;
             }
 
@@ -492,10 +495,11 @@ internal sealed class BillPostingWorkflow(
             orderedBillIds.Count,
             succeeded,
             failedBillId is null ? 0 : 1,
-            failedBillId is not null && succeeded < orderedBillIds.Count,
+            StoppedOnFailure: failedBillId is not null,
             failedBillId,
             failureMessage,
-            items);
+            items,
+            Cancelled: cancelled);
     }
 
     private async Task EnsureTallyReadyAsync(CancellationToken cancellationToken)

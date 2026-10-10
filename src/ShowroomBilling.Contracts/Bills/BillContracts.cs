@@ -101,6 +101,10 @@ public sealed record BillBatchPushItemResult(
     string? InvoiceNumber,
     string? ErrorMessage);
 
+/// <param name="Cancelled">
+/// True when the run was cut short because the request was cancelled, with no
+/// bill having failed. The bills not reached are still pending.
+/// </param>
 public sealed record BillBatchPushResponse(
     int Matched,
     int Succeeded,
@@ -108,7 +112,8 @@ public sealed record BillBatchPushResponse(
     bool StoppedOnFailure,
     Guid? FailedBillId,
     string? FailureMessage,
-    IReadOnlyList<BillBatchPushItemResult> Items);
+    IReadOnlyList<BillBatchPushItemResult> Items,
+    bool Cancelled = false);
 
 public sealed record ReviseBillRequest(
     BillPayloadDto? InitialPayload);
