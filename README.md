@@ -93,7 +93,6 @@ tools/
   publish-prod.ps1
   publish-server-tray.ps1
   publish-server-api.ps1
-  install-server-api-service.ps1
   uninstall-server-api-service.ps1
 
 docs/
@@ -293,7 +292,7 @@ Output:
 publish\server\api\TallyWrapper.Api.exe
 ```
 
-Use this when you need the raw API service binary without the tray installer wrapper.
+Use this when you need the raw API binary by itself, for example to run it by hand while diagnosing a server. Nothing installs it: the server is installed and repaired only by `TallyWrapper.Server.exe`.
 
 ## Server Mode Deployment
 
@@ -340,6 +339,14 @@ Server mode is for a multi-counter showroom where TallyPrime runs on one server 
 8. Save and restart the Desktop.
 
 The server tray dashboard can install/repair, start/stop/restart the API service, test/save database settings, open logs, show connected clients, and copy the workstation URL. Exiting the tray stops the API service first.
+
+To remove the server, exit the tray and run this elevated, signed in as the user whose tray starts at sign-in:
+
+```powershell
+.\tools\uninstall-server-api-service.ps1
+```
+
+It removes the Windows Service, the firewall rule and the tray's start-up entry. `C:\ProgramData\ShowroomBilling` (saved database connection, maintenance token, logs, API binary) is kept unless you add `-RemoveConfig`.
 
 ## Security Model
 
