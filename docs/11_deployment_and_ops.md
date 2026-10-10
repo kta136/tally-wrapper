@@ -109,6 +109,8 @@ Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. Th
 
 Running the same EXE again is idempotent. It checks the embedded API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
 
+This EXE is the only server installer; the PowerShell install script that duplicated it was removed on 10 October 2026. The tray has no uninstall. To remove the server, exit the tray and run `tools\uninstall-server-api-service.ps1` elevated, as the user whose tray starts at sign-in: it removes the service, both firewall rule names and the start-up entry, and keeps `C:\ProgramData\ShowroomBilling` unless `-RemoveConfig` is given.
+
 The service install sets:
 
 - `ASPNETCORE_URLS=http://0.0.0.0:5107`

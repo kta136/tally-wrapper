@@ -11,6 +11,9 @@ namespace ShowroomBilling.ServerTray;
 public static class ServerInstaller
 {
     public const string DefaultLanCidr = "192.168.0.0/16";
+
+    // This class is the only server installer. tools/uninstall-server-api-service.ps1
+    // undoes it and repeats the next three names: change them together.
     private const string RunValueName = "ShowroomBilling.ServerTray";
     private const string FirewallDisplayName = "Tally Wrapper API LAN";
     // The rule name used before the product was renamed; removed on repair.
