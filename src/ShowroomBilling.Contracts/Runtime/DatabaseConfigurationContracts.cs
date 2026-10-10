@@ -1,8 +1,11 @@
 namespace ShowroomBilling.Contracts.Runtime;
 
+/// <summary>
+/// The state of the API's database configuration. It never carries the
+/// connection string itself, only <see cref="MaskedConnectionString"/>.
+/// </summary>
 public sealed record DatabaseConfigurationResponse(
     string Provider,
-    string ConnectionString,
     string MaskedConnectionString,
     string ConfigPath,
     bool IsLocalOverridePresent,

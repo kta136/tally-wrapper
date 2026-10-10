@@ -247,6 +247,10 @@ public sealed class ViewSmokeTests
                 completionStore: null!),
             syntheticBatch: new SyntheticBatchViewModel());
 
+        // The usual state of the Database section: a connection is saved and admin is locked.
+        shell.Settings.Database.IsLocalDatabaseOverridePresent = true;
+        shell.Settings.Database.DatabaseMaskedConnectionString = "Host=db.example;Database=showroom;Username=app;Password=***";
+
         // Left open so the confirm overlay has its texts; nothing awaits the answer.
         _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));
         return shell;

@@ -139,6 +139,12 @@ internal sealed class DatabaseConfigurationWorkflow(
             }
 
             Apply(response);
+            if (adminTokenStore?.IsUnlocked != true)
+            {
+                // Stored now; it stays on screen only for an unlocked admin.
+                host.DatabaseConnectionString = string.Empty;
+            }
+
             if (response.RequiresApiRestart && childProcessSupervisor?.CanRestartApi == true)
             {
                 await RestartApiCoreAsync(waitForDatabaseReady: true, cancellationToken);
@@ -237,7 +243,6 @@ internal sealed class DatabaseConfigurationWorkflow(
 
     private void Apply(DatabaseConfigurationResponse response)
     {
-        host.DatabaseConnectionString = response.ConnectionString;
         host.DatabaseMaskedConnectionString = string.IsNullOrWhiteSpace(response.MaskedConnectionString)
             ? "—"
             : response.MaskedConnectionString;

@@ -34,7 +34,7 @@ Style:
 |---|---|---|---|
 | `GET` | `/api/runtime/bootstrap` | Load startup/runtime payload for desktop | active showroom, counter settings, connection status summary, feature flags |
 | `GET` | `/api/runtime/health` | Desktop health summary | API availability, master freshness, limited-mode reasons |
-| `GET` | `/api/runtime/database` | Current DB override metadata | loopback-only in server mode; override source, masked connection string, file paths |
+| `GET` | `/api/runtime/database` | Current DB override metadata | loopback-only in server mode; override source, masked connection string (never the connection string itself), file paths |
 | `PUT` | `/api/runtime/database` | **Admin** — save DB override | updated DB metadata |
 | `PUT` | `/api/runtime/database/bootstrap` | First anonymous DB override setup | loopback-only in server mode; rejects when an override already exists |
 | `POST` | `/api/runtime/database/test` | Test a candidate DB string | loopback-only in server mode |

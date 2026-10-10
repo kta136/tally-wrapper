@@ -155,7 +155,6 @@ public sealed class SetupWizardViewModelTests
         bool requiresRestart = false) =>
         new(
             "PostgreSQL",
-            string.Empty,
             "Host=db;Database=showroom;Username=user;Password=***",
             "database.Production.local.json",
             localOverride,

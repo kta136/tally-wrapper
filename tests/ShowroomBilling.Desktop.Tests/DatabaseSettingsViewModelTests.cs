@@ -192,6 +192,131 @@ public sealed class DatabaseSettingsViewModelTests
         Assert.Equal(SettingsSectionKey.Database, settings.SelectedSection);
     }
 
+    private const string SavedConnection = "Host=db;Database=showroom;Username=user;Password=saved-secret";
+
+    private static LocalDatabaseOverrideSnapshot SavedOverride() =>
+        new(@"C:\scratch\database.Development.local.json", SavedConnection, true);
+
+    private static AdminUnlockResponse AdminSession() =>
+        new("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "admin");
+
+    [Fact]
+    public void SavedConnectionString_IsNotShown_WhileAdminIsLocked()
+    {
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            adminTokenStore: new AdminTokenStore(),
+            loadLocalOverride: SavedOverride);
+
+        Assert.Equal(string.Empty, vm.DatabaseConnectionString);
+        Assert.True(vm.IsSavedConnectionStringHidden);
+        // The masked form is still there, so the operator can see which database is configured.
+        Assert.Contains("Host=db", vm.DatabaseMaskedConnectionString);
+        Assert.DoesNotContain("saved-secret", vm.DatabaseMaskedConnectionString);
+        Assert.False(vm.SaveDatabaseConfigCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SavedConnectionString_StaysHidden_WhenTheApiAnswers_WhileLocked()
+    {
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            adminTokenStore: new AdminTokenStore(),
+            loadLocalOverride: SavedOverride);
+
+        await vm.LoadDatabaseConfigCommand.ExecuteAsync(null);
+
+        Assert.Equal(string.Empty, vm.DatabaseConnectionString);
+        Assert.True(vm.IsSavedConnectionStringHidden);
+    }
+
+    [Fact]
+    public void SavedConnectionString_AppearsOnUnlock_AndLeavesOnLock()
+    {
+        var tokenStore = new AdminTokenStore();
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            adminTokenStore: tokenStore,
+            loadLocalOverride: SavedOverride);
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        tokenStore.Set(AdminSession());
+
+        Assert.Equal(SavedConnection, vm.DatabaseConnectionString);
+        Assert.False(vm.IsSavedConnectionStringHidden);
+        Assert.Contains(nameof(vm.IsSavedConnectionStringHidden), raised);
+        Assert.True(vm.SaveDatabaseConfigCommand.CanExecute(null));
+
+        // An edit of the saved value still holds the password, so it goes too.
+        vm.DatabaseConnectionString = SavedConnection + ";Timeout=5";
+        tokenStore.Clear();
+
+        Assert.Equal(string.Empty, vm.DatabaseConnectionString);
+        Assert.True(vm.IsSavedConnectionStringHidden);
+    }
+
+    [Fact]
+    public async Task Unlocking_OrReloading_DoesNotReplaceWhatIsBeingTyped()
+    {
+        var tokenStore = new AdminTokenStore();
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            adminTokenStore: tokenStore,
+            loadLocalOverride: SavedOverride);
+        const string typed = "Host=new-db;Database=showroom;Username=user;Password=typed";
+        vm.DatabaseConnectionString = typed;
+
+        await vm.LoadDatabaseConfigCommand.ExecuteAsync(null);
+        Assert.Equal(typed, vm.DatabaseConnectionString);
+
+        tokenStore.Set(AdminSession());
+        Assert.Equal(typed, vm.DatabaseConnectionString);
+
+        await vm.LoadDatabaseConfigCommand.ExecuteAsync(null);
+        Assert.Equal(typed, vm.DatabaseConnectionString);
+    }
+
+    [Fact]
+    public async Task AnUnlockedAdmin_SeesTheSavedValue_AfterAReload()
+    {
+        var tokenStore = new AdminTokenStore();
+        tokenStore.Set(AdminSession());
+        var saved = new LocalDatabaseOverrideSnapshot("database.Development.local.json", null, false);
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            adminTokenStore: tokenStore,
+            loadLocalOverride: () => saved);
+        Assert.Equal(string.Empty, vm.DatabaseConnectionString);
+
+        // Something saved it meanwhile (the API, after a save from another screen).
+        saved = SavedOverride();
+        await vm.LoadDatabaseConfigCommand.ExecuteAsync(null);
+
+        Assert.Equal(SavedConnection, vm.DatabaseConnectionString);
+    }
+
+    [Fact]
+    public void ServerMode_NeverPutsTheFallbackConnectionStringInTheEditor()
+    {
+        var tokenStore = new AdminTokenStore();
+        var vm = new DatabaseSettingsViewModel(
+            runtimeApi: new FakeRuntimeApiClient(),
+            adminTokenStore: tokenStore,
+            bootstrapOptions: new DesktopBootstrapOptions
+            {
+                ConnectionMode = DesktopConnectionModes.Server,
+                ServerApiBaseUrl = "http://192.168.0.10:5107"
+            },
+            loadLocalOverride: SavedOverride);
+
+        tokenStore.Set(AdminSession());
+
+        Assert.Equal(string.Empty, vm.DatabaseConnectionString);
+        Assert.False(vm.IsSavedConnectionStringHidden);
+        Assert.DoesNotContain("saved-secret", vm.DatabaseMaskedConnectionString);
+    }
+
     [Fact]
     public void SwitchingBackToServer_RestoresLastNonLocalhostServerUrl()
     {
@@ -241,6 +366,8 @@ public sealed class DatabaseSettingsViewModelTests
 
         Assert.Equal("admin-token", runtime.LastAdminToken);
         Assert.Equal(connectionString, runtime.LastSavedConnectionString);
+        // Still unlocked, so the value that was just saved stays in the editor.
+        Assert.Equal(connectionString, vm.DatabaseConnectionString);
     }
 
     [Fact]
@@ -264,6 +391,8 @@ public sealed class DatabaseSettingsViewModelTests
 
         Assert.Equal(connectionString, runtime.LastBootstrappedConnectionString);
         Assert.Null(runtime.LastAdminToken);
+        // Saved without an admin session: stored, and off the screen.
+        Assert.Equal(string.Empty, vm.DatabaseConnectionString);
     }
 
     [Fact]
@@ -358,7 +487,6 @@ public sealed class DatabaseSettingsViewModelTests
             LastSavedConnectionString = request.ConnectionString;
             return Task.FromResult(new DatabaseConfigurationResponse(
                 "PostgreSQL",
-                string.Empty,
                 "Host=db;Database=showroom;Username=user;Password=***",
                 "database.Development.local.json",
                 true,
@@ -435,7 +563,6 @@ public sealed class DatabaseSettingsViewModelTests
         bool requiresRestart) =>
         new(
             "PostgreSQL",
-            string.Empty,
             "Host=db;Database=showroom;Username=user;Password=***",
             "database.Development.local.json",
             localOverride,

@@ -21,6 +21,8 @@ namespace ShowroomBilling.Desktop.ViewModels.Settings;
 public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConfigurationWorkflowHost
 {
     private readonly DatabaseConfigurationWorkflow _databaseWorkflow;
+    private readonly AdminTokenStore? _adminTokenStore;
+    private readonly Func<LocalDatabaseOverrideSnapshot> _loadLocalOverride;
     private readonly DesktopBootstrapOptions _bootstrapOptions;
     private readonly Action _restartApplication;
     private readonly Func<bool> _hasUnsavedSettingsEdits;
@@ -35,8 +37,11 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
         Func<bool>? hasUnsavedSettingsEdits = null,
-        Action<string>? copyToClipboard = null)
+        Action<string>? copyToClipboard = null,
+        Func<LocalDatabaseOverrideSnapshot>? loadLocalOverride = null)
     {
+        _adminTokenStore = adminTokenStore;
+        _loadLocalOverride = loadLocalOverride ?? DesktopLocalDatabaseOverrideStore.Load;
         _bootstrapOptions = bootstrapOptions ?? new DesktopBootstrapOptions();
         _restartApplication = restartApplication ?? AppRestart.Restart;
         _hasUnsavedSettingsEdits = hasUnsavedSettingsEdits ?? (static () => false);
@@ -63,6 +68,10 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
             : DesktopConnectionModes.LocalEmbedded;
         ServerApiBaseUrl = _lastServerApiBaseUrl;
         RefreshLocalEmbeddedDatabaseOverride();
+        if (_adminTokenStore is not null)
+        {
+            _adminTokenStore.Changed += _ => OnAdminLockChanged();
+        }
     }
 
     public IAsyncRelayCommand LoadDatabaseConfigCommand { get; }
@@ -110,6 +119,16 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     public bool IsRunningServerMode => _bootstrapOptions.IsServerMode;
     public bool IsRunningLocalEmbeddedMode => !IsRunningServerMode;
     public bool IsDatabaseOverrideEditorEnabled => !IsRunningServerMode;
+
+    /// <summary>
+    /// The saved connection string holds the database password, so the editor
+    /// only shows it to an unlocked admin. Everyone else sees the masked form
+    /// and can type a new value.
+    /// </summary>
+    public bool IsSavedConnectionStringHidden =>
+        IsRunningLocalEmbeddedMode && IsLocalDatabaseOverridePresent && !IsAdminUnlocked;
+
+    private bool IsAdminUnlocked => _adminTokenStore?.IsUnlocked == true;
     public bool IsServerApiUrlEnabled =>
         string.Equals(ApiConnectionMode, DesktopConnectionModes.Server, StringComparison.OrdinalIgnoreCase);
     public bool IsLocalDatabaseSectionVisible =>
@@ -255,6 +274,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
     {
         OnPropertyChanged(nameof(ActiveDatabaseSourceText));
         OnPropertyChanged(nameof(DatabaseSourceText));
+        OnPropertyChanged(nameof(IsSavedConnectionStringHidden));
     }
 
     partial void OnIsEnvironmentDatabaseOverridePresentChanged(bool value)
@@ -275,6 +295,39 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
         }
 
         await _databaseWorkflow.LoadAsync(cancellationToken);
+        ShowSavedConnectionString();
+    }
+
+    private void OnAdminLockChanged()
+    {
+        if (IsAdminUnlocked)
+        {
+            ShowSavedConnectionString();
+        }
+        else
+        {
+            // Whatever is in the editor now is the saved value or an edit of it.
+            DatabaseConnectionString = string.Empty;
+        }
+
+        OnPropertyChanged(nameof(IsSavedConnectionStringHidden));
+    }
+
+    /// <summary>
+    /// Puts the saved value in the editor for an unlocked admin. It never
+    /// replaces something that is being typed there.
+    /// </summary>
+    private void ShowSavedConnectionString()
+    {
+        if (!IsAdminUnlocked || IsRunningServerMode || !string.IsNullOrEmpty(DatabaseConnectionString))
+        {
+            return;
+        }
+
+        if (_loadLocalOverride().ConnectionString is { Length: > 0 } saved)
+        {
+            DatabaseConnectionString = saved;
+        }
     }
 
     private async Task TestDatabaseConnectionAsync(CancellationToken cancellationToken)
@@ -438,7 +491,7 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
 
     private void RefreshLocalEmbeddedDatabaseOverride()
     {
-        var snapshot = DesktopLocalDatabaseOverrideStore.Load();
+        var snapshot = _loadLocalOverride();
         DatabaseProvider = "PostgreSQL";
         DatabaseEnvironmentName = "Local fallback";
         DatabaseStorageProtection = snapshot.Exists ? "Windows DPAPI CurrentUser" : "—";
@@ -453,7 +506,8 @@ public partial class DatabaseSettingsViewModel : ObservableObject, IDatabaseConf
             DatabaseConfigStatus = IsRunningServerMode
                 ? "Loaded this workstation's LocalEmbedded fallback DB override. Server DB is configured from the server tray."
                 : "Loaded local embedded DB override.";
-            DatabaseConnectionString = IsRunningServerMode ? string.Empty : connectionString;
+            // The value holds the password: the editor gets it only for an unlocked admin.
+            DatabaseConnectionString = !IsRunningServerMode && IsAdminUnlocked ? connectionString : string.Empty;
             return;
         }
 

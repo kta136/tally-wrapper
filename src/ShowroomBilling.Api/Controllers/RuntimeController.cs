@@ -242,7 +242,6 @@ public sealed class RuntimeController(
     {
         return new DatabaseConfigurationResponse(
             Provider: "PostgreSQL",
-            ConnectionString: string.Empty,
             MaskedConnectionString: MaskConnectionString(connectionString),
             ConfigPath: DatabaseConfigurationStore.ConfigPathForEnvironment(hostEnvironment.EnvironmentName),
             IsLocalOverridePresent: DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName),

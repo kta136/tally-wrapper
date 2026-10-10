@@ -119,8 +119,8 @@ public sealed class DatabaseConfigurationTests
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
 
-            Assert.Equal(string.Empty, response.ConnectionString);
-            Assert.DoesNotContain("new-secret", response.MaskedConnectionString);
+            // Nothing in the answer carries the password, whatever field it might hide in.
+            Assert.DoesNotContain("new-secret", System.Text.Json.JsonSerializer.Serialize(response));
             Assert.Contains("Password=***", response.MaskedConnectionString);
             Assert.True(response.RequiresApiRestart);
             Assert.True(response.CanBootstrapWithoutAdmin);
@@ -226,8 +226,7 @@ public sealed class DatabaseConfigurationTests
 
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
-            Assert.Equal(string.Empty, response.ConnectionString);
-            Assert.DoesNotContain("secret", response.MaskedConnectionString);
+            Assert.DoesNotContain("secret", System.Text.Json.JsonSerializer.Serialize(response));
             Assert.Contains("Password=***", response.MaskedConnectionString);
             Assert.True(response.IsLocalOverridePresent);
             Assert.False(response.CanBootstrapWithoutAdmin);

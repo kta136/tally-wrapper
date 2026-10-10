@@ -504,6 +504,13 @@
                          FontFamily="{StaticResource MonoFontFamily}"
                          FontSize="{DynamicResource FontSizeSm}"
                          ToolTip="The embedded API uses this value after it is tested, saved, and restarted." />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="{DynamicResource FontSizeXs}"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding IsSavedConnectionStringHidden, Converter={StaticResource BoolToVis}}">
+                    <Run Text="The saved connection string is not shown here because it holds the password. Press " /><Run FontFamily="{StaticResource MonoFontFamily}" Text="~" /><Run Text=" (backtick) to unlock admin and see it, or type a new one." />
+                </TextBlock>
                 <TextBlock Margin="0,4,0,8"
                            FontSize="{DynamicResource FontSizeXs}"
                            Foreground="{StaticResource InkMutedBrush}"
