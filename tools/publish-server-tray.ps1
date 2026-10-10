@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PublishCommon.ps1')
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $trayProj = Join-Path $repoRoot 'src\ShowroomBilling.ServerTray\ShowroomBilling.ServerTray.csproj'
 $apiProj = Join-Path $repoRoot 'src\ShowroomBilling.Api\ShowroomBilling.Api.csproj'
@@ -15,25 +16,13 @@ $embeddedApi = Join-Path $embeddedDir 'ShowroomBilling.Api.exe'
 $resolvedOutput = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
 
 foreach ($path in @($resolvedOutput, $apiStaging)) {
-    if (Test-Path $path) {
-        Remove-Item -Recurse -Force $path
-    }
+    Remove-PublishFolder -Path $path -RepoRoot $repoRoot
 }
 if (Test-Path $embeddedApi) { Remove-Item -Force $embeddedApi }
 
 New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
 
-$apiPublishArgs = @(
-    '-c', $Configuration,
-    '-r', $Runtime,
-    '--self-contained', 'true',
-    '-p:PublishSingleFile=true',
-    '-p:PublishReadyToRun=true',
-    '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:EnableCompressionInSingleFile=true',
-    '-p:ShowroomBillingExcludeAppSettings=true',
-    '-p:DebugType=embedded'
-)
+$apiPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile -ExcludeAppSettings
 
 dotnet publish $apiProj @apiPublishArgs -o $apiStaging
 if ($LASTEXITCODE -ne 0) { throw 'Embedded API publish failed.' }
@@ -42,16 +31,7 @@ $stagedApi = Join-Path $apiStaging 'ShowroomBilling.Api.exe'
 if (-not (Test-Path $stagedApi)) { throw "Expected $stagedApi but it was not produced." }
 Copy-Item -Force $stagedApi $embeddedApi
 
-$publishArgs = @(
-    '-c', $Configuration,
-    '-r', $Runtime,
-    '--self-contained', 'true',
-    '-p:PublishSingleFile=true',
-    '-p:PublishReadyToRun=true',
-    '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:EnableCompressionInSingleFile=true',
-    '-p:DebugType=embedded'
-)
+$publishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile
 
 dotnet publish $trayProj @publishArgs -o $resolvedOutput
 if ($LASTEXITCODE -ne 0) { throw 'Server tray publish failed.' }
@@ -65,7 +45,7 @@ Get-ChildItem -Path $resolvedOutput -Force |
     Where-Object { $_.FullName -ne $serverExe } |
     Remove-Item -Recurse -Force
 
-Remove-Item -Recurse -Force $apiStaging
+Remove-PublishFolder -Path $apiStaging -RepoRoot $repoRoot
 Remove-Item -Force $embeddedApi
 
 Write-Host "Published one-file server installer/tray to $serverExe"

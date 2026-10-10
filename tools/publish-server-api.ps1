@@ -6,25 +6,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PublishCommon.ps1')
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $apiProj = Join-Path $repoRoot 'src\ShowroomBilling.Api\ShowroomBilling.Api.csproj'
 $resolvedOutput = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
 
-if (Test-Path $resolvedOutput) {
-    Remove-Item -Recurse -Force $resolvedOutput
-}
+Remove-PublishFolder -Path $resolvedOutput -RepoRoot $repoRoot
 
-$publishArgs = @(
-    '-c', $Configuration,
-    '-r', $Runtime,
-    '--self-contained', 'true',
-    '-p:PublishSingleFile=true',
-    '-p:PublishReadyToRun=true',
-    '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:EnableCompressionInSingleFile=true',
-    '-p:ShowroomBillingExcludeAppSettings=true',
-    '-p:DebugType=embedded'
-)
+$publishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile -ExcludeAppSettings
 
 dotnet publish $apiProj @publishArgs -o $resolvedOutput
 if ($LASTEXITCODE -ne 0) { throw 'API publish failed.' }

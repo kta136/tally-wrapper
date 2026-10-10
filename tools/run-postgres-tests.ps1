@@ -97,7 +97,9 @@ function Get-PublishedPort {
 function Wait-ForPostgres {
     $deadline = (Get-Date).AddSeconds(60)
     do {
-        & docker --context $DockerContext exec $ContainerName pg_isready -U postgres -d postgres *> $null
+        # Over TCP, not the local socket: while the image runs its first-time
+        # set-up it answers on the socket only, and the tests connect over TCP.
+        & docker --context $DockerContext exec $ContainerName pg_isready -h 127.0.0.1 -U postgres -d postgres *> $null
         if ($LASTEXITCODE -eq 0) {
             return
         }

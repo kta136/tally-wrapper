@@ -27,6 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'PublishCommon.ps1')
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $publishRoot = Join-Path $repoRoot 'publish\prod'
 $apiStaging = Join-Path $repoRoot 'publish\.api-staging'
@@ -41,8 +42,8 @@ $embedApi = -not [bool]$NoEmbeddedApi
 foreach ($d in @($publishRoot, $apiStaging)) {
     if (Test-Path $d) {
         Write-Host "Cleaning $d" -ForegroundColor Yellow
-        Remove-Item -Recurse -Force $d
     }
+    Remove-PublishFolder -Path $d -RepoRoot $repoRoot
 }
 if (Test-Path $embeddedZip) { Remove-Item -Force $embeddedZip }
 
@@ -54,14 +55,7 @@ if ($embedApi) {
     # PublishReadyToRun pre-JITs IL to native code at publish time, eliminating most
     # JIT cost on first run. R2R coexists with single-file (the precompiled native
     # sections live alongside the IL inside the assembly).
-    $apiPublishArgs = @(
-        "-c", $Configuration,
-        "-r", $Runtime,
-        "--self-contained", "true",
-        "-p:PublishSingleFile=false",
-        "-p:PublishReadyToRun=true",
-        "-p:DebugType=embedded"
-    )
+    $apiPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime
     & dotnet publish $apiProj @apiPublishArgs -o $apiStaging
     if ($LASTEXITCODE -ne 0) { throw "API publish failed." }
 
@@ -101,16 +95,7 @@ Write-Host "`n=== Publishing Desktop → $desktopOut ===" -ForegroundColor Cyan
 # entry (in `%APPDATA%\ShowroomBilling\logs\desktop-*.log`): expect
 # `hostBuild` and `resolveWindow` to drop noticeably vs a non-R2R prod build.
 # R2R is compatible with PublishSingleFile + EnableCompressionInSingleFile.
-$desktopPublishArgs = @(
-    "-c", $Configuration,
-    "-r", $Runtime,
-    "--self-contained", "true",
-    "-p:PublishSingleFile=true",
-    "-p:PublishReadyToRun=true",
-    "-p:IncludeNativeLibrariesForSelfExtract=true",
-    "-p:EnableCompressionInSingleFile=true",
-    "-p:DebugType=embedded"
-)
+$desktopPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile
 & dotnet publish $desktopProj @desktopPublishArgs -o $desktopOut
 if ($LASTEXITCODE -ne 0) { throw "Desktop publish failed." }
 
@@ -124,7 +109,7 @@ if ($LASTEXITCODE -ne 0) { throw "Desktop publish failed." }
 # the LatoFont folder is removed below.
 
 if (-not $KeepStaging) {
-    if (Test-Path $apiStaging) { Remove-Item -Recurse -Force $apiStaging }
+    Remove-PublishFolder -Path $apiStaging -RepoRoot $repoRoot
     if (Test-Path $embeddedZip) { Remove-Item -Force $embeddedZip }
 }
 
