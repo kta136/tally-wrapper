@@ -4,6 +4,7 @@ using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.Tests.Views;
 
+[Collection(WpfApplicationCollection.Name)]
 public sealed class UiDensityTests
 {
     [Fact]

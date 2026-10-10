@@ -28,6 +28,7 @@ namespace ShowroomBilling.Desktop.Tests.Views;
 /// This does not replace launching the app: it cannot see layout, focus or
 /// keyboard flow.
 /// </summary>
+[Collection(WpfApplicationCollection.Name)]
 public sealed class ViewSmokeTests
 {
     [Fact]

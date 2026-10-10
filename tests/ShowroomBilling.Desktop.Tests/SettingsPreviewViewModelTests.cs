@@ -12,6 +12,7 @@ using Xunit;
 
 namespace ShowroomBilling.Desktop.Tests;
 
+[Collection(Views.WpfApplicationCollection.Name)]
 public class SettingsPreviewViewModelTests
 {
     private static readonly TimeSpan FastDebounce = TimeSpan.FromMilliseconds(15);
