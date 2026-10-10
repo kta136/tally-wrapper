@@ -14,11 +14,6 @@ public sealed class ClientsController(ClientPresenceRegistry presenceRegistry) :
     [Authorize(Policy = DevicePolicy.PolicyName)]
     public ActionResult<ClientPresenceResponse> Heartbeat([FromBody] ClientHeartbeatRequest request)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
-
         var remoteAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         return Ok(presenceRegistry.Register(request, remoteAddress));
     }

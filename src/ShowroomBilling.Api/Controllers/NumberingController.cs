@@ -36,10 +36,6 @@ public sealed class NumberingController(INumberingService numberingService) : Co
         [FromBody] ReserveNumberRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await numberingService.ReserveAsync(request, cancellationToken);
         return response.AlreadyExisted ? Ok(response) : Created(string.Empty, response);
     }

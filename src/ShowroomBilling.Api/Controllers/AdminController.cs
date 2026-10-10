@@ -27,11 +27,6 @@ public sealed class AdminController(
         [FromBody] AdminSetPasscodeRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
-
         var status = await adminService.GetPasscodeStatusAsync(cancellationToken);
         if (!status.IsConfigured
             && ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
@@ -65,10 +60,6 @@ public sealed class AdminController(
         [FromBody] AdminUnlockRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await adminService.UnlockAsync(request, cancellationToken);
         return Ok(response);
     }
@@ -78,10 +69,6 @@ public sealed class AdminController(
         [FromBody] AdminLogoutRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         await adminService.LogoutAsync(request, cancellationToken);
         return NoContent();
     }

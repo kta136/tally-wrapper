@@ -23,10 +23,6 @@ public sealed class PrintAssetsController(IPrintAssetService service) : Controll
         [FromBody] PrintAssetUploadRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await service.UploadAsync(request, cancellationToken);
         return Created($"/api/print-assets/{response.Id}", response);
     }

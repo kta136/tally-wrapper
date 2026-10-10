@@ -13,7 +13,9 @@ public sealed class PrintAssetService(
     IAuditActorContext? actorContext = null) : IPrintAssetService
 {
     private const long MaxBytes = 2 * 1024 * 1024;
-    private const int MaxBase64Characters = 2_800_000;
+
+    // Base64 writes four characters for every three bytes, rounded up.
+    private const int MaxBase64Characters = (int)((MaxBytes + 2) / 3 * 4);
 
     public async Task<PrintAssetListResponse> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -52,10 +54,7 @@ public sealed class PrintAssetService(
         {
             throw new RequestValidationException("FileName must be a plain file name of at most 256 characters.");
         }
-        if (request.ContentType?.Length > 128)
-        {
-            throw new RequestValidationException("ContentType cannot exceed 128 characters.");
-        }
+        // request.ContentType is not read: the type is taken from the bytes themselves.
         if (string.IsNullOrWhiteSpace(request.Base64Content))
         {
             throw new RequestValidationException("Base64Content is required.");
@@ -107,34 +106,24 @@ public sealed class PrintAssetService(
             new { kind = entity.AssetKind, size = entity.ByteLength }));
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new PrintAssetResponse(
-            entity.Id,
-            entity.ShowroomId,
-            entity.AssetKind,
-            entity.FileName,
-            entity.ContentType,
-            entity.ByteLength,
-            entity.CreatedAtUtc);
+        return ToResponse(entity);
     }
 
     public async Task<(PrintAssetResponse Metadata, byte[] Bytes)?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await dbContext.PrintAssets.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-        if (entity is null)
-        {
-            return null;
-        }
-        var metadata = new PrintAssetResponse(
-            entity.Id,
-            entity.ShowroomId,
-            entity.AssetKind,
-            entity.FileName,
-            entity.ContentType,
-            entity.ByteLength,
-            entity.CreatedAtUtc);
-        return (metadata, entity.Bytes);
+        return entity is null ? null : (ToResponse(entity), entity.Bytes);
     }
+
+    private static PrintAssetResponse ToResponse(PrintAssetEntity entity) => new(
+        entity.Id,
+        entity.ShowroomId,
+        entity.AssetKind,
+        entity.FileName,
+        entity.ContentType,
+        entity.ByteLength,
+        entity.CreatedAtUtc);
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {

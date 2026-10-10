@@ -16,10 +16,6 @@ public sealed class DraftLeasesController(IDraftLeaseService leaseService) : Con
         [FromBody] DraftLeaseAcquireRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var result = await leaseService.AcquireAsync(request, cancellationToken);
         return Ok(result);
     }
@@ -31,10 +27,6 @@ public sealed class DraftLeasesController(IDraftLeaseService leaseService) : Con
         [FromBody] DraftLeaseRenewRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var result = await leaseService.RenewAsync(leaseId, request, cancellationToken);
         return Ok(result);
     }
@@ -46,10 +38,6 @@ public sealed class DraftLeasesController(IDraftLeaseService leaseService) : Con
         [FromBody] DraftLeaseReleaseRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var result = await leaseService.ReleaseAsync(leaseId, request, cancellationToken);
         return Ok(result);
     }
@@ -79,10 +67,6 @@ public sealed class DraftLeasesController(IDraftLeaseService leaseService) : Con
         [FromBody] DraftLeaseForceReleaseRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var result = await leaseService.ForceReleaseAsync(leaseId, request, cancellationToken);
         return Ok(result);
     }

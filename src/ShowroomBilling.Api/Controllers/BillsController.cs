@@ -15,13 +15,9 @@ public sealed class BillsController(
     [HttpPost("synthetic-batch")]
     [Authorize(Policy = AdminPolicy.PolicyName)]
     public async Task<ActionResult<SyntheticBatchResponse>> CreateSyntheticBatch(
-        [FromBody] SyntheticBatchRequest? request,
+        [FromBody] SyntheticBatchRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await syntheticBatchExecutor.ExecuteAsync(request, cancellationToken);
         return Ok(response);
     }
@@ -32,10 +28,6 @@ public sealed class BillsController(
         [FromBody] CreateBillDraftRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.CreateDraftAsync(request, cancellationToken);
         return Created($"/api/bills/{response.Id}", response);
     }
@@ -47,10 +39,6 @@ public sealed class BillsController(
         [FromBody] UpdateBillDraftRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.UpdateDraftAsync(billId, request, cancellationToken);
         return Ok(response);
     }
@@ -64,14 +52,9 @@ public sealed class BillsController(
 
     [HttpPost("batch")]
     public async Task<ActionResult<BillBatchGetResponse>> GetMany(
-        [FromBody] BillBatchGetRequest? request,
+        [FromBody] BillBatchGetRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
-
         var response = await billService.GetManyAsync(request, cancellationToken);
         return Ok(response);
     }
@@ -110,14 +93,9 @@ public sealed class BillsController(
     [HttpPost("push-selected")]
     [Authorize(Policy = DevicePolicy.PolicyName)]
     public async Task<ActionResult<BillBatchPushResponse>> PushSelected(
-        [FromBody] PushSelectedBillsRequest? request,
+        [FromBody] PushSelectedBillsRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
-
         var response = await billService.PushSelectedAsync(request, cancellationToken);
         return Ok(response);
     }
@@ -182,10 +160,6 @@ public sealed class BillsController(
         [FromBody] RepostBillRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.RepostAsync(billId, request, cancellationToken);
         return Ok(response);
     }
@@ -205,13 +179,9 @@ public sealed class BillsController(
     [Authorize(Policy = AdminPolicy.PolicyName)]
     public async Task<ActionResult<ChangeBillNumberResponse>> ChangeNumber(
         Guid billId,
-        [FromBody] ChangeBillNumberRequest? request,
+        [FromBody] ChangeBillNumberRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.ChangeInvoiceNumberAsync(billId, request, cancellationToken);
         return Ok(response);
     }
@@ -220,13 +190,9 @@ public sealed class BillsController(
     [Authorize(Policy = AdminPolicy.PolicyName)]
     public async Task<ActionResult<BillResponse>> MarkPosted(
         Guid billId,
-        [FromBody] MarkBillStateRequest? request,
+        [FromBody] MarkBillStateRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.MarkPostedAsync(billId, request, cancellationToken);
         return Ok(response);
     }
@@ -235,13 +201,9 @@ public sealed class BillsController(
     [Authorize(Policy = AdminPolicy.PolicyName)]
     public async Task<ActionResult<BillResponse>> MarkPending(
         Guid billId,
-        [FromBody] MarkBillStateRequest? request,
+        [FromBody] MarkBillStateRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.MarkPendingAsync(billId, request, cancellationToken);
         return Ok(response);
     }
@@ -260,13 +222,9 @@ public sealed class BillsController(
     [HttpPost("delete-selected")]
     [Authorize(Policy = AdminPolicy.PolicyName)]
     public async Task<ActionResult<DeleteSelectedBillsResponse>> DeleteSelected(
-        [FromBody] DeleteSelectedBillsRequest? request,
+        [FromBody] DeleteSelectedBillsRequest request,
         CancellationToken cancellationToken)
     {
-        if (request is null)
-        {
-            return ControllerProblemDetails.BadRequest("Request body is required.");
-        }
         var response = await billService.DeleteSelectedAsync(request, cancellationToken);
         return Ok(response);
     }
