@@ -24,14 +24,15 @@ public sealed class BillService : IBillService
         ITallyPoster tallyPoster,
         ITallyCompanyHealthService? tallyCompanyHealthService = null,
         ILoggerFactory? loggerFactory = null,
-        IAuditActorContext? auditActorContext = null)
+        IAuditActorContext? auditActorContext = null,
+        TimeProvider? timeProvider = null)
     {
         var postingLogger = loggerFactory?.CreateLogger<BillPostingWorkflow>()
             ?? NullLogger<BillPostingWorkflow>.Instance;
         _audit = new BillAuditStore(dbContext, auditActorContext);
         _read = new BillReadWorkflow(dbContext);
         _lifecycle = new BillLifecycleWorkflow(dbContext, numberingService, _audit);
-        _posting = new BillPostingWorkflow(dbContext, tallyPoster, _audit, postingLogger, tallyCompanyHealthService);
+        _posting = new BillPostingWorkflow(dbContext, tallyPoster, _audit, postingLogger, tallyCompanyHealthService, timeProvider);
         _admin = new BillAdminWorkflow(dbContext, numberingService, _audit);
     }
 

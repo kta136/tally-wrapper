@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
@@ -1225,6 +1226,55 @@ public sealed class BillServiceTests
         Assert.Equal(BillStates.Pending, (await db.Bills.AsNoTracking().SingleAsync(b => b.Id == second.Id)).State);
     }
 
+    [Fact]
+    public async Task Push_TallyTakesLongerThanTheSettleBudget_StillRecordsTheOutcome()
+    {
+        await using var db = CreateDbContext();
+        var clock = new FakeTimeProvider();
+        var poster = new SlowTallyPoster(clock, TimeSpan.FromSeconds(31), PostedResponse());
+        var service = BuildService(db, poster, timeProvider: clock);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        var response = await service.PushAsync(bill.Id, new PushBillRequest("push"));
+
+        Assert.Equal(IBillService.StatePosted, response.State);
+        var persisted = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
+        Assert.Equal(IBillService.StatePosted, persisted.State);
+        Assert.Contains(await db.AuditEvents.ToListAsync(), a => a.EventType == "tally.posted");
+    }
+
+    [Fact]
+    public async Task Push_TallyTimesOutAfterTheSettleBudget_MovesToReconciliationRequired()
+    {
+        await using var db = CreateDbContext();
+        var clock = new FakeTimeProvider();
+        var poster = new SlowTallyPoster(
+            clock,
+            TimeSpan.FromSeconds(31),
+            UnknownResponse("TALLY_TIMEOUT", "Tally did not answer in time."));
+        var service = BuildService(db, poster, timeProvider: clock);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+
+        var response = await service.PushAsync(bill.Id, new PushBillRequest("push"));
+
+        Assert.Equal(BillStates.ReconciliationRequired, response.State);
+        var persisted = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
+        Assert.Equal(BillStates.ReconciliationRequired, persisted.State);
+        Assert.Contains(await db.AuditEvents.ToListAsync(), a => a.EventType == "tally.outcome.unknown");
+    }
+
+    private sealed class SlowTallyPoster(
+        FakeTimeProvider clock,
+        TimeSpan duration,
+        TallyPostResponse response) : ITallyPoster
+    {
+        public Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default)
+        {
+            clock.Advance(duration);
+            return Task.FromResult(response);
+        }
+    }
+
     private sealed class CancellingTallyPoster(CancellationTokenSource requestCts) : ITallyPoster
     {
         public int CallCount { get; private set; }
@@ -1399,10 +1449,16 @@ public sealed class BillServiceTests
     private static BillService BuildService(
         ShowroomBillingDbContext db,
         ITallyPoster? poster = null,
-        ITallyCompanyHealthService? tallyHealth = null)
+        ITallyCompanyHealthService? tallyHealth = null,
+        TimeProvider? timeProvider = null)
     {
         var numbering = new NumberingService(db);
-        return new BillService(db, numbering, poster ?? new FakeTallyPoster(), tallyHealth ?? FakeTallyHealth.Healthy());
+        return new BillService(
+            db,
+            numbering,
+            poster ?? new FakeTallyPoster(),
+            tallyHealth ?? FakeTallyHealth.Healthy(),
+            timeProvider: timeProvider);
     }
 
     private static ShowroomBillingDbContext CreateDbContext()

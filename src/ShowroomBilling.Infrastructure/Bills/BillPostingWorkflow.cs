@@ -20,14 +20,19 @@ internal sealed class BillPostingWorkflow(
     ITallyPoster tallyPoster,
     BillAuditStore auditStore,
     ILogger<BillPostingWorkflow> logger,
-    ITallyCompanyHealthService? tallyCompanyHealthService = null)
+    ITallyCompanyHealthService? tallyCompanyHealthService = null,
+    TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     private const string DefaultShowroomCode = "default";
     private const string TallyAlterTargetTagName = "MASTER ID";
 
     // Once the bill is committed to `posting`, the outcome must be written
-    // even if the HTTP caller disconnects. Settling uses its own bounded
-    // budget instead of the request token.
+    // even if the HTTP caller disconnects. The bookkeeping before the Tally
+    // call and the outcome save after it each get this budget instead of the
+    // request token. They are timed separately: the Tally round-trip can take
+    // as long as the budget itself, and must not eat into the outcome save.
     private static readonly TimeSpan SettleBudget = TimeSpan.FromSeconds(30);
 
     internal Task<BillResponse> PushAsync(
@@ -233,8 +238,8 @@ internal sealed class BillPostingWorkflow(
             await dbContext.Entry(bill).ReloadAsync(CancellationToken.None);
         }
 
-        using var settleCts = new CancellationTokenSource(SettleBudget);
-        var settleToken = settleCts.Token;
+        using var claimCts = new CancellationTokenSource(SettleBudget, _timeProvider);
+        var claimToken = claimCts.Token;
 
         currentRevision.SubmittedAtUtc ??= now;
         currentRevision.FinalizedAtUtc = now;
@@ -244,7 +249,7 @@ internal sealed class BillPostingWorkflow(
         string? targetTagValue = null;
         if (bill.EditedAfterPush)
         {
-            targetTagValue = await ResolveAlterTargetMasterIdAsync(bill.Id, settleToken);
+            targetTagValue = await ResolveAlterTargetMasterIdAsync(bill.Id, claimToken);
         }
 
         var trimmedReason = string.IsNullOrWhiteSpace(reason) ? "manual-push" : reason.Trim();
@@ -260,7 +265,7 @@ internal sealed class BillPostingWorkflow(
                 reason = trimmedReason,
                 tallyAction = operation.ToString()
             });
-        await dbContext.SaveChangesAsync(settleToken);
+        await dbContext.SaveChangesAsync(claimToken);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -274,7 +279,7 @@ internal sealed class BillPostingWorkflow(
                 bill.State,
                 bill.UpdatedAtUtc,
                 new { reason = "request cancelled before sending to Tally" });
-            await dbContext.SaveChangesAsync(settleToken);
+            await dbContext.SaveChangesAsync(claimToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -411,7 +416,11 @@ internal sealed class BillPostingWorkflow(
                 tallyResult.ErrorMessage);
         }
 
-        await dbContext.SaveChangesAsync(settleToken);
+        // Start the outcome budget only now that Tally has answered. A timer
+        // started before the call would already have expired after a Tally
+        // timeout, and the bill would stay in `posting` with no outcome.
+        using var settleCts = new CancellationTokenSource(SettleBudget, _timeProvider);
+        await dbContext.SaveChangesAsync(settleCts.Token);
 
         return BillSerialization.MapResponse(bill, currentRevision);
     }
