@@ -136,7 +136,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     private void OnSettingsDraftPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName?.Contains("Karat") == true)
+        if (e.PropertyName == nameof(SettingsDraft.KaratRows))
             RefreshKaratOptions();
     }
 

@@ -243,22 +243,25 @@ public partial class SettingsDraft : ObservableObject
     }
 
     private void OnItemMasterRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => HandleRowsChanged(e);
+        => HandleRowsChanged(e, nameof(ItemMasterRows));
 
     private void OnKaratRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
-        => HandleRowsChanged(e);
+        => HandleRowsChanged(e, nameof(KaratRows));
 
-    private void HandleRowsChanged(NotifyCollectionChangedEventArgs e)
+    private void HandleRowsChanged(NotifyCollectionChangedEventArgs e, string collectionName)
     {
         if (e.NewItems is not null)
             foreach (INotifyPropertyChanged item in e.NewItems) item.PropertyChanged += OnRowPropertyChanged;
         if (e.OldItems is not null)
             foreach (INotifyPropertyChanged item in e.OldItems) item.PropertyChanged -= OnRowPropertyChanged;
-        OnPropertyChanged(nameof(ItemMasterRows));
+        OnPropertyChanged(collectionName);
     }
 
+    // Name the collection the row belongs to. Every row change used to be
+    // announced as ItemMasterRows, so a listener waiting for karat changes
+    // (the batch scheduler's karat list) never heard one.
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        => OnPropertyChanged(nameof(ItemMasterRows));
+        => OnPropertyChanged(sender is KaratMasterRowVm ? nameof(KaratRows) : nameof(ItemMasterRows));
 
     private static string? NullIfBlank(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

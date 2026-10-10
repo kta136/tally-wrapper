@@ -31,6 +31,28 @@ public sealed class SyntheticBatchViewModelTests
     }
 
     [Fact]
+    public void KaratOptions_FollowKaratRowsAddedAndEditedInSettings()
+    {
+        var settings = new ShowroomBilling.Desktop.ViewModels.Settings.SettingsViewModel();
+        var vm = new SyntheticBatchViewModel(billsApi: null, adminTokens: null, settings);
+        Assert.Empty(vm.KaratOptions);
+
+        var row = new ShowroomBilling.Desktop.ViewModels.Settings.KaratMasterRowVm
+        {
+            Label = "22K",
+            PurityPercent = "91.6",
+            TallyItem = "Hallmarked 22KT",
+        };
+        settings.Draft.KaratRows.Add(row);
+        Assert.Equal(["22K"], vm.KaratOptions.Select(option => option.Label));
+
+        // An edit to an existing row was announced under the item-master
+        // collection's name, so the list here kept the old label.
+        row.Label = "22KT";
+        Assert.Equal(["22KT"], vm.KaratOptions.Select(option => option.Label));
+    }
+
+    [Fact]
     public async Task StartCommand_OpensAdminUnlock_WhenTokenMissing()
     {
         var tokenStore = new AdminTokenStore();
