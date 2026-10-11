@@ -154,7 +154,7 @@ dotnet run --project src/ShowroomBilling.Desktop
 
 Development API defaults to:
 
-- Swagger: `http://localhost:5108/swagger`
+- OpenAPI document: `http://localhost:5108/openapi/v1.json`
 - Liveness: `http://localhost:5108/api/health/live`
 - Runtime health: `http://localhost:5108/api/runtime/health`
 

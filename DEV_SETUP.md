@@ -148,7 +148,7 @@ dotnet run --project src/ShowroomBilling.Api
 
 Key endpoints:
 
-- `http://localhost:5108/swagger`
+- `http://localhost:5108/openapi/v1.json` (the OpenAPI document; Development only, there is no browsable Swagger page)
 - `http://localhost:5108/api/health/live`
 - `http://localhost:5108/api/health/masters` (per-type snapshot freshness; DB-backed, not part of cheap background polling)
 - `http://localhost:5108/api/runtime/health` (cheap by default; add `?forceDatabase=true` for DB-backed health)

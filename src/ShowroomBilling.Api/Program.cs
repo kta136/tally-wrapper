@@ -54,8 +54,7 @@ builder.Services.AddSingleton<IDatabaseConnectionVerifier, DatabaseConnectionVer
 
 builder.Services.AddInfrastructureLayer(builder.Configuration);
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddHttpContextAccessor();
@@ -98,27 +97,25 @@ if (!deviceAuth.IsTrustedLan)
     app.Services.GetRequiredService<DeviceTokenStore>().GetOrCreateToken();
 }
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
 app.UseExceptionHandler();
 app.UseMiddleware<CorrelationIdMiddleware>();
 // No UseHttpsRedirection: Desktop dials the configured loopback API URL
 // (prod defaults to 5107; dev uses 5108 to avoid attaching to prod).
-// The dev `https` launch profile is intentional for Swagger browsing only.
+// The dev `https` launch profile is intentional for browsing the OpenAPI document only.
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
 app.MapGet("/", () => Results.Ok(new
 {
     service = "Tally Wrapper API",
     environment = app.Environment.EnvironmentName,
-    // Swagger is served in Development only.
-    docs = app.Environment.IsDevelopment() ? "/swagger" : null,
+    // The OpenAPI document is served in Development only.
+    docs = app.Environment.IsDevelopment() ? "/openapi/v1.json" : null,
 }));
 
 app.Run();

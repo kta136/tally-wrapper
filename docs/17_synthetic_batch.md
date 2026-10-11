@@ -86,7 +86,7 @@ padding / business-day replay. Available in production, admin-gated.
 # 1. Start the API
 dotnet run --project src/ShowroomBilling.Api
 
-# 2. Unlock admin (swagger or curl)
+# 2. Unlock admin
 curl -X POST http://localhost:5108/api/admin/unlock \
   -H "Content-Type: application/json" \
   -d '{"passcode":"<your-passcode>","actorLabel":"dev"}'
