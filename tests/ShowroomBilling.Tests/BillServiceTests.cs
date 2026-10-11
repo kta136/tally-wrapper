@@ -1284,6 +1284,55 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     }
 
     [Fact]
+    public async Task Delete_PushedBillRenumberedAheadOfTheSeries_ItsNumberIsNotIssuedAgain()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.PushAsync(second.Id, new PushBillRequest("first"));
+
+        // The series is at 3. The voucher in Tally is moved to number 5, and
+        // the bill is then deleted here while Tally keeps that voucher.
+        await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("5", null, DryRun: false));
+        await service.PushAsync(second.Id, new PushBillRequest("alter"));
+        await service.DeleteAsync(second.Id, new DeleteBillRequest("removed locally", DryRun: false));
+
+        var issued = new List<string>();
+        for (var i = 0; i < 3; i++)
+        {
+            var preview = await new NumberingService(db).GetPreviewAsync("sales_invoice", null);
+            var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload($"N{i}", 100m)));
+            Assert.Equal(preview.FormattedNumber, bill.InvoiceNumber);
+            issued.Add(bill.InvoiceNumber![^5..]);
+        }
+
+        Assert.Equal(["/0003", "/0004", "/0006"], issued);
+    }
+
+    [Fact]
+    public async Task ChangeInvoiceNumber_PushedBillMovedOffANumberAheadOfTheSeries_KeepsThatNumberForTally()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.PushAsync(second.Id, new PushBillRequest("first"));
+        await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("4", null, DryRun: false));
+        await service.PushAsync(second.Id, new PushBillRequest("alter"));
+
+        // Tally has the voucher as 4. The bill moves on to 9 and is not pushed
+        // again, so Tally still shows 4 when the series reaches it.
+        await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("9", null, DryRun: false));
+
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+        var fourth = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("D", 100m)));
+
+        Assert.EndsWith("/0003", third.InvoiceNumber);
+        Assert.EndsWith("/0005", fourth.InvoiceNumber);
+    }
+
+    [Fact]
     public async Task Push_CallerCancelsDuringTallyCall_StillSettlesForReconciliation()
     {
         await using var db = CreateDbContext();

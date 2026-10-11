@@ -8,7 +8,7 @@ Windows desktop billing app for a jewellery showroom. Each counter runs the Desk
 
 - **Solution:** `ShowroomBilling.sln` · target framework is **`.NET 10`** across every project (Desktop is `net10.0-windows`).
 - **Hosts:** `src/ShowroomBilling.Api`, `src/ShowroomBilling.Desktop`, and `src/ShowroomBilling.ServerTray` (WinForms installer and tray that installs the API as a Windows service on the Tally server and holds its database connection). A Desktop's only connection setting is the server address (`DesktopBootstrap:ApiBaseUrl`, edited in Settings → Server).
-- **Layers:** `Contracts` (DTOs, shared between hosts), `Application`, `Infrastructure` (EF Core + Tally XML), `Printing` (QuestPDF templates). (There is no `Domain` project — business rules live in `Application` / `Infrastructure`.)
+- **Layers:** `Contracts` (DTOs, shared between hosts), `Application`, `Infrastructure` (EF Core + Tally XML), `Printing` (QuestPDF templates). (There is no `Domain` project — business rules live in `Application` / `Infrastructure`.) `Application` declares an interface only where something stands in for the implementation: a test double (`ITallyPoster`, `ICloudSettingsService`) or a second implementation. A service nothing substitutes (`BillService`, `NumberingService`, `AdminAuthService`, `PrintAssetService`) is used as its Infrastructure class, by controllers too; do not add an interface for it.
 - **Tests:** `tests/ShowroomBilling.Tests` (API + infra) and `tests/ShowroomBilling.Desktop.Tests` (ViewModels).
 
 ## Authoritative docs — pointers, not restatements
@@ -68,16 +68,9 @@ Pass the connection string explicitly when migrating any remote database. The EF
 dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<postgres-connection-string>"
 ```
 
-- **After any model change, regenerate the compiled model** the API runs on, or it runs against a stale model:
-
-  ```powershell
-  dotnet ef dbcontext optimize --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --output-dir Persistence/CompiledModels --namespace ShowroomBilling.Infrastructure.Persistence.CompiledModels
-  ```
-
-  Then delete the generated `ShowroomBillingDbContextAssemblyAttributes.cs`: the compiled model is opted into with `UseModel` in `DependencyInjection`, so design-time tools and the tests' own contexts keep building the model from `OnModelCreating`. `CompiledModelTests` fails when the two drift.
-- **Production never migrates itself.** Migrations are applied by hand, as the role that owns the tables, before a new build is started. The server service tries at start-up, but its database role may not alter the schema (SQLSTATE `42501`), and nothing else applies them. A new build on a database without its migrations cannot read or save a bill; this took production down on 10 October 2026, when it showed only as an empty Bills tab. It is now reported: `IDatabaseSchemaState` holds the pending-migration count, `/api/runtime/health` returns it as `pendingMigrationCount`, the Desktop shows `DB BEHIND` with a banner, and the tray says "upgrade needed". Keep that signal working when you touch health or start-up code; `SchemaBehindPostgresTests` replays the outage. Never tell anyone a deployed build will migrate production by itself. The steps are in [docs/11 §11](docs/11_deployment_and_ops.md).
-- **A migration that drops data copies it aside first**, because whoever applies it may skip the backup. Follow `20261010124946_DropUnusedColumnsAndIndexes` (`20261010132922_DropDraftEditLeases` is the whole-table version): copy the values into a `dropped_<date>_<table>_<column>` table in the same transaction, make `Down` restore from it, and write every statement conditionally (`IF EXISTS` / `IF NOT EXISTS`), because a migration that fails at start-up leaves the API in limited mode. Add a test that runs it both ways against real rows, like `DropUnusedColumnsMigrationPostgresTests`. **Dropping also makes the release all-at-once:** an older build still maps the column or table, so it fails against the migrated database. Say so in docs/11 §11 when you add one.
-- **On a machine that also runs the real app, point the EF tools away from its settings first**, or the design-time host reads the saved production connection: set `SHOWROOM_BILLING_APPDATA` to an empty folder and `SHOWROOM_BILLING_POSTGRES` to a dummy value. Neither `migrations add` nor `dbcontext optimize` connects to a database.
+- **Production never migrates itself.** Migrations are applied by hand, as the role that owns the tables, before a new build is started. The server service tries at start-up, but its database role may not alter the schema (SQLSTATE `42501`), and nothing else applies them. A new build on a database without its migrations cannot read or save a bill; this took production down on 10 October 2026, when it showed only as an empty Bills tab. It is now reported: `DatabaseSchemaState` holds the pending-migration count, `/api/runtime/health` returns it as `pendingMigrationCount`, the Desktop shows `DB BEHIND` with a banner, and the tray says "upgrade needed". Keep that signal working when you touch health or start-up code; `SchemaBehindPostgresTests` replays the outage. Never tell anyone a deployed build will migrate production by itself. The steps are in [docs/11 §11](docs/11_deployment_and_ops.md).
+- **A migration that drops data copies it aside first**, because whoever applies it may skip the backup. Follow `20261010124946_DropUnusedColumnsAndIndexes` (`20261011114506_DropInvoiceNumberReservations` is the whole-table version): copy the values into a `dropped_<date>_<table>_<column>` table in the same transaction, make `Down` restore from it, and write every statement conditionally (`IF EXISTS` / `IF NOT EXISTS`), because a migration that fails at start-up leaves the API in limited mode. Add a test that runs it both ways against real rows, like `DropUnusedColumnsMigrationPostgresTests`. The side tables are removed later by hand ([docs/10 §1.10](docs/10_database_schema.md)), never by a migration: that would also delete the copies a restored older database makes on its way up. **Dropping also makes the release all-at-once:** an older build still maps the column or table, so it fails against the migrated database. Say so in docs/11 §11 when you add one.
+- **On a machine that also runs the real app, point the EF tools away from its settings first**, or the design-time host reads the saved production connection: set `SHOWROOM_BILLING_APPDATA` to an empty folder and `SHOWROOM_BILLING_POSTGRES` to a dummy value. `migrations add` does not connect to a database.
 - The production secret is in OpenBao (`kv/Postgres/apps/tally_wrapper/prod`); the API does not read OpenBao itself. Commands: [docs/11](docs/11_deployment_and_ops.md#openbao-production-secret).
 
 ## Build & test
@@ -114,7 +107,7 @@ Endpoints and the throttling numbers: [docs/09](docs/09_api_spec.md).
 
 - **Unlock.** Press `~` (backtick) anywhere outside a text box, with no dialog open, to open `AdminUnlockDialog`. The bare-key bindings use gated `*KeyCommand`s so the character still types and an awaited prompt is never replaced. The token lives in `AdminTokenStore` (30 min TTL) and rides as `X-Admin-Token`. If an admin call is made while locked, the unlock dialog opens and the call goes ahead once it closes unlocked.
 - **First passcode.** `AdminUnlockDialog` runs `LoadStatusCommand` on open and shows either the unlock form or a "Set passcode" form (`ShowUnlockForm` / `ShowInitialSetupForm` on `AdminUnlockViewModel`). It is the only in-app place to set the first passcode, because Settings → Admin appears only once unlocked; the server accepts a first passcode only from a Desktop on the server PC itself (loopback). Minimum length is `Contracts.Settings.SettingLimits.MinAdminPasscodeLength`, which both the server and the view model read.
-- **Server side.** `AdminAuthenticationHandler` (scheme `AdminToken`) validates the token and endpoints are gated with `[Authorize(Policy = AdminPolicy.PolicyName)]`; downstream code reads the session from the `ClaimsPrincipal`. Unlock and passcode rotation go through `IAdminUnlockThrottle`, which is in-memory and resets on API restart by design.
+- **Server side.** `AdminAuthenticationHandler` (scheme `AdminToken`) validates the token and endpoints are gated with `[Authorize(Policy = AdminPolicy.PolicyName)]`; downstream code reads the session from the `ClaimsPrincipal`. Unlock and passcode rotation go through `AdminUnlockThrottle`, which is in-memory and resets on API restart by design.
 - **Which policy a new endpoint gets.** A mutating endpoint gets `[Authorize(Policy = DevicePolicy.PolicyName)]`: on a server install that means a caller inside the trusted LAN range; for an API on a developer's own machine it means the `X-Device-Token` file secret, which `DeviceTokenHandler` attaches only when the Desktop's API address is loopback. An admin-only endpoint gets the admin policy **only**; do not stack both. Reads are unauthenticated.
 - **An action that needs admin only for some bills** keeps the device policy. Saving an edit to a `posted` bill is the case: `BillsController.UpdateDraft` passes on whether the request carries an admin session, and the workflow throws `AdminSessionRequiredException` (403) when it is needed and missing.
 
@@ -135,9 +128,9 @@ A button that will fail auth gives the operator no feedback, so admin-only contr
 
 ## Start-up hosted services
 
-A start-up hosted service must never block or fail the API boot: bound it with a timeout and log failures at warning. One that needs the migrated database derives from `DatabaseStartupTask` (Infrastructure/Persistence): the base waits for `IStartupStatus.WaitForDatabaseReadyAsync`, bounds the work, never throws into the host and drains for 2 s on stop. Stuck-posting recovery and sequence self-heal use it. The wait faults with `DatabaseNotReadyException`; only that type means "database not ready", and any other exception from the work is reported as a failure.
+A start-up hosted service must never block or fail the API boot: bound it with a timeout and log failures at warning. One that needs the migrated database derives from `DatabaseStartupTask` (Infrastructure/Persistence): the base waits for `StartupStatus.WaitForDatabaseReadyAsync`, bounds the work, never throws into the host and drains for 2 s on stop. Stuck-posting recovery is the one that does. The wait faults with `DatabaseNotReadyException`; only that type means "database not ready", and any other exception from the work is reported as a failure.
 
-`IStartupStatus` is in-process only. What the Desktop's CLOUD pill shows comes from `/api/health/ready` and `/api/runtime/health?forceDatabase=true`, which report whether the database answers now.
+`StartupStatus` is in-process only. What the Desktop's CLOUD pill shows comes from `/api/health/ready` and `/api/runtime/health?forceDatabase=true`, which report whether the database answers now.
 
 ## Audit rows
 
@@ -160,12 +153,12 @@ Most commands are a single `SaveChangesAsync`, which EF wraps in an implicit tra
 
 ## Numbering
 
-How reservation, forward-skip and roll-back behave: [docs/04 §2.4–2.6](docs/04_numbering_and_idempotency.md).
+How reservation, forward-skip and roll-back behave: [docs/04 §2.4–2.7](docs/04_numbering_and_idempotency.md).
 
 - **Every path that sets `InvoiceNumber` (create, revise, change-number) must also set `InvoiceCore`.** Occupancy is read from the stored core, never from display text, because a suffix such as `-A2` parses as core 2. Rows with a NULL core are legacy custom numbers and fall back to `InvoiceNumberFormatter.TryParseTrailingCore`.
-- **A path that removes a bill from the sequence's trailing slot, or moves it, calls `NumberingSequenceReclaimer.ReclaimAsync` inside its transaction**, as delete and change-number do. Do not re-invent the roll-back: it also raises `MinNextValue` past a core whose voucher Tally still holds, so a roll-back never goes back below that number.
+- **A path that removes a bill from the sequence's trailing slot, or moves it, calls `NumberingSequenceReclaimer.ReclaimAsync` inside its transaction**, as delete and change-number do. Do not re-invent the roll-back: it also raises `MinNextValue` past a core whose voucher Tally still holds. No roll-back goes below that floor, and `NumberingService` passes over the core just under it, which matters when that core is ahead of the sequence. Nothing reconciles a sequence at start-up.
 - **Change-number accepts digits only** and formats them with `InvoiceNumberFormatter`.
-- `invoice_number_reservations` is no longer written or read; the table and its mapping stay until a migration drops them. A repeated Save is recognised by `bills.CreateOperationId`.
+- A repeated Save is recognised by `bills.CreateOperationId`. There is no reservation table: a bill's own row holds its number.
 
 ## Master data refresh
 

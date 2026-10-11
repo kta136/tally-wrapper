@@ -4,12 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Npgsql;
 using Polly;
-using ShowroomBilling.Application.Admin;
-using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Masters;
-using ShowroomBilling.Application.Numbering;
-using ShowroomBilling.Application.PrintAssets;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Infrastructure.Admin;
@@ -19,7 +15,6 @@ using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
-using ShowroomBilling.Infrastructure.Persistence.CompiledModels;
 using ShowroomBilling.Infrastructure.PrintAssets;
 using ShowroomBilling.Infrastructure.Settings;
 using ShowroomBilling.Infrastructure.Tally;
@@ -66,29 +61,23 @@ public static class DependencyInjection
         var dataSource = new NpgsqlDataSourceBuilder(ApplyPoolDefaults(connectionString)).Build();
         services.AddSingleton(dataSource);
         services.AddDbContextPool<ShowroomBillingDbContext>((provider, options) =>
-            options
-                // The registered data source, not the local above: a host that
-                // replaces the registration (the contract tests do) moves the
-                // context and the readiness check together.
-                .UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(), npgsql =>
-                {
-                    npgsql.SetPostgresVersion(18, 0);
-                    npgsql.CommandTimeout(15);
-                })
-                // Precompiled with `dotnet ef dbcontext optimize`: skips the
-                // model build on the first request after every API start.
-                // Regenerate after any model change (see CLAUDE.md).
-                .UseModel(ShowroomBillingDbContextModel.Instance));
+            // The registered data source, not the local above: a host that
+            // replaces the registration (the contract tests do) moves the
+            // context and the readiness check together.
+            options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(), npgsql =>
+            {
+                npgsql.SetPostgresVersion(18, 0);
+                npgsql.CommandTimeout(15);
+            }));
         services.AddScoped<IMasterSnapshotService, MasterSnapshotService>();
-        services.AddScoped<INumberingService, NumberingService>();
-        services.AddScoped<IBillService, BillService>();
-        services.AddScoped<ILatestBillTimestampProvider, LatestBillTimestampProvider>();
-        services.AddScoped<ISyntheticBatchExecutor, SyntheticBatchExecutor>();
+        services.AddScoped<NumberingService>();
+        services.AddScoped<BillService>();
+        services.AddScoped<SyntheticBatchExecutor>();
         services.AddSingleton<EffectiveSettingsCache>();
         services.AddScoped<ICloudSettingsService, CloudSettingsService>();
-        services.AddScoped<IAdminAuthService, AdminAuthService>();
-        services.AddSingleton<IAdminUnlockThrottle, AdminUnlockThrottle>();
-        services.AddScoped<IPrintAssetService, PrintAssetService>();
+        services.AddScoped<AdminAuthService>();
+        services.AddSingleton<AdminUnlockThrottle>();
+        services.AddScoped<PrintAssetService>();
         services.AddScoped<ITallyCompanyHealthService, TallyCompanyHealthService>();
 
         // Tally (sync, operator-initiated only — no background workers).
@@ -130,14 +119,10 @@ public static class DependencyInjection
         services.AddScoped<ITallyPoster, TallyPoster>();
         services.AddScoped<ITallyMasterRefresher, TallyMasterRefresher>();
 
-        services.AddSingleton<IStartupStatus, StartupStatus>();
-        services.AddSingleton<IDatabaseSchemaState, DatabaseSchemaState>();
+        services.AddSingleton<StartupStatus>();
+        services.AddSingleton<DatabaseSchemaState>();
         services.AddHostedService<DatabaseInitializationHostedService>();
         services.AddHostedService<StuckPostingRecoveryHostedService>();
-        // One-shot reconcile of InvoiceSequences.NextValue against actual
-        // remaining bills, so a sequence that fell out of sync under older
-        // code (rename-without-rollback) self-heals on the next boot.
-        services.AddHostedService<SequenceSelfHealHostedService>();
         services.AddHealthChecks().AddCheck<PostgresReadinessHealthCheck>("postgres");
 
         return services;

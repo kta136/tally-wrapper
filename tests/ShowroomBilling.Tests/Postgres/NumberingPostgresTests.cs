@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Infrastructure.Numbering;
 
 namespace ShowroomBilling.Tests.Postgres;
@@ -21,7 +20,7 @@ public sealed class NumberingPostgresTests(PostgresFixture fixture)
                 await start.Task;
                 await using var db = database.CreateContext();
                 var service = new NumberingService(db);
-                return await service.ReserveAsync(INumberingService.DocumentTypeSalesInvoice, "2026-27");
+                return await service.ReserveAsync(NumberingService.DocumentTypeSalesInvoice, "2026-27");
             }))
             .ToArray();
 

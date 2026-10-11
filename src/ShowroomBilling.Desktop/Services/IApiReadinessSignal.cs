@@ -7,7 +7,7 @@ namespace ShowroomBilling.Desktop.Services;
 /// <see cref="WhenReadyAsync"/> to defer work that must not run before the
 /// API is reachable — without each consumer re-implementing its own probe.
 ///
-/// This sits alongside <c>IStartupStatus</c> (server-side) — that one tracks
+/// This sits alongside <c>StartupStatus</c> (server-side) — that one tracks
 /// readiness inside the API process; this one tracks readiness from the
 /// Desktop's perspective (the API answers on the address the Desktop was
 /// given). They are deliberately separate concerns.

@@ -12,7 +12,7 @@ namespace ShowroomBilling.Tests;
 /// </summary>
 public class BillDocumentRenderTests
 {
-    private static readonly IBillPrintRenderer Renderer = new BillPrintRenderer();
+    private static readonly BillPrintRenderer Renderer = new();
 
     [Fact]
     public void GeneratePdf_for_minimal_bill_produces_bytes()

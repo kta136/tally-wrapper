@@ -21,7 +21,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
     public DbSet<InvoiceSequenceEntity> InvoiceSequences => Set<InvoiceSequenceEntity>();
 
-    public DbSet<InvoiceNumberReservationEntity> InvoiceNumberReservations => Set<InvoiceNumberReservationEntity>();
 
     public DbSet<BillEntity> Bills => Set<BillEntity>();
 
@@ -176,19 +175,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasKey(x => new { x.ShowroomId, x.FiscalYear, x.DocumentType });
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
             entity.Property(x => x.DocumentType).HasMaxLength(32);
-        });
-
-        modelBuilder.Entity<InvoiceNumberReservationEntity>(entity =>
-        {
-            entity.ToTable("invoice_number_reservations");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.IdempotencyKey).HasMaxLength(128).IsRequired();
-            entity.Property(x => x.FiscalYear).HasMaxLength(16);
-            entity.Property(x => x.DocumentType).HasMaxLength(32);
-            entity.Property(x => x.FormattedNumber).HasMaxLength(128);
-            entity.Property(x => x.ReservedForReference).HasMaxLength(128);
-            entity.HasIndex(x => x.IdempotencyKey).IsUnique();
-            entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.DocumentType });
         });
 
         modelBuilder.Entity<BillEntity>(entity =>

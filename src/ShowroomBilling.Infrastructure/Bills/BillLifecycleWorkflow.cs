@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Numbering;
+using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
@@ -11,7 +11,7 @@ namespace ShowroomBilling.Infrastructure.Bills;
 
 internal sealed class BillLifecycleWorkflow(
     ShowroomBillingDbContext dbContext,
-    INumberingService numberingService,
+    NumberingService numberingService,
     BillAuditStore auditStore)
 {
     private const string BillTypeSales = "sales";
@@ -359,7 +359,7 @@ internal sealed class BillLifecycleWorkflow(
     /// </summary>
     private Task<ReservedNumber> ReserveNumberAsync(DateOnly billDate, CancellationToken cancellationToken)
         => numberingService.ReserveAsync(
-            INumberingService.DocumentTypeSalesInvoice,
+            NumberingService.DocumentTypeSalesInvoice,
             InvoiceNumberFormatter.ComputeFiscalYear(billDate),
             cancellationToken);
 

@@ -3,8 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ShowroomBilling.Application.Health;
 using ShowroomBilling.Infrastructure.Configuration;
+using ShowroomBilling.Infrastructure.Health;
 
 namespace ShowroomBilling.Infrastructure.Persistence;
 
@@ -12,8 +12,8 @@ public sealed class DatabaseInitializationHostedService(
     IServiceProvider serviceProvider,
     IOptions<DatabaseOptions> databaseOptions,
     IHostEnvironment hostEnvironment,
-    IStartupStatus startupStatus,
-    IDatabaseSchemaState schemaState,
+    StartupStatus startupStatus,
+    DatabaseSchemaState schemaState,
     ILogger<DatabaseInitializationHostedService> logger) : IHostedService
 {
     // Bounded so a slow / unreachable Postgres can't hold the API's startup

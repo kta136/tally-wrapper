@@ -108,7 +108,7 @@ public partial class App : System.Windows.Application
         // first numbering preview lands on a hot connection.
         builder.Services.AddSingleton<IApiReadinessSignal, ApiReadinessSignal>();
 
-        builder.Services.AddSingleton<IBillPrintRenderer, BillPrintRenderer>();
+        builder.Services.AddSingleton<BillPrintRenderer>();
         builder.Services.AddSingleton<IPrintDispatcher, PrintDispatcher>();
         builder.Services.AddSingleton<IPrintPreferencesStore, PrintPreferencesStore>();
         builder.Services.AddSingleton<ICompanyProfileProvider, CompanyProfileProvider>();

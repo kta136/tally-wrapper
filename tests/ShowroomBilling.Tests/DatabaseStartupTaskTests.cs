@@ -1,4 +1,3 @@
-using ShowroomBilling.Application.Health;
 using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Persistence;
 
@@ -90,7 +89,7 @@ public sealed class DatabaseStartupTaskTests
     }
 
     private sealed class ProbeTask(
-        IStartupStatus startupStatus,
+        StartupStatus startupStatus,
         Func<CancellationToken, CancellationToken, Task> work,
         TimeSpan? timeout = null) : DatabaseStartupTask(startupStatus)
     {

@@ -137,16 +137,10 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         ShowPostedDaysCommand = new RelayCommand(() => HideFullyPostedDays = false, () => HideFullyPostedDays);
         ClearSelectionCommand = new RelayCommand(ClearSelection, () => HasSelection);
 
-        _pushSelected = batch.PushSelectedAsync;
-        _retrySelected = batch.RetrySelectedAsync;
-        _repostSelected = batch.RepostSelectedAsync;
-        PushSelectedCommand = new AsyncRelayCommand(_pushSelected, () => CanActOnSelection(x => x.IsPendingLike, needsTally: true));
+        PushSelectedCommand = new AsyncRelayCommand(batch.PushSelectedAsync, () => CanActOnSelection(x => x.IsPendingLike, needsTally: true));
         PushAllPendingCommand = new AsyncRelayCommand(batch.PushAllPendingAsync, () => CanAct && IsTallyPushAllowed);
-        RetrySelectedCommand = new AsyncRelayCommand(_retrySelected, () => CanActOnSelection(x => x.IsRetryable, needsTally: true));
-        RepostSelectedCommand = new AsyncRelayCommand(_repostSelected, () => CanActOnSelection(x => x.CanBeReposted, needsTally: true));
-        TallyPushSelectedCommand = new AsyncRelayCommand(
-            TallyPushSelectedAsync,
-            () => CanAct && IsTallyPushAllowed && GetTallyPushMode() != TallyPushMode.None);
+        RetrySelectedCommand = new AsyncRelayCommand(batch.RetrySelectedAsync, () => CanActOnSelection(x => x.IsRetryable, needsTally: true));
+        RepostSelectedCommand = new AsyncRelayCommand(batch.RepostSelectedAsync, () => CanActOnSelection(x => x.CanBeReposted, needsTally: true));
 
         PushRowCommand = RowCommand(rows.PushRowAsync, x => x.CanBePushed, needsTally: true);
         RetryRowCommand = RowCommand(rows.RetryRowAsync, x => x.CanBeRetried, needsTally: true);
@@ -162,11 +156,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         DeleteRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.DeleteRowAsync, row => CanActOnContextRows(row, x => x.CanBeDeleted));
         DeleteSelectedCommand = new AsyncRelayCommand(admin.DeleteSelectedAsync, () => CanActOnSelection(x => x.CanBeDeleted));
     }
-
-    // The combined "Push to Tally" button picks one of these three by what is selected.
-    private readonly Func<CancellationToken, Task> _pushSelected;
-    private readonly Func<CancellationToken, Task> _retrySelected;
-    private readonly Func<CancellationToken, Task> _repostSelected;
 
     public ObservableCollection<BillListRowViewModel> Items { get; }
 
@@ -191,7 +180,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public bool IsAdminUnlocked => _adminTokens?.IsUnlocked == true;
     public IAsyncRelayCommand RetrySelectedCommand { get; }
     public IAsyncRelayCommand RepostSelectedCommand { get; }
-    public IAsyncRelayCommand TallyPushSelectedCommand { get; }
     public IRelayCommand ClearSelectionCommand { get; }
 
     public IAsyncRelayCommand<BillListRowViewModel?> PushRowCommand { get; }
@@ -576,8 +564,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         PushSelectedCommand.NotifyCanExecuteChanged();
         RetrySelectedCommand.NotifyCanExecuteChanged();
         RepostSelectedCommand.NotifyCanExecuteChanged();
-        TallyPushSelectedCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(TallyPushButtonLabel));
         ClearSelectionCommand.NotifyCanExecuteChanged();
         PushRowCommand.NotifyCanExecuteChanged();
         RetryRowCommand.NotifyCanExecuteChanged();
@@ -616,34 +602,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         Func<BillListRowViewModel, bool> allowed,
         bool needsTally = false)
         => new(action, row => row is not null && allowed(row) && !IsLoading && !IsActing && (!needsTally || IsTallyPushAllowed));
-
-    public enum TallyPushMode { None, Push, Retry, Repost }
-
-    private TallyPushMode GetTallyPushMode()
-    {
-        if (!HasSelection) return TallyPushMode.None;
-        var selected = SelectedRows.ToArray();
-        if (selected.All(x => x.IsPendingLike)) return TallyPushMode.Push;
-        if (selected.All(x => x.IsRetryable)) return TallyPushMode.Retry;
-        if (selected.All(x => BillStateCapabilities.IsPosted(x.State))) return TallyPushMode.Repost;
-        return TallyPushMode.None;
-    }
-
-    public string TallyPushButtonLabel => GetTallyPushMode() switch
-    {
-        TallyPushMode.Push => "Push to Tally",
-        TallyPushMode.Retry => "Retry",
-        TallyPushMode.Repost => "Repost…",
-        _ => "Push to Tally",
-    };
-
-    private Task TallyPushSelectedAsync(CancellationToken cancellationToken) => GetTallyPushMode() switch
-    {
-        TallyPushMode.Push => _pushSelected(cancellationToken),
-        TallyPushMode.Retry => _retrySelected(cancellationToken),
-        TallyPushMode.Repost => _repostSelected(cancellationToken),
-        _ => Task.CompletedTask,
-    };
 
     private Task NextPageAsync(CancellationToken cancellationToken)
     {

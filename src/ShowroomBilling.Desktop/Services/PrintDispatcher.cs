@@ -15,12 +15,12 @@ public sealed class PrintDispatcher : IPrintDispatcher
 {
     private const int PrintImageDpi = 600;
 
-    private readonly IBillPrintRenderer _renderer;
+    private readonly BillPrintRenderer _renderer;
     private readonly object _printerCacheGate = new();
     private IReadOnlyList<string>? _availablePrinters;
     private string? _defaultPrinter;
 
-    public PrintDispatcher(IBillPrintRenderer renderer)
+    public PrintDispatcher(BillPrintRenderer renderer)
     {
         _renderer = renderer;
     }

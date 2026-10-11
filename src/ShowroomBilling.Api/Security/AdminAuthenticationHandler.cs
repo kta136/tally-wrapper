@@ -3,20 +3,20 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Contracts.Admin;
+using ShowroomBilling.Infrastructure.Admin;
 
 namespace ShowroomBilling.Api.Security;
 
 /// <summary>
-/// Reads the <c>X-Admin-Token</c> header, validates via <see cref="IAdminAuthService"/>,
+/// Reads the <c>X-Admin-Token</c> header, validates via <see cref="AdminAuthService"/>,
 /// and builds a ClaimsPrincipal.
 /// </summary>
 public sealed class AdminAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IAdminAuthService adminService)
+    AdminAuthService adminService)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SchemeName = "AdminToken";

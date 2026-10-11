@@ -1,31 +1,28 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using ShowroomBilling.Application;
+using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
+using ShowroomBilling.Infrastructure.Persistence;
 
-namespace ShowroomBilling.Application.Bills;
+namespace ShowroomBilling.Infrastructure.Bills;
 
 /// <summary>
-/// Orchestrates a synthetic batch run: loads masters, builds a plan via
-/// <see cref="SyntheticBillPlanner"/>, and persists each planned bill via
-/// <see cref="IBillService.CreateBackdatedDraftAsync"/> one at a time.
+/// Runs a synthetic batch: loads the masters, builds a plan with
+/// <see cref="SyntheticBillPlanner"/>, and saves each planned bill through
+/// <see cref="BillService.CreateBackdatedDraftAsync"/>, one at a time.
 ///
-/// Numbering reservation uses a <c>FOR UPDATE</c> row-lock, so bills must be
-/// serialized; per-bill transactions are the correct granularity here.
+/// A number is reserved under a <c>FOR UPDATE</c> row lock, so the bills are
+/// saved one after another, each in its own transaction.
 /// </summary>
-public interface ISyntheticBatchExecutor
-{
-    Task<SyntheticBatchResponse> ExecuteAsync(
-        SyntheticBatchRequest request,
-        CancellationToken cancellationToken = default);
-}
-
 public sealed class SyntheticBatchExecutor(
-    IBillService billService,
+    BillService billService,
     ICloudSettingsService settings,
-    ILatestBillTimestampProvider latestBillTimestamp,
-    ILogger<SyntheticBatchExecutor> logger) : ISyntheticBatchExecutor
+    ShowroomBillingDbContext dbContext,
+    ILogger<SyntheticBatchExecutor> logger)
 {
     public async Task<SyntheticBatchResponse> ExecuteAsync(
         SyntheticBatchRequest request,
@@ -44,7 +41,10 @@ public sealed class SyntheticBatchExecutor(
         if (karatEntries.Count == 0)
             throw new RequestValidationException("No karat masters are configured.");
 
-        var floorUtc = await latestBillTimestamp.GetLatestCreatedAtUtcAsync(cancellationToken);
+        // The planner keeps the batch after the newest bill already stored.
+        var floorUtc = await dbContext.Bills
+            .AsNoTracking()
+            .MaxAsync(b => (DateTimeOffset?)b.CreatedAtUtc, cancellationToken);
 
         var rng = new Random();
         var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, floorUtc);
@@ -79,14 +79,4 @@ public sealed class SyntheticBatchExecutor(
                 $"Failed to parse {label} JSON: {ex.Message}", ex);
         }
     }
-}
-
-/// <summary>
-/// Abstraction so the planner can look up "what's the most recent existing bill
-/// CreatedAtUtc?" without the executor taking a direct DbContext dependency.
-/// Implemented in Infrastructure via a direct EF query.
-/// </summary>
-public interface ILatestBillTimestampProvider
-{
-    Task<DateTimeOffset?> GetLatestCreatedAtUtcAsync(CancellationToken cancellationToken = default);
 }

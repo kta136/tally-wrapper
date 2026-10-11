@@ -1,9 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Numbering;
-using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 using ShowroomBilling.Tests.Postgres;
 
@@ -11,7 +9,7 @@ namespace ShowroomBilling.Tests;
 
 public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
-    private const string SalesInvoice = INumberingService.DocumentTypeSalesInvoice;
+    private const string SalesInvoice = NumberingService.DocumentTypeSalesInvoice;
 
     [Fact]
     public async Task Preview_WithNoSequence_ReturnsOneAndDoesNotReserve()

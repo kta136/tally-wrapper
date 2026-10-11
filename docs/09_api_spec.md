@@ -171,7 +171,7 @@ There are no edit locks: concurrent edits of one bill are caught by the bill's r
 
 Admin-gated routes require a valid `X-Admin-Token` header (obtained via `POST /api/admin/unlock`). Tokens are SHA-256 hashed server-side, expire after 30 minutes, and can be revoked explicitly via logout. Each successful unlock also deletes the session rows that expired more than 30 days ago. Passcodes are PBKDF2 (SHA-256, 120 000 iterations).
 
-Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates via `IAdminAuthService.ValidateTokenAsync`, and builds a `ClaimsPrincipal` with an `admin_session_id` claim. Controllers opt in with `[Authorize(Policy = AdminPolicy.PolicyName)]`.
+Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates via `AdminAuthService.ValidateTokenAsync`, and builds a `ClaimsPrincipal` with an `admin_session_id` claim. Controllers opt in with `[Authorize(Policy = AdminPolicy.PolicyName)]`.
 
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|

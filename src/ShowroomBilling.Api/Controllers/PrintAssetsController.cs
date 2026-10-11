@@ -1,14 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShowroomBilling.Api.Security;
-using ShowroomBilling.Application.PrintAssets;
 using ShowroomBilling.Contracts.PrintAssets;
+using ShowroomBilling.Infrastructure.PrintAssets;
 
 namespace ShowroomBilling.Api.Controllers;
 
 [ApiController]
 [Route("api/print-assets")]
-public sealed class PrintAssetsController(IPrintAssetService service) : ControllerBase
+public sealed class PrintAssetsController(PrintAssetService service) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<PrintAssetListResponse>> List(CancellationToken cancellationToken)

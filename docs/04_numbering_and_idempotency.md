@@ -20,12 +20,12 @@ This document describes invoice numbering, renumbering, Tally posting identity, 
 
 Numbering is server-side only.
 
-- `CreateDraftAsync` (and `ReviseAsync`, for the new bill it creates) calls `INumberingService.ReserveAsync(documentType, fiscalYear)` inside the transaction that inserts the bill. It returns `ReservedNumber(FiscalYear, ReservedValue, FormattedNumber)`; the bill stores the formatted number in `InvoiceNumber` and the integer in `InvoiceCore`. If the bill cannot be saved the transaction rolls back and the number is not used up.
+- `CreateDraftAsync` (and `ReviseAsync`, for the new bill it creates) calls `NumberingService.ReserveAsync(documentType, fiscalYear)` inside the transaction that inserts the bill. It returns `ReservedNumber(FiscalYear, ReservedValue, FormattedNumber)`; the bill stores the formatted number in `InvoiceNumber` and the integer in `InvoiceCore`. If the bill cannot be saved the transaction rolls back and the number is not used up.
 - The sequence row in `invoice_sequences` is read `FOR UPDATE`, so two saves cannot take the same value.
 - `InvoiceNumberFormatter.Format` gives `{prefix}{fiscalYear}/{core}{suffix}`, the core zero-padded to `Numbering.InvoicePadding` digits (default 4): prefix `SR/` in fiscal year `2026-27` gives `SR/2026-27/0145`. When the prefix or suffix already carries the fiscal year (`DDAJR/26-27/`), the year is not repeated.
 - Save is replay-safe through a client operation id: the Desktop generates `CreateBillDraftRequest.ClientOperationId` once per unsaved bill and reuses it on every retry. `bills.CreateOperationId` is unique, so a retry whose first attempt committed (response lost) returns that same bill and number; reusing the id with different contents is `409`. Requests without the id create a new bill every time. Draft updates carry `expectedRevisionId`, so a replayed update that already landed returns the stored bill instead of adding a revision.
 - The number stays on the bill through every transition. Push moves the bill to `posting` and calls Tally; it does not issue a number. `UpdateDraftAsync` never changes the number.
-- The `invoice_number_reservations` table is not written or read. It stays in the database, with the rows older builds wrote, until a migration drops it.
+- There is no reservation table. Builds up to 10 October 2026 wrote a row to `invoice_number_reservations` for every bill; the `DropInvoiceNumberReservations` migration removed it ([docs/10 §1.10](10_database_schema.md)).
 
 ### 2.2 Sequence scope
 
@@ -46,7 +46,7 @@ There is one sequence per `(ShowroomId, FiscalYear, DocumentType)`, the primary 
 - Returns two informational flags:
   - **`LeavesGap`** — the chosen core is at or beyond the sequence's `NextValue`, so a gap appears in the series. `NextValue` is **not** advanced; the forward-skip in `ReserveAsync` (§2.5) passes the occupied core when the allocator reaches it.
   - **`TallyDiverges`** — Tally holds this bill's voucher under the old number (`BillTallyHistory.IsInTallyAsync`: the bill is `posted`, was edited after a push, or its latest Tally-truth audit event is a successful push or an admin Mark as Pushed). Committing the change then sets `EditedAfterPush`, moves a `posted` bill to `pending` and writes `bill.edit.reopened`, so the next push alters the same voucher to the new number.
-- **Moving the trailing bill down frees its old number.** The save and `NumberingSequenceReclaimer.ReclaimAsync` (§2.6) run in one transaction: renaming `94 → 92` when `94` was the last number issued rolls `NextValue` back, and the next bill gets `94`. When Tally holds the bill, its old core stays reserved. Moving a number up changes nothing in the sequence. The response's `SequenceNextValue` is read after the rollback.
+- **Moving the trailing bill down frees its old number.** The save and `NumberingSequenceReclaimer.ReclaimAsync` (§2.6) run in one transaction: renaming `94 → 92` when `94` was the last number issued rolls `NextValue` back, and the next bill gets `94`. When Tally holds the bill, its old core is kept for Tally (§2.7). Moving a number up changes nothing in the sequence. The response's `SequenceNextValue` is read after the rollback.
 - Supports `DryRun=true`: it validates and returns the flags without changing anything. The Desktop uses this to show warnings before the real commit.
 - Writes a `bill.number.changed` audit event with the old number, the new number, both flags and the reason.
 
@@ -57,6 +57,7 @@ There is one sequence per `(ShowroomId, FiscalYear, DocumentType)`, the primary 
 Properties:
 
 - **Mid-range gaps stay gaps** — if bill `0007` is deleted while `0008..0012` still exist, the allocator does not backfill `0007` on the next reservation; it advances from the current `NextValue`.
+- **A number kept for Tally is passed over** like an occupied one — see §2.7.
 - **Trailing freed cores are reclaimed** — see §2.6.
 - **Bounded cost** — the window is 1000 values. If every core in it is occupied the save fails with an error instead of scanning further.
 
@@ -65,7 +66,7 @@ Properties:
 ---
 ### 2.6 Sequence rollback on trailing delete or rename
 
-After a bill is deleted (`BillAdminWorkflow.DeleteAsync`) **or renumbered** (`BillAdminWorkflow.ChangeInvoiceNumberAsync`, §2.4), `NumberingSequenceReclaimer.ReclaimAsync` recomputes the sequence. The target is `max(MinNextValue, highest InvoiceCore still in the scope + 1)`; `NextValue` is set to the target when the target is lower, and is never raised. `MinNextValue` is first raised past the core of a deleted or renumbered bill whose voucher Tally holds, because Tally still has that number. So if `NextValue = 47` and bill `0046` is deleted while bill `0045` still exists, `NextValue` becomes `46`. If both `0045` and `0046` are deleted in the same selection, the second delete recomputes the highest core across what remains and `NextValue` settles at `45`. The next reservation then reuses `0045`. The same logic runs when an operator renames `0046 → 0042`: the highest remaining core is `0045`, and `NextValue` rolls back to `0046` so the freed core is reclaimed.
+After a bill is deleted (`BillAdminWorkflow.DeleteAsync`) **or renumbered** (`BillAdminWorkflow.ChangeInvoiceNumberAsync`, §2.4), `NumberingSequenceReclaimer.ReclaimAsync` recomputes the sequence. The target is `max(MinNextValue, highest InvoiceCore still in the scope + 1)`; `NextValue` is set to the target when the target is lower, and is never raised. `MinNextValue` is first raised past the core of a deleted or renumbered bill whose voucher Tally holds (§2.7). So if `NextValue = 47` and bill `0046` is deleted while bill `0045` still exists, `NextValue` becomes `46`. If both `0045` and `0046` are deleted in the same selection, the second delete recomputes the highest core across what remains and `NextValue` settles at `45`. The next reservation then reuses `0045`. The same logic runs when an operator renames `0046 → 0042`: the highest remaining core is `0045`, and `NextValue` rolls back to `0046` so the freed core is reclaimed.
 
 Properties:
 
@@ -73,8 +74,21 @@ Properties:
 - **Format-tolerant.** The check compares stored numeric cores (`bills.InvoiceCore`) rather than formatted strings, so suffixes and padding changes never hide an occupied core. Rows without a stored core are read by their trailing digits.
 - **Anchors a stale `NextValue`.** If `NextValue` sits higher than the occupied range (a sequence bump that no bill ever used), the next delete or rename in the scope pulls it down to the highest core + 1.
 - **Atomic with the delete or rename.** Both run inside the same transaction, with a `FOR UPDATE` lock on the `invoice_sequences` row so a concurrent reservation cannot allocate a core the rollback is about to free.
-- **Audit-logged.** A `numbering.sales_invoice.rolled_back` event is written each time `NextValue` moves, recording `fiscalYear`, `from`, `to`, `maxOccupiedCore` and `trigger` (`delete:{billId}`, `rename:{billId}` or `startup-self-heal`).
-- **Also at start-up.** `SequenceSelfHealHostedService` runs the same reclaim once for every sequence when the API starts.
+- **Audit-logged.** A `numbering.sales_invoice.rolled_back` event is written each time `NextValue` moves, recording `fiscalYear`, `from`, `to`, `maxOccupiedCore` and `trigger` (`delete:{billId}` or `rename:{billId}`).
+- **Only then.** Nothing reconciles the sequence at start-up: a number and its bill commit together, so `NextValue` can only run ahead of the bills after a delete or a rename, and both reclaim at once.
+
+### 2.7 Numbers kept for Tally
+
+A bill whose voucher Tally holds can lose its number here in two ways: the bill is deleted, or it is renumbered (Tally shows the old number until the next push alters the voucher). Issuing that number to a new bill would put two vouchers with one number in Tally, so the number is kept out of circulation. `ReclaimAsync` records it by raising `invoice_sequences.MinNextValue` to that core + 1:
+
+- **Behind the sequence** (the usual case: the bill had a number the series issued), the floor stops every later roll-back from going back to it.
+- **Ahead of the sequence** (the bill had first been renumbered upwards, say `0002 → 0009` while the series was at `0003`), the floor cannot help, because the series is walking towards that number. The reservation and the preview therefore treat the core just under the floor, `MinNextValue − 1`, as occupied and pass over it: the series runs `…0008, 0010`.
+
+Limits, all from the floor being one value per sequence:
+
+- The number stays kept even after the voucher is altered or deleted in Tally. The cost is one unused number.
+- While the floor is ahead of the sequence, deleting the last bill does not roll `NextValue` back, so that delete leaves a gap.
+- Only the highest kept number ahead of the sequence is passed over. If two Tally-held bills are both moved ahead of the series and both then deleted or renumbered again before the series reaches them, the lower number is issued when the series gets there. Tally then has two vouchers with that number, or refuses the push if it is set to prevent duplicates; change the new bill's number to resolve it.
 
 ---
 

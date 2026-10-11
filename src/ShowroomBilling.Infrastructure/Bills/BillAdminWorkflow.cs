@@ -1,17 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Bills;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
-using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
 internal sealed class BillAdminWorkflow(
     ShowroomBillingDbContext dbContext,
-    INumberingService numberingService,
+    NumberingService numberingService,
     BillAuditStore auditStore)
 {
     internal async Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(
@@ -80,7 +78,7 @@ internal sealed class BillAdminWorkflow(
             .FirstOrDefaultAsync(
                 s => s.ShowroomId == showroomId
                      && s.FiscalYear == fiscalYear
-                     && s.DocumentType == INumberingService.DocumentTypeSalesInvoice,
+                     && s.DocumentType == NumberingService.DocumentTypeSalesInvoice,
                 cancellationToken);
         long? seqNext = sequence?.NextValue;
 
@@ -179,7 +177,7 @@ internal sealed class BillAdminWorkflow(
             .AsNoTracking()
             .Where(s => s.ShowroomId == showroomId
                         && s.FiscalYear == fiscalYear
-                        && s.DocumentType == INumberingService.DocumentTypeSalesInvoice)
+                        && s.DocumentType == NumberingService.DocumentTypeSalesInvoice)
             .Select(s => (long?)s.NextValue)
             .FirstOrDefaultAsync(cancellationToken);
 

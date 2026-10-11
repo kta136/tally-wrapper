@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using ShowroomBilling.Application.Health;
+using ShowroomBilling.Infrastructure.Health;
 
 namespace ShowroomBilling.Infrastructure.Persistence;
 
@@ -9,7 +10,7 @@ namespace ShowroomBilling.Infrastructure.Persistence;
 /// timeout, never throws into the host, and drains briefly on stop. See
 /// CLAUDE.md, "Startup hosted-service resilience".
 /// </summary>
-public abstract class DatabaseStartupTask(IStartupStatus startupStatus) : IHostedService
+public abstract class DatabaseStartupTask(StartupStatus startupStatus) : IHostedService
 {
     private static readonly TimeSpan StopDrain = TimeSpan.FromSeconds(2);
 

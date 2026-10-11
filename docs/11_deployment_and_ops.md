@@ -265,7 +265,6 @@ The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windo
 
 - `DatabaseInitializationHostedService` — applies pending EF migrations when auto-migrate is on, and records how many are pending.
 - `StuckPostingRecoveryHostedService` — moves abandoned `posting` bills to `reconciliation_required`.
-- `SequenceSelfHealHostedService` — bounded repair of invoice sequences after database readiness.
 
 These are bounded start-up tasks. There is no recurring posting, Tally polling, or retention worker after they finish.
 
@@ -374,6 +373,8 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 - preserve backward-compatibility window if desktop rollout is staged
 
 **A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so once the migrations are applied to the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers an older server service, and any counter still on an old Desktop build that runs its own embedded API. For such a release: close Billing on every counter and stop the server service, take the dump below, apply the migrations by hand as the owner role (see above), update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
+
+`DropInvoiceNumberReservations` (the release after 11 October 2026) is a narrower case. The table it drops was last written by the build of 10 October; the build of 11 October (`627ef1f`) still maps it but never touches it. So the migration can be applied while a server from 11 October is running, and the new server started afterwards. A server exe from 10 October or earlier cannot save a bill against the migrated database; to go back that far, run the migration's `Down` first, which restores the table and its rows.
 
 **Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 

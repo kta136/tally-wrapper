@@ -86,7 +86,7 @@
                             Content="Open Details"
                             shell:Kbd.Hint="Enter" />
                     <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry Push" shell:Kbd.Hint="Ctrl+R" />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}" Content="{Binding TallyPushButtonLabel}" />
+                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding PushSelectedCommand}" Content="Push to Tally" />
                     <Button Style="{StaticResource BtnSm}"
                             Margin="0,0,6,0"
                             Command="{Binding PushAllPendingCommand}"
@@ -187,7 +187,7 @@
                 <Button Style="{StaticResource BtnSm}" Margin="8,0,0,0" Command="{Binding ClearSelectionCommand}" Content="Clear" />
                 <Rectangle Width="1" Height="18" Margin="10,0" Fill="{StaticResource DividerBrush}" />
                 <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry Push" />
-                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding TallyPushSelectedCommand}" Content="{Binding TallyPushButtonLabel}" />
+                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding PushSelectedCommand}" Content="Push to Tally" />
                 <Button Style="{StaticResource BtnSm}"
                         Margin="0,0,6,0"
                         Command="{Binding MarkPostedSelectedCommand}"

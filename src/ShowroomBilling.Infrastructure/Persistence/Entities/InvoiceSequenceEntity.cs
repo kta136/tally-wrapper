@@ -11,9 +11,11 @@ public sealed class InvoiceSequenceEntity
     public long NextValue { get; set; }
 
     /// <summary>
-    /// Rollback never moves <see cref="NextValue"/> below this. Raised when a
-    /// bill whose voucher Tally holds is deleted or renumbered, because Tally
-    /// still has that number and handing it out again would duplicate it.
+    /// One past the highest core that Tally holds a voucher for although no
+    /// bill here has it any more: raised when a bill whose voucher Tally holds
+    /// is deleted or renumbered. Rollback never moves <see cref="NextValue"/>
+    /// below this, and a reservation never hands out the core just under it,
+    /// because issuing that number again would duplicate it in Tally.
     /// </summary>
     public long MinNextValue { get; set; }
 

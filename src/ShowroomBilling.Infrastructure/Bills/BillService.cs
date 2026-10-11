@@ -1,16 +1,20 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ShowroomBilling.Application.Auditing;
-using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-public sealed class BillService : IBillService
+/// <summary>
+/// Everything the API does with a bill. The work is in the workflow classes
+/// beside this one, which share one context and one audit store per request;
+/// this is their public face.
+/// </summary>
+public sealed class BillService
 {
     private readonly BillReadWorkflow _read;
     private readonly BillLifecycleWorkflow _lifecycle;
@@ -20,7 +24,7 @@ public sealed class BillService : IBillService
 
     public BillService(
         ShowroomBillingDbContext dbContext,
-        INumberingService numberingService,
+        NumberingService numberingService,
         ITallyPoster tallyPoster,
         ITallyCompanyHealthService? tallyCompanyHealthService = null,
         ILoggerFactory? loggerFactory = null,
@@ -41,12 +45,22 @@ public sealed class BillService : IBillService
         CancellationToken cancellationToken = default)
         => _lifecycle.CreateDraftAsync(request, cancellationToken);
 
+    /// <summary>
+    /// Creates a draft whose created and updated times, first revision and
+    /// audit event all carry <paramref name="createdAtUtc"/> instead of now.
+    /// The synthetic batch uses it to spread bills over a past window. The
+    /// invoice number is still the next one in the series.
+    /// </summary>
     public Task<BillResponse> CreateBackdatedDraftAsync(
         CreateBillDraftRequest request,
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default)
         => _lifecycle.CreateBackdatedDraftAsync(request, createdAtUtc, cancellationToken);
 
+    /// <param name="callerIsAdmin">
+    /// True when the request came from an unlocked admin session. Saving an
+    /// edit to a posted bill reopens it for another push, which only admin may do.
+    /// </param>
     public Task<BillResponse> UpdateDraftAsync(
         Guid billId,
         UpdateBillDraftRequest request,

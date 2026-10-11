@@ -14,8 +14,8 @@ namespace ShowroomBilling.Infrastructure.Admin;
 
 public sealed class AdminAuthService(
     ShowroomBillingDbContext dbContext,
-    IAdminUnlockThrottle unlockThrottle,
-    ILogger<AdminAuthService> logger) : IAdminAuthService
+    AdminUnlockThrottle unlockThrottle,
+    ILogger<AdminAuthService> logger)
 {
     private const int SaltBytes = 16;
     private const int HashBytes = 32;

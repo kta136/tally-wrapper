@@ -72,14 +72,14 @@ Numbering state, one row per `("ShowroomId", "FiscalYear", "DocumentType")` (the
 | Column | Type | Notes |
 |---|---|---|
 | `NextValue` | bigint | Where the next allocation starts; check `> 0` |
-| `MinNextValue` | bigint | Floor for rollback. Raised past the core of a deleted or renumbered bill whose voucher Tally holds |
+| `MinNextValue` | bigint | One past the highest core kept for Tally: raised when a bill whose voucher Tally holds is deleted or renumbered. Roll-back stops at it, and a reservation passes over the core just under it ([docs/04 §2.7](04_numbering_and_idempotency.md)) |
 | `UpdatedAtUtc` | timestamptz | |
 
 The row is locked with `SELECT ... FOR UPDATE` during allocation and rollback. Behaviour is in [04_numbering_and_idempotency.md](04_numbering_and_idempotency.md).
 
-### 1.4 `invoice_number_reservations` (unused)
+### 1.4 `invoice_number_reservations` (dropped)
 
-Not written and not read. Older builds wrote one row per bill created (`"IdempotencyKey"` = `draft:{billId}`). The table, its EF mapping and those rows stay until a migration drops it. A bill's number is on its own row, and a repeated Save is recognised by `bills."CreateOperationId"`.
+Dropped on 11 October 2026; see §1.10. Builds up to 10 October 2026 wrote one row per bill created (`"IdempotencyKey"` = `draft:{billId}`). A bill's number is on its own row, and a repeated Save is recognised by `bills."CreateOperationId"`.
 
 ### 1.5 `audit_events`
 
@@ -169,7 +169,7 @@ Logo, signature, and watermark images uploaded by the operator, stored inline.
 
 Index: `("ShowroomId", "AssetKind")`. Upload validation accepts only PNG/JPEG content whose file signature matches, with a 2 MiB decoded-byte cap.
 
-### 1.10 Columns and tables removed on 10 October 2026
+### 1.10 Columns and tables removed in October 2026
 
 The `DropUnusedColumnsAndIndexes` migration removed six columns nothing read: `bills."CreatedBy"`, `bill_revisions."TotalsJson"` and `"RawJson"` on the four master snapshot tables. It also removed twelve indexes that were a prefix of another index or sat on a single-row table.
 
@@ -190,6 +190,14 @@ The `DropDraftEditLeases` migration dropped the `draft_edit_leases` table the sa
 ```sql
 DROP TABLE IF EXISTS public.dropped_20261010_draft_edit_leases;
 ```
+
+The `DropInvoiceNumberReservations` migration (11 October 2026) dropped `invoice_number_reservations` (§1.4). Its rows are first copied to `dropped_20261011_invoice_number_reservations` in the same transaction, and rolling back recreates the table, its two indexes and those rows. Production held a row for every bill created before 11 October, so the copy exists there. When the release has settled:
+
+```sql
+DROP TABLE IF EXISTS public.dropped_20261011_invoice_number_reservations;
+```
+
+These side tables are removed by hand and not by a migration on purpose: a migration that deleted them would also delete the copies a restored older database makes on its way up.
 
 ---
 

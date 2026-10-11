@@ -481,55 +481,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.ToTable("database_identity", "public");
                 });
 
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.InvoiceNumberReservationEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DocumentType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("FiscalYear")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<string>("FormattedNumber")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<string>("IdempotencyKey")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTimeOffset>("ReservedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ReservedForReference")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<long>("ReservedValue")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IdempotencyKey")
-                        .IsUnique();
-
-                    b.HasIndex("ShowroomId", "FiscalYear", "DocumentType");
-
-                    b.ToTable("invoice_number_reservations", "public");
-                });
-
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.InvoiceSequenceEntity", b =>
                 {
                     b.Property<Guid>("ShowroomId")

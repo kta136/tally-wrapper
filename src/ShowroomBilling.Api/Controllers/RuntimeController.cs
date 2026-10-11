@@ -5,7 +5,6 @@ using Npgsql;
 using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Security;
-using ShowroomBilling.Application.Health;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Infrastructure.Health;
@@ -23,7 +22,7 @@ public sealed class RuntimeController(
     IHostEnvironment hostEnvironment,
     MaintenanceTokenStore maintenanceTokenStore,
     ClientPresenceRegistry clientPresenceRegistry,
-    IDatabaseSchemaState schemaState) : ControllerBase
+    DatabaseSchemaState schemaState) : ControllerBase
 {
     [HttpPost("database/maintenance/test")]
     public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(

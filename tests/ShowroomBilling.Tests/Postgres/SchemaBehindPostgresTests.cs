@@ -21,13 +21,19 @@ namespace ShowroomBilling.Tests.Postgres;
 [Trait("Category", "Postgres")]
 public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
 {
-    // Two migrations short of the current schema.
+    // The schema the server had on the day: several migrations short of the build.
     private const string Older = "20261009161104_PerformanceReadOptimizationsApplied";
 
     [Fact]
     public async Task A_service_role_that_may_not_migrate_leaves_the_api_up_and_the_shortfall_on_record()
     {
         await using var database = await fixture.CreateDatabaseAtMigrationAsync(Older);
+        int missing;
+        await using (var asOwner = database.CreateContext())
+        {
+            missing = asOwner.Database.GetMigrations().SkipWhile(id => id != Older).Count() - 1;
+        }
+        Assert.True(missing >= 2);
         var role = $"tw_app_{Guid.NewGuid():N}";
         await ExecuteAsync(database.ConnectionString, $"""
             CREATE ROLE "{role}" LOGIN PASSWORD 'app';
@@ -59,18 +65,18 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
             // The host must come up regardless.
             await service.StartAsync(TestContext.Current.CancellationToken);
 
-            Assert.Equal(2, schemaState.PendingMigrationCount);
+            Assert.Equal(missing, schemaState.PendingMigrationCount);
             await Assert.ThrowsAsync<DatabaseNotReadyException>(
                 () => startupStatus.WaitForDatabaseReadyAsync(TestContext.Current.CancellationToken));
 
             // Nothing was applied, and the build's own SQL is what PostgreSQL rejects.
             await using var scope = provider.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
-            Assert.Equal(2, (await db.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken)).Count());
+            Assert.Equal(missing, (await db.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken)).Count());
             Assert.NotNull(await ScalarAsync(database.ConnectionString, "SELECT to_regclass('public.draft_edit_leases')::text"));
 
             // A full health check finds the same shortfall...
-            Assert.Equal(2, await DatabaseSchemaState.CheckAsync(db, new DatabaseSchemaState(), TestContext.Current.CancellationToken));
+            Assert.Equal(missing, await DatabaseSchemaState.CheckAsync(db, new DatabaseSchemaState(), TestContext.Current.CancellationToken));
 
             // ...and sees it gone once the owner has applied the migrations by hand.
             await using (var asOwner = database.CreateContext())

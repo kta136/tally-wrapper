@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Auditing;
-using ShowroomBilling.Application.PrintAssets;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
@@ -10,7 +9,7 @@ namespace ShowroomBilling.Infrastructure.PrintAssets;
 
 public sealed class PrintAssetService(
     ShowroomBillingDbContext dbContext,
-    IAuditActorContext? actorContext = null) : IPrintAssetService
+    IAuditActorContext? actorContext = null)
 {
     private const long MaxBytes = 2 * 1024 * 1024;
 

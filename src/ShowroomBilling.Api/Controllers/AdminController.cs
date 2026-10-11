@@ -4,15 +4,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
-using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Contracts.Admin;
+using ShowroomBilling.Infrastructure.Admin;
 
 namespace ShowroomBilling.Api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
 public sealed class AdminController(
-    IAdminAuthService adminService,
+    AdminAuthService adminService,
     IOptions<DeviceAuthOptions> deviceAuthOptions) : ControllerBase
 {
     [HttpGet("passcode")]

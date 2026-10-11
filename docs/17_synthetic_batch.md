@@ -46,7 +46,7 @@ padding / business-day replay. Available in production, admin-gated.
    inclusive total; if it overshoots the target, halves the qty, then clamps to
    `MinQty = 0.001 g`.
 5. `SyntheticBatchExecutor` — loops planned bills, calls
-   [`IBillService.CreateBackdatedDraftAsync`](../src/ShowroomBilling.Application/Bills/IBillService.cs)
+   [`BillService.CreateBackdatedDraftAsync`](../src/ShowroomBilling.Infrastructure/Bills/BillService.cs)
    with the planned `ScheduledAtUtc`. Each bill takes the next invoice number
    from `NumberingService` exactly as a saved bill does (numbers follow the
    order the bills are created in, within the fiscal year of the bill date),

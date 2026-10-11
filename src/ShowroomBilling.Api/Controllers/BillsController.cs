@@ -2,16 +2,16 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShowroomBilling.Api.Security;
-using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Infrastructure.Bills;
 
 namespace ShowroomBilling.Api.Controllers;
 
 [ApiController]
 [Route("api/bills")]
 public sealed class BillsController(
-    IBillService billService,
-    ISyntheticBatchExecutor syntheticBatchExecutor) : ControllerBase
+    BillService billService,
+    SyntheticBatchExecutor syntheticBatchExecutor) : ControllerBase
 {
     [HttpPost("synthetic-batch")]
     [Authorize(Policy = AdminPolicy.PolicyName)]

@@ -1,13 +1,17 @@
-using ShowroomBilling.Application.Admin;
-
 namespace ShowroomBilling.Infrastructure.Admin;
 
 /// <summary>
-/// In-memory backoff: first 4 failures are free, then an exponential cooldown
-/// kicks in (2s, 4s, 8s, 16s, capped at 30s). The counter resets on a
-/// successful unlock or API restart.
+/// In-memory backoff for failed admin unlocks: the first 4 failures are
+/// free, then an exponential cooldown applies (2s, 4s, 8s, 16s, capped at
+/// 30s). The counter resets on a successful unlock or an API restart.
+/// A singleton, so the state outlives the per-request
+/// <see cref="AdminAuthService"/>.
+///
+/// Device auth already keeps other machines and processes away from the
+/// endpoint, so the realistic caller is an operator who forgot the passcode,
+/// not a brute-force script; that is why nothing is persisted.
 /// </summary>
-public sealed class AdminUnlockThrottle : IAdminUnlockThrottle
+public sealed class AdminUnlockThrottle
 {
     private const int FreeAttempts = 4;
     private static readonly TimeSpan MaxCooldown = TimeSpan.FromSeconds(30);
@@ -15,6 +19,13 @@ public sealed class AdminUnlockThrottle : IAdminUnlockThrottle
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, ThrottleState> _state = new();
 
+    /// <summary>
+    /// Checks the cooldown and, when none applies, counts this attempt before
+    /// the passcode is verified, in one step: concurrent guesses cannot all
+    /// slip past the check before any failure is recorded. Returns the
+    /// remaining cooldown when the attempt is refused, or
+    /// <see cref="TimeSpan.Zero"/> when it may proceed.
+    /// </summary>
     public TimeSpan TryBeginAttempt(Guid showroomId)
     {
         lock (_gate)

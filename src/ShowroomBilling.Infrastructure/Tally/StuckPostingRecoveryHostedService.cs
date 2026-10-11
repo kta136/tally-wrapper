@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using ShowroomBilling.Application.Health;
+using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Infrastructure.Tally;
@@ -24,7 +24,7 @@ namespace ShowroomBilling.Infrastructure.Tally;
 /// </summary>
 public sealed class StuckPostingRecoveryHostedService(
     IServiceScopeFactory scopeFactory,
-    IStartupStatus startupStatus,
+    StartupStatus startupStatus,
     ILogger<StuckPostingRecoveryHostedService> logger) : DatabaseStartupTask(startupStatus)
 {
     protected override TimeSpan Timeout => TimeSpan.FromSeconds(30);

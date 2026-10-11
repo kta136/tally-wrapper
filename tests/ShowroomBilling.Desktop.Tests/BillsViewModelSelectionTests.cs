@@ -125,7 +125,7 @@ public sealed class BillsViewModelSelectionTests
 
         Assert.False(allowed);
         Assert.False(vm.IsTallyPushAllowed);
-        Assert.False(vm.TallyPushSelectedCommand.CanExecute(null));
+        Assert.False(vm.PushSelectedCommand.CanExecute(null));
         Assert.Contains("Tally push blocked", vm.StatusMessage);
     }
 

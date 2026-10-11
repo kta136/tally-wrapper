@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Numbering;
+using ShowroomBilling.Infrastructure.Numbering;
 
 namespace ShowroomBilling.Api.Controllers;
 
 [ApiController]
 [Route("api/numbering")]
-public sealed class NumberingController(INumberingService numberingService) : ControllerBase
+public sealed class NumberingController(NumberingService numberingService) : ControllerBase
 {
     [HttpGet("preview")]
     public async Task<ActionResult<NumberingPreviewResponse>> Preview(
@@ -15,7 +15,7 @@ public sealed class NumberingController(INumberingService numberingService) : Co
         CancellationToken cancellationToken)
     {
         var resolvedType = string.IsNullOrWhiteSpace(documentType)
-            ? INumberingService.DocumentTypeSalesInvoice
+            ? NumberingService.DocumentTypeSalesInvoice
             : documentType;
         var response = await numberingService.GetPreviewAsync(resolvedType, fiscalYear, cancellationToken);
         return Ok(response);

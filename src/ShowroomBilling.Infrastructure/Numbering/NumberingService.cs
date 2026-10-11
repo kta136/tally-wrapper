@@ -1,15 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using ShowroomBilling.Application;
-using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Numbering;
 
-public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumberingService
+/// <summary>An invoice number taken from a fiscal year's sequence.</summary>
+public sealed record ReservedNumber(string FiscalYear, long ReservedValue, string FormattedNumber);
+
+public sealed class NumberingService(ShowroomBillingDbContext dbContext)
 {
+    public const string DocumentTypeSalesInvoice = "sales_invoice";
+
     private const int MaxReservationAttempts = 3;
 
     public async Task<NumberingPreviewResponse> GetPreviewAsync(
@@ -29,7 +33,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
 
         var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
         var previewValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, sequence?.NextValue ?? 1L, cancellationToken);
+            showroomId, year, sequence?.NextValue ?? 1L, CoreKeptForTally(sequence), cancellationToken);
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, previewValue, year, padding);
 
         return new NumberingPreviewResponse(
@@ -43,9 +47,12 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
     }
 
     /// <summary>
-    /// Hands out the next free invoice number of the fiscal year and moves the
-    /// sequence past it. Inside a caller's transaction the number is only
-    /// taken when that transaction commits, together with the bill it is for.
+    /// Hands out the next free invoice number of the fiscal year (the current
+    /// one when <paramref name="fiscalYear"/> is null) and moves the sequence
+    /// past it. Inside a caller's transaction the number is only taken when
+    /// that transaction commits, together with the bill it is for, and the
+    /// caller must call <c>SaveChangesAsync</c>: the sequence is saved with
+    /// its rows.
     /// </summary>
     public async Task<ReservedNumber> ReserveAsync(
         string documentType,
@@ -95,7 +102,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
         // number was moved by hand via change-number.
         var startFrom = sequence?.NextValue ?? 1L;
         var reservedValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, startFrom, cancellationToken);
+            showroomId, year, startFrom, CoreKeptForTally(sequence), cancellationToken);
 
         if (sequence is null)
         {
@@ -178,10 +185,15 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
     /// has jumped numbers far ahead and the entire skip range happens to be
     /// occupied.
     /// </summary>
+    /// <param name="keptForTally">
+    /// A core no bill holds here but a voucher in Tally does
+    /// (<see cref="CoreKeptForTally"/>); it is passed over like an occupied one.
+    /// </param>
     private async Task<long> ComputeNextFreeCoreAsync(
         Guid showroomId,
         string fiscalYear,
         long startFrom,
+        long? keptForTally,
         CancellationToken cancellationToken)
     {
         const int SafetyCap = 1000;
@@ -198,6 +210,10 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             .ToListAsync(cancellationToken);
 
         var occupied = new HashSet<long>();
+        if (keptForTally is { } kept)
+        {
+            occupied.Add(kept);
+        }
         foreach (var row in rows)
         {
             if ((row.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(row.InvoiceNumber)) is { } core)
@@ -218,13 +234,23 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             $"Could not find a free invoice number within {SafetyCap} tries starting at {startFrom} for fiscal year {fiscalYear}.");
     }
 
+    /// <summary>
+    /// The floor of a sequence is one past the highest core that Tally holds a
+    /// voucher for after its bill was deleted or renumbered. That core is
+    /// normally behind the sequence, where the floor stops a roll-back from
+    /// reaching it. It is ahead of the sequence when the bill had first been
+    /// renumbered upwards, and then only the reservation can keep it unused.
+    /// </summary>
+    private static long? CoreKeptForTally(InvoiceSequenceEntity? sequence) =>
+        sequence is { MinNextValue: > 1L } ? sequence.MinNextValue - 1L : null;
+
     private static string NormalizeDocumentType(string documentType)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(documentType);
         var normalized = documentType.Trim().ToLowerInvariant().Replace('-', '_');
         return normalized switch
         {
-            INumberingService.DocumentTypeSalesInvoice => INumberingService.DocumentTypeSalesInvoice,
+            DocumentTypeSalesInvoice => DocumentTypeSalesInvoice,
             _ => throw new RequestValidationException($"Unsupported document type '{documentType}'.")
         };
     }

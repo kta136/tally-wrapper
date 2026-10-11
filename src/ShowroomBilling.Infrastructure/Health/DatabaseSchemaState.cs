@@ -1,14 +1,25 @@
 using Microsoft.EntityFrameworkCore;
-using ShowroomBilling.Application.Health;
 using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Infrastructure.Health;
 
-public sealed class DatabaseSchemaState : IDatabaseSchemaState
+/// <summary>
+/// What this process last learned about the schema of the database it runs
+/// against: how many of this build's migrations the database has not had.
+/// <para>
+/// A build on a database that is behind answers every bill and numbering
+/// request with an error while PostgreSQL itself is perfectly reachable, so
+/// "reachable" alone is not health. The start-up migration and each full
+/// health check record what they find here, and the cheap health probe reports
+/// the last value without touching the database. In memory only.
+/// </para>
+/// </summary>
+public sealed class DatabaseSchemaState
 {
     private const int Unknown = -1;
     private int _pending = Unknown;
 
+    /// <summary>Null: not looked at yet. Zero: up to date.</summary>
     public int? PendingMigrationCount =>
         Volatile.Read(ref _pending) is var pending && pending == Unknown ? null : pending;
 
@@ -21,7 +32,7 @@ public sealed class DatabaseSchemaState : IDatabaseSchemaState
     /// </summary>
     public static async Task<int> CheckAsync(
         ShowroomBillingDbContext dbContext,
-        IDatabaseSchemaState state,
+        DatabaseSchemaState state,
         CancellationToken cancellationToken)
     {
         var pending = (await dbContext.Database.GetPendingMigrationsAsync(cancellationToken)).Count();

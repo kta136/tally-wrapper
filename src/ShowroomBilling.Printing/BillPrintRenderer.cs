@@ -3,13 +3,7 @@ using QuestPDF.Infrastructure;
 
 namespace ShowroomBilling.Printing;
 
-public interface IBillPrintRenderer
-{
-    byte[] GeneratePdf(PrintDocumentOptions options);
-    IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int imageDpi = 150);
-}
-
-public sealed class BillPrintRenderer : IBillPrintRenderer
+public sealed class BillPrintRenderer
 {
     static BillPrintRenderer()
     {
