@@ -267,13 +267,13 @@ Such a copy holds real customer data on the Docker host until `-Reset` or `-Remo
 
 ## Logs
 
-Both hosts (API, Desktop) write structured rolling-file logs via `ShowroomBilling.Application.Logging.RollingFileLoggerProvider` (alias `File`). Files live under `%APPDATA%\ShowroomBilling\logs` — the same folder the Settings → Advanced → Logs & Diagnostics **Open** button points at.
+Both hosts (API, Desktop) write rolling-file logs through Serilog's file sink, set up by `LoggingExtensions.AddRollingFile` in `ShowroomBilling.Application.Logging`. Files live under `%APPDATA%\ShowroomBilling\logs` — the same folder the Settings → Advanced → Logs & Diagnostics **Open** button points at.
 
-- file naming: `{prefix}-{yyyyMMdd}.log` (prefixes: `api-`, `desktop-`); within a day, size-cap rollover at `FileSizeLimitMB` (default 20 MB) appends `-1`, `-2`, …
-- line shape: `{ISO timestamp} [{LEVEL3}] [{scope key=values}] {Category}: {message}` plus optional exception block; the `CorrelationId` rides as a scope key on every API request, so desktop → API traces are greppable by a single id
-- retention: default 30 days, runs on provider startup + on each daily rollover; files with `LastWriteTime` older than the cutoff are deleted
+- file naming: `{prefix}-{yyyyMMdd}.log` (prefixes: `api-`, `desktop-`); within a day, size-cap rollover at `FileSizeLimitMB` (default 20 MB) continues in `{prefix}-{yyyyMMdd}_001.log`, `_002`, …. A second copy of the same host running at the same time (a dev API beside the installed one, say) cannot share the file, so it writes to the next numbered one too
+- line shape: `{ISO timestamp} [{LEVEL3}] [{scope key=values}] {Category}: {message}` plus optional exception block (`LogLineFormatter`); the `CorrelationId` rides as a scope key on every API request, so desktop → API traces are greppable by a single id
+- retention: default 30 days, judged by the date in the file name; old files are removed whenever a file is opened (start-up, the daily rollover, a size rollover)
 - configuration lives under `Logging:File` in each host's `appsettings.json` — `Enabled`, `Directory`, `FilePrefix`, `RetentionDays`, `FileSizeLimitMB`, `MinLevel`
-- writes are non-blocking: `RollingFileLogger` drops lines into a bounded `BlockingCollection<string>` (cap 4096) and a dedicated background task drains it to disk; graceful shutdown flushes up to a 2 s drain window via `ILoggerProvider.Dispose`
+- writes are non-blocking: lines go into a bounded queue (4096; a full queue drops the line) and a background thread writes each one to the file as it arrives; disposing the provider at shutdown writes out whatever is still queued
 
 ## Settings-storage contract
 
