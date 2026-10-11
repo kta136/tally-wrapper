@@ -8,18 +8,17 @@ This document describes how Tally Wrapper is deployed and operated.
 
 ### Components
 
-- WPF desktop app on each counter workstation
-- ASP.NET Core API process, **co-located on the same machine as TallyPrime** (reaches Tally's XML endpoint over localhost)
-- optional `ShowroomBilling.ServerTray` app on the Tally server, running in the logged-in user's taskbar notification area
-- PostgreSQL database (PostgreSQL 18 on an Oracle Cloud Infrastructure VPS in production; local Postgres remains available for development)
+- WPF desktop app on each counter workstation. It is a client of the server API and never starts an API of its own
+- one ASP.NET Core API, a Windows Service **on the same machine as TallyPrime** (reaches Tally's XML endpoint over localhost)
+- `ShowroomBilling.ServerTray` on the Tally server: the installer for that service, and its companion in the logged-in user's taskbar notification area
+- PostgreSQL database (PostgreSQL 18 on an Oracle Cloud Infrastructure VPS in production; development uses a throwaway PostgreSQL 18 container, see [DEV_SETUP.md](../DEV_SETUP.md#run-against-a-scratch-database))
 - TallyPrime running on the Tally host
 
 No separate bridge process. No SignalR hub. No job queue.
 
 ### Communication paths
 
-- Desktop -> API: HTTP(S) JSON
-- Workstation Desktop -> server API: HTTP JSON to `http://<tally-server>:5107` when `DesktopBootstrap:ConnectionMode=Server`
+- Desktop -> API: HTTP JSON to `http://<tally-server>:5107`, the address saved on the workstation in Settings → Server
 - API -> PostgreSQL: direct DB connection (Npgsql)
 - API -> TallyPrime: localhost HTTP/XML (synchronous, only on operator click)
 - ServerTray -> API: localhost HTTP JSON for health and DB maintenance
@@ -30,47 +29,30 @@ Desktop never talks to Tally directly.
 
 ## 2. Desktop app deployment
 
-### Target packaging
+### Packaging
 
-Preferred steady-state packaging:
+`tools\publish-prod.ps1` publishes the Desktop as a self-contained, single-file `TallyWrapper.exe` in `publish\prod\`. It carries no API and no database settings. There is no installer and no in-app updater: copy the contents of `publish\prod\` to the workstation, set the server address, and replace the files to upgrade.
 
-- `MSIX` + `App Installer`
+### Server address
 
-Acceptable pilot/early rollout option:
+The Desktop's one connection setting is `DesktopBootstrap:ApiBaseUrl`, the address of the server API. The built-in value is `http://localhost:5107`, which is right for a Desktop on the server PC itself. Every other workstation saves its own in **Settings → Server**:
 
-- `ClickOnce`, if it reduces initial deployment friction
+- **Find server** scans the workstation's own `/24` networks for a Tally Wrapper API on port `5107` and fills in what it finds
+- **Test server** calls the server's `/api/health/live` and `/api/health/ready`
+- **Save and restart Billing** writes the address to `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json` and restarts the Desktop, which reads it at start-up
 
-### Desktop connection modes
+The environment variable `SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl` overrides the saved address.
 
-`DesktopBootstrap:ConnectionMode` controls where the desktop sends API traffic:
+The file keeps the shape older builds wrote: `serverApiBaseUrl`, and a `connectionMode` that is always `Server`. A counter that an older build had already pointed at the server needs nothing done. A counter that has no saved address looks for the server on its own PC and shows the limited-mode screen until an address is saved; **Server Settings** on that screen opens the section.
 
-- `LocalEmbedded` (default) — the desktop owns the API child process and uses `ApiBaseUrl`.
-- `Server` — the desktop uses `ServerApiBaseUrl`, skips child-process startup, and does not create or send the local device token.
-
-The typed local override file is `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json` and is intentionally limited to `connectionMode` and `serverApiBaseUrl`. It must not override child-process settings, database strings, Tally settings, or shared business behavior.
-
-Operators normally change this from **Settings -> Database -> API Connection Mode** in the desktop. Choosing `Server` and saving writes the local override, then restarts Tally Wrapper so the next boot skips the embedded API. Choosing `LocalEmbedded` restores the old desktop-owned API path. The UI remembers the last non-localhost server URL, can test the server health endpoints, and can scan the local `/24` subnet for a Tally Wrapper API on port `5107`. Local embedded API and database details are hidden while the selected API location is `Server`; selecting `LocalEmbedded` reveals them. Editing remains disabled until the desktop is actually running in `LocalEmbedded` mode because server DB configuration is owned by the tray on the Tally server.
-
-Fallback remains available per workstation: switching back to `LocalEmbedded` requires that workstation's own DB override and Tally host settings that can reach the Tally server by LAN name/IP.
-
-### Child-process supervision
-
-The Desktop spawns the API as a child under a Windows Job Object (`KillOnJobClose`). When the Desktop exits — gracefully or by crash — the API dies with it. The published desktop-owned API is launched with `ASPNETCORE_ENVIRONMENT=Production`, `DOTNET_ENVIRONMENT=Production`, and `--urls http://127.0.0.1:5107`, because the production desktop talks to the API over HTTP only. Development config overrides this to `Development` on `http://127.0.0.1:5108`, so VS Code/debug sessions do not attach to a production API already running on `5107`. If the API is already running (e.g. you're debugging it separately), the supervisor probes the configured API ports and skips spawning.
-
-Config lives in `appsettings.json` under `ChildProcesses`. Only `ChildProcesses.Api` remains — the bridge entry is gone.
+The Desktop sends the device token only when its server address is loopback. A workstation on the LAN sends none; the server trusts its configured LAN range instead (§3).
 
 The database also carries its own identity marker in `public.database_identity` (`key = 'environment'`). Production databases must be marked `PROD`; development/test databases must be marked `DEV`. Runtime health compares this DB-owned value with the API environment and surfaces a `DB MISMATCH` warning on mismatch while still reporting PostgreSQL as reachable.
 
-### Desktop update behavior
-
-- updates should be centrally publishable
-- operator update prompts should be predictable and low-friction
-- client should reject incompatible backend schema/contracts with clear message rather than failing obscurely
-
 ### Local desktop persistence allowed
 
-- app config needed to start
-- cached auth/session tokens (admin unlock, short TTL)
+- the server address and the counter name
+- the admin unlock token, in memory only (short TTL)
 - local UX preferences such as printer name and last PDF directory
 - logs
 
@@ -84,32 +66,32 @@ No local durable business cache is allowed.
 
 - ASP.NET Core modular monolith
 - **runs on the same machine as TallyPrime** (single-showroom deployment) — this is a hard topology constraint because the API dials Tally's localhost XML endpoint directly
-- spawned as a child of the Desktop by default (see §2); for LAN deployments, deploy it as a Windows Service on the Tally server
-- migration-safe startup: `DatabaseInitializationHostedService` applies EF migrations on boot
+- runs as a Windows Service on the Tally server, installed and repaired by `TallyWrapper.Server.exe`; nothing else starts it
+- at start-up `DatabaseInitializationHostedService` applies pending EF migrations when `Database:AutoMigrateOnStartup` is true and its database role may alter the schema. On production the service's role may not, so migrations are applied by hand (§11)
 
 ### Operational requirements
 
-- structured logging to rolling log files (`%APPDATA%\ShowroomBilling\logs` for embedded mode; `C:\ProgramData\ShowroomBilling\logs` for server-service installs)
+- structured logging to rolling log files: `C:\ProgramData\ShowroomBilling\logs` for the server service
 - `/api/health/live` and `/api/health/ready` endpoints
 - `StuckPostingRecoveryHostedService` runs once on boot — any bill stranded in `posting` from a prior crash moves to `reconciliation_required` with a `bill.posting.recovered` audit event
-- `OperationalDataRetentionHostedService` runs once after DB readiness and purges only admin sessions that expired more than 30 days ago; accounting and audit records are excluded
+- each successful admin unlock deletes the admin sessions that expired more than 30 days ago; nothing else is purged
 - API errors are returned as RFC 7807 `application/problem+json` via a global `IExceptionHandler`, with no typed-body exceptions. See [`09_api_spec.md`](./09_api_spec.md) §1.
 - API admin endpoints are gated via ASP.NET Core authentication/authorization — scheme `AdminToken` + policy `Admin`. No framework-wide authentication is required for non-admin routes.
 - Safe `ITallyXmlClient` reads have a Polly retry pipeline (2 attempts, ~200 ms jittered backoff, triggered on `HttpRequestException` + 5xx). Voucher writes are excluded to prevent duplicate Tally imports; their total timeout still comes from `Connection.TimeoutSeconds`.
 
-### Windows Service server mode
+### Server install
 
-Server mode is published with:
+The server is published with:
 
 ```powershell
 .\tools\publish-server-tray.ps1
 ```
 
-Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR, elevates via UAC, extracts the embedded API to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
+Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR, elevates via UAC, extracts the API it carries to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
 
-Running the same EXE again is idempotent. It checks the embedded API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
+Running the same EXE again is idempotent. It checks the extracted API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
 
-This EXE is the only server installer; the PowerShell install script that duplicated it was removed on 10 October 2026. The tray has no uninstall. To remove the server, exit the tray and run `tools\uninstall-server-api-service.ps1` elevated, as the user whose tray starts at sign-in: it removes the service, both firewall rule names and the start-up entry, and keeps `C:\ProgramData\ShowroomBilling` unless `-RemoveConfig` is given.
+This EXE is the only server installer. The tray has no uninstall. To remove the server, exit the tray and run `tools\uninstall-server-api-service.ps1` elevated, as the user whose tray starts at sign-in: it removes the service, both firewall rule names and the start-up entry, and keeps `C:\ProgramData\ShowroomBilling` unless `-RemoveConfig` is given.
 
 The service install sets:
 
@@ -123,30 +105,7 @@ The service install sets:
 
 It also creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt` and a Windows Firewall rule scoped to the configured LAN CIDR. The range must be a network in CIDR form; it is checked before anything is written. A later run that only upgrades the API (a newer `TallyWrapper.Server.exe`) keeps the range already configured on the service and does not ask again. **Install / Repair Server** in the dashboard does ask, starting from the current range. The one-EXE installer uses the default LocalSystem service identity; DB configuration is written through the tray's localhost maintenance flow under `C:\ProgramData\ShowroomBilling`.
 
-Server mode intentionally trusts clients inside the configured LAN CIDR for normal writes. Admin actions still require `X-Admin-Token`. DB override metadata, anonymous DB bootstrap, DB test, and initial admin-passcode setup are loopback-only in server mode.
-
-### Server tray
-
-`ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. It uses Windows Service Control Manager for service state and control, so start/stop/restart still works when the API is stopped.
-
-Tray features:
-
-- show service state, API liveness, DB health, and recently seen workstation clients
-- install/repair the server, start/stop/restart the API Windows Service, open the local health page, open logs/config/install-log folders, and copy the workstation server URL from either the tray menu or the main dashboard window
-- configure/test/save DB settings through localhost-only maintenance endpoints using `maintenance_token.txt`; DB maintenance result dialogs include a **Copy** action for supportable error messages
-- exit the tray by stopping the API Windows Service first, then closing the companion UI
-- no Tally polling; Tally is checked only by operator-triggered push/refresh/System Health flows
-
-The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windows Service Control Manager before closing the companion tray UI. This is the server shutdown path for the Tally host.
-
-### Startup hosted services
-
-- `DatabaseInitializationHostedService` — applies EF migrations.
-- `StuckPostingRecoveryHostedService` — one-shot classification of stuck `posting` bills as reconciliation-required.
-- `OperationalDataRetentionHostedService` — bounded purge of stale auth-session rows.
-- `SequenceSelfHealHostedService` and `DatabaseWarmupHostedService` — bounded sequence repair and read-path warmup after database readiness.
-
-These are bounded, single-pass startup tasks. There is no recurring posting, Tally polling, or retention worker after startup completes.
+The server intentionally trusts clients inside the configured LAN CIDR for normal writes. Admin actions still require `X-Admin-Token`. The database maintenance endpoints and the initial admin-passcode setup are accepted from the server PC only, so the first admin passcode is set there (for example from a Desktop running on the server PC).
 
 ---
 
@@ -161,6 +120,8 @@ Configure the API or server tray with an Npgsql connection string shaped like:
 ```text
 Host=<oracle-vps-host>;Port=5432;Database=tally_wrapper_prod;Username=<app-role>;Password=<secret>;SSL Mode=<vps-required-mode>;Minimum Pool Size=<min>;Maximum Pool Size=<max>
 ```
+
+Only this keyword form is accepted. A `postgres://` or `postgresql://` URL is refused with a message that names the form above.
 
 ### OpenBao production secret
 
@@ -245,7 +206,7 @@ PostgreSQL is the system of record for:
 
 - bills
 - bill revisions
-- numbering sequences and reservations
+- numbering sequences
 - audit events
 - master snapshots (companies, ledgers, stock items, voucher types)
 - admin passcodes and sessions
@@ -284,22 +245,35 @@ The EF provider is explicitly targeted at PostgreSQL 18. New application-created
 
 ---
 
-## 5. ~~SignalR~~ (removed)
+## 5. Server tray
 
-Tally Wrapper no longer hosts a SignalR hub. The desktop refreshes explicitly after every command it runs; there's no background push channel to maintain.
+`ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. It uses Windows Service Control Manager for service state and control, so start/stop/restart still works when the API is stopped.
+
+Tray features:
+
+- show service state, API liveness, DB health, and recently seen workstation clients (counter, machine\user, address, last seen)
+- install/repair the server, start/stop/restart the API Windows Service, open the local health page, open logs/config/install-log folders, and copy the workstation server URL from either the tray menu or the main dashboard window
+- configure/test/save the server's database connection through localhost-only maintenance endpoints using `maintenance_token.txt`; this is the only place it is changed, and no Desktop screen shows it. DB maintenance result dialogs include a **Copy** action for supportable error messages
+- exit the tray by stopping the API Windows Service first, then closing the companion UI
+- no Tally polling; Tally is checked only by operator-triggered push/refresh/System Health flows
+
+The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windows Service Control Manager before closing the companion tray UI. This is the server shutdown path for the Tally host.
 
 ---
 
-## 6. ~~Local Tally bridge~~ (removed)
+## 6. Start-up tasks
 
-There is no separate bridge process. `ITallyPoster` and `ITallyMasterRefresher` live inside the API's Infrastructure layer. The API process is the only component that speaks Tally XML.
+- `DatabaseInitializationHostedService` — applies pending EF migrations when auto-migrate is on, and records how many are pending.
+- `StuckPostingRecoveryHostedService` — moves abandoned `posting` bills to `reconciliation_required`.
+- `SequenceSelfHealHostedService` — bounded repair of invoice sequences after database readiness.
 
-If the API is deployed on a different machine than Tally, bridging is the operator's problem — e.g. an SSH tunnel or VPN. The default / supported topology is API on the Tally host.
+These are bounded start-up tasks. There is no recurring posting, Tally polling, or retention worker after they finish.
 
 ---
 
 ## 7. Tally host assumptions
 
+- the API is the only component that speaks Tally XML; the supported topology is the API on the Tally host
 - TallyPrime is reachable on `http://{host}:{port}` from the API process (typically `127.0.0.1:9000`)
 - host and port are configured via cloud settings `Connection.Host` / `Connection.Port`
 - selected company exists in Tally and is open/available
@@ -313,12 +287,12 @@ If the API is deployed on a different machine than Tally, bridging is the operat
 
 Should capture:
 
-- startup/bootstrap status
+- startup status, including one `[startup-timing] hostBuild=… hostStart=… resolveWindow=… showWindow=… windowVisibleAt=…` line per launch
 - API connectivity failures
 - print failures
 - admin/recovery actions where appropriate
 
-Location: `%APPDATA%\ShowroomBilling\logs` (rolling files).
+Location: `%APPDATA%\ShowroomBilling\logs` on each workstation (rolling files, `desktop-*.log`).
 
 ### API logs
 
@@ -332,7 +306,7 @@ Should capture:
 - admin and recovery actions
 - `StuckPostingRecoveryHostedService` startup report
 
-Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\ProgramData\ShowroomBilling\logs` when installed as the server service.
+Location: `C:\ProgramData\ShowroomBilling\logs` on the server (`api-*.log`). An API started by hand in development writes to its own data folder: `%APPDATA%\ShowroomBilling\logs`, or the scratch folder under `tools\run-scratch.ps1`.
 
 ---
 
@@ -341,19 +315,15 @@ Location: `%APPDATA%\ShowroomBilling\logs` when spawned by the Desktop, or `C:\P
 ### API endpoints
 
 - `/api/health/live` — liveness
-- `/api/health/ready` — DB connectivity + migration readiness
+- `/api/health/ready` — whether PostgreSQL answers (pending migrations are reported by `/api/runtime/health`)
 - `/api/health/masters` — freshness of companies/ledgers/stock-items/voucher-types snapshots
 - `/api/health/tally-company` — operator-triggered Tally reachability + active-company check
 - `/api/runtime/health` — cheap runtime status by default; pass `?forceDatabase=true` for a PostgreSQL-backed DB/identity probe
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
 
-Desktop background health polling uses cheap runtime probes so it does not add a database round trip on every tick. Full DB health, Tally-company health, and master freshness are requested on startup, explicit System Health refreshes, database setup waits, and a slower scheduled probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
+Desktop background health polling uses cheap runtime probes so it does not add a database round trip on every tick. Full DB health, Tally-company health, and master freshness are requested on startup, explicit System Health refreshes, and a slower scheduled probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
 
-### What's NOT a health check anymore
-
-- bridge heartbeat / last-seen (no bridge exists)
-- Tally-job queue depth (no queue exists)
-- SignalR hub health (no hub exists)
+When the server reports that it cannot reach its database, the Desktop shows the limited-mode screen with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection." It does not open a settings screen by itself.
 
 ### Tally reachability
 
@@ -397,13 +367,13 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 - deploy API compatible with next DB migration
 - **On production, nothing applies migrations by itself. Apply them by hand, as the role that owns the tables, before a new server or Desktop build is started.**
   - The server service does try at start-up (the tray installer sets `Database__AutoMigrateOnStartup=true`), but it connects as the restricted application role, which may not create or alter objects. As soon as a migration is pending its attempt is refused with SQLSTATE `42501`, logged as a warning, and the API carries on. A release with nothing pending never reaches that code, which is how this stayed hidden until 10 October 2026.
-  - The Desktop's embedded API never tries: `publish-prod.ps1` writes `AutoMigrateOnStartup=false` into the API it embeds.
+  - The Desktop has no API and migrates nothing.
   - A build running against a database that has not had its migrations cannot read or save a bill, although PostgreSQL is reachable and settings and masters load. It says so in four places: bill and numbering requests answer `503 Database upgrade needed`; `/api/runtime/health` reports `pendingMigrationCount` (see [09_api_spec.md](09_api_spec.md)); the Desktop shows `DB BEHIND`, a banner, and the reason above the Bills list; the server tray's database line reads `upgrade needed: N migration(s) not applied`. Before 10 October 2026 none of this existed: those requests were a bare `500`, health read Healthy and the Bills tab was simply empty. The detailed reason for a refused start-up migration is in the server's log (`C:\ProgramData\ShowroomBilling\logs\api-*.log`, search for `migration`).
   - To apply them: first look at what the database has (`SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1 DESC LIMIT 3`); do not assume. Then either generate a script with `dotnet ef migrations script <last applied migration> --idempotent --output <file>` (no database connection needed) and run it with `psql -v ON_ERROR_STOP=1` as the owner role where the database is reachable, or run `dotnet ef database update --connection ...` with the owner role's connection string. Restart the API service afterwards so the start-up tasks that stepped aside run.
   - A development or test database whose application role owns its tables does migrate itself; that is why this does not show up there.
 - preserve backward-compatibility window if desktop rollout is staged
 
-**A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so once the migrations are applied to the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers each counter running its own embedded API as well as an older server service. For such a release: close Billing on every counter and stop the server service, take the dump below, apply the migrations by hand as the owner role (see above), update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
+**A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so once the migrations are applied to the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers an older server service, and any counter still on an old Desktop build that runs its own embedded API. For such a release: close Billing on every counter and stop the server service, take the dump below, apply the migrations by hand as the owner role (see above), update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
 
 **Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 
@@ -414,12 +384,14 @@ Remove-Item Env:PGPASSWORD
 pg_restore --list <the .dump file> | Select-Object -First 5   # proves the file is readable
 ```
 
-A migration that removes data must also protect itself, because that step can be forgotten: it copies what it is about to drop into a side table in the same transaction, and its `Down` restores from that copy. `DropUnusedColumnsAndIndexes` (10 October 2026) is the model; see [10_database_schema.md §1.8.1](10_database_schema.md) for the tables it leaves and how to remove them.
+A migration that removes data must also protect itself, because that step can be forgotten: it copies what it is about to drop into a side table in the same transaction, and its `Down` restores from that copy. `DropUnusedColumnsAndIndexes` (10 October 2026) is the model; see [10_database_schema.md §1.10](10_database_schema.md) for the tables it leaves and how to remove them.
 
 ### Desktop
 
-- staged counter rollout acceptable if contracts remain compatible
-- if incompatible, block with clear required-update message
+- to upgrade a counter, replace its files with the new `publish\prod\` output (§2)
+- a staged counter rollout is acceptable while contracts remain compatible and the release drops nothing from the schema
+- nothing checks that a Desktop and the API it calls are the same build; when a contract changes, update the server and every counter together
+- a counter coming from a build that ran its own embedded API opens on the limited-mode screen until a server address is saved in Settings → Server. An address that build had saved without using it is not taken up. Delete that older build's leftovers when the counter is upgraded: the folder `%LOCALAPPDATA%\ShowroomBilling\runtime\api` (about 130 MB) and the file `%APPDATA%\ShowroomBilling\database.*.local.json`, which holds that workstation's old database password and is no longer read by anything
 
 ---
 
@@ -427,7 +399,7 @@ A migration that removes data must also protect itself, because that step can be
 
 ### Online-first consequence
 
-This architecture is intentionally online-first. If the API is unavailable, the desktop cannot save bills. Reasoning:
+This architecture is intentionally online-first. If the API is unavailable, the desktop cannot save bills. There is one API for the whole showroom: while the server PC is off or its service is stopped (the tray's **Exit Tray** stops it), every counter shows the limited-mode screen. Reasoning:
 
 - no local durable business storage on the desktop
 - invoice numbers are reserved at save time by the API's numbering service

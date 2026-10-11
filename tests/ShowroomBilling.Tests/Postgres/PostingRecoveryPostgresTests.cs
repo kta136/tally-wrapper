@@ -5,10 +5,10 @@ using ShowroomBilling.Infrastructure.Tally;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
 {
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task RecoverAsync_OnlyRecoversClaimsOlderThanAnyLivePush()
     {
         await using var database = await fixture.CreateDatabaseAsync();

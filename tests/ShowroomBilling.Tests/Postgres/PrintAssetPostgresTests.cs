@@ -6,10 +6,10 @@ using ShowroomBilling.Infrastructure.PrintAssets;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class PrintAssetPostgresTests(PostgresFixture fixture)
 {
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task Asset_kind_constraint_accepts_watermark_and_rejects_unknown_values()
     {
         await using var database = await fixture.CreateDatabaseAsync();

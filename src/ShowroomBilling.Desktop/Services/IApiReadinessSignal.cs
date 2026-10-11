@@ -3,14 +3,14 @@ namespace ShowroomBilling.Desktop.Services;
 /// <summary>
 /// Singleton signal that goes from "not yet ready" to "ready" exactly once,
 /// at the moment <see cref="MainWindow.OnLoaded"/> finishes its TCP probe of
-/// the API child process. ViewModels and other consumers can <c>await</c>
+/// the API and the first load. ViewModels and other consumers can <c>await</c>
 /// <see cref="WhenReadyAsync"/> to defer work that must not run before the
 /// API is reachable — without each consumer re-implementing its own probe.
 ///
 /// This sits alongside <c>IStartupStatus</c> (server-side) — that one tracks
 /// readiness inside the API process; this one tracks readiness from the
-/// Desktop's perspective (the API child has bound a port the Desktop can
-/// reach). They are deliberately separate concerns.
+/// Desktop's perspective (the API answers on the address the Desktop was
+/// given). They are deliberately separate concerns.
 /// </summary>
 public interface IApiReadinessSignal
 {

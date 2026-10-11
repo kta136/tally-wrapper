@@ -56,7 +56,6 @@ internal sealed class BillAdminWorkflow(
                 Committed: false,
                 LeavesGap: false,
                 TallyDiverges: false,
-                ReservationOrphaned: false,
                 SequenceNextValue: null,
                 WarningSummary: "New invoice number matches the current one; nothing to do.");
         }
@@ -92,17 +91,6 @@ internal sealed class BillAdminWorkflow(
         // voucher to the new number instead of creating a second one.
         bool tallyDiverges = await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken);
 
-        bool reservationOrphaned = false;
-        if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
-        {
-            reservationOrphaned = await dbContext.InvoiceNumberReservations
-                .AsNoTracking()
-                .AnyAsync(
-                    r => r.IdempotencyKey == $"draft:{bill.Id:N}"
-                         && r.FormattedNumber != newNumber,
-                    cancellationToken);
-        }
-
         if (request.DryRun)
         {
             return new ChangeBillNumberResponse(
@@ -112,9 +100,8 @@ internal sealed class BillAdminWorkflow(
                 Committed: false,
                 LeavesGap: leavesGap,
                 TallyDiverges: tallyDiverges,
-                ReservationOrphaned: reservationOrphaned,
                 SequenceNextValue: seqNext,
-                WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges, reservationOrphaned));
+                WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges));
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -144,7 +131,6 @@ internal sealed class BillAdminWorkflow(
                 @new = newNumber,
                 leavesGap,
                 tallyDiverges,
-                reservationOrphaned,
                 reason = request.Reason ?? string.Empty
             });
         if (tallyDiverges)
@@ -204,9 +190,8 @@ internal sealed class BillAdminWorkflow(
             Committed: true,
             LeavesGap: leavesGap,
             TallyDiverges: tallyDiverges,
-            ReservationOrphaned: reservationOrphaned,
             SequenceNextValue: postSeqNext ?? seqNext,
-            WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges, reservationOrphaned));
+            WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges));
     }
 
     internal Task<BillResponse> MarkPostedAsync(

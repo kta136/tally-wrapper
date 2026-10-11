@@ -83,10 +83,10 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
 
     [Theory]
     [InlineData("/api/masters/companies")]
-    [InlineData("/api/masters/ledgers?search=cash&skip=0&take=5")]
+    [InlineData("/api/masters/ledgers")]
     [InlineData("/api/masters/stock-items")]
-    [InlineData("/api/masters/voucher-types?take=1")]
-    public async Task Snapshot_reads_accept_their_optional_query_values(string url)
+    [InlineData("/api/masters/voucher-types")]
+    public async Task Snapshot_reads_answer_with_their_metadata(string url)
     {
         var client = _factory.CreateClient();
 

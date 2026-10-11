@@ -330,7 +330,7 @@ public sealed class StatusForm : Form
             foreach (var client in clients)
             {
                 _clients.Items.Add(
-                    $"{client.CounterName} | {client.MachineName}\\{client.UserName} | {client.ConnectionMode} | {client.RemoteAddress} | {client.LastSeenAtUtc.LocalDateTime:HH:mm:ss}");
+                    $"{client.CounterName} | {client.MachineName}\\{client.UserName} | {client.RemoteAddress} | {client.LastSeenAtUtc.LocalDateTime:HH:mm:ss}");
             }
         }
         catch (Exception ex)

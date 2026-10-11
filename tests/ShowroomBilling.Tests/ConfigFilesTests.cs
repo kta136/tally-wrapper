@@ -10,67 +10,26 @@ public sealed class ConfigFilesTests
         var desktopSections = ReadTopLevelSections("src/ShowroomBilling.Desktop/appsettings.json");
 
         Assert.Equal(
-            ["ChildProcesses", "DesktopBootstrap", "Logging"],
+            ["DesktopBootstrap", "Logging"],
             desktopSections.OrderBy(section => section));
     }
 
+    /// <summary>
+    /// A development Desktop must not reach for the port the real server
+    /// uses on the same machine.
+    /// </summary>
     [Fact]
-    public void Desktop_Api_Child_Process_Is_Pinned_To_Production_Port_And_Environment()
+    public void Desktop_Development_Config_Points_At_A_Different_Port_From_Production()
     {
-        using var document = ReadJson("src/ShowroomBilling.Desktop/appsettings.json");
-        var root = document.RootElement;
-        var api = root
-            .GetProperty("ChildProcesses")
-            .GetProperty("Api");
+        using var production = ReadJson("src/ShowroomBilling.Desktop/appsettings.json");
+        using var development = ReadJson("src/ShowroomBilling.Desktop/appsettings.Development.json");
 
-        Assert.Equal("--urls http://127.0.0.1:5107", api.GetProperty("Arguments").GetString());
-        Assert.Equal(
-            "LocalEmbedded",
-            root.GetProperty("DesktopBootstrap").GetProperty("ConnectionMode").GetString());
         Assert.Equal(
             "http://localhost:5107",
-            root.GetProperty("DesktopBootstrap").GetProperty("ServerApiBaseUrl").GetString());
-        Assert.Equal(
-            "Production",
-            api.GetProperty("EnvironmentVariables").GetProperty("ASPNETCORE_ENVIRONMENT").GetString());
-
-        var ports = api.GetProperty("AlreadyRunningProbePorts")
-            .EnumerateArray()
-            .Select(x => x.GetInt32())
-            .OrderBy(x => x)
-            .ToArray();
-
-        Assert.Equal([5107, 7107], ports);
-    }
-
-    [Fact]
-    public void Desktop_Development_Config_Uses_Separate_Dev_Api_Port_And_Environment()
-    {
-        using var document = ReadJson("src/ShowroomBilling.Desktop/appsettings.Development.json");
-        var root = document.RootElement;
-        var api = root.GetProperty("ChildProcesses").GetProperty("Api");
-
+            production.RootElement.GetProperty("DesktopBootstrap").GetProperty("ApiBaseUrl").GetString());
         Assert.Equal(
             "http://localhost:5108",
-            root.GetProperty("DesktopBootstrap").GetProperty("ApiBaseUrl").GetString());
-        Assert.Equal(
-            "LocalEmbedded",
-            root.GetProperty("DesktopBootstrap").GetProperty("ConnectionMode").GetString());
-        Assert.Equal(
-            "http://localhost:5108",
-            root.GetProperty("DesktopBootstrap").GetProperty("ServerApiBaseUrl").GetString());
-        Assert.Equal("--urls http://127.0.0.1:5108", api.GetProperty("Arguments").GetString());
-        Assert.Equal(
-            "Development",
-            api.GetProperty("EnvironmentVariables").GetProperty("ASPNETCORE_ENVIRONMENT").GetString());
-
-        var ports = api.GetProperty("AlreadyRunningProbePorts")
-            .EnumerateArray()
-            .Select(x => x.GetInt32())
-            .OrderBy(x => x)
-            .ToArray();
-
-        Assert.Equal([5108, 7108], ports);
+            development.RootElement.GetProperty("DesktopBootstrap").GetProperty("ApiBaseUrl").GetString());
     }
 
     [Fact]

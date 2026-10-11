@@ -88,7 +88,6 @@ public sealed class ShellHealthCoordinatorTests
         public string BannerText { get; set; } = string.Empty;
         public SystemHealthSnapshot? LastHealthSnapshot { get; set; }
         public DateTimeOffset? LastHealthCheckedAtUtc { get; set; }
-        public bool IsHealthRefreshing { get; set; }
         public string? MastersRefreshMessage { get; set; }
         public bool IsRefreshingAllMasters { get; set; }
         public bool DatabaseConfigurationAttentionRequired { get; set; }
@@ -113,24 +112,16 @@ public sealed class ShellHealthCoordinatorTests
 
     private sealed class FakeMastersApiClient : IMastersApiClient
     {
-        public Task<CompanySnapshotResponse> GetCompaniesAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default) =>
+        public Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<LedgerSnapshotResponse> GetLedgersAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default) =>
+        public Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default) =>
+        public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<StockItemSnapshotResponse> GetStockItemsAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default) =>
+        public Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TallyMasterRefreshResult>> RequestRefreshAsync(

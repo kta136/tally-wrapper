@@ -7,11 +7,6 @@ public sealed record MasterSnapshotMetadata(
     int ItemCount,
     string Freshness);
 
-public sealed record MasterSnapshotQuery(
-    string? Search,
-    int? Skip,
-    int? Take);
-
 public sealed record CompanySnapshotResponse(
     MasterSnapshotMetadata Metadata,
     IReadOnlyList<CompanySnapshotItem> Companies);

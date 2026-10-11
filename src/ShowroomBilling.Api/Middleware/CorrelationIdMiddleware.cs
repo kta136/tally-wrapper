@@ -20,7 +20,6 @@ public sealed class CorrelationIdMiddleware
                 ? header.ToString()
                 : CorrelationConstants.NewId();
 
-        context.Items[CorrelationConstants.HeaderName] = correlationId;
         context.Response.OnStarting(() =>
         {
             context.Response.Headers[CorrelationConstants.HeaderName] = correlationId;

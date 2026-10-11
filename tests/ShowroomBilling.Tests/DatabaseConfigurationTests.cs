@@ -96,255 +96,13 @@ public sealed class DatabaseConfigurationTests
     }
 
     [Fact]
-    public void UpdateDatabaseConfiguration_IsAdminProtected()
-    {
-        var method = typeof(RuntimeController).GetMethod(nameof(RuntimeController.UpdateDatabaseConfiguration));
-
-        Assert.NotNull(method);
-        var authorize = method!.GetCustomAttributes(inherit: true)
-            .OfType<AuthorizeAttribute>()
-            .SingleOrDefault();
-        Assert.NotNull(authorize);
-        Assert.Equal(AdminPolicy.PolicyName, authorize!.Policy);
-    }
-
-    [Fact]
-    public void GetDatabaseConfiguration_MasksPassword_AndReportsRestartWhenAppliedConnectionDiffers()
-    {
-        WithIsolatedConfigurationStore(() =>
-        {
-            var controller = BuildController(
-                configured: "Host=new-db;Database=showroom;Username=user;Password=new-secret",
-                applied: "Host=old-db;Database=showroom;Username=user;Password=old-secret");
-
-            var result = controller.GetDatabaseConfiguration();
-            var ok = Assert.IsType<OkObjectResult>(result.Result);
-            var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
-
-            // Nothing in the answer carries the password, whatever field it might hide in.
-            Assert.DoesNotContain("new-secret", System.Text.Json.JsonSerializer.Serialize(response));
-            Assert.Contains("Password=***", response.MaskedConnectionString);
-            Assert.True(response.RequiresApiRestart);
-            Assert.True(response.CanBootstrapWithoutAdmin);
-        });
-    }
-
-    [Fact]
-    public void ServerMode_GetDatabaseConfiguration_RejectsNonLoopbackRequest()
-    {
-        var controller = BuildController(
-            configured: "Host=db;Database=showroom;Username=user;Password=secret",
-            applied: "Host=db;Database=showroom;Username=user;Password=secret",
-            deviceAuthOptions: new DeviceAuthOptions { Mode = "TrustedLan", TrustedNetworks = ["192.168.0.0/16"] },
-            remoteAddress: System.Net.IPAddress.Parse("192.168.1.25"));
-
-        var result = controller.GetDatabaseConfiguration();
-
-        var denied = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
-    }
-
-    [Fact]
-    public async Task UpdateDatabaseConfiguration_RejectsInvalidConnectionString()
-    {
-        var controller = BuildController(
-            configured: "Host=old-db;Database=showroom;Username=user;Password=old-secret",
-            applied: "Host=old-db;Database=showroom;Username=user;Password=old-secret");
-
-        var result = await controller.UpdateDatabaseConfiguration(
-            new UpdateDatabaseConfigurationRequest("Not A Connection String"),
-            CancellationToken.None);
-
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task BootstrapDatabaseConfiguration_AcceptsPsqlWrappedPostgresUri()
+    public async Task Maintenance_save_stores_the_override_and_answers_without_the_password()
     {
         await WithIsolatedConfigurationStoreAsync(async () =>
         {
             var verifier = new FakeDatabaseConnectionVerifier(
                 DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD"));
-            var controller = BuildController(
-                configured: string.Empty,
-                applied: string.Empty,
-                environmentName: "Production",
-                verifier: verifier);
-
-            var result = await controller.BootstrapDatabaseConfiguration(
-                new UpdateDatabaseConfigurationRequest(
-                    "psql 'postgresql://db_user:db_secret@example.aivencloud.com/showroom?sslmode=require&channel_binding=require'"),
-                CancellationToken.None);
-
-            var ok = Assert.IsType<OkObjectResult>(result.Result);
-            var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
-            Assert.Contains("Host=example.aivencloud.com", response.MaskedConnectionString);
-            Assert.Contains("Username=db_user", verifier.LastConnectionString);
-            Assert.Contains("Database=showroom", verifier.LastConnectionString);
-            Assert.Contains("SSL Mode=Require", verifier.LastConnectionString);
-            Assert.Contains("Channel Binding=Require", verifier.LastConnectionString);
-            Assert.DoesNotContain("psql", verifier.LastConnectionString, StringComparison.OrdinalIgnoreCase);
-        });
-    }
-
-    [Fact]
-    public void StartupConfiguration_NormalizesPostgresUriBeforeInfrastructureReadsIt()
-    {
-        var configuration = new ConfigurationManager();
-        configuration.AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["ConnectionStrings:Postgres"] =
-                "postgres://avnadmin:db_secret@example.aivencloud.com:19001/tally_wrapper_prod?sslmode=require"
-        });
-
-        DatabaseConnectionStringConfiguration.NormalizePostgresConnectionString(configuration);
-
-        var normalized = configuration.GetConnectionString("Postgres")!;
-        Assert.Contains("Host=example.aivencloud.com", normalized);
-        Assert.Contains("Port=19001", normalized);
-        Assert.Contains("Database=tally_wrapper_prod", normalized);
-        Assert.Contains("Username=avnadmin", normalized);
-        Assert.Contains("Password=db_secret", normalized);
-        Assert.Contains("SSL Mode=Require", normalized);
-        Assert.DoesNotContain("postgres://", normalized, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task BootstrapDatabaseConfiguration_SavesLocalOverrideWithoutAdmin_WhenBootstrapIsOpen()
-    {
-        await WithIsolatedConfigurationStoreAsync(async () =>
-        {
-            var verifier = new FakeDatabaseConnectionVerifier(
-                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD"));
-            var controller = BuildController(
-                configured: string.Empty,
-                applied: string.Empty,
-                environmentName: "Production",
-                verifier: verifier);
-
-            var result = await controller.BootstrapDatabaseConfiguration(
-                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
-                CancellationToken.None);
-
-            var ok = Assert.IsType<OkObjectResult>(result.Result);
-            var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
-            Assert.DoesNotContain("secret", System.Text.Json.JsonSerializer.Serialize(response));
-            Assert.Contains("Password=***", response.MaskedConnectionString);
-            Assert.True(response.IsLocalOverridePresent);
-            Assert.False(response.CanBootstrapWithoutAdmin);
-            Assert.True(File.Exists(response.ConfigPath));
-            Assert.Equal("PROD", verifier.LastExpectedDatabaseIdentity);
-        });
-    }
-
-    [Fact]
-    public async Task BootstrapDatabaseConfiguration_RejectsWhenLocalOverrideExists()
-    {
-        await WithIsolatedConfigurationStoreAsync(async () =>
-        {
-            Directory.CreateDirectory(DatabaseConfigurationStore.DirectoryPath);
-            await File.WriteAllTextAsync(
-                DatabaseConfigurationStore.ConfigPathForEnvironment("Production"),
-                "{}");
-            var controller = BuildController(
-                configured: string.Empty,
-                applied: string.Empty,
-                environmentName: "Production");
-
-            var result = await controller.BootstrapDatabaseConfiguration(
-                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
-                CancellationToken.None);
-
-            Assert.IsType<ConflictObjectResult>(result.Result);
-        });
-    }
-
-    [Fact]
-    public async Task BootstrapDatabaseConfiguration_RejectsWhenEnvironmentOverrideExists()
-    {
-        await WithIsolatedConfigurationStoreAsync(async () =>
-        {
-            var previousPostgres = Environment.GetEnvironmentVariable(DatabaseConfigurationStore.PostgresConnectionStringEnvironmentVariable);
-            Environment.SetEnvironmentVariable(
-                DatabaseConfigurationStore.PostgresConnectionStringEnvironmentVariable,
-                "Host=env-db;Database=showroom;Username=user;Password=secret");
-            try
-            {
-                var controller = BuildController(
-                    configured: string.Empty,
-                    applied: string.Empty,
-                    environmentName: "Production");
-
-                var result = await controller.BootstrapDatabaseConfiguration(
-                    new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
-                    CancellationToken.None);
-
-                Assert.IsType<ConflictObjectResult>(result.Result);
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable(
-                    DatabaseConfigurationStore.PostgresConnectionStringEnvironmentVariable,
-                    previousPostgres);
-            }
-        });
-    }
-
-    [Fact]
-    public async Task BootstrapDatabaseConfiguration_RejectsWhenIdentityDoesNotMatch()
-    {
-        await WithIsolatedConfigurationStoreAsync(async () =>
-        {
-            var controller = BuildController(
-                configured: string.Empty,
-                applied: string.Empty,
-                environmentName: "Production",
-                verifier: new FakeDatabaseConnectionVerifier(
-                    DatabaseConnectionVerificationResult.Failed(
-                        "Connection succeeded, but database identity is DEV; expected PROD.",
-                        "DEV")));
-
-            var result = await controller.BootstrapDatabaseConfiguration(
-                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
-                CancellationToken.None);
-
-            Assert.IsType<BadRequestObjectResult>(result.Result);
-        });
-    }
-
-    [Fact]
-    public async Task ServerMode_DatabaseTest_RejectsNonLoopbackRequest()
-    {
-        var controller = BuildController(
-            configured: string.Empty,
-            applied: string.Empty,
-            deviceAuthOptions: new DeviceAuthOptions { Mode = "TrustedLan", TrustedNetworks = ["192.168.0.0/16"] },
-            remoteAddress: System.Net.IPAddress.Parse("192.168.1.25"));
-
-        var result = await controller.TestDatabaseConfiguration(
-            new TestDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
-            CancellationToken.None);
-
-        var denied = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status403Forbidden, denied.StatusCode);
-    }
-
-    [Fact]
-    public async Task MaintenanceDatabaseConfiguration_UsesTokenWithoutAdminAuth()
-    {
-        await WithIsolatedConfigurationStoreAsync(async () =>
-        {
-            Directory.CreateDirectory(DatabaseConfigurationStore.DirectoryPath);
-            await File.WriteAllTextAsync(
-                Path.Combine(DatabaseConfigurationStore.DirectoryPath, MaintenanceTokenConstants.FileName),
-                "maintenance-secret");
-            var controller = BuildController(
-                configured: string.Empty,
-                applied: string.Empty,
-                environmentName: "Production",
-                verifier: new FakeDatabaseConnectionVerifier(
-                    DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD")));
-            controller.HttpContext.Request.Headers[MaintenanceTokenConstants.HeaderName] = "maintenance-secret";
+            var controller = await BuildMaintenanceControllerAsync(verifier);
 
             var result = await controller.UpdateDatabaseConfigurationForMaintenance(
                 new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
@@ -352,23 +110,141 @@ public sealed class DatabaseConfigurationTests
 
             var ok = Assert.IsType<OkObjectResult>(result.Result);
             var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
+            // Nothing in the answer carries the password, whatever field it might hide in.
+            Assert.DoesNotContain("secret", System.Text.Json.JsonSerializer.Serialize(response));
+            Assert.Contains("Password=***", response.MaskedConnectionString);
             Assert.True(response.IsLocalOverridePresent);
+            Assert.True(response.RequiresApiRestart);
+            Assert.True(File.Exists(response.ConfigPath));
+            Assert.Equal("PROD", verifier.LastExpectedDatabaseIdentity);
         });
     }
 
-    private static RuntimeController BuildController(
-        string configured,
-        string applied,
-        string environmentName = "Development",
-        IDatabaseConnectionVerifier? verifier = null,
-        DeviceAuthOptions? deviceAuthOptions = null,
-        System.Net.IPAddress? remoteAddress = null)
+    [Fact]
+    public async Task Maintenance_save_refuses_a_postgres_url_and_says_which_form_to_use()
     {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            var verifier = new FakeDatabaseConnectionVerifier(
+                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD"));
+            var controller = await BuildMaintenanceControllerAsync(verifier);
+
+            var result = await controller.UpdateDatabaseConfigurationForMaintenance(
+                new UpdateDatabaseConfigurationRequest("postgresql://db_user:db_secret@db.example.test/showroom"),
+                CancellationToken.None);
+
+            var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var problem = Assert.IsType<ProblemDetails>(badRequest.Value);
+            Assert.Contains("Host=", problem.Detail);
+            Assert.DoesNotContain("db_secret", problem.Detail);
+            Assert.Null(verifier.LastConnectionString);
+        });
+    }
+
+    [Fact]
+    public async Task Maintenance_save_refuses_text_that_is_not_a_connection_string()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            var controller = await BuildMaintenanceControllerAsync();
+
+            var result = await controller.UpdateDatabaseConfigurationForMaintenance(
+                new UpdateDatabaseConfigurationRequest("Not A Connection String"),
+                CancellationToken.None);
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+        });
+    }
+
+    [Fact]
+    public async Task Maintenance_save_refuses_a_database_with_the_wrong_identity_and_stores_nothing()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            var controller = await BuildMaintenanceControllerAsync(
+                new FakeDatabaseConnectionVerifier(
+                    DatabaseConnectionVerificationResult.Failed(
+                        "Connection succeeded, but database identity is DEV; expected PROD.",
+                        "DEV")));
+
+            var result = await controller.UpdateDatabaseConfigurationForMaintenance(
+                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                CancellationToken.None);
+
+            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+        });
+    }
+
+    [Fact]
+    public async Task Maintenance_test_reports_what_the_database_answered()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            var controller = await BuildMaintenanceControllerAsync();
+
+            var result = await controller.TestDatabaseConfigurationForMaintenance(
+                new TestDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                CancellationToken.None);
+
+            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var response = Assert.IsType<DatabaseConfigurationTestResponse>(ok.Value);
+            Assert.True(response.Success);
+            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+        });
+    }
+
+    [Fact]
+    public async Task Maintenance_actions_need_the_maintenance_token()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            var controller = await BuildMaintenanceControllerAsync(sendToken: false);
+            var connection = "Host=db;Database=showroom;Username=user;Password=secret";
+
+            var test = await controller.TestDatabaseConfigurationForMaintenance(
+                new TestDatabaseConfigurationRequest(connection), CancellationToken.None);
+            var save = await controller.UpdateDatabaseConfigurationForMaintenance(
+                new UpdateDatabaseConfigurationRequest(connection), CancellationToken.None);
+
+            Assert.Equal(StatusCodes.Status401Unauthorized, Assert.IsType<ObjectResult>(test.Result).StatusCode);
+            Assert.Equal(StatusCodes.Status401Unauthorized, Assert.IsType<ObjectResult>(save.Result).StatusCode);
+            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+        });
+    }
+
+    [Fact]
+    public async Task Maintenance_actions_are_refused_from_another_machine_even_with_the_token()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            var controller = await BuildMaintenanceControllerAsync(remoteAddress: System.Net.IPAddress.Parse("192.168.1.25"));
+
+            var result = await controller.UpdateDatabaseConfigurationForMaintenance(
+                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                CancellationToken.None);
+
+            Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsType<ObjectResult>(result.Result).StatusCode);
+            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+        });
+    }
+
+    /// <summary>
+    /// A Production controller as the server tray reaches it: from the server
+    /// itself, with the maintenance token. Call inside an isolated store.
+    /// </summary>
+    private static async Task<RuntimeController> BuildMaintenanceControllerAsync(
+        IDatabaseConnectionVerifier? verifier = null,
+        System.Net.IPAddress? remoteAddress = null,
+        bool sendToken = true)
+    {
+        Directory.CreateDirectory(DatabaseConfigurationStore.DirectoryPath);
+        await File.WriteAllTextAsync(
+            Path.Combine(DatabaseConfigurationStore.DirectoryPath, MaintenanceTokenConstants.FileName),
+            "maintenance-secret");
+
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Postgres"] = configured
-            })
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Postgres"] = string.Empty })
             .Build();
 
         var services = new ServiceCollection();
@@ -378,17 +254,13 @@ public sealed class DatabaseConfigurationTests
 
         var controller = new RuntimeController(
             configuration,
-            new FakeCloudSettingsService(),
             new ShowroomBillingDbContext(new DbContextOptionsBuilder<ShowroomBillingDbContext>()
                 .UseNpgsql("Host=localhost;Database=test;Username=test;Password=test")
                 .Options),
             provider.GetRequiredService<HealthCheckService>(),
             verifier ?? new FakeDatabaseConnectionVerifier(
-                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: DEV.", "DEV")),
-            new AppliedDatabaseConfiguration(applied),
-            new FakeHostEnvironment(environmentName),
-            Options.Create(new ApiRuntimeOptions()),
-            Options.Create(deviceAuthOptions ?? new DeviceAuthOptions()),
+                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD")),
+            new FakeHostEnvironment("Production"),
             new MaintenanceTokenStore(),
             new ClientPresenceRegistry(),
             new ShowroomBilling.Infrastructure.Health.DatabaseSchemaState());
@@ -397,6 +269,11 @@ public sealed class DatabaseConfigurationTests
             HttpContext = new DefaultHttpContext()
         };
         controller.HttpContext.Connection.RemoteIpAddress = remoteAddress ?? System.Net.IPAddress.Loopback;
+        if (sendToken)
+        {
+            controller.HttpContext.Request.Headers[MaintenanceTokenConstants.HeaderName] = "maintenance-secret";
+        }
+
         return controller;
     }
 
@@ -447,30 +324,6 @@ public sealed class DatabaseConfigurationTests
         public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
 
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
-    private sealed class FakeCloudSettingsService : ICloudSettingsService
-    {
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
-            UpdateEffectiveSettingsRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
-            string companyName,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
-            UpdatePrintLayoutRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     private sealed class FakeDatabaseConnectionVerifier(DatabaseConnectionVerificationResult result)

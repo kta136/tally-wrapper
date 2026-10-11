@@ -23,6 +23,8 @@ public sealed class AdminAuthService(
     private const int TokenBytes = 32;
     private const int MinPasscodeLength = SettingLimits.MinAdminPasscodeLength;
     private static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(30);
+    // How long an expired session row is kept before an unlock removes it.
+    private static readonly TimeSpan ExpiredSessionRetention = TimeSpan.FromDays(30);
     private const string DefaultActorLabel = "admin";
 
     public async Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default)
@@ -107,6 +109,14 @@ public sealed class AdminAuthService(
         unlockThrottle.Reset(showroomId);
 
         var now = DateTimeOffset.UtcNow;
+
+        // Housekeeping: long-expired sessions are of no use, and the audit
+        // trail keeps the record of every unlock.
+        var expiredBefore = now.Subtract(ExpiredSessionRetention);
+        await dbContext.AdminSessions
+            .Where(x => x.ExpiresAtUtc < expiredBefore)
+            .ExecuteDeleteAsync(cancellationToken);
+
         var rawToken = GenerateRawToken();
         var tokenHash = HashToken(rawToken);
         var actorLabel = string.IsNullOrWhiteSpace(request.ActorLabel) ? DefaultActorLabel : request.ActorLabel.Trim();

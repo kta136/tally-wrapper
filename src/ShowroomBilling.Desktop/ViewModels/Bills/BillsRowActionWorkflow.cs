@@ -7,6 +7,7 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 /// <summary>Context-menu actions on one bill row.</summary>
 internal sealed class BillsRowActionWorkflow(
     IBillsApiClient? billsApi,
+    BillsAdminTokenGate adminTokenGate,
     IBillsActionWorkflowHost host,
     BillsActionRunner runner)
 {
@@ -62,37 +63,6 @@ internal sealed class BillsRowActionWorkflow(
             cancellationToken);
     }
 
-    internal async Task ReviseRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-    {
-        if (billsApi is null || row is null) return;
-
-        await runner.RunAsync(
-            $"Creating revision for {row.InvoiceNumberDisplay}…",
-            "Revise failed",
-            async () =>
-            {
-                var revised = await billsApi.ReviseAsync(row.Id, new ReviseBillRequest(null), cancellationToken);
-                return $"Revision created: {revised.InvoiceNumber ?? "(pending)"}";
-            },
-            cancellationToken);
-    }
-
-    internal async Task VoidRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
-    {
-        if (billsApi is null || row is null) return;
-        if (!await runner.ConfirmAsync(BillConfirmations.Void(row.InvoiceNumberDisplay))) return;
-
-        await runner.RunAsync(
-            $"Voiding {row.InvoiceNumberDisplay}…",
-            "Void failed",
-            async () =>
-            {
-                await billsApi.VoidAsync(row.Id, new VoidBillRequest("Voided from Bills tab"), cancellationToken);
-                return $"Voided {row.InvoiceNumberDisplay}.";
-            },
-            cancellationToken);
-    }
-
     internal void CopyInvoiceNumber(BillListRowViewModel? row)
     {
         if (row is null || string.IsNullOrWhiteSpace(row.InvoiceNumber)) return;
@@ -110,6 +80,19 @@ internal sealed class BillsRowActionWorkflow(
     internal async Task EditRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
         if (row is null || host.EditBillHandler is null) return;
+
+        // Saving an edit to a posted bill needs admin, so ask before the
+        // operator has retyped anything rather than at Save.
+        if (BillStateCapabilities.IsPosted(row.State))
+        {
+            var (token, _) = await adminTokenGate.EnsureAsync(cancellationToken);
+            if (token is null)
+            {
+                host.StatusMessage = $"{row.InvoiceNumberDisplay} is posted; editing it needs admin unlock.";
+                return;
+            }
+        }
+
         try
         {
             await host.EditBillHandler(row.Id, cancellationToken);

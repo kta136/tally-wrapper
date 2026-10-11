@@ -11,10 +11,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
-using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
-using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Tests.Postgres;
@@ -90,13 +88,6 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
                     : "healthy";
                 return new StubTallyCompanyHealthService(status);
             });
-            if (_extraConfiguration.TryGetValue("Testing:Bills:PushThrowsTallyPreflight", out var throwPreflight)
-                && bool.TryParse(throwPreflight, out var enabled)
-                && enabled)
-            {
-                services.RemoveAll<IBillService>();
-                services.AddScoped<IBillService, TallyPreflightThrowingBillService>();
-            }
             services.RemoveAll<DeviceTokenStore>();
             services.AddSingleton(new DeviceTokenStore(Path.Combine(_deviceTokenRoot, "device_token.txt")));
             services.AddSingleton<IStartupFilter, LoopbackRemoteAddressStartupFilter>();
@@ -184,35 +175,6 @@ internal sealed class StubTallyCompanyHealthService(string? status) : ITallyComp
                 ? "Tally OK - active company 'Contract Test Company' is open."
                 : "Tally is unreachable. Check that Tally is running and the connection settings are correct."));
     }
-}
-
-internal sealed class TallyPreflightThrowingBillService : IBillService
-{
-    public Task<BillResponse> PushAsync(
-        Guid billId,
-        PushBillRequest request,
-        CancellationToken cancellationToken = default) =>
-        throw new TallyPreflightUnavailableException("Tally push blocked: Tally is unreachable.");
-
-    public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse> CreateBackdatedDraftAsync(CreateBillDraftRequest request, DateTimeOffset createdAtUtc, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse> ReviseAsync(Guid billId, ReviseBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(Guid billId, ChangeBillNumberRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse> MarkPostedAsync(Guid billId, MarkBillStateRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<BillResponse> MarkPendingAsync(Guid billId, MarkBillStateRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<DeleteBillResponse> DeleteAsync(Guid billId, DeleteBillRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(DeleteSelectedBillsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 }
 
 internal sealed class StubTallyMasterRefresher : ITallyMasterRefresher

@@ -35,7 +35,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     [ObservableProperty] private bool isActing;
     [ObservableProperty] private string statusMessage = string.Empty;
     [ObservableProperty] private BillResponse? bill;
-    [ObservableProperty] private BillPostingStatusResponse? postingStatus;
 
     public IAsyncRelayCommand PushCommand { get; }
     public IAsyncRelayCommand RetryCommand { get; }
@@ -53,7 +52,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
 
     public BillPayloadDto? Payload => Bill?.CurrentRevision?.Payload;
     public BillTotalsDto? Totals => Payload?.Totals;
-    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
     public bool HasAuditTrail => AuditTrail.Count > 0;
     public bool IsPendingLike => BillStateCapabilities.IsPendingLike(Bill?.State);
     public bool IsPosted => BillStateCapabilities.IsPosted(Bill?.State);
@@ -101,7 +99,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         NotifyActionsChanged();
     }
 
-    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
     partial void OnIsActingChanged(bool value) => NotifyActionsChanged();
 
     private void NotifyActionsChanged()
@@ -127,21 +124,19 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         IsLoading = true;
         StatusMessage = "Loading bill…";
         Bill = null;
-        PostingStatus = null;
         AuditTrail.Clear();
         OnPropertyChanged(nameof(HasAuditTrail));
         OnPropertyChanged(nameof(AuditEmptyMessage));
 
         try
         {
-            // The posting status and the timeline are read by bill id, so they
-            // load alongside the bill instead of after it.
+            // The timeline is read by bill id, so it loads alongside the bill
+            // instead of after it.
             var supporting = ReloadSupportingStateAsync(billId, cancellationToken);
             var bill = await _billsApi.GetAsync(billId, cancellationToken);
             await supporting;
             if (bill is null)
             {
-                PostingStatus = null;
                 ApplyAudit(null);
                 StatusMessage = "Bill not found.";
                 return;
@@ -169,22 +164,10 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
             return;
         }
 
-        var status = _billsApi.GetPostingStatusAsync(billId, cancellationToken);
-        var audit = _billsApi.GetAuditAsync(billId, cancellationToken);
-
-        // Either read may fail on its own; the bill itself is still worth showing.
+        // The timeline may fail on its own; the bill itself is still worth showing.
         try
         {
-            PostingStatus = await status;
-        }
-        catch
-        {
-            PostingStatus = null;
-        }
-
-        try
-        {
-            ApplyAudit(await audit);
+            ApplyAudit(await _billsApi.GetAuditAsync(billId, cancellationToken));
         }
         catch
         {

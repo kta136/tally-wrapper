@@ -4,7 +4,6 @@ using System.Windows.Interop;
 using Microsoft.Extensions.Options;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
-using ShowroomBilling.Desktop.Services.ProcessSupervision;
 using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels;
 

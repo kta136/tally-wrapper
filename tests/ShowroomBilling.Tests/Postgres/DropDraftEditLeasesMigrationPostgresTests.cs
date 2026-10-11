@@ -11,13 +11,13 @@ namespace ShowroomBilling.Tests.Postgres;
 /// before it drops the table, and must be able to put table and rows back.
 /// </summary>
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class DropDraftEditLeasesMigrationPostgresTests(PostgresFixture fixture)
 {
     private const string Previous = "20261010124946_DropUnusedColumnsAndIndexes";
     private const string Backup = DropDraftEditLeases.Backup;
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task An_empty_table_is_dropped_and_leaves_no_copy()
     {
         // A new database is migrated all the way up; its lease table was never written.
@@ -35,7 +35,6 @@ public sealed class DropDraftEditLeasesMigrationPostgresTests(PostgresFixture fi
     }
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task Rows_are_copied_aside_first_and_come_back_on_the_way_down()
     {
         await using var database = await fixture.CreateDatabaseAsync();

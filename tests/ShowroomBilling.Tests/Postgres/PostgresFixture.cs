@@ -179,9 +179,6 @@ public sealed class PostgresFixture : IAsyncDisposable
 
         public ShowroomBillingDbContext CreateContext() => new(Options);
 
-        /// <summary>For a test that registers the context in its own service collection.</summary>
-        public void Configure(DbContextOptionsBuilder builder) => PostgresFixture.Configure(builder, ConnectionString);
-
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref dropped, 1) == 0)

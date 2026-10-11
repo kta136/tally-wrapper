@@ -15,7 +15,9 @@
 #   - SHOWROOM_BILLING_APPDATA / SHOWROOM_BILLING_LOCALAPPDATA pointing at empty
 #     folders, and SHOWROOM_BILLING_POSTGRES pointing at that container. The API
 #     gives the variable precedence over every saved connection string;
-#   - tools\scratch-tally.ps1 on 127.0.0.1:9000, where a new database expects Tally.
+#   - tools\scratch-tally.ps1 on 127.0.0.1:9000, where a new database expects Tally;
+#   - the dev build's API on 127.0.0.1:5108, started here and stopped when the app
+#     closes. The Desktop only ever connects to an API; it does not start one.
 #
 # The app starts like a fresh install: no admin passcode, placeholder company.
 # The database keeps its data between runs until the container stops.
@@ -53,8 +55,8 @@ $statePath = Join-Path $scratch 'scratch.json'
 $mastersPath = Join-Path $scratch 'tally-masters.json'
 $containerName = 'tw-scratch-postgres'
 $database = 'tw_scratch'
-# The dev build's API: appsettings.Development.json of the Desktop.
-$apiPorts = @(5108, 7108)
+# Where a Development Desktop looks for its API (its appsettings.Development.json).
+$apiPort = 5108
 
 function Test-PortInUse([int]$port) {
     $client = [System.Net.Sockets.TcpClient]::new()
@@ -205,8 +207,8 @@ if ($restoring) {
 
 $connectionString = "Host=$($state.host);Port=$($state.port);Database=$($state.database);Username=postgres;Password=$($state.password)"
 
-# Everything started from here on (the EF tool, the Desktop and the API it
-# spawns) inherits these, so none of them reads this PC's real settings.
+# Everything started from here on (the EF tool, the API and the Desktop)
+# inherits these, so none of them reads this PC's real settings.
 $env:SHOWROOM_BILLING_APPDATA = Join-Path $scratch 'appdata'
 $env:SHOWROOM_BILLING_LOCALAPPDATA = Join-Path $scratch 'localappdata'
 $env:SHOWROOM_BILLING_POSTGRES = $connectionString
@@ -214,10 +216,8 @@ $env:DOTNET_ENVIRONMENT = 'Development'
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 
 # ── build and migrate ───────────────────────────────────────────────────────
-foreach ($port in $apiPorts) {
-    if (Test-PortInUse $port) {
-        throw "Something already listens on 127.0.0.1:$port. The dev Desktop would attach to that API instead of starting its own, and that API may use another database. Close it and run this again."
-    }
+if (Test-PortInUse $apiPort) {
+    throw "Something already listens on 127.0.0.1:$apiPort. The dev Desktop would connect to that API instead of the one started here, and that API may use another database. Close it and run this again."
 }
 
 Write-Host 'Building...' -ForegroundColor Cyan
@@ -272,10 +272,24 @@ elseif (-not $AllowRealTally) {
     Write-Host "Stand-in Tally on 127.0.0.1:$TallyPort (log: $tallyLog)." -ForegroundColor Cyan
 }
 
-# ── the app ─────────────────────────────────────────────────────────────────
+# ── the API, then the app ───────────────────────────────────────────────────
+$apiDir = Join-Path $repoRoot 'src\ShowroomBilling.Api\bin\Debug\net10.0'
+$apiExe = Join-Path $apiDir 'ShowroomBilling.Api.exe'
 $desktopDir = Join-Path $repoRoot 'src\ShowroomBilling.Desktop\bin\Debug\net10.0-windows'
 $desktopExe = Join-Path $desktopDir 'TallyWrapper.exe'
+$api = $null
 try {
+    $api = Start-Process -FilePath $apiExe -WorkingDirectory $apiDir -PassThru -WindowStyle Hidden `
+        -ArgumentList @('--urls', "http://127.0.0.1:$apiPort")
+    $deadline = (Get-Date).AddSeconds(30)
+    while (-not (Test-PortInUse $apiPort)) {
+        if ($api.HasExited -or (Get-Date) -gt $deadline) {
+            throw "The API did not start on 127.0.0.1:$apiPort. Its log is under $($env:SHOWROOM_BILLING_APPDATA)\logs."
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    Write-Host "API on 127.0.0.1:$apiPort." -ForegroundColor Cyan
+
     Write-Host 'Starting the app. This window waits until it is closed.' -ForegroundColor Green
     Write-Host "  settings:  $($env:SHOWROOM_BILLING_APPDATA)"
     Write-Host "  database:  $($state.host):$($state.port)/$($state.database) (marked DEV)"
@@ -284,6 +298,9 @@ try {
     $app.WaitForExit()
 }
 finally {
+    if ($null -ne $api -and -not $api.HasExited) {
+        Stop-Process -Id $api.Id -Force
+    }
     if ($null -ne $tally -and -not $tally.HasExited) {
         Stop-Process -Id $tally.Id -Force
     }

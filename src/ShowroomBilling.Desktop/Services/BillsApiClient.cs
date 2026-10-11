@@ -8,8 +8,8 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
     public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default)
         => httpClient.PostApiAsync<BillResponse>("/api/bills/drafts", request, cancellationToken);
 
-    public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default)
-        => httpClient.PutApiAsync<BillResponse>($"/api/bills/drafts/{billId}", request, cancellationToken);
+    public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, string? adminToken = null, CancellationToken cancellationToken = default)
+        => httpClient.PutApiAsync<BillResponse>($"/api/bills/drafts/{billId}", request, cancellationToken, adminToken);
 
     public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
         => httpClient.PostApiAsync<BillResponse>($"/api/bills/{billId}/push", request, cancellationToken);
@@ -43,9 +43,6 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
 
     public Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
         => httpClient.GetApiOrNullAsync<BillAuditResponse>($"/api/bills/{billId}/audit", cancellationToken);
-
-    public Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default)
-        => httpClient.GetApiOrNullAsync<BillPostingStatusResponse>($"/api/bills/{billId}/posting-status", cancellationToken);
 
     public Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default)
         => httpClient.PostApiAsync<BillPostingStatusResponse>($"/api/bills/{billId}/retry", request, cancellationToken);

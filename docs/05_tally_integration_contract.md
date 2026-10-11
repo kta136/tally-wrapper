@@ -2,13 +2,13 @@
 
 This document defines the Tally Wrapper contract between the desktop client, the cloud API, and TallyPrime.
 
-**Architectural note:** Tally Wrapper no longer ships a separate `TallyBridge` process or a posting queue. The API talks to Tally XML directly, in-process, only when an operator clicks Push (or Refresh for masters). Every Tally interaction is synchronous and initiated by a human click.
+**Architectural note:** There is no separate bridge process and no posting queue. The API talks to Tally XML directly, in-process, only when an operator clicks Push (or Refresh for masters). Every Tally interaction is synchronous and initiated by a human click.
 
 Direction already chosen:
 
 - Windows-first WPF desktop
 - ASP.NET Core modular monolith backend (runs on the same machine as TallyPrime)
-- backend can run either as the desktop-owned embedded API or as a Windows Service on the Tally server for LAN workstations
+- the backend runs as a Windows Service on the Tally server; every counter's desktop reaches it over the LAN
 - PostgreSQL system of record
 - no separate bridge process, no job queue, no polling
 - no local durable business storage on the desktop
@@ -33,8 +33,9 @@ The desktop does **not**:
 - talk directly to TallyPrime
 - own Tally posting truth
 - own any background notification or retry mechanism
+- start or host an API
 
-In `Server` connection mode, the desktop calls `http://<tally-server>:5107` and does not start a local API child process. Switching back to `LocalEmbedded` is a per-workstation fallback and requires that workstation to have its own DB override and Tally host settings that point at the Tally server over the LAN.
+The desktop calls the server API at the address saved on the workstation in Settings → Server (`http://<tally-server>:5107`). Without a reachable server it shows the limited-mode screen and cannot save bills.
 
 ### 1.2 Cloud API
 
@@ -72,11 +73,11 @@ The API, on operator demand only, fetches and stores normalized snapshots for:
 - stock item list
 - voucher type list
 
-**Cadence:** zero. There is no timer. The only trigger is a click on "Refresh from Tally" in Settings or the System Health dialog, which issues `POST /api/masters/refresh`. Each call blocks until Tally answers and writes the fresh snapshot.
+**Cadence:** zero. There is no timer. The only trigger is a click on "Refresh from Tally" in Settings or the System Health dialog, which issues `POST /api/masters/refresh`. Each call blocks until Tally answers and writes the fresh snapshot, which replaces the previous one of that master type.
 
 Desktop reads these through the API, never from Tally directly.
 
-The canonical XML request/response shapes, `<FETCH>` field lists per master type, response quirks (C0 control characters, sentinel values like `\x04 Not Found` for unset HSN, mandatory `<SVCURRENTCOMPANY>` scoping for every master except the company list), and live counts observed against real Tally are documented in [`06_tally_xml_golden_path.md`](06_tally_xml_golden_path.md) section 7 (Masters read path).
+The canonical XML request/response shapes, `<FETCH>` field lists per master type, response quirks (C0 control characters, sentinel values like `\x04 Not Found` for unset HSN, mandatory `<SVCURRENTCOMPANY>` scoping for every master except the company list), and live counts observed against real Tally are documented in [`06_tally_xml_golden_path.md`](06_tally_xml_golden_path.md) section 3 (Masters read path).
 
 ---
 
@@ -136,7 +137,7 @@ Do not emit a free-text customer label as `<PARTYNAME>`: Tally expects the party
 
 **Synchronous, in-process, manual only.**
 
-When the operator clicks Push on the Bills tab, the desktop calls `POST /api/bills/{billId}/push`. Inside that HTTP request, `BillService.PushInternalAsync`:
+When the operator clicks Push on the Bills tab, the desktop calls `POST /api/bills/{billId}/push`. Inside that HTTP request, `BillPostingWorkflow.PushInternalAsync`:
 
 1. Checks Tally company health via `ITallyCompanyHealthService`. Tally must be reachable and the configured active company must be open. If not, the API returns `503 Tally unavailable` and leaves the bill in its original state.
 2. Atomically transitions the bill to `posting` via a conditional `UPDATE bills SET state='posting' WHERE id=@id AND state IN ('pending','draft','failed')`. If 0 rows are affected — another concurrent push already won the flip, or the state drifted — the request short-circuits and returns the current bill without a second Tally call. Closes a double-click / duplicate-request race that would otherwise produce two vouchers.
@@ -177,7 +178,7 @@ If the API process dies mid-call, any bill stuck in `posting` moves to `reconcil
 
 These outcomes are not auto-retried: a retry could create a duplicate voucher. The operator verifies Tally first, then resolves the state explicitly.
 
-### 5.2 Definite failures (bill lands in `failed`, operator fixes config/data then Retry or Revise)
+### 5.2 Definite failures (bill lands in `failed`, operator fixes config/data then Retry or Edit)
 
 - missing ledger, stock item, voucher type
 - company mismatch
@@ -204,7 +205,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 |---|---|
 | Tally down or wrong active company, API up | Push is blocked by preflight with `503 Tally unavailable`; the bill remains `pending`/`failed`/`posted` as it was. Operator opens Tally or the correct company, then retries. |
 | API down | Desktop shows "Cloud unavailable"; bills stay in `pending` on whatever was last persisted; clicking Push is disabled. |
-| API crashes mid-post | Bill is stuck in `posting` until an API restart; `StuckPostingRecoveryHostedService` moves it to `reconciliation_required` with an audit breadcrumb once the claim is older than 10 minutes (so a live push on another counter is never touched). Operator verifies Tally before resolving it. |
+| API crashes mid-post | Bill is stuck in `posting` until an API restart; `StuckPostingRecoveryHostedService` moves it to `reconciliation_required` with an audit breadcrumb once the claim is older than 10 minutes (longer than any push can run, so a push still running in another API process on the same database is never touched). Operator verifies Tally before resolving it. |
 | Caller disconnects mid-post | The push keeps its own 30 s settle budget and records the known or unknown outcome; it is never left in `posting`. A cancellation noticed before anything is sent restores the prior state. |
 | Desktop down during a push | That push fails; no correctness lost (the API either completed the post or crashed; either way recovery is deterministic). |
 | Network partitions after preflight / mid-post | Timeout → `reconciliation_required` → operator verifies in Tally → Mark as Pushed or Mark as Pending. |
@@ -231,7 +232,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 
 ### Allowed on desktop
 
-- bootstrap config (API URL, counter name)
+- the server address and the counter name
 - print preferences (last-used printer, last PDF directory)
 - admin unlock token cache (TTL-bounded)
 - logs

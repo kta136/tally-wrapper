@@ -54,7 +54,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     /// <summary>
     /// Handler the shell wires up to ask a yes/no question in the confirm
-    /// overlay (void, repost, delete, push all).
+    /// overlay (repost, delete, push all).
     /// </summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
@@ -83,13 +83,12 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         _adminTokenGate = new BillsAdminTokenGate(_adminTokens);
         var runner = new BillsActionRunner(this);
         var batch = new BillsBatchActionWorkflow(_billsApi, this, runner);
-        var rows = new BillsRowActionWorkflow(_billsApi, this, runner);
+        var rows = new BillsRowActionWorkflow(_billsApi, _adminTokenGate, this, runner);
         var admin = new BillsAdminActionWorkflow(_billsApi, _adminTokenGate, this, runner);
 
         // Re-publish admin state to XAML so admin-only actions
         // (Change Bill Number, Mark Posted/Pending, Delete, Delete Selected)
-        // can hide themselves when locked. Matches the pattern in
-        // SettingsViewModel.IsAdminFeaturesVisible.
+        // can hide themselves when locked.
         if (_adminTokens is not null)
         {
             _adminTokens.Changed += _ => OnPropertyChanged(nameof(IsAdminUnlocked));
@@ -144,8 +143,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         PushSelectedCommand = new AsyncRelayCommand(_pushSelected, () => CanActOnSelection(x => x.IsPendingLike, needsTally: true));
         PushAllPendingCommand = new AsyncRelayCommand(batch.PushAllPendingAsync, () => CanAct && IsTallyPushAllowed);
         RetrySelectedCommand = new AsyncRelayCommand(_retrySelected, () => CanActOnSelection(x => x.IsRetryable, needsTally: true));
-        VoidSelectedCommand = new AsyncRelayCommand(batch.VoidSelectedAsync, () => CanActOnSelection(x => x.CanBeVoided));
-        ReviseSelectedCommand = new AsyncRelayCommand(batch.ReviseSelectedAsync, () => CanActOnSelection(x => x.CanBeRevised));
         RepostSelectedCommand = new AsyncRelayCommand(_repostSelected, () => CanActOnSelection(x => x.CanBeReposted, needsTally: true));
         TallyPushSelectedCommand = new AsyncRelayCommand(
             TallyPushSelectedAsync,
@@ -154,8 +151,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         PushRowCommand = RowCommand(rows.PushRowAsync, x => x.CanBePushed, needsTally: true);
         RetryRowCommand = RowCommand(rows.RetryRowAsync, x => x.CanBeRetried, needsTally: true);
         RepostRowCommand = RowCommand(rows.RepostRowAsync, x => x.CanBeReposted, needsTally: true);
-        ReviseRowCommand = RowCommand(rows.ReviseRowAsync, x => x.CanBeRevised);
-        VoidRowCommand = RowCommand(rows.VoidRowAsync, x => x.CanBeVoided);
         EditRowCommand = RowCommand(rows.EditRowAsync, x => x.CanBeEdited);
         CopyInvoiceNumberCommand = new RelayCommand<BillListRowViewModel?>(rows.CopyInvoiceNumber, row => row?.CanCopyInvoiceNumber == true);
 
@@ -195,8 +190,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public bool IsAdminUnlocked => _adminTokens?.IsUnlocked == true;
     public IAsyncRelayCommand RetrySelectedCommand { get; }
-    public IAsyncRelayCommand VoidSelectedCommand { get; }
-    public IAsyncRelayCommand ReviseSelectedCommand { get; }
     public IAsyncRelayCommand RepostSelectedCommand { get; }
     public IAsyncRelayCommand TallyPushSelectedCommand { get; }
     public IRelayCommand ClearSelectionCommand { get; }
@@ -204,8 +197,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public IAsyncRelayCommand<BillListRowViewModel?> PushRowCommand { get; }
     public IAsyncRelayCommand<BillListRowViewModel?> RetryRowCommand { get; }
     public IAsyncRelayCommand<BillListRowViewModel?> RepostRowCommand { get; }
-    public IAsyncRelayCommand<BillListRowViewModel?> ReviseRowCommand { get; }
-    public IAsyncRelayCommand<BillListRowViewModel?> VoidRowCommand { get; }
     public IRelayCommand<BillListRowViewModel?> CopyInvoiceNumberCommand { get; }
 
     public IAsyncRelayCommand<BillListRowViewModel?> EditRowCommand { get; }
@@ -251,15 +242,12 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     /// <summary>"120", or "50+" while more pages follow.</summary>
     public string TotalDisplay => _hasMorePages ? $"{Skip + Items.Count}+" : Total.ToString();
-    public int PageTake => PageSize;
     public int VisibleCount => GroupedItems.Count;
     public int Showing => VisibleCount;
     public int HiddenByPostedDaysCount => Math.Max(0, Items.Count - VisibleCount);
-    public bool HasHiddenPostedDays => HideFullyPostedDays && HiddenByPostedDaysCount > 0;
     public bool IsFilteredEmpty => Items.Count > 0 && VisibleCount == 0;
     public int SelectedCount => Items.Count(x => x.IsSelected);
     public bool HasSelection => SelectedCount > 0;
-    public bool HasSingleSelection => SelectedCount == 1;
     public bool CanPrintSelected => HasSelection;
     public bool IsSelectionBarVisible => HasSelection;
     public string SelectionSummaryText => HasSelection ? $"{SelectedCount} selected" : "No selection";
@@ -566,7 +554,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         OnPropertyChanged(nameof(Showing));
         OnPropertyChanged(nameof(VisibleCount));
         OnPropertyChanged(nameof(HiddenByPostedDaysCount));
-        OnPropertyChanged(nameof(HasHiddenPostedDays));
         OnPropertyChanged(nameof(IsFilteredEmpty));
         RefreshSelectionState();
         RefreshCommand.NotifyCanExecuteChanged();
@@ -581,7 +568,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     {
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(HasSelection));
-        OnPropertyChanged(nameof(HasSingleSelection));
         OnPropertyChanged(nameof(CanPrintSelected));
         OnPropertyChanged(nameof(IsSelectionBarVisible));
         OnPropertyChanged(nameof(AreAllVisibleSelected));
@@ -589,8 +575,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         OnPropertyChanged(nameof(SelectedBillIds));
         PushSelectedCommand.NotifyCanExecuteChanged();
         RetrySelectedCommand.NotifyCanExecuteChanged();
-        VoidSelectedCommand.NotifyCanExecuteChanged();
-        ReviseSelectedCommand.NotifyCanExecuteChanged();
         RepostSelectedCommand.NotifyCanExecuteChanged();
         TallyPushSelectedCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(TallyPushButtonLabel));
@@ -598,8 +582,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         PushRowCommand.NotifyCanExecuteChanged();
         RetryRowCommand.NotifyCanExecuteChanged();
         RepostRowCommand.NotifyCanExecuteChanged();
-        ReviseRowCommand.NotifyCanExecuteChanged();
-        VoidRowCommand.NotifyCanExecuteChanged();
         EditRowCommand.NotifyCanExecuteChanged();
         ChangeNumberRowCommand.NotifyCanExecuteChanged();
         MarkPostedRowCommand.NotifyCanExecuteChanged();

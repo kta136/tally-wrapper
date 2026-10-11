@@ -41,6 +41,8 @@ The README in the original bundle ([handoff notes](design/)) says: *recreate pix
 | `--ink-soft` | `oklch(58% 0.008 260)` | tertiary text |
 | `--ink-disabled` | `oklch(72% 0.006 260)` | disabled controls |
 
+These are the prototype's CSS values. For the accent family WPF does not convert them: `DesignTokens.xaml` uses `#4F46E5` (`AccentBrush`), hover `#4338CA`, pressed `#3730A3`, soft `#EEF2FF` and ring `#818CF8` at 45% opacity. That is the indigo of the bundle's own thumbnail; the oklch conversion renders muddy.
+
 ### 3.2 Status colors (matched chroma)
 
 | Token | Value | Use |
@@ -74,6 +76,7 @@ In WPF the toggle is Settings → Advanced → UI density (Compact / Comfortable
 - UI: **Inter** (weights 400/500/600/700) with Segoe UI Variable fallback. `font-feature-settings: 'cv11', 'ss01', 'tnum'`, `line-height: 1.35`.
 - Numeric columns, invoice numbers, kbd hints, timestamps: **JetBrains Mono** (weights 400/500/600) with Cascadia Mono fallback. `font-variant-numeric: tabular-nums` everywhere numbers are compared vertically.
 - Label size `11.5px` uppercase `letter-spacing: 0.03em`; section title `10.5px` uppercase `letter-spacing: 0.06em`.
+- WPF uses the Windows-native equivalents, because Inter and JetBrains Mono are not installed on Windows and are not bundled: `UiFontFamily` is `Segoe UI Variable Display, Segoe UI Variable, Segoe UI` and `MonoFontFamily` is `Cascadia Mono, Consolas`.
 
 ### 3.5 Focus ring (keyboard-first, non-negotiable)
 
@@ -111,7 +114,7 @@ In WPF the toggle is Settings → Advanced → UI density (Compact / Comfortable
 | `.panel` / `.panel-header` / `.panel-body` | sectioned panel | styles.css |
 | `.tile` (+ `.ok` / `.warn` / `.err` / `.info`) | bill-summary tile | styles.css |
 | `.dialog` / `.dialog-head` / `.dialog-body` / `.dialog-foot` / `.scrim` | modal dialog | styles.css, dialogs.jsx |
-| `AdminSectionPanel` / `AdminSectionTitle` / `AdminFieldLabel` / `AdminDataGrid` / `AdminBannerErr`·`Warn`·`Info` / `StateChipLocked`·`Unlocked` | admin sections | [Resources/Styles.xaml](../src/ShowroomBilling.Desktop/Resources/Styles.xaml) — shared by `AdminUnlockDialog` and Settings › Admin tab |
+| `AdminSectionPanel` / `AdminBannerErr`·`Warn`·`Info` / `StateChipLocked`·`Unlocked` | admin sections | [Resources/Styles.xaml](../src/ShowroomBilling.Desktop/Resources/Styles.xaml) — shared by `AdminUnlockDialog` and Settings › Admin tab |
 | `.entry-row` / `.rcell` | in-table editable cell | styles.css, invoice.jsx |
 | `.picker` / `.picker-item` | side item picker | styles.css, invoice.jsx |
 | `.settings-nav` / `.it` / `.group` | settings sidebar | styles.css, screens.jsx |
@@ -121,7 +124,7 @@ In WPF the toggle is Settings → Advanced → UI density (Compact / Comfortable
 | `.dot` (+ `.ok` / `.warn` / `.err` / `.pulse`) | status dot with halo | styles.css |
 | `.toast` | transient save confirmation | styles.css, invoice.jsx |
 
-Every class above has a direct WPF translation — most become a `Style` keyed in a `ResourceDictionary`. The design tokens in §3 become `SolidColorBrush` / `Thickness` / `double` resources so a later Spacious/Compact switch is a single `MergedDictionaries` swap.
+Every class above has a direct WPF translation — most become a `Style` keyed in a `ResourceDictionary`. The design tokens in §3 become `SolidColorBrush` / `Thickness` / `double` resources. Density is switched at run time by `UiDensityManager` (§3.3), not by swapping a dictionary.
 
 ## 5. Screens
 
@@ -180,7 +183,9 @@ Two operating states, driven by whether the API is reachable. Tally itself is on
 | `healthy` | none | default | green dot on Cloud; neutral dot on Tally |
 | `limited` | err banner: *"Limited mode — cloud unavailable."* | titlebar background = warn-soft | err dot on Cloud; err dot on Tally (API can't reach Tally either) |
 
-In `limited`, Invoice and Bills are hidden. The main region shows the `LimitedModeView` recovery card; Settings remains available so an operator can retry health checks or change Database recovery mode.
+In `limited`, Invoice and Bills are hidden. The main region shows the `LimitedModeView` recovery card, whose **Server Settings** button opens Settings → Server; Settings remains available so an operator can retry health checks or correct the server address.
+
+WPF enters `limited` in three cases, each with its own banner: the server does not answer ("Cloud unavailable — the desktop can prepare bills but cannot save. Retrying…"), the server cannot reach its database ("The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection."), and the database has not had this build's migrations ("Database upgrade needed — …").
 
 The design's Tweaks panel lets a reviewer toggle system state for preview purposes. In production the state is derived from real API health signals.
 
@@ -204,10 +209,10 @@ The mockup contains a few review-only affordances that we do **not** ship to ope
   - system state is derived from real health signals;
   - keyboard hints stay on (they are a core affordance, not decorative);
   - accent is fixed at indigo (we do not expose accent theming).
-- **Window buttons in the titlebar** (min/max/close as painted SVGs): defer until we decide custom-chrome vs native-chrome. If we keep native WPF chrome, the painted title bar goes with it and the brand/context strip becomes a thin header band below it.
+- **Window buttons in the titlebar** (min/max/close as painted SVGs): WPF uses custom chrome (`WindowStyle="None"` with `WindowChrome`), so `TitleBarView` draws the title bar and its own window buttons. See §3.7 for how it handles maximizing.
 - **Tab-switcher "keyboard hints on/off"**: hints stay on.
 - **Title-bar "Counter X" strip**: the prototype shows `Company · Counter · Operator` in the centered context strip. WPF ships `Company · Operator` only — we don't model multiple counters per workstation. The workstation identifier (`WS: COUNTER-01`) lives in the status bar instead.
-- **Settings → Database panel**: the prototype shows a Bootstrap API endpoint / Tenant Slug / Workstation Token form with a snapshot freshness table — that's a stylized cloud-onboarding mockup that doesn't reflect the real desktop architecture. WPF instead uses a compact `Component / Mode / Details / Status` table for the configured Desktop → API → PostgreSQL route and explicitly states that the Desktop never connects to PostgreSQL directly. The status column reports configuration (`OK` / `ACTIVE` / `CONFIGURED`), not live reachability; Refresh and Test remain the explicit health actions. API-location controls are separate from the LocalEmbedded database controls. Local embedded API and database details stay hidden while the selected API location is Server and appear when Local embedded is selected; editing remains unavailable until Billing is actually running in LocalEmbedded mode. The revealed panel retains Test / Save-override / Restart-API actions, a masked connection value, source/environment/restart state, encrypted override path, and copy actions for non-secret endpoints and paths. Settings navigation uses the Windows-native `Segoe Fluent Icons` / `Segoe MDL2 Assets` icon font while preserving the dynamic admin-only entry. See [DatabaseSettingsSectionView.xaml](../src/ShowroomBilling.Desktop/Views/Settings/DatabaseSettingsSectionView.xaml).
+- **Settings → Database panel**: the prototype shows a Bootstrap API endpoint / Tenant Slug / Workstation Token form with a snapshot freshness table — that's a stylized cloud-onboarding mockup that doesn't reflect the real desktop architecture. WPF has a **Server** section instead: the server address, the address in use now, and **Test server** / **Find server** / **Save and restart Billing**. It shows nothing about the database; the server's database connection is set from the tray on the server PC. Settings navigation uses the Windows-native `Segoe Fluent Icons` / `Segoe MDL2 Assets` icon font while preserving the dynamic admin-only entry. See [ServerSettingsSectionView.xaml](../src/ShowroomBilling.Desktop/Views/Settings/ServerSettingsSectionView.xaml).
 - **Invoice footer discount controls**: WPF adds a linked **Final** amount input next to the prototype's Discount input. Operators can type either the discount amount or desired final total, and the other value updates immediately.
 - **Bills selection footer**: the prototype shows `Clear · Retry All · Repost… · Print`. WPF adds a `Delete Selected` button that is admin-gated (hidden when the admin session is locked). When admin is locked — the typical operator state — the visible footer matches the design exactly. When unlocked, the extra button is a power-user affordance documented in [CLAUDE.md](../CLAUDE.md) under "Desktop admin-gating pattern".
 - **`Posted · edit` chip**: WPF renders this as `Posted · edit` (matching the prototype) when `EditedAfterPush == true`. Source: `BillListRowViewModel.StateChipLabel`.

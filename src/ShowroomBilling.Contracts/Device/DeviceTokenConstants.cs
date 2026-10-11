@@ -1,9 +1,10 @@
 namespace ShowroomBilling.Contracts.Device;
 
 /// <summary>
-/// Shared between API and Desktop: both processes read the same token file
-/// (both run as the same Windows user under ChildProcessSupervisor) to
-/// establish a local IPC secret that gates write routes.
+/// Shared between API and Desktop when both run on one machine as the same
+/// Windows user (a development run): both read the same token file, which
+/// gives them a local secret that gates write routes. A server install
+/// trusts its LAN instead.
 /// </summary>
 public static class DeviceTokenConstants
 {

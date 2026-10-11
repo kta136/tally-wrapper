@@ -38,7 +38,6 @@ public partial class AdminUnlockViewModel : ObservableObject
 
     partial void OnIsPasscodeConfiguredChanged(bool value)
     {
-        OnPropertyChanged(nameof(PasscodeSectionTitle));
         OnPropertyChanged(nameof(ShowUnlockForm));
         OnPropertyChanged(nameof(ShowInitialSetupForm));
     }
@@ -80,7 +79,6 @@ public partial class AdminUnlockViewModel : ObservableObject
 
     public bool ShowInitialSetupForm => !_tokenStore.IsUnlocked && !IsPasscodeConfigured;
 
-    public string PasscodeSectionTitle => IsPasscodeConfigured ? "Change passcode" : "Set passcode";
 
     public string SessionSummary
     {

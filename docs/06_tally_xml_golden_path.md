@@ -10,7 +10,7 @@
 
 ## Change control
 
-Do not change the posting order, accepted XML shape, fallback sequence, or `REMOTEID` handling in this document without live revalidation against a real Tally company. This is the golden path for Tally Wrapper as well.
+Do not change the accepted XML shape or the `REMOTEID` handling in this document without live revalidation against a real Tally company.
 
 ---
 
@@ -31,237 +31,30 @@ If sales vouchers stop posting, start here before changing the XML builder or po
 
 All live sales-voucher writes go through the API's in-process Tally integration:
 
-- `ITallyPoster.PostAsync` → `TallyXmlVoucherBuilder.Build` → `ITallyXmlClient.SendAsync`
+- `ITallyPoster.PostAsync` → `TallyXmlVoucherBuilder.Build` → `ITallyXmlClient.SendWriteAsync`
 - all three live under `src/ShowroomBilling.Infrastructure/Tally/`
-- invoked synchronously by `BillService.PushInternalAsync` when the operator clicks Push / Retry / Repost
+- invoked synchronously by `BillPostingWorkflow.PushInternalAsync` when the operator clicks Push / Retry / Repost
 - there is no separate bridge process and no posting queue
 
-### 2.2 Canonical posting order
+### 2.2 One attempt per operator action
 
-The canonical live write path is:
+A push, retry or repost builds one voucher envelope (§4.3) and sends it once. There is no second XML shape and no fallback request: Tally's answer, or the lack of one, settles the bill (§4.5).
 
-1. build **plain** sales-voucher XML first
-2. send plain XML with `include_batch_allocations=True`
-3. if Tally rejects that import, retry once with plain XML and `include_batch_allocations=False`
-4. do not try `item_invoice` first
-
-Canonical builder sequence:
-
-1. `build_sales_voucher_xml(..., shape="plain", include_batch_allocations=True)`
-2. fallback once to `build_sales_voucher_xml(..., shape="plain", include_batch_allocations=False)`
-
-### 2.3 Do not use this as the first live write path
-
-Do **not** use `shape="item_invoice"` as the first live posting shape unless it has been revalidated against the target company.
-
-Reason:
-
-- on April 11, 2026, `item_invoice` failed on `dummy`
-- retrying plain XML with the same `REMOTEID` after that failure also failed
-- plain XML succeeds when sent first
+The builder emits one layout, the Accounting Invoice shape: `ALLLEDGERENTRIES.LIST` entries, with the bill lines as `INVENTORYALLOCATIONS.LIST` inside the sales entry. It emits no `BATCHALLOCATIONS.LIST`.
 
 ---
 
-## 3. Working XML strategy
+## 3. Masters read path
 
-### 3.1 Primary accepted shape
+Implemented in `TallyXmlClient` + `TallyXmlMasterSource` under `src/ShowroomBilling.Infrastructure/Tally/`.
 
-Primary accepted shape:
-
-- `shape="plain"`
-- `include_batch_allocations=True`
-
-This produces:
-
-- `ALLLEDGERENTRIES.LIST`
-- nested `INVENTORYALLOCATIONS.LIST`
-- optional `BATCHALLOCATIONS.LIST`
-
-### 3.2 Compatibility fallback shape
-
-Fallback shape:
-
-- `shape="plain"`
-- `include_batch_allocations=False`
-
-This exists because some Tally/company combinations may silently reject batch allocations.
-
-### 3.3 Why the plain path is canonical
-
-Live finding from April 11, 2026:
-
-- `item_invoice` returned `EXCEPTIONS=1`
-- plain XML posted successfully when it was sent first
-- the plain XML retry could fail if it reused the same `REMOTEID` after an `item_invoice` failure
-
-Practical rule:
-
-- treat plain XML as the source-of-truth posting path
-- treat invoice-view XML as experimental unless reverified
-
----
-
-## 4. `REMOTEID` behavior warning
-
-Live finding:
-
-1. `item_invoice` with `REMOTEID = X` failed
-2. plain XML with the same `REMOTEID = X` also failed
-3. plain XML with a fresh `REMOTEID = Y` succeeded
-
-Rules:
-
-- do not change shape after a failed write while blindly reusing the same `REMOTEID`
-- if a fallback materially changes the XML path, issue a fresh `REMOTEID`
-- keep cloud idempotency separate from Tally `REMOTEID`
-- use reconciliation before retrying ambiguous outcomes
-
----
-
-## 5. Live-verified accepted request
-
-This request shape was accepted by Tally during live verification on April 11, 2026.
-
-Voucher details used:
-
-- company: `dummy`
-- date: `2026-03-22`
-- party ledger: `CASH`
-- stock item: `Halmarked Gold Jewellery 22KT`
-- quantity: `0.010 GMS`
-- subtotal: `100.000`
-- CGST: `1.500`
-- SGST: `1.500`
-- grand total: `103.000`
-
-Accepted request:
-
-```xml
-<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Import Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <IMPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>Vouchers</REPORTNAME>
-        <STATICVARIABLES>
-          <SVCURRENTCOMPANY>dummy</SVCURRENTCOMPANY>
-        </STATICVARIABLES>
-      </REQUESTDESC>
-      <REQUESTDATA>
-        <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <VOUCHER REMOTEID="codex-live-fixed-bb6cff4c-dd19-498e-bbf4-f719b4fc615b" VCHTYPE="Sales" ACTION="Create">
-            <DATE>20260322</DATE>
-            <NARRATION>Cash Sale Test | Codex live fixed codex-live-fixed-bb6cff4c-dd19-498e-bbf4-f719b4fc615b</NARRATION>
-            <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
-            <ISINVOICE>Yes</ISINVOICE>
-            <PARTYLEDGERNAME>CASH</PARTYLEDGERNAME>
-            <PARTYNAME>CASH</PARTYNAME>
-            <GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>
-            <STATENAME>Uttar Pradesh</STATENAME>
-            <PLACEOFSUPPLY>Uttar Pradesh</PLACEOFSUPPLY>
-            <CONSIGNEESTATENAME>Uttar Pradesh</CONSIGNEESTATENAME>
-            <COUNTRYNAME>India</COUNTRYNAME>
-            <COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>
-            <CONSIGNEECOUNTRYNAME>India</CONSIGNEECOUNTRYNAME>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>CASH</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
-              <AMOUNT>-103.000</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>SALES GOLD JEWELLERY</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>100.000</AMOUNT>
-              <INVENTORYALLOCATIONS.LIST>
-                <STOCKITEMNAME>Halmarked Gold Jewellery 22KT</STOCKITEMNAME>
-                <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-                <RATE>10000.000/GMS</RATE>
-                <AMOUNT>100.000</AMOUNT>
-                <ACTUALQTY>0.010 GMS</ACTUALQTY>
-                <BILLEDQTY>0.010 GMS</BILLEDQTY>
-                <BATCHALLOCATIONS.LIST>
-                  <GODOWNNAME>Main Location</GODOWNNAME>
-                  <BATCHNAME>Primary Batch</BATCHNAME>
-                  <AMOUNT>100.000</AMOUNT>
-                  <ACTUALQTY>0.010 GMS</ACTUALQTY>
-                  <BILLEDQTY>0.010 GMS</BILLEDQTY>
-                </BATCHALLOCATIONS.LIST>
-              </INVENTORYALLOCATIONS.LIST>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>CGST TAX</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>1.500</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>SGST TAX</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>1.500</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-          </VOUCHER>
-        </TALLYMESSAGE>
-      </REQUESTDATA>
-    </IMPORTDATA>
-  </BODY>
-</ENVELOPE>
-```
-
-Accepted response:
-
-```xml
-<RESPONSE>
-  <CREATED>1</CREATED>
-  <ALTERED>0</ALTERED>
-  <DELETED>0</DELETED>
-  <LASTVCHID>16945</LASTVCHID>
-  <LASTMID>0</LASTMID>
-  <COMBINED>0</COMBINED>
-  <IGNORED>0</IGNORED>
-  <ERRORS>0</ERRORS>
-  <CANCELLED>0</CANCELLED>
-  <EXCEPTIONS>0</EXCEPTIONS>
-</RESPONSE>
-```
-
-Captured artifacts for that successful post:
-
-- `tmp/live_validation/codex-live-fixed-bb6cff4c-dd19-498e-bbf4-f719b4fc615b.plain.request.xml`
-- `tmp/live_validation/codex-live-fixed-bb6cff4c-dd19-498e-bbf4-f719b4fc615b.response.xml`
-
----
-
-## 6. Debug sequence
-
-When vouchers are not posting, use this order:
-
-1. probe Tally reachability and open company visibility
-2. fetch voucher types, ledgers, and stock items from the target company
-3. confirm the configured ledgers match Tally exactly
-4. inspect the XML generated by `build_sales_voucher_xml(..., shape="plain", include_batch_allocations=True)`
-5. post the plain XML first
-6. if rejected, try the plain no-batch fallback
-7. only experiment with `item_invoice` after the plain path has been ruled out
-
-Useful helper:
-
-- `tools/tally_live_validation_helper.py`
-
----
-
-## 7. Masters read path
-
-**Status as of April 20, 2026:** implemented in `TallyXmlClient` + `TallyXmlMasterSource` in the API's Infrastructure layer. Replaces the Python V1 `tally/xml_builder.py` + `tally/xml_parser.py`.
-
-### 7.1 Transport
+### 3.1 Transport
 
 - POST directly to the Tally HTTP endpoint root (`http://<host>:<port>/`). No path segment — Tally does not route by URL.
-- `Content-Type: text/xml; charset=utf-8`. Tally also accepts `application/xml` but `text/xml` matches V1 and observed real-world Tally examples.
+- `Content-Type: text/xml; charset=utf-8`. Tally also accepts `application/xml`.
 - Expected response: `HTTP 200` with an `<ENVELOPE>` body. Non-200 is a hard error; status header `<STATUS>1</STATUS>` inside the envelope indicates success at the Tally layer.
 
-### 7.2 Request shape (collection exports)
+### 3.2 Request shape (collection exports)
 
 Every master fetch is a `TYPE=Collection` export request. Canonical template (companies):
 
@@ -294,13 +87,13 @@ Every master fetch is a `TYPE=Collection` export request. Canonical template (co
 
 Findings from live validation:
 
-- Title-case request verbs (`Export`, `Collection`) work — Tally also accepts the uppercase V1 form (`EXPORT`, `COLLECTION`). We standardized on title case.
-- `<COLLECTION>` type names with a space (`Stock Item`, `Voucher Type`) work. V1 used the unspaced forms (`StockItem`, `VoucherType`); both are accepted.
-- `<FETCH>Name, Field1, Field2</FETCH>` is a comma-separated single element. V1 used repeated `<NATIVEMETHOD>` elements per field; `<FETCH>` is equivalent for master collections and produces the same result set.
+- Title-case request verbs (`Export`, `Collection`) work — Tally also accepts the uppercase form (`EXPORT`, `COLLECTION`). The client sends title case.
+- `<COLLECTION>` type names with a space (`Stock Item`, `Voucher Type`) work. The unspaced forms (`StockItem`, `VoucherType`) are accepted too.
+- `<FETCH>Name, Field1, Field2</FETCH>` is a comma-separated single element. Repeated `<NATIVEMETHOD>` elements, one per field, give the same result set for master collections.
 - **Do not scope the company-list request** with `<SVCURRENTCOMPANY>`. Tally returns the list of all companies currently open in the server; scoping it prevents the outer envelope from enumerating other companies.
 - Every other master fetch **must** include `<SVCURRENTCOMPANY>...</SVCURRENTCOMPANY>` inside `<STATICVARIABLES>`, otherwise Tally returns zero rows.
 
-### 7.3 Fetch field lists (what we ask for per master)
+### 3.3 Fetch field lists (what we ask for per master)
 
 | Master | TYPE | FETCH fields |
 |---|---|---|
@@ -311,7 +104,7 @@ Findings from live validation:
 
 Tally may silently drop requested fields from the response (e.g. the `dummy` company returned ledgers without `<PRIMARYGROUP>` even though we asked for it, and returned companies without `<ISINACTIVE>`). Parsers must treat every field except `Name` as optional.
 
-### 7.4 Response shape
+### 3.4 Response shape
 
 The response wraps payload elements inside `<BODY><DESC><CMPINFO>...</CMPINFO></DESC><DATA><COLLECTION>...</COLLECTION></DATA></BODY>`. It is not the `<TALLYMESSAGE>` wrapper that voucher imports use. Parsers must use a local-name descendant search rather than fixed path matching so they work for both shapes.
 
@@ -349,20 +142,19 @@ Quirks the parser must handle:
 - every scalar child carries a `TYPE="String|Logical|Number"` attribute. The value is still in element text; do not try to cast by attribute.
 - `<ISREVENUE>`, `<ISDEEMEDPOSITIVE>`, `<ISINACTIVE>` are `Yes`/`No`. Tally also uses `True`/`False` and sometimes `1`/`0` elsewhere; accept all three.
 
-### 7.5 Invalid XML 1.0 characters (critical)
+### 3.5 Invalid XML 1.0 characters (critical)
 
 **Tally emits invalid XML 1.0 characters in two forms.** Observed cases:
 
-- **Raw C0 bytes** in text content (seen intermittently; V1 strips these defensively).
+- **Raw C0 bytes** in text content (seen intermittently).
 - **Numeric character references** like `&#4;` in text content. For the `dummy` company, every `<STOCKITEM>` has `<GSTHSNCODE>&#4; Not Found</GSTHSNCODE>`. `&#4;` resolves to `U+0004` (`EOT`), which is not a valid XML 1.0 character. `.NET`'s `XmlReader` rejects the reference during entity decoding with `XmlException: hexadecimal value 0x04, is an invalid character`, even though the reference itself is syntactically legal.
 
 Mitigation (`TallyXmlClient.StripInvalidXmlControlChars`):
 
 - before `XElement.Parse`, regex-strip raw `[\x00-\x08\x0B\x0C\x0E-\x1F]` bytes from the response body. Tab (`\x09`), LF (`\x0A`), CR (`\x0D`) are preserved.
 - then regex-match every `&#<decimal>;` / `&#x<hex>;` in the body; drop the reference when the code point is invalid for XML 1.0 (C0 except tab/LF/CR, and C1 except NEL `U+0085`). Valid references (e.g. `&#65;` for `A`) pass through unchanged.
-- this matches V1's behavior: V1 strips C0 raw bytes via `CONTROL_CHARS_RE` (`tally/xml_parser.py:strip_control_chars`) and happens to avoid the `&#4;` case because it uses `lxml` in recovery mode. In .NET we must explicitly defuse the char-refs before handing the string to `XElement.Parse`.
 
-### 7.6 Sentinel values (treat as missing)
+### 3.6 Sentinel values (treat as missing)
 
 Tally reports "no value set" for some master fields with sentinel strings rather than omitting the element:
 
@@ -372,7 +164,7 @@ Tally reports "no value set" for some master fields with sentinel strings rather
 
 Implemented in `TallyXmlMasterSource.SanitizeHsn`. Add new sentinels here as they are discovered from live data.
 
-### 7.7 Live counts observed (April 20, 2026)
+### 3.7 Live counts observed (April 20, 2026)
 
 Against `http://192.168.1.13:9000`, company `dummy`:
 
@@ -381,56 +173,54 @@ Against `http://192.168.1.13:9000`, company `dummy`:
 - stock items: 11 (all HSNs returned as the `\x04 Not Found` sentinel)
 - voucher types: 33 (includes legacy `Counter Sale` → parent `Sales`)
 
-Saved raw response fixtures live at `/tmp/tally-*-response.xml` in the verification environment. The stock items response is exercised end-to-end by `TallyXmlLiveFixtureTests` when that file is present; the test no-ops when absent so CI stays green without live infrastructure.
-
 ---
 
-## 8. Voucher write path
+## 4. Voucher write path
 
-Section 7 documents the **read** path (masters). This section documents the **write** path: how the API posts a bill to Tally as a sales voucher.
+Section 3 documents the **read** path (masters). This section documents the **write** path: how the API posts a bill to Tally as a sales voucher.
 
-### 8.1 Pipeline
+### 4.1 Pipeline
 
 Synchronous, in-process, driven by an operator click on Push / Retry / Repost:
 
-1. `BillService.PushInternalAsync` transitions the bill to `posting` and saves (so a crash is recoverable).
+1. `BillPostingWorkflow.PushInternalAsync` transitions the bill to `posting` and saves (so a crash is recoverable).
 2. Builds a `TallyPostRequest` carrying the bill header + `BillPayloadDto` from the current revision's snapshot. `Operation=Create` is the default; `Operation=Alter` is used only for `EditedAfterPush=true` bills after resolving the old Tally `MASTER ID` from pre-edit audit.
 3. Calls `ITallyPoster.PostAsync` which:
    - reads ledger mappings + active company from cloud settings via `ICloudSettingsService`
    - builds an Import Data envelope via `TallyXmlVoucherBuilder.Build`
-   - sends it through `ITallyXmlClient.SendAsync` (one HTTP POST to Tally's localhost XML endpoint)
+   - sends it through `ITallyXmlClient.SendWriteAsync` (one HTTP POST to the Tally endpoint in Settings; never retried)
    - classifies the response
-4. `BillService` records `tally.posted` or `tally.failed` audit, transitions the bill to `posted` or `failed`, saves, and returns the updated `BillResponse` to the desktop. Successful alter clears `EditedAfterPush` and stores the target `tallyMasterId`; failed alter keeps the old audit target for retry.
+4. `BillPostingWorkflow` records `tally.posted`, `tally.failed` or `tally.outcome.unknown`, transitions the bill to `posted`, `failed` or `reconciliation_required`, saves, and returns the updated `BillResponse` to the desktop. Successful alter clears `EditedAfterPush` and stores the target `tallyMasterId`; failed alter keeps the old audit target for retry.
 
 The desktop's Push button stays busy for the full duration of one Tally round-trip (typically 1–10 seconds).
 
-### 8.2 Required cloud-settings ledger mappings
+### 4.2 Required cloud-settings ledger mappings
 
-The voucher builder reads these from `ICloudSettingsService.GetEffectiveSettingsAsync` on every call (no cached config):
+`TallyPoster` reads these from `ICloudSettingsService.GetEffectiveSettingsAsync` on every call and hands them to the builder (the API keeps settings for at most five seconds; a save through the same API clears them at once):
 
 | Cloud-settings field | Purpose | Required |
 |---|---|---|
 | `Ledgers.SalesVoucherType` | `<VOUCHERTYPENAME>` + `VCHTYPE` attribute on `<VOUCHER>` | always (defaults to `Sales`) |
-| `Ledgers.SalesLedger` | Sales-side `<LEDGERNAME>` inside each `ACCOUNTINGALLOCATIONS.LIST` | always |
-| `Ledgers.CashLedger` | `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and offsetting party Dr ledger when `bill.Payment` normalizes to `Cash` | always |
-| `Ledgers.CreditDebitLedger` | `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and offsetting party Dr ledger when `bill.Payment` normalizes to `Credit and debit` | always |
+| `Ledgers.SalesLedger` | `<LEDGERNAME>` of the sales `ALLLEDGERENTRIES.LIST` entry, which holds the inventory lines | always |
+| `Ledgers.CashLedger` | `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and offsetting party Dr ledger when `bill.Payment` normalizes to `Cash` | for a `Cash` bill |
+| `Ledgers.CreditDebitLedger` | `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and offsetting party Dr ledger when `bill.Payment` normalizes to `Credit and debit` | for every other bill |
 | Unregistered/consumer sales policy | `<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>`; no `<PARTYGSTIN>` / `<CONSIGNEEGSTIN>` is emitted by this app | always |
-| `Ledgers.CgstLedger` + `Ledgers.SgstLedger` | Credit ledgers for CGST / SGST halves of `BillTotals.TaxTotal` | only when `TaxTotal != 0` |
+| `Ledgers.CgstLedger` + `Ledgers.SgstLedger` | Credit ledgers for the CGST / SGST halves of `BillTotals.TaxTotal` (`JewelleryGst.Split`, the split the printed invoice uses) | each only when its half is not zero |
 | `Ledgers.DiscountLedger` | Debit ledger for `BillTotals.DiscountTotal` | only when `DiscountTotal != 0` |
 | `Ledgers.RoundOffLedger` | Credit/debit ledger for `BillTotals.RoundOff` | only when `RoundOff != 0` |
 | `Connection.ActiveCompanyName` | `<SVCURRENTCOMPANY>` scope for the import | always |
 | `Print.CompanyState` | `<STATENAME>`, `<PLACEOFSUPPLY>`, `<CONSIGNEESTATENAME>` GST transaction state fields | when configured |
 | `Print.CompanyCountry` | `<COUNTRYNAME>` for the voucher view plus `<COUNTRYOFRESIDENCE>` / `<CONSIGNEECOUNTRYNAME>` for GST/GSTR-1 fields | when configured |
 
-Missing config raises `VoucherBuildException` with `Terminal = true`, surfacing in the UI as a `failed` bill with `CONFIG_MISSING_*` error code — operator fixes the mapping in Settings, then clicks Retry.
+A missing mapping raises `VoucherBuildException` before anything is sent, surfacing in the UI as a `failed` bill with a `CONFIG_MISSING_*` error code — the operator fixes the mapping in Settings, then clicks Retry. The builder also checks that the ledger amounts net to zero exactly as they will be sent, and fails with `VOUCHER_UNBALANCED` if they do not.
 
 The `{PartyLedger}` placeholder in `<PARTYLEDGERNAME>` and the offsetting Dr ledger entry is **resolved from the bill's payment mode**, not from the customer name. `bill.Payment` is normalized via [`PaymentMode.Normalize`](../src/ShowroomBilling.Contracts/Bills/PaymentMode.cs) into `Cash` or `Credit and debit`, then mapped to `Ledgers.CashLedger` or `Ledgers.CreditDebitLedger`. The free-text `bill.PartyName` (operator's customer label) is joined with `bill.Notes` and emitted as `<NARRATION>` — it never reaches `<PARTYLEDGERNAME>`. See [`05_tally_integration_contract.md` §3.1](05_tally_integration_contract.md) for the full derivation rule.
 
 `<PARTYNAME>` deliberately uses the same resolved party ledger. It is a Tally GST transaction field, not the free-text customer label.
 
-### 8.3 Envelope shape (`voucher-import-v1`)
+### 4.3 Envelope shape
 
-This is the *Accounting Invoice* layout, live-verified against the `dummy` company. It matches the canonical envelope in §5.
+This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` produces, live-verified against the `dummy` company. Amounts are written with two decimals. `VOUCHERNUMBER`, the three state elements, the three country elements and `NARRATION` are left out when they have no value.
 
 ```xml
 <ENVELOPE>
@@ -529,7 +319,7 @@ The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.p
 
 The builder uses proportional allocation so multi-line bills with rounding drift still sum exactly to `bill.Totals.Subtotal`: each line gets `Math.Round(LineTotal / ΣLineTotal × Subtotal, 2)`, with any residual absorbed by the last line.
 
-#### 8.3.1 Gotchas that produce silent `TALLY_NO_EFFECT`
+#### 4.3.1 Gotchas that produce silent `TALLY_NO_EFFECT`
 
 These are all bugs that caused real failed pushes during Tally Wrapper bring-up — each one produces the opaque response `<RESPONSE>Unknown Request, cannot be processed</RESPONSE>` (with `CREATED=0, ALTERED=0, ERRORS=0, EXCEPTIONS=0`), which `TallyPoster` classifies as `TALLY_NO_EFFECT`. None of them produce a useful LINEERROR or ERRORS count, so you *must* inspect the `requestExcerpt` and `responseExcerpt` on the `tally.failed` audit event.
 
@@ -540,13 +330,32 @@ These are all bugs that caused real failed pushes during Tally Wrapper bring-up 
 5. **Ledger name mismatch between cloud-settings and Tally company.** `CONFIG_MISSING_CASH_LEDGER` / `CONFIG_MISSING_CREDIT_DEBIT_LEDGER` / `MISSING_PAYMENT_MODE` are caught pre-send, but every *other* ledger (CGST/SGST/RoundOff/Sales/Discount) is only validated by Tally itself — and a missing ledger here surfaces as the same `Unknown Request` response, never as a LINEERROR naming the offender. Use `List of Ledgers` via a Tally collection export to verify each name exists in the target company before debugging the XML.
 6. **`ActiveCompanyName` doesn't match a company open in Tally.** Same symptom — request accepted, 0 created, 0 altered, no error. Verify with the `$$CurrentCompany` function export before blaming the voucher XML.
 
-### 8.4 `REMOTEID` idempotency
+### 4.4 `REMOTEID` idempotency
 
-`REMOTEID` on create imports is `post:{billId:N}:{revisionId:N}`. Tally enforces uniqueness on this field per company, so if a push happens twice against the same bill revision (e.g. network glitch, retry), Tally rejects the second import with `ERRORS > 0` — classified as `TALLY_ERRORS`, landing the bill in `failed`. The operator then decides: click Retry (same REMOTEID; Tally will reject again until the first post is manually voided or superseded), or Mark as Pushed (local-only attestation), or Revise (creates a new bill with a fresh REMOTEID).
+`REMOTEID` on create imports is `post:{billId:N}:{revisionId:N}`; an explicit repost sends the caller's own key instead. Tally enforces uniqueness on this field per company, so if a push happens twice against the same bill revision (e.g. network glitch, retry), Tally rejects the second import with `ERRORS > 0` — classified as `TALLY_ERRORS`, landing the bill in `failed`. The operator checks Tally and then decides: Mark as Pushed (admin, local-only) when Tally holds the voucher, or Retry (same `REMOTEID`; Tally rejects it again while it holds the first voucher). An edit saves a new revision, so the next push carries a fresh `REMOTEID`; if Tally still holds the first voucher that creates a second one.
+
+Live finding (April 11, 2026): after an import that failed with `EXCEPTIONS=1`, a second, otherwise valid import that reused the same `REMOTEID` failed too, and one with a fresh `REMOTEID` succeeded.
 
 Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"`.
 
-### 8.5 Response classification
+### 4.5 Response classification
+
+Tally's answer to a create it accepted (captured live):
+
+```xml
+<RESPONSE>
+  <CREATED>1</CREATED>
+  <ALTERED>0</ALTERED>
+  <DELETED>0</DELETED>
+  <LASTVCHID>16945</LASTVCHID>
+  <LASTMID>0</LASTMID>
+  <COMBINED>0</COMBINED>
+  <IGNORED>0</IGNORED>
+  <ERRORS>0</ERRORS>
+  <CANCELLED>0</CANCELLED>
+  <EXCEPTIONS>0</EXCEPTIONS>
+</RESPONSE>
+```
 
 `TallyPoster.ClassifyResponse`, in order:
 
@@ -566,22 +375,23 @@ Edited-after-push alter requests do not send `REMOTEID`; they target the old vou
 
 Transport failures after a voucher write begins are classified as `Unknown`: `TALLY_TRANSPORT_UNKNOWN` for HTTP/transport errors, `TALLY_TIMEOUT` for the configured timeout, and `TALLY_RESPONSE_UNKNOWN` for an unusable response. They move the bill to `reconciliation_required`. Missing configuration is known before sending and remains `Failed` with `TALLY_NOT_CONFIGURED`. Any other failure while loading settings or building/serializing the voucher XML happens before a byte is sent, so it is `Failed` with `TALLY_PREPARE_FAILED` (and `BillValidator` rejects XML-invalid control characters in text fields at save time). A response that changed something in Tally while also reporting an error is never a definite failure: Retry/Repost from `failed` would duplicate the voucher. `BillPostingStatusResponse` returns the latest problem's `errorCode` + `errorMessage`.
 
-Success, failure, and unknown-outcome audit events carry truncated `RequestExcerpt` and `ResponseExcerpt` (≤4000 chars each) for diagnosis.
+The `tally.failed` and `tally.outcome.unknown` audit events carry truncated `requestExcerpt` and `responseExcerpt` (≤4000 chars each) for diagnosis.
 
-### 8.6 Terminal vs transient categorisation
+### 4.6 What the operator does next
 
-Since Tally Wrapper has no auto-retry, "terminal" vs "transient" is informational only — the operator decides what to do next. Typical categorisation:
+There is no auto-retry: the operator decides what to do next. A `failed` bill cannot be revised; it is edited (which returns it to `pending`) or retried.
 
-- **Config errors → fix Settings, then Retry:** `CONFIG_MISSING_SALES_LEDGER`, `CONFIG_MISSING_CGST_LEDGER`, `CONFIG_MISSING_SGST_LEDGER`, `CONFIG_MISSING_ROUNDOFF_LEDGER`, `CONFIG_MISSING_DISCOUNT_LEDGER`, `CONFIG_MISSING_COMPANY`, `TALLY_NOT_CONFIGURED`.
-- **Bill-content errors → Revise, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`.
-- **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`, `TALLY_PARTIAL_EFFECT`, `TALLY_UNEXPECTED_CREATE_ON_ALTER`.
-- **Definite Tally rejection → correct data/config, then Retry or Revise:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`, `TALLY_PREPARE_FAILED`.
+- **Config errors → fix Settings, then Retry:** `CONFIG_MISSING_SALES_LEDGER`, `CONFIG_MISSING_CASH_LEDGER`, `CONFIG_MISSING_CREDIT_DEBIT_LEDGER`, `CONFIG_MISSING_CGST_LEDGER`, `CONFIG_MISSING_SGST_LEDGER`, `CONFIG_MISSING_ROUNDOFF_LEDGER`, `CONFIG_MISSING_DISCOUNT_LEDGER`, `CONFIG_MISSING_COMPANY`, `TALLY_NOT_CONFIGURED`.
+- **Bill-content errors → Edit, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`, `VOUCHER_UNBALANCED`.
+- **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`, `TALLY_PARTIAL_EFFECT`, `TALLY_UNEXPECTED_CREATE_ON_ALTER`, `TALLY_UNEXPECTED`.
+- **Definite Tally rejection → correct data/config, then Retry or Edit:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`, `TALLY_PREPARE_FAILED`.
+- **Edited bill whose original voucher id cannot be found:** `TALLY_ALTER_TARGET_MISSING`. Nothing is sent to Tally and no replacement voucher is created.
 
 Every voucher click makes one HTTP attempt — there is no automatic voucher retry, backoff, or next-attempt clock. Safe XML reads retain the short transport retry pipeline.
 
 ---
 
-## 9. Verification command
+## 5. Verification command
 
 Current focused regression command:
 

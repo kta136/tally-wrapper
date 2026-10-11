@@ -17,10 +17,6 @@ public static class DatabaseConfigurationStore
 
     public static string DirectoryPath => AppPaths.DataDirectory;
 
-    public static string ConfigPath => ConfigPathForEnvironment(GetCurrentEnvironmentName());
-
-    public static bool Exists => File.Exists(ConfigPath);
-
     public static string ConfigPathForEnvironment(string? environmentName) =>
         Path.Combine(DirectoryPath, $"database.{NormalizeEnvironmentName(environmentName)}.local.json");
 

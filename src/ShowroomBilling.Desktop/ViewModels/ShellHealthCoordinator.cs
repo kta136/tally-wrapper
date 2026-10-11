@@ -13,10 +13,8 @@ internal interface IShellHealthHost
     string BannerText { get; set; }
     SystemHealthSnapshot? LastHealthSnapshot { get; set; }
     DateTimeOffset? LastHealthCheckedAtUtc { get; set; }
-    bool IsHealthRefreshing { get; set; }
     string? MastersRefreshMessage { get; set; }
     bool IsRefreshingAllMasters { get; set; }
-    bool DatabaseConfigurationAttentionRequired { get; set; }
 }
 
 internal sealed class ShellHealthCoordinator(
@@ -83,7 +81,6 @@ internal sealed class ShellHealthCoordinator(
         CancellationToken cancellationToken = default)
     {
         if (Interlocked.Exchange(ref _healthPollInFlight, 1) == 1) return;
-        host.IsHealthRefreshing = true;
         try
         {
             SystemHealthSnapshot snapshot;
@@ -136,7 +133,6 @@ internal sealed class ShellHealthCoordinator(
         }
         finally
         {
-            host.IsHealthRefreshing = false;
             Interlocked.Exchange(ref _healthPollInFlight, 0);
         }
     }
@@ -183,9 +179,8 @@ internal sealed class ShellHealthCoordinator(
 
         if (snapshot.Runtime?.DatabaseReachable == false)
         {
-            host.DatabaseConfigurationAttentionRequired = true;
             host.SystemState = SystemState.Limited;
-            host.BannerText = "Database unavailable — open Settings > Advanced > Database to configure PostgreSQL.";
+            host.BannerText = "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.";
             host.StatusBar.StatusText = "DB DOWN";
             return;
         }

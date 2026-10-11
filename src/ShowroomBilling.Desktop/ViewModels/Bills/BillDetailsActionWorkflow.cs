@@ -6,7 +6,6 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 internal interface IBillDetailsActionHost
 {
     BillResponse? Bill { get; set; }
-    BillPostingStatusResponse? PostingStatus { get; set; }
     bool IsActing { get; set; }
     string StatusMessage { get; set; }
     Action? BillMutated { get; }
@@ -36,7 +35,7 @@ internal sealed class BillDetailsActionWorkflow(
         "Retry failed",
         async (api, billId) =>
         {
-            host.PostingStatus = await api.RetryAsync(billId, new RetryBillPostingRequest(null), cancellationToken);
+            await api.RetryAsync(billId, new RetryBillPostingRequest(null), cancellationToken);
             await host.LoadAsync(billId, cancellationToken);
         });
 
@@ -55,7 +54,7 @@ internal sealed class BillDetailsActionWorkflow(
             "Repost failed",
             async (api, billId) =>
             {
-                host.PostingStatus = await api.RepostAsync(
+                await api.RepostAsync(
                     billId,
                     new RepostBillRequest(Guid.NewGuid().ToString("N"), null),
                     cancellationToken);
@@ -63,15 +62,23 @@ internal sealed class BillDetailsActionWorkflow(
             });
     }
 
-    public Task VoidAsync(CancellationToken cancellationToken) => RunAsync(
-        "Voiding…",
-        "Bill voided.",
-        "Void failed",
-        async (api, billId) =>
-        {
-            host.Bill = await api.VoidAsync(billId, new VoidBillRequest(null), cancellationToken);
-            await host.ReloadSupportingStateAsync(billId, cancellationToken);
-        });
+    public async Task VoidAsync(CancellationToken cancellationToken)
+    {
+        if (host.Bill is not { } bill) return;
+
+        var question = BillConfirmations.Void($"invoice {bill.InvoiceNumber ?? "—"}");
+        if (host.ConfirmHandler is null || !await host.ConfirmHandler(question)) return;
+
+        await RunAsync(
+            "Voiding…",
+            "Bill voided.",
+            "Void failed",
+            async (api, billId) =>
+            {
+                host.Bill = await api.VoidAsync(billId, new VoidBillRequest(null), cancellationToken);
+                await host.ReloadSupportingStateAsync(billId, cancellationToken);
+            });
+    }
 
     public Task ReviseAsync(CancellationToken cancellationToken) => RunAsync(
         "Creating revision…",

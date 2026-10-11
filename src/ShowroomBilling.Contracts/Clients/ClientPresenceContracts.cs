@@ -4,7 +4,6 @@ public sealed record ClientHeartbeatRequest(
     string DeviceId,
     string CounterName,
     string AppVersion,
-    string ConnectionMode,
     string MachineName,
     string UserName);
 
@@ -12,7 +11,6 @@ public sealed record ClientPresenceResponse(
     string DeviceId,
     string CounterName,
     string AppVersion,
-    string ConnectionMode,
     string MachineName,
     string UserName,
     string RemoteAddress,
@@ -21,5 +19,4 @@ public sealed record ClientPresenceResponse(
     DateTimeOffset ExpiresAtUtc);
 
 public sealed record ClientPresenceListResponse(
-    DateTimeOffset ServerTimeUtc,
     IReadOnlyList<ClientPresenceResponse> Clients);

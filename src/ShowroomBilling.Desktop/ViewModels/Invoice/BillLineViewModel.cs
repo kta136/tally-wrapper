@@ -10,7 +10,6 @@ namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 public partial class BillLineViewModel : ObservableObject
 {
     private int rowNumber;
-    private bool _suppressItemMasterDefaults;
     private bool _restoringPayloadValues;
     private ItemMasterRowVm? _payloadItemMaster;
     private string? _payloadItemName;
@@ -87,21 +86,6 @@ public partial class BillLineViewModel : ObservableObject
 
     public event EventHandler? MutationOccurred;
 
-    public void SetItemMasterFromPayload(ItemMasterRowVm? value)
-    {
-        _payloadItemMaster = value;
-        _payloadItemName = value?.Name;
-        _suppressItemMasterDefaults = true;
-        try
-        {
-            ItemMaster = value;
-        }
-        finally
-        {
-            _suppressItemMasterDefaults = false;
-        }
-    }
-
     public void ApplyPayloadValues(
         BillLineItemDto line,
         string itemCategory,
@@ -112,7 +96,6 @@ public partial class BillLineViewModel : ObservableObject
         _payloadItemMaster = itemMaster;
         _payloadItemName = line.ItemName;
         _restoringPayloadValues = true;
-        _suppressItemMasterDefaults = true;
         try
         {
             ItemMaster = itemMaster;
@@ -132,7 +115,6 @@ public partial class BillLineViewModel : ObservableObject
         }
         finally
         {
-            _suppressItemMasterDefaults = false;
             _restoringPayloadValues = false;
         }
 
@@ -186,7 +168,7 @@ public partial class BillLineViewModel : ObservableObject
     partial void OnItemMasterChanged(ItemMasterRowVm? value)
     {
         var preservePayloadValues = IsPayloadMasterRebind(value);
-        if (value is not null && !_restoringPayloadValues && !_suppressItemMasterDefaults && !preservePayloadValues)
+        if (value is not null && !_restoringPayloadValues && !preservePayloadValues)
         {
             ItemName = value.Name;
             if (!string.IsNullOrWhiteSpace(value.Unit)) Unit = value.Unit;

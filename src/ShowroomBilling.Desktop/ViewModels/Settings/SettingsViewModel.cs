@@ -10,7 +10,6 @@ using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
-using ShowroomBilling.Desktop.Services.ProcessSupervision;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 
 namespace ShowroomBilling.Desktop.ViewModels.Settings;
@@ -37,10 +36,6 @@ public partial class SettingsViewModel : ObservableObject,
         IPrintAssetApiClient? printAssetApi = null,
         IPrintDispatcher? printDispatcher = null,
         IPrintPreferencesStore? printPreferences = null,
-        IRuntimeApiClient? runtimeApi = null,
-        IHealthApiClient? healthApi = null,
-        AdminTokenStore? adminTokenStore = null,
-        IChildProcessSupervisor? childProcessSupervisor = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
         Func<SettingsDraft, PrintLayoutViewModel, SettingsViewModel, SettingsPreviewViewModel>? previewFactory = null)
@@ -49,11 +44,7 @@ public partial class SettingsViewModel : ObservableObject,
         Draft = new SettingsDraft();
         Draft.PropertyChanged += OnDraftPropertyChanged;
 
-        Database = new DatabaseSettingsViewModel(
-            runtimeApi,
-            healthApi,
-            adminTokenStore,
-            childProcessSupervisor,
+        Server = new ServerSettingsViewModel(
             bootstrapOptions,
             restartApplication,
             hasUnsavedSettingsEdits: () => IsDirty);
@@ -68,7 +59,7 @@ public partial class SettingsViewModel : ObservableObject,
         // capabilities to an operator who doesn't have a session.
         Sections = new ObservableCollection<SettingsSectionKey>
         {
-            SettingsSectionKey.Database,
+            SettingsSectionKey.Server,
             SettingsSectionKey.Connection,
             SettingsSectionKey.Invoice,
             SettingsSectionKey.PrintLayout,
@@ -76,7 +67,7 @@ public partial class SettingsViewModel : ObservableObject,
             SettingsSectionKey.Masters,
             SettingsSectionKey.Advanced,
         };
-        SelectedSection = SettingsSectionKey.Database;
+        SelectedSection = SettingsSectionKey.Server;
 
         Preview = previewFactory is not null
             ? previewFactory(Draft, PrintLayout, this)
@@ -99,12 +90,6 @@ public partial class SettingsViewModel : ObservableObject,
     public IRelayCommand OpenInstallFolderCommand { get; }
     public IRelayCommand OpenAppDataFolderCommand { get; }
     public IReadOnlyList<string> DensityOptions { get; }
-
-    public Func<CancellationToken, Task>? AdminUnlockHandler
-    {
-        get => Database.AdminUnlockHandler;
-        set => Database.AdminUnlockHandler = value;
-    }
 
     /// <summary>
     /// Settable by the shell (MainWindowViewModel) so the Admin section of
@@ -132,27 +117,15 @@ public partial class SettingsViewModel : ObservableObject,
             }
 
             OnPropertyChanged(nameof(AdminVm));
-            OnPropertyChanged(nameof(IsAdminVmWired));
-            OnPropertyChanged(nameof(IsAdminFeaturesVisible));
             _sectionCoordinator.SyncAdminSection(_adminVm);
         }
     }
     private AdminUnlockViewModel? _adminVm;
 
-    public bool IsAdminVmWired => _adminVm is not null;
-
-    /// <summary>
-    /// Tabs and controls that are functionally admin-only (Admin tab itself,
-    /// synthetic batch scheduler button, etc.) bind to this so they hide when
-    /// no admin session is active. Follows the navbar ADMIN chip's visibility.
-    /// </summary>
-    public bool IsAdminFeaturesVisible => _adminVm?.IsUnlocked == true;
-
     private void OnAdminVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(AdminUnlockViewModel.IsUnlocked) or nameof(AdminUnlockViewModel.IsLocked))
         {
-            OnPropertyChanged(nameof(IsAdminFeaturesVisible));
             _sectionCoordinator.SyncAdminSection(_adminVm);
         }
     }
@@ -168,7 +141,7 @@ public partial class SettingsViewModel : ObservableObject,
     private static void OpenAppDataFolder() => SettingsFolderLauncher.OpenAppDataFolder();
 
     public ObservableCollection<SettingsSectionKey> Sections { get; }
-    public DatabaseSettingsViewModel Database { get; }
+    public ServerSettingsViewModel Server { get; }
     public MasterDataSettingsViewModel MasterData { get; }
     public SettingsDraft Draft { get; }
     public PrintLayoutViewModel PrintLayout { get; }
@@ -195,7 +168,7 @@ public partial class SettingsViewModel : ObservableObject,
     public IReadOnlyList<string> LocalOnlyCategories { get; private set; } = Array.Empty<string>();
 
     public bool IsConnectionVisible => _sectionCoordinator.IsConnectionVisible;
-    public bool IsDatabaseVisible => _sectionCoordinator.IsDatabaseVisible;
+    public bool IsServerVisible => _sectionCoordinator.IsServerVisible;
     public bool IsInvoiceVisible => _sectionCoordinator.IsInvoiceVisible;
     public bool IsPrintLayoutVisible => _sectionCoordinator.IsPrintLayoutVisible;
     public bool IsLedgersVisible => _sectionCoordinator.IsLedgersVisible;
@@ -239,7 +212,7 @@ public partial class SettingsViewModel : ObservableObject,
     public void NotifySectionPropertiesChanged()
     {
         OnPropertyChanged(nameof(IsConnectionVisible));
-        OnPropertyChanged(nameof(IsDatabaseVisible));
+        OnPropertyChanged(nameof(IsServerVisible));
         OnPropertyChanged(nameof(IsInvoiceVisible));
         OnPropertyChanged(nameof(IsPrintLayoutVisible));
         OnPropertyChanged(nameof(IsLedgersVisible));
@@ -300,8 +273,6 @@ public partial class SettingsViewModel : ObservableObject,
 
     private async Task LoadCoreAsync(CancellationToken cancellationToken = default)
     {
-        await LoadDatabaseConfigAsync(cancellationToken);
-
         if (_settingsApi is null)
         {
             StatusMessage = "Settings API unavailable.";
@@ -330,9 +301,6 @@ public partial class SettingsViewModel : ObservableObject,
         }
     }
 
-    public async Task LoadDatabaseConfigAsync(CancellationToken cancellationToken = default)
-        => await Database.LoadDatabaseConfigAsync(cancellationToken);
-
     private void BeginEdit()
         => _editWorkflow.BeginEdit();
 
@@ -346,7 +314,7 @@ public partial class SettingsViewModel : ObservableObject,
 
 public enum SettingsSectionKey
 {
-    Database,
+    Server,
     Connection,
     Invoice,
     PrintLayout,

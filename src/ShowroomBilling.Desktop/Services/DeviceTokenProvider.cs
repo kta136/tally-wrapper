@@ -7,9 +7,9 @@ namespace ShowroomBilling.Desktop.Services;
 
 /// <summary>
 /// Desktop-side mirror of <c>DeviceTokenStore</c> in the API. Both processes
-/// read-or-create the same file at <see cref="DeviceTokenConstants.ResolveTokenFilePath"/>.
-/// The Desktop starts first and spawns the API as a child, so the Desktop
-/// normally wins the race and writes the token; the API then reads it.
+/// read-or-create the same file at <see cref="DeviceTokenConstants.ResolveTokenFilePath"/>,
+/// so whichever starts first writes the token and the other reads it. Only
+/// used against an API on this machine; see <see cref="ApiEndpointResolver"/>.
 /// </summary>
 public sealed class DeviceTokenProvider
 {

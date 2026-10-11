@@ -44,7 +44,6 @@ public sealed class ClientPresenceHeartbeatService(
                 DeviceId: identityStore.Resolve(configured.DeviceId),
                 CounterName: configured.CounterName,
                 AppVersion: typeof(ClientPresenceHeartbeatService).Assembly.GetName().Version?.ToString() ?? "unknown",
-                ConnectionMode: configured.ConnectionMode,
                 MachineName: Environment.MachineName,
                 UserName: Environment.UserName);
             await client.SendHeartbeatAsync(request, cancellationToken);

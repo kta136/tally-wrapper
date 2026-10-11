@@ -18,6 +18,7 @@ public sealed class DomainExceptionHandlerTests
         { new TallyPreflightUnavailableException("down"), StatusCodes.Status503ServiceUnavailable, "Tally unavailable" },
         { new DbUpdateConcurrencyException("stale"), StatusCodes.Status409Conflict, "Concurrent change" },
         { new AdminPasscodeInvalidException(), StatusCodes.Status401Unauthorized, "Admin passcode invalid" },
+        { new AdminSessionRequiredException("Unlock admin."), StatusCodes.Status403Forbidden, "Admin session required" },
         { new RequestValidationException("Port must be between 1 and 65535."), StatusCodes.Status400BadRequest, "Bad request" },
         { new ArgumentException("bad", "request"), StatusCodes.Status400BadRequest, "Bad request" },
     };

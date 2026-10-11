@@ -6,9 +6,9 @@
 [![WPF](https://img.shields.io/badge/UI-WPF-5C2D91)](https://learn.microsoft.com/dotnet/desktop/wpf/)
 [![TallyPrime](https://img.shields.io/badge/integration-TallyPrime-0F766E)](https://tallysolutions.com/)
 
-Tally Wrapper is a Windows billing system for jewellery showrooms. It combines a WPF counter app, a local ASP.NET Core API, PostgreSQL, QuestPDF printing, and direct TallyPrime XML integration.
+Tally Wrapper is a Windows billing system for jewellery showrooms. It combines a WPF counter app, one ASP.NET Core API on the showroom's Tally server, PostgreSQL, QuestPDF printing, and direct TallyPrime XML integration.
 
-The system is designed for operator-controlled billing. Bills are saved locally through the API, printed from the desktop app, and pushed to Tally only when an operator explicitly clicks a push action. There is no background Tally polling, queue worker, or automatic posting loop.
+The system is designed for operator-controlled billing. Bills are saved through the API, printed from the desktop app, and pushed to Tally only when an operator explicitly clicks a push action. There is no background Tally polling, queue worker, or automatic posting loop.
 
 ## Contents
 
@@ -20,7 +20,7 @@ The system is designed for operator-controlled billing. Bills are saved locally 
 - [Configuration](#configuration)
 - [Running Locally](#running-locally)
 - [Publishing EXEs](#publishing-exes)
-- [Server Mode Deployment](#server-mode-deployment)
+- [Server Deployment](#server-deployment)
 - [Security Model](#security-model)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
@@ -35,8 +35,8 @@ Tally Wrapper supports the core workflow for a jewellery billing counter:
 | Billing | Draft creation, invoice numbering, jewellery line math, GST-inclusive totals, edit/revise/void flows |
 | Tally | Synchronous voucher create/alter, master refresh, active company checks, failure reporting |
 | Printing | Tax invoice preview, PDF export, printer dispatch, logo/signature/watermark assets, structured print layout designer |
-| Operations | Health banners, startup recovery, service tray, logs, database setup, LAN server mode |
-| Admin | Passcode unlock, session tokens, bill renumbering, local state overrides, destructive actions |
+| Operations | Health banners, startup recovery, server installer and tray, logs, database setup from the tray |
+| Admin | Passcode unlock, session tokens, editing posted bills, bill renumbering, local state overrides, destructive actions |
 | Multi-counter | Tally-server API service with trusted LAN workstations |
 
 ## Architecture
@@ -53,14 +53,11 @@ flowchart LR
     Desktop --> Printing["QuestPDF / Windows printing"]
 ```
 
-### Runtime Shapes
+### Runtime Shape
 
-| Mode | Shape | Use case |
-|---|---|---|
-| `LocalEmbedded` | Desktop starts and supervises a local API child process | Single-machine pilot or one counter with Tally on the same PC |
-| `Server` | API runs as a Windows Service on the Tally server; desktops connect over LAN | Multi-counter showroom deployment |
+There is one topology. The API runs as a Windows Service on the Tally server, installed by the server EXE. Every counter's Desktop is a client of that API over the LAN; a Desktop never starts or carries an API. The only connection setting a workstation holds is the server's address (Settings → Server).
 
-The API owns all durable business state. The Desktop is a rich client; it does not maintain a separate local billing database.
+The API owns all durable business state. The Desktop is a rich client; it does not maintain a separate local billing database, and it shows a limited-mode screen while the server cannot be reached.
 
 ### Tally Integration Contract
 
@@ -78,8 +75,8 @@ See [docs/05_tally_integration_contract.md](docs/05_tally_integration_contract.m
 ```text
 src/
   ShowroomBilling.Api/          ASP.NET Core API, auth, controllers, runtime setup
-  ShowroomBilling.Desktop/      WPF desktop app, view models, views, process supervision
-  ShowroomBilling.ServerTray/   Windows tray installer/controller for server mode
+  ShowroomBilling.Desktop/      WPF desktop app, view models, views
+  ShowroomBilling.ServerTray/   Server installer and tray controller for the API service
   ShowroomBilling.Application/  Application contracts and business services
   ShowroomBilling.Infrastructure/ EF Core, PostgreSQL, Tally XML, persistence workflows
   ShowroomBilling.Contracts/    Shared DTOs between API and desktop
@@ -90,11 +87,11 @@ tests/
   ShowroomBilling.Desktop.Tests/ ViewModel and desktop workflow tests
 
 tools/
-  publish-prod.ps1
-  publish-server-tray.ps1
-  publish-server-api.ps1
-  uninstall-server-api-service.ps1
-  run-scratch.ps1               dev build on a throwaway database with a stand-in Tally
+  publish-prod.ps1                  Desktop EXE
+  publish-server-tray.ps1           server installer / tray EXE (carries the API)
+  uninstall-server-api-service.ps1  removes what the server EXE installs
+  run-scratch.ps1                   dev build on a throwaway database with a stand-in Tally
+  Test-Coverage.ps1                 runs the tests and enforces the coverage floor
 
 docs/
   Architecture, API, database, deployment, printing, settings, and UI references
@@ -108,13 +105,14 @@ Development currently targets Windows because the desktop host is WPF.
 |---|---|
 | Windows 10/11 | Required for WPF, printing, DPAPI, and Windows Service/server tray behavior |
 | .NET SDK `10.0.202` | Pinned by [global.json](global.json) |
-| PostgreSQL 18 | Required for production, local development, and the relational test harness |
+| PostgreSQL 18 | The production database. Development and the tests use throwaway PostgreSQL 18 containers |
+| Docker | Starts those containers for `tools\run-scratch.ps1` and for the database tests (a local engine, or a remote Docker context) |
+| `dotnet-ef` | Installed globally (`dotnet tool install --global dotnet-ef`); applies migrations |
 | TallyPrime | Required for real posting and master refresh workflows |
-| PowerShell | Required for publish and server install scripts |
+| PowerShell | Required for the scripts in `tools\` |
 
 Optional:
 
-- Docker Desktop for the local Postgres fallback.
 - VS Code with the checked-in launch/tasks configuration.
 
 ## Quick Start
@@ -130,26 +128,15 @@ dotnet build ShowroomBilling.sln
 dotnet test --solution ShowroomBilling.sln
 ```
 
-Start a local Postgres fallback:
+The tests that touch the database start their own PostgreSQL 18 container, so `dotnet test` needs Docker; see [Testing](#testing).
+
+Run the dev build on a throwaway database with a stand-in Tally:
 
 ```powershell
-docker compose -f docker-compose.dev.yml up -d
+.\tools\run-scratch.ps1
 ```
 
-The local Compose image is PostgreSQL 18. Existing PostgreSQL 17 volumes require dump/restore or intentional replacement before first use; see [DEV_SETUP.md](DEV_SETUP.md#database).
-
-Run the API:
-
-```powershell
-dotnet run --project src/ShowroomBilling.Api
-```
-
-Run the desktop app:
-
-```powershell
-$env:DOTNET_ENVIRONMENT = "Development"
-dotnet run --project src/ShowroomBilling.Desktop
-```
+It starts a `postgres:18` container, migrates it, starts the API on `127.0.0.1:5108` and then the Desktop, both with empty settings folders, so the run cannot reach the saved production connection, the real server or TallyPrime. Details and options are in [DEV_SETUP.md](DEV_SETUP.md#run-against-a-scratch-database). A plain `dotnet run` or F5 (see [Running Locally](#running-locally)) uses whatever this PC has saved: the API its database connection, the Desktop its server address.
 
 Development API defaults to:
 
@@ -169,9 +156,9 @@ Real connection strings are not committed. Keep them in one of these private loc
 - `src/ShowroomBilling.Api/appsettings.Production.json`
 - user secrets
 - local environment variables (`SHOWROOM_BILLING_POSTGRES` is the API's explicit database override)
-- the in-app DPAPI-protected database override
+- the DPAPI-protected database override the server tray writes (`database.<Environment>.local.json` in the API's data folder)
 
-The safe placeholder in `src/ShowroomBilling.Api/appsettings.json` points to local Postgres:
+A connection string is always in the Npgsql keyword form; a `postgres://` URL is refused. The committed `src/ShowroomBilling.Api/appsettings.json` holds only a placeholder:
 
 ```text
 Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres
@@ -181,36 +168,27 @@ Production uses PostgreSQL 18 hosted on an Oracle Cloud Infrastructure VPS. The 
 
 The persistent test deployment uses `tally_wrapper_test` inside the same Coolify `shared-postgres` PostgreSQL 18 cluster and connects through PgBouncer; it is not a separate database server. Its OpenBao path, network attachment, and role contract are documented in [Development Setup](DEV_SETUP.md#shared-persistent-test-database).
 
-Manual migration command:
-
-```powershell
-dotnet ef database update `
-  --project src/ShowroomBilling.Infrastructure `
-  --startup-project src/ShowroomBilling.Api `
-  --connection "<postgres-connection-string>"
-```
-
-Always pass `--connection` when targeting a managed or production database. Do not rely on environment-name resolution for migrations.
+Migrations are applied with `dotnet ef database update`. Always pass `--connection`; do not rely on environment-name resolution. On production they are applied by hand before a new build is started. The full command is in [Deployment and operations](docs/11_deployment_and_ops.md#openbao-production-secret) and the production procedure in its [§11](docs/11_deployment_and_ops.md#11-upgrade-flow).
 
 ### Database Identity Marker
 
-The app uses a DB-owned identity marker to catch accidental environment mixups. After migrations, set one marker per database:
-
-```sql
-insert into public.database_identity (key, value, updated_at_utc)
-values ('environment', 'DEV', current_timestamp)
-on conflict (key) do update
-set value = excluded.value,
-    updated_at_utc = excluded.updated_at_utc;
-```
-
-Use `PROD` for production. The Desktop status bar displays `DB DEV`, `DB PROD`, `DB UNSET`, or a mismatch warning.
+The app uses a DB-owned identity marker to catch accidental environment mixups: `DEV` or `PROD` in `public.database_identity`. The SQL that sets it is in [DEV_SETUP.md](DEV_SETUP.md#database). The Desktop status bar displays `DB DEV`, `DB PROD`, `DB UNSET`, or a mismatch warning.
 
 ### Tally Connection
 
-Tally host, port, active company, ledgers, voucher types, and stock mappings are backend-owned settings. Operators configure them through the Desktop Settings screen. Tally calls are made by the API process, so in server mode TallyPrime must be reachable from the Tally server machine.
+Tally host, port, active company, ledgers, voucher types, and stock mappings are backend-owned settings. Operators configure them through the Desktop Settings screen. Tally calls are made by the API process, so TallyPrime must be reachable from the machine the API runs on (the Tally server).
 
 ## Running Locally
+
+The Desktop is a client: it needs an API that is already running and never starts one. With nothing listening at its address it opens on the limited-mode screen.
+
+### Scratch run
+
+```powershell
+.\tools\run-scratch.ps1
+```
+
+This is the way to run the dev build on any PC that also runs the real app. It starts a throwaway PostgreSQL 18 container and a stand-in Tally on port 9000, starts the API on `127.0.0.1:5108`, then the Desktop, and stops the API when the app closes. See [DEV_SETUP.md](DEV_SETUP.md#run-against-a-scratch-database).
 
 ### VS Code
 
@@ -225,9 +203,11 @@ Recommended debug target:
 Desktop + API
 ```
 
-This starts the API in Development mode on `127.0.0.1:5108` and then starts the Desktop without spawning a second API.
+This builds the solution, then starts the API in Development mode on `127.0.0.1:5108` and the Desktop. The `Desktop` configuration alone needs an API you started yourself.
 
-### API Only
+### By hand
+
+Start the API first:
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = "Development"
@@ -235,19 +215,14 @@ $env:DOTNET_ENVIRONMENT = "Development"
 dotnet run --project src/ShowroomBilling.Api --urls http://127.0.0.1:5108
 ```
 
-### Desktop Only
+Then the Desktop, in a second terminal:
 
 ```powershell
 $env:DOTNET_ENVIRONMENT = "Development"
 dotnet run --project src/ShowroomBilling.Desktop
 ```
 
-By default the Desktop supervises the API child process. To run against an already-started API:
-
-```powershell
-$env:SHOWROOM_DESKTOP_ChildProcesses__Api__Enabled = "false"
-dotnet run --project src/ShowroomBilling.Desktop
-```
+F5 and `dotnet run` read this PC's real settings folder. The API uses whatever database connection this PC has configured (see [Database Connection](#database-connection)), and a Desktop started by `dotnet run` on a PC with a server address saved in Settings → Server uses that address in place of `http://localhost:5108`, so it talks to the real server. Set `SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl` for the session to point it at the development API; the VS Code `Desktop` launch configuration already does.
 
 ## Publishing EXEs
 
@@ -265,7 +240,7 @@ Output:
 publish\prod\TallyWrapper.exe
 ```
 
-The desktop artifact embeds a sanitized API payload. Production database credentials are not embedded.
+The artifact is the Desktop alone: it contains no API and no database settings. Copy it to each counter PC.
 
 ### Server Installer / Tray EXE
 
@@ -279,25 +254,11 @@ Output:
 publish\server\TallyWrapper.Server.exe
 ```
 
-This one-file EXE embeds the API service binary and installs/repairs the server-mode Windows Service.
+This one-file EXE carries the API service binary and installs/repairs the API Windows Service.
 
-### Standalone Server API EXE
+## Server Deployment
 
-```powershell
-.\tools\publish-server-api.ps1
-```
-
-Output:
-
-```text
-publish\server\api\TallyWrapper.Api.exe
-```
-
-Use this when you need the raw API binary by itself, for example to run it by hand while diagnosing a server. Nothing installs it: the server is installed and repaired only by `TallyWrapper.Server.exe`.
-
-## Server Mode Deployment
-
-Server mode is for a multi-counter showroom where TallyPrime runs on one server machine.
+One server PC runs TallyPrime and the Tally Wrapper API; every counter connects to it.
 
 1. Publish the server installer:
 
@@ -325,21 +286,23 @@ Server mode is for a multi-counter showroom where TallyPrime runs on one server 
    - registers the tray companion at user login
    - starts the API service
 
-6. Configure each workstation from:
+6. On the server PC, set the database connection in the tray dashboard: **Test DB**, **Save DB**, then **Restart API Service**.
+
+7. On each workstation, open:
 
    ```text
-   Billing -> Settings -> Database -> API Connection Mode
+   Billing -> Settings -> Server
    ```
 
-7. Choose `Server`, enter:
+8. Enter the server address, or click **Find server** to scan the workstation's own network for it:
 
    ```text
    http://<tally-server>:5107
    ```
 
-8. Save and restart the Desktop.
+9. Check it with **Test server**, then click **Save and restart Billing**.
 
-The server tray dashboard can install/repair, start/stop/restart the API service, test/save database settings, open logs, show connected clients, and copy the workstation URL. Exiting the tray stops the API service first.
+The server tray dashboard can install/repair, start/stop/restart the API service, test/save database settings, open logs, show connected clients, and copy the workstation URL. It is the only place the server's database connection is changed. Exiting the tray stops the API service first.
 
 To remove the server, exit the tray and run this elevated, signed in as the user whose tray starts at sign-in:
 
@@ -355,19 +318,19 @@ This project is built for a trusted showroom LAN, not internet exposure.
 
 | Layer | Behavior |
 |---|---|
-| Device token | In `LocalEmbedded` mode, mutating API calls require `X-Device-Token`, a random local secret shared by Desktop and API |
-| Trusted LAN | In server mode, normal workstation writes are accepted from configured CIDRs and matching firewall scope |
+| Trusted LAN | The server install accepts workstation writes from the configured CIDRs, with a firewall rule of the same scope; workstations send no token |
+| Device token | A development API (default `LocalFile` mode) requires `X-Device-Token` on mutating calls: a random secret in a local file that the API and a Desktop on the same PC both read. The Desktop sends it only to a loopback address |
 | Admin token | Admin-only actions require `X-Admin-Token`, issued after passcode unlock and expiring after 30 minutes |
 | Maintenance token | Server tray DB maintenance uses a localhost-only `X-Maintenance-Token` file under server app data |
-| Database secrets | Local overrides are DPAPI-protected; production credentials are not committed or embedded in published desktop artifacts |
+| Database secrets | Only the API holds a connection string. The one the tray saves is DPAPI-protected on the server PC; production credentials are not committed, and the Desktop artifact contains none |
 | Read endpoints | Business read endpoints are intentionally unauthenticated for the trusted LAN deployment model |
 
 Important deployment notes:
 
 - Do not expose the Tally Wrapper API directly to the internet.
 - Keep the trusted CIDR as narrow as practical.
-- Admin passcode setup is loopback-only in server mode until configured.
-- DB override metadata, DB bootstrap, DB test, and maintenance endpoints are loopback-only in server mode.
+- On the server install the first admin passcode can be set only from the server PC itself (loopback).
+- The database maintenance endpoints (test, save) and the connected-clients list answer loopback callers only.
 - Keep real `appsettings.Development.json` and `appsettings.Production.json` ignored and local.
 - Do not publish or zip `bin/`, `obj/`, `publish/`, `.env`, logs, or local appsettings files.
 
@@ -407,7 +370,7 @@ What the tests cover:
 - admin unlock behavior
 - API contract shape
 - Tally XML voucher generation
-- database configuration masking/bootstrap behavior
+- database configuration masking and the tray's maintenance endpoints
 - WPF ViewModel workflows
 - printing/rendering helpers
 
@@ -420,8 +383,8 @@ The persistent `tally_wrapper_test` deployment database is not the connection fo
 | Symptom | Likely Cause | Fix |
 |---|---|---|
 | Build fails copying Desktop DLLs | Desktop EXE is still running | Close `TallyWrapper.exe` / the Desktop process and rebuild |
-| API starts but DB is not ready | Missing or invalid Postgres connection string | Configure DB from Settings or server tray, then restart API |
-| Desktop says cloud/API down | API child process not started or wrong port | Check `%APPDATA%\ShowroomBilling\logs` and `ChildProcesses` settings |
+| API starts but DB is not ready | Missing or invalid Postgres connection string | Set the connection from the server tray, then restart the API service |
+| Desktop opens in limited mode ("Working without the server") | The server is off or unreachable, or the saved server address is wrong | Click **Server Settings**, use **Test server** or **Find server**, then **Save and restart Billing**; check that the API service is running on the server |
 | Tally push is blocked, fails, or needs reconciliation | TallyPrime closed, wrong company open, business XML rejection, or the write response was lost | Preflight blocks leave state unchanged; definite rejections can be retried after correction. For `reconciliation_required`, verify the voucher in Tally and use admin Mark as Pushed or Mark as Pending before another push. |
 | Workstation cannot reach server | Firewall/CIDR/API URL mismatch | Re-run server installer and verify `http://<server>:5107/api/health/live` |
 | Admin action returns 401 | Admin token expired or not unlocked | Press `~` in Desktop and unlock again |
@@ -436,7 +399,7 @@ The detailed specs live in [docs/](docs/README.md):
 - [Tally integration contract](docs/05_tally_integration_contract.md)
 - [Tally XML golden path](docs/06_tally_xml_golden_path.md)
 - [Printing spec](docs/07_printing_spec.md)
-- [Settings catalog](docs/08_settings_catalog.md)
+- [Settings: where they are defined and edited](docs/08_settings_catalog.md)
 - [API spec](docs/09_api_spec.md)
 - [Database schema](docs/10_database_schema.md)
 - [Deployment and operations](docs/11_deployment_and_ops.md)

@@ -134,15 +134,10 @@ public static class DependencyInjection
         services.AddSingleton<IDatabaseSchemaState, DatabaseSchemaState>();
         services.AddHostedService<DatabaseInitializationHostedService>();
         services.AddHostedService<StuckPostingRecoveryHostedService>();
-        services.AddHostedService<OperationalDataRetentionHostedService>();
         // One-shot reconcile of InvoiceSequences.NextValue against actual
         // remaining bills, so a sequence that fell out of sync under older
         // code (rename-without-rollback) self-heals on the next boot.
         services.AddHostedService<SequenceSelfHealHostedService>();
-        // Warms the connection pool, EF model, and bills index plan after
-        // migrations finish — eliminates the ~0.5–2 s cold-path penalty on the
-        // operator's first SaveDraft. Fire-and-forget; failure is non-fatal.
-        services.AddHostedService<DatabaseWarmupHostedService>();
         services.AddHealthChecks().AddCheck<PostgresReadinessHealthCheck>("postgres");
 
         return services;

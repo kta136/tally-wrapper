@@ -141,9 +141,7 @@ public sealed class MasterDataSettingsViewModelTests
     {
         private readonly DateTimeOffset _fetchedAt = new(2026, 6, 14, 10, 0, 0, TimeSpan.Zero);
 
-        public Task<CompanySnapshotResponse> GetCompaniesAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default)
+        public Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new CompanySnapshotResponse(
                 Metadata("companies", 2),
                 new[]
@@ -152,9 +150,7 @@ public sealed class MasterDataSettingsViewModelTests
                     new CompanySnapshotItem("DDA Jewels", true),
                 }));
 
-        public Task<LedgerSnapshotResponse> GetLedgersAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default)
+        public Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new LedgerSnapshotResponse(
                 Metadata("ledgers", 2),
                 new[]
@@ -163,16 +159,12 @@ public sealed class MasterDataSettingsViewModelTests
                     new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null),
                 }));
 
-        public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default)
+        public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new VoucherTypeSnapshotResponse(
                 Metadata("voucher-types", 1),
                 new[] { new VoucherTypeSnapshotItem("Sales", "Sales", false) }));
 
-        public Task<StockItemSnapshotResponse> GetStockItemsAsync(
-            MasterSnapshotQuery? query = null,
-            CancellationToken cancellationToken = default)
+        public Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new StockItemSnapshotResponse(
                 Metadata("stock-items", 2),
                 new[]

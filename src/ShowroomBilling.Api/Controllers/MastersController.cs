@@ -14,31 +14,23 @@ public sealed class MastersController(
     IMasterSnapshotService masterSnapshotService,
     ITallyMasterRefresher tallyMasterRefresher) : ControllerBase
 {
-    // Each read takes the optional search / skip / take query values.
+    // Each read returns the whole current snapshot, in name order.
 
     [HttpGet(MasterTypes.Companies)]
-    public async Task<ActionResult<CompanySnapshotResponse>> GetCompanies(
-        [FromQuery] MasterSnapshotQuery query,
-        CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetCompaniesAsync(query, cancellationToken));
+    public async Task<ActionResult<CompanySnapshotResponse>> GetCompanies(CancellationToken cancellationToken)
+        => Ok(await masterSnapshotService.GetCompaniesAsync(cancellationToken));
 
     [HttpGet(MasterTypes.Ledgers)]
-    public async Task<ActionResult<LedgerSnapshotResponse>> GetLedgers(
-        [FromQuery] MasterSnapshotQuery query,
-        CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetLedgersAsync(query, cancellationToken));
+    public async Task<ActionResult<LedgerSnapshotResponse>> GetLedgers(CancellationToken cancellationToken)
+        => Ok(await masterSnapshotService.GetLedgersAsync(cancellationToken));
 
     [HttpGet(MasterTypes.StockItems)]
-    public async Task<ActionResult<StockItemSnapshotResponse>> GetStockItems(
-        [FromQuery] MasterSnapshotQuery query,
-        CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetStockItemsAsync(query, cancellationToken));
+    public async Task<ActionResult<StockItemSnapshotResponse>> GetStockItems(CancellationToken cancellationToken)
+        => Ok(await masterSnapshotService.GetStockItemsAsync(cancellationToken));
 
     [HttpGet(MasterTypes.VoucherTypes)]
-    public async Task<ActionResult<VoucherTypeSnapshotResponse>> GetVoucherTypes(
-        [FromQuery] MasterSnapshotQuery query,
-        CancellationToken cancellationToken)
-        => Ok(await masterSnapshotService.GetVoucherTypesAsync(query, cancellationToken));
+    public async Task<ActionResult<VoucherTypeSnapshotResponse>> GetVoucherTypes(CancellationToken cancellationToken)
+        => Ok(await masterSnapshotService.GetVoucherTypesAsync(cancellationToken));
 
     /// <summary>
     /// Synchronously fetches master data from Tally and writes the snapshot. This is the

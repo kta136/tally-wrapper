@@ -23,7 +23,6 @@ public sealed class ClientPresenceRegistry
                 DeviceId: deviceId,
                 CounterName: Normalize(request.CounterName, "Counter"),
                 AppVersion: Normalize(request.AppVersion, "unknown"),
-                ConnectionMode: Normalize(request.ConnectionMode, "unknown"),
                 MachineName: Normalize(request.MachineName, "unknown"),
                 UserName: Normalize(request.UserName, "unknown"),
                 RemoteAddress: remoteAddress,
@@ -59,7 +58,7 @@ public sealed class ClientPresenceRegistry
                 .OrderByDescending(x => x.LastSeenAtUtc)
                 .Select(x => ToResponse(x, now))
                 .ToArray();
-            return new ClientPresenceListResponse(now, clients);
+            return new ClientPresenceListResponse(clients);
         }
     }
 
@@ -96,7 +95,6 @@ public sealed class ClientPresenceRegistry
             entry.DeviceId,
             entry.CounterName,
             entry.AppVersion,
-            entry.ConnectionMode,
             entry.MachineName,
             entry.UserName,
             entry.RemoteAddress,
@@ -114,7 +112,6 @@ public sealed class ClientPresenceRegistry
         string DeviceId,
         string CounterName,
         string AppVersion,
-        string ConnectionMode,
         string MachineName,
         string UserName,
         string RemoteAddress,

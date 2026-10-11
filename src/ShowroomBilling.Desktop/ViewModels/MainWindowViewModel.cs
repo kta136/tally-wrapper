@@ -28,7 +28,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 {
     private static readonly TimeSpan HealthPollInterval = TimeSpan.FromSeconds(15);
 
-    private readonly IRuntimeApiClient _runtimeApiClient;
     private readonly ISettingsApiClient _settingsApiClient;
     private readonly IBillsApiClient _billsApiClient;
     private readonly DesktopBootstrapOptions _bootstrapOptions;
@@ -39,17 +38,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     private readonly ShellPrintCoordinator _printCoordinator;
 
     private DispatcherTimer? _healthTimer;
-    private bool _databaseConfigurationAttentionRequired;
     private bool _suppressSettingsRefresh;
 
-    bool IShellHealthHost.DatabaseConfigurationAttentionRequired
-    {
-        get => _databaseConfigurationAttentionRequired;
-        set => _databaseConfigurationAttentionRequired = value;
-    }
-
     public MainWindowViewModel(
-        IRuntimeApiClient runtimeApiClient,
         ISettingsApiClient settingsApiClient,
         IHealthApiClient healthApiClient,
         IMastersApiClient mastersApiClient,
@@ -69,7 +60,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         SetupWizardViewModel setupWizard,
         SyntheticBatchViewModel syntheticBatch)
     {
-        _runtimeApiClient = runtimeApiClient;
         _settingsApiClient = settingsApiClient;
         _billsApiClient = billsApiClient;
         _bootstrapOptions = bootstrapOptions.Value;
@@ -150,12 +140,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             () => Invoice.RemoveFocusedRowCommand.Execute(null),
             () => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null));
         PrintEstimateCommand = new RelayCommand(PrintEstimate);
-        OpenDatabaseSettingsCommand = new RelayCommand(() =>
-        {
-            OpenDatabaseSettings();
-        });
-        SwitchToLocalFallbackCommand = new AsyncRelayCommand(SwitchToLocalFallbackAsync);
-        SwitchToServerModeCommand = new AsyncRelayCommand(SwitchToServerModeAsync);
+        OpenServerSettingsCommand = new RelayCommand(OpenServerSettings);
         RefreshHealthCommand = new AsyncRelayCommand(ct => RefreshHealthAsync(forceTallyCompany: true, ct));
         RefreshAllMastersCommand = new AsyncRelayCommand(RefreshAllMastersAsync);
         CloseDialogCommand = new RelayCommand(() =>
@@ -224,7 +209,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         };
 
         Bills.AdminUnlockHandler = RequestAdminUnlockAsync;
-        Settings.AdminUnlockHandler = RequestAdminUnlockAsync;
+        Invoice.AdminUnlockHandler = RequestAdminUnlockAsync;
         Settings.AdminVm = Admin;
         SetupWizard.Completed += OnSetupWizardCompleted;
         SyntheticBatch.AdminUnlockHandler = RequestAdminUnlockAsync;
@@ -236,7 +221,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Bills.OpenDetailsCommand = OpenBillDetailsCommand;
         Bills.PrintSelectedCommand = OpenSelectedBillsPrintPreviewCommand;
         BillDetails.ConfirmHandler = ConfirmDialog.ShowAsync;
-        Settings.Database.ConfirmHandler = ConfirmDialog.ShowAsync;
+        Settings.Server.ConfirmHandler = ConfirmDialog.ShowAsync;
         Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
     }
 
@@ -385,9 +370,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         && System.Windows.Input.Keyboard.FocusedElement is not (System.Windows.Controls.Primitives.TextBoxBase or System.Windows.Controls.PasswordBox);
     public IRelayCommand OpenSyntheticBatchCommand { get; }
     public IRelayCommand OpenHealthCommand { get; }
-    public IRelayCommand OpenDatabaseSettingsCommand { get; }
-    public IAsyncRelayCommand SwitchToLocalFallbackCommand { get; }
-    public IAsyncRelayCommand SwitchToServerModeCommand { get; }
+    public IRelayCommand OpenServerSettingsCommand { get; }
     public IAsyncRelayCommand RefreshHealthCommand { get; }
     public IAsyncRelayCommand RefreshAllMastersCommand { get; }
     public IAsyncRelayCommand SaveActiveCommand { get; }
@@ -418,9 +401,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     private DateTimeOffset? lastHealthCheckedAtUtc;
 
     [ObservableProperty]
-    private bool isHealthRefreshing;
-
-    [ObservableProperty]
     private string? mastersRefreshMessage;
 
     [ObservableProperty]
@@ -441,9 +421,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public bool IsBillsVisible => ActiveTab == NavTab.Bills && SystemState != SystemState.Limited;
     public bool IsSettingsVisible => ActiveTab == NavTab.Settings;
     public bool IsLimitedVisible => SystemState == SystemState.Limited && ActiveTab != NavTab.Settings;
-    public bool IsServerMode => _bootstrapOptions.IsServerMode;
-    public bool IsSwitchToLocalFallbackVisible => IsLimitedVisible && IsServerMode;
-    public bool IsSwitchToServerVisible => IsLimitedVisible && !IsServerMode;
 
     public bool IsDegradedBannerVisible => SystemState == SystemState.Degraded;
     public bool IsLimitedBannerVisible => SystemState == SystemState.Limited;
@@ -457,8 +434,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
         if (value == NavTab.Bills) _ = Bills.LoadAsync();
-        // waitForApi: true defers the preview fetch until the API child has
-        // bound its port. On a cold launch, the very first activation can fire
+        // waitForApi: true defers the preview fetch until the API has been
+        // probed. On a cold launch, the very first activation can fire
         // before that — without the wait the catch in RefreshNextNumberAsync
         // silently swallows the failure and the operator pays the full
         // cold-path cost on first SaveDraft instead.
@@ -481,8 +458,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
         OnPropertyChanged(nameof(IsLimitedVisible));
-        OnPropertyChanged(nameof(IsSwitchToLocalFallbackVisible));
-        OnPropertyChanged(nameof(IsSwitchToServerVisible));
         OnPropertyChanged(nameof(IsDegradedBannerVisible));
         OnPropertyChanged(nameof(IsLimitedBannerVisible));
     }
@@ -536,11 +511,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     public async Task InitializeAsync()
     {
-        var bootstrapTask = ApplyBootstrapAsync();
         var settingsTask = ApplySettingsAsync();
+        // The forced check also brings the database identity for the status bar.
         var healthTask = RefreshHealthAsync(forceTallyCompany: true);
 
-        await Task.WhenAll(bootstrapTask, settingsTask, healthTask);
+        await Task.WhenAll(settingsTask, healthTask);
         var settingsResponse = await settingsTask;
 
         _ = _printCoordinator.WarmUpPrintPipelineAsync();
@@ -552,29 +527,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         if (ActiveTab == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync(waitForApi: true);
 
         if (LastHealthSnapshot?.ApiReachable == true
-            && await SetupWizard.PrepareForStartupAsync(LastHealthSnapshot, settingsResponse))
+            && await SetupWizard.PrepareForStartupAsync(settingsResponse))
         {
             ActiveDialog = ShellDialogs.SetupWizard;
         }
-        else if (_databaseConfigurationAttentionRequired && LastHealthSnapshot?.ApiReachable == true)
-        {
-            OpenDatabaseSettings();
-        }
         StartHealthPolling();
-    }
-
-    private async Task ApplyBootstrapAsync()
-    {
-        try
-        {
-            var bootstrap = await _runtimeApiClient.GetBootstrapAsync();
-            StatusBar.ApplyDatabaseIdentity(bootstrap.DatabaseIdentity);
-        }
-        catch
-        {
-            // Health polling will classify a fully unreachable API as Limited.
-            StatusBar.ApplyDatabaseIdentity(null);
-        }
     }
 
     private async Task<EffectiveSettingsResponse?> ApplySettingsAsync()
@@ -602,7 +559,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
         catch
         {
-            _databaseConfigurationAttentionRequired = true;
             return null;
         }
     }
@@ -612,7 +568,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         try
         {
             ActiveDialog = null;
-            _databaseConfigurationAttentionRequired = false;
             await ApplySettingsAsync();
             await RefreshHealthAsync(forceTallyCompany: true);
         }
@@ -623,39 +578,10 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
     }
 
-    private void OpenDatabaseSettings()
+    private void OpenServerSettings()
     {
-        Settings.SelectedSection = SettingsSectionKey.Database;
+        Settings.SelectedSection = SettingsSectionKey.Server;
         ActiveTab = NavTab.Settings;
-        _ = Settings.LoadDatabaseConfigAsync();
-    }
-
-    private async Task SwitchToLocalFallbackAsync(CancellationToken cancellationToken)
-    {
-        var confirmed = await ConfirmDialog.ShowAsync(new ConfirmRequest(
-            "Switch to local fallback",
-            "Switch this workstation to local embedded API mode and restart Billing? This fallback requires local database configuration on this PC, and any unsaved in-memory invoice work will be lost.",
-            "Switch and restart",
-            IsWarning: true));
-        if (!confirmed)
-        {
-            return;
-        }
-
-        await DesktopBootstrapLocalOverrideStore.SaveAsync(
-            DesktopConnectionModes.LocalEmbedded,
-            _bootstrapOptions.ServerApiBaseUrl,
-            cancellationToken);
-        AppRestart.Restart();
-    }
-
-    private async Task SwitchToServerModeAsync(CancellationToken cancellationToken)
-    {
-        await DesktopBootstrapLocalOverrideStore.SaveAsync(
-            DesktopConnectionModes.Server,
-            _bootstrapOptions.ServerApiBaseUrl,
-            cancellationToken);
-        AppRestart.Restart();
     }
 
     private void StartHealthPolling()

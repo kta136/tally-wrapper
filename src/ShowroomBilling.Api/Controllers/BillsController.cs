@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShowroomBilling.Api.Security;
@@ -39,7 +40,15 @@ public sealed class BillsController(
         [FromBody] UpdateBillDraftRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.UpdateDraftAsync(billId, request, cancellationToken);
+        // Any counter may save a pending bill. An edit to a posted bill also
+        // needs an admin session; with one, the audit row names the admin.
+        var admin = await HttpContext.AuthenticateAsync(AdminAuthenticationHandler.SchemeName);
+        if (admin.Succeeded)
+        {
+            HttpContext.User.AddIdentities(admin.Principal.Identities);
+        }
+
+        var response = await billService.UpdateDraftAsync(billId, request, admin.Succeeded, cancellationToken);
         return Ok(response);
     }
 
@@ -129,15 +138,6 @@ public sealed class BillsController(
         CancellationToken cancellationToken)
     {
         var response = await billService.GetAuditAsync(billId, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
-    }
-
-    [HttpGet("{billId:guid}/posting-status")]
-    public async Task<ActionResult<BillPostingStatusResponse>> GetPostingStatus(
-        Guid billId,
-        CancellationToken cancellationToken)
-    {
-        var response = await billService.GetPostingStatusAsync(billId, cancellationToken);
         return response is null ? NotFound() : Ok(response);
     }
 

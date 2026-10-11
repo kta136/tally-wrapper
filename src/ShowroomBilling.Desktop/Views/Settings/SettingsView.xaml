@@ -145,9 +145,9 @@
                                            Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
                             </Grid>
                             <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Database}">
+                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Server}">
                                     <Setter TargetName="SectionIcon" Property="Text" Value="&#xEDA2;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Database" />
+                                    <Setter TargetName="SectionLabel" Property="Text" Value="Server" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Connection}">
                                     <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71B;" />
@@ -194,8 +194,8 @@
                                                               Visibility="{Binding DataContext.IsLedgersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:MastersSettingsSectionView DataContext="{Binding MasterData}"
                                                               Visibility="{Binding DataContext.IsMastersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
-                    <settingsViews:DatabaseSettingsSectionView DataContext="{Binding Database}"
-                                                               Visibility="{Binding DataContext.IsDatabaseVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                    <settingsViews:ServerSettingsSectionView DataContext="{Binding Server}"
+                                                             Visibility="{Binding DataContext.IsServerVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdvancedSettingsSectionView Visibility="{Binding IsAdvancedVisible, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdminSettingsSectionView Visibility="{Binding IsAdminVisible, Converter={StaticResource BoolToVis}}" />
                 </Grid>

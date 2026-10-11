@@ -5,6 +5,7 @@ using Npgsql;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class MigratedIndexesPostgresTests(PostgresFixture fixture)
 {
     /// <summary>
@@ -12,7 +13,6 @@ public sealed class MigratedIndexesPostgresTests(PostgresFixture fixture)
     /// or Designer file): the model would list indexes no database has.
     /// </summary>
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task EveryIndexInTheModelExistsAfterMigrating()
     {
         await using var database = await fixture.CreateDatabaseAsync();

@@ -87,12 +87,6 @@ internal sealed class FakeBillsApi : IBillsApiClient
         return Task.FromResult(Audit);
     }
 
-    public Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default)
-    {
-        Calls.Add($"posting-status:{billId}");
-        return Task.FromResult<BillPostingStatusResponse?>(null);
-    }
-
     public Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default)
     {
         Creates.Add(request);
@@ -105,8 +99,11 @@ internal sealed class FakeBillsApi : IBillsApiClient
         return Task.FromResult(Bill(Guid.NewGuid(), BillStates.Pending, request.Payload));
     }
 
-    public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default)
-        => Write($"update:{billId}", () => Bill(billId, BillStates.Pending, request.Payload));
+    public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, string? adminToken = null, CancellationToken cancellationToken = default)
+    {
+        if (adminToken is not null) AdminTokens.Add(adminToken);
+        return Write($"update:{billId}", () => Bill(billId, BillStates.Pending, request.Payload));
+    }
 
     public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
         => Write($"push:{billId}", () => Bill(billId, BillStates.Posted));
@@ -134,7 +131,7 @@ internal sealed class FakeBillsApi : IBillsApiClient
         AdminTokens.Add(adminToken);
         return Write(
             $"change-number:{billId}:{request.NewInvoiceNumber}",
-            () => new ChangeBillNumberResponse(billId, null, request.NewInvoiceNumber, !request.DryRun, false, false, false, null, null));
+            () => new ChangeBillNumberResponse(billId, null, request.NewInvoiceNumber, !request.DryRun, false, false, null, null));
     }
 
     public Task<BillResponse> MarkPostedAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)
@@ -180,8 +177,7 @@ internal sealed class FakeBillsApi : IBillsApiClient
         AdminTokens.Add(adminToken);
         return Task.FromResult(new SyntheticBatchResponse(
             BillCount: 3,
-            TotalAmount: 300_000m,
-            CreatedBills: Array.Empty<SyntheticBatchCreatedBill>()));
+            TotalAmount: 300_000m));
     }
 
     private Task<T> Write<T>(string call, Func<T> result)

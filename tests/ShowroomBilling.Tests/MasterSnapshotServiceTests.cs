@@ -48,12 +48,12 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
             [new CompanySnapshotItem("ACME Jewellers", true)]));
 
         // A second context: the first still tracks the old batch as it was
-        // loaded, and the service supersedes it with a set-based update.
+        // loaded, and the service removes it with a set-based delete.
         await using var stored = CreateDbContext();
-        var batches = await stored.TallyMasterSnapshotBatches.ToListAsync();
-        Assert.Equal(2, batches.Count);
-        Assert.Single(batches, b => b.Status == "active" && b.Id.ToString() == latest.BatchId);
-        Assert.Single(batches, b => b.Status == "superseded");
+        var batch = Assert.Single(await stored.TallyMasterSnapshotBatches.ToListAsync());
+        Assert.Equal("active", batch.Status);
+        Assert.Equal(latest.BatchId, batch.Id.ToString());
+        Assert.Single(await stored.TallyCompanySnapshots.ToListAsync());
 
         var read = await service.GetCompaniesAsync();
         Assert.Single(read.Companies);
@@ -78,6 +78,27 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         var read = await service.GetLedgersAsync();
         Assert.Equal(2, read.Ledgers.Count);
         Assert.Contains(read.Ledgers, l => l.Name == "Sales A/c" && l.Parent == "Sales Accounts" && l.IsRevenue);
+    }
+
+    /// <summary>
+    /// The read used to stop at 500 rows while reporting the full count, so a
+    /// company with more ledgers lost the rest from the Settings dropdown.
+    /// </summary>
+    [Fact]
+    public async Task GetLedgersAsync_ReturnsEveryLedger_HoweverMany()
+    {
+        await using var db = CreateDbContext();
+        var service = new MasterSnapshotService(db);
+        var ledgers = Enumerable.Range(1, 501)
+            .Select(n => new LedgerSnapshotItem($"Customer {n:0000}", null, "Sundry Debtors", false, null))
+            .ToArray();
+        await service.IngestLedgersAsync(new PushLedgerSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, ledgers));
+
+        var read = await service.GetLedgersAsync();
+
+        Assert.Equal(501, read.Ledgers.Count);
+        Assert.Equal(501, read.Metadata.ItemCount);
+        Assert.Equal("Customer 0501", read.Ledgers[^1].Name);
     }
 
     [Fact]

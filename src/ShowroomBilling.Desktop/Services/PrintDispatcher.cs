@@ -14,7 +14,6 @@ namespace ShowroomBilling.Desktop.Services;
 public sealed class PrintDispatcher : IPrintDispatcher
 {
     private const int PrintImageDpi = 600;
-    private static readonly HashSet<char> InvalidFileNameChars = Path.GetInvalidFileNameChars().ToHashSet();
 
     private readonly IBillPrintRenderer _renderer;
     private readonly object _printerCacheGate = new();
@@ -216,16 +215,6 @@ public sealed class PrintDispatcher : IPrintDispatcher
             }
             return true;
         });
-    }
-
-    public string SavePdfToDisk(PrintDocumentOptions options, string directory, string fileNameWithoutExtension)
-    {
-        Directory.CreateDirectory(directory);
-        var safeName = string.Concat(fileNameWithoutExtension.Select(c => InvalidFileNameChars.Contains(c) ? '_' : c));
-        var fullPath = Path.Combine(directory, safeName + ".pdf");
-        var bytes = _renderer.GeneratePdf(options);
-        File.WriteAllBytes(fullPath, bytes);
-        return fullPath;
     }
 
     private static PrintTicket? TryBuildPrintTicket(PrintQueue queue, PrintJobSettings settings)

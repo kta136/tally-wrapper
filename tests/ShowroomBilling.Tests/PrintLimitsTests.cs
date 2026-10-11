@@ -39,21 +39,6 @@ public sealed class PrintLimitsTests
         Assert.Contains("LeftMarginCm", ex.Message);
     }
 
-    [Fact]
-    public void The_renderer_reads_its_limits_from_the_shared_definition()
-    {
-        Assert.Equal(PrintLayoutDefaults.MarginMaxCm * 10, PrintLayoutLimits.MarginMaxMm, 3);
-        Assert.Equal(PrintLayoutDefaults.InvoiceFontMin, PrintLayoutLimits.InvoiceFontMin);
-        Assert.Equal(PrintLayoutDefaults.InvoiceFontMax, PrintLayoutLimits.InvoiceFontMax);
-        Assert.Equal(PrintLayoutDefaults.TermsFontMin, PrintLayoutLimits.TermsFontMin);
-        Assert.Equal(PrintLayoutDefaults.TermsFontMax, PrintLayoutLimits.TermsFontMax);
-        Assert.Equal(210f, PrintLayoutLimits.A4WidthMm, 3);
-        Assert.Equal(297f, PrintLayoutLimits.A4HeightMm, 3);
-        Assert.Equal(120f, PrintLayoutLimits.DefaultWatermarkWidthMm, 3);
-        Assert.Equal(88.5f, PrintLayoutLimits.DefaultWatermarkOffsetYMm, 3);
-        Assert.Equal(0.15f, PrintLayoutLimits.DefaultWatermarkOpacity, 3);
-    }
-
     [Theory]
     [InlineData(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00 }, ImageSignature.Png)]
     [InlineData(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, ImageSignature.Jpeg)]

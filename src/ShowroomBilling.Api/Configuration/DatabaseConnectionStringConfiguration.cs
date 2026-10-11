@@ -22,9 +22,6 @@ public static class DatabaseConnectionStringConfiguration
         });
     }
 
-    public static string GetPostgresConnectionString(IConfiguration configuration) =>
-        NormalizeOrOriginal(configuration.GetConnectionString("Postgres"));
-
     public static string NormalizeOrOriginal(string? connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))

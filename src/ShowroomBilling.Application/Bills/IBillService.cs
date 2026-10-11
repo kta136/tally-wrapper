@@ -22,9 +22,14 @@ public interface IBillService
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default);
 
+    /// <param name="callerIsAdmin">
+    /// True when the request came from an unlocked admin session. Saving an
+    /// edit to a posted bill reopens it for another push, which only admin may do.
+    /// </param>
     Task<BillResponse> UpdateDraftAsync(
         Guid billId,
         UpdateBillDraftRequest request,
+        bool callerIsAdmin = false,
         CancellationToken cancellationToken = default);
 
     Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default);

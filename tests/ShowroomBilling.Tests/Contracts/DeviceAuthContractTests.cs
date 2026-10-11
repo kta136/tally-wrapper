@@ -66,7 +66,6 @@ public sealed class DeviceAuthContractTests(PostgresFixture postgres)
             DeviceId: "test-device",
             CounterName: "Test Counter",
             AppVersion: "1.0",
-            ConnectionMode: "Server",
             MachineName: "TEST-PC",
             UserName: "tester");
 }

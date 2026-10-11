@@ -14,7 +14,6 @@
     <SolidColorBrush x:Key="BgBrush" Color="#FFF8F9FB" />
     <SolidColorBrush x:Key="BgPanelBrush" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="BgSunkenBrush" Color="#FFF2F4F7" />
-    <SolidColorBrush x:Key="BgRowAltBrush" Color="#FFF8F9FB" />
     <SolidColorBrush x:Key="BgHoverBrush" Color="#FFEAEDF4" />
     <SolidColorBrush x:Key="BgSelectedBrush" Color="#FFDFE3F4" />
 

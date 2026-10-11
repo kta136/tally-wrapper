@@ -57,7 +57,6 @@ publish/
 *.msi
 *.msix
 *.pdb
-src/ShowroomBilling.Desktop/Resources/Embedded/**
 
 .DS_Store
 Thumbs.db
@@ -66,3 +65,6 @@ Thumbs.db
 .codex/
 AGENTS.md
 graphify-out/
+
+# Review notes stay local: this repository is public.
+docs/audits/

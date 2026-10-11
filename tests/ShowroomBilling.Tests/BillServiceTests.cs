@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using ShowroomBilling.Application;
+using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
@@ -90,11 +91,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         var bill = Assert.Single(await db.Bills.ToListAsync());
         var revision = Assert.Single(await db.BillRevisions.ToListAsync());
-        var reservation = Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
 
         AssertVersion7(bill.Id);
         AssertVersion7(revision.Id);
-        AssertVersion7(reservation.Id);
         Assert.All(await db.AuditEvents.ToListAsync(), audit => AssertVersion7(audit.Id));
     }
 
@@ -112,7 +111,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(first.Id, replay.Id);
         Assert.Equal(first.InvoiceNumber, replay.InvoiceNumber);
         Assert.Single(await db.Bills.ToListAsync());
-        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
+        Assert.Equal(2L, await db.InvoiceSequences.Select(x => x.NextValue).SingleAsync());
     }
 
     [Fact]
@@ -154,7 +153,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Contains("/0001", first.InvoiceNumber);
         Assert.Contains("/0002", second.InvoiceNumber);
         Assert.Contains("/0003", third.InvoiceNumber);
-        Assert.Equal(3, await db.InvoiceNumberReservations.CountAsync());
+        Assert.Equal(4L, await db.InvoiceSequences.Select(x => x.NextValue).SingleAsync());
     }
 
     [Fact]
@@ -228,7 +227,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         Assert.Equal(created.InvoiceNumber, updated.InvoiceNumber);
         Assert.Equal(created.FiscalYear, updated.FiscalYear);
-        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
+        Assert.Equal(2L, await db.InvoiceSequences.Select(x => x.NextValue).SingleAsync());
     }
 
     [Fact]
@@ -333,14 +332,13 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db);
 
         var draft = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var reservationsBefore = await db.InvoiceNumberReservations.CountAsync();
 
         var pushed = await service.PushAsync(draft.Id, new PushBillRequest("manual"));
 
         Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(draft.InvoiceNumber, pushed.InvoiceNumber);
         Assert.Equal(draft.FiscalYear, pushed.FiscalYear);
-        Assert.Equal(reservationsBefore, await db.InvoiceNumberReservations.CountAsync());
+        Assert.Equal(2L, await db.InvoiceSequences.Select(x => x.NextValue).SingleAsync());
     }
 
     [Fact]
@@ -398,11 +396,30 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("sub-1"));
 
-        var updated = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+        var updated = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
         Assert.Equal(BillStates.Pending, updated.State);
         Assert.True(updated.EditedAfterPush);
         Assert.Equal(bill.InvoiceNumber, updated.InvoiceNumber); // invoice number immutable through reopen
+    }
+
+    [Fact]
+    public async Task UpdateDraft_OnPostedBill_WithoutAdmin_IsRefusedAndLeavesTheBillPosted()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var posted = await service.PushAsync(bill.Id, new PushBillRequest("sub-1"));
+
+        var ex = await Assert.ThrowsAsync<AdminSessionRequiredException>(() =>
+            service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m))));
+
+        Assert.Contains(bill.InvoiceNumber!, ex.Message);
+        await using var check = CreateDbContext();
+        var stored = await check.Bills.SingleAsync(x => x.Id == bill.Id);
+        Assert.Equal(BillStates.Posted, stored.State);
+        Assert.False(stored.EditedAfterPush);
+        Assert.Equal(posted.CurrentRevisionId, stored.CurrentRevisionId);
     }
 
     [Fact]
@@ -428,7 +445,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
@@ -464,7 +481,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
@@ -487,7 +504,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
@@ -505,7 +522,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
@@ -515,6 +532,10 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             .ToListAsync();
         Assert.Equal(2, postedAudits.Count);
         Assert.Contains("\"tallyAction\":\"Alter\"", postedAudits[^1].PayloadJson);
+        var trail = await service.GetAuditAsync(bill.Id);
+        Assert.Equal(
+            ["bill.edit.reopened", "bill.push.requested", "tally.posted"],
+            trail!.Events.TakeLast(3).Select(x => x.EventType).ToArray());
         Assert.Contains("\"tallyMasterId\":\"101\"", postedAudits[^1].PayloadJson);
     }
 
@@ -533,8 +554,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Contains("/0001", submitted.InvoiceNumber);
         Assert.NotNull(submitted.CurrentRevision!.SubmittedAtUtc);
         Assert.NotNull(submitted.CurrentRevision.FinalizedAtUtc);
-
-        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
     }
 
     [Fact]
@@ -549,8 +568,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
             service.PushAsync(bill.Id, new PushBillRequest("second")));
-
-        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
     }
 
     [Fact]
@@ -580,7 +597,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(original.FiscalYear, revised.FiscalYear);
         Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(revised.InvoiceNumber, poster.LastRequest!.InvoiceNumber);
-        Assert.Equal(2, await db.InvoiceNumberReservations.CountAsync());
+        Assert.Equal(3L, await db.InvoiceSequences.Select(x => x.NextValue).SingleAsync());
     }
 
     [Fact]
@@ -1161,7 +1178,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edit-1", 150m)));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edit-1", 150m)), callerIsAdmin: true);
         await service.PushAsync(bill.Id, new PushBillRequest("alter-1"));
 
         var edited = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edit-2", 160m)));
@@ -1179,7 +1196,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
             service.VoidAsync(bill.Id, new VoidBillRequest("customer cancelled")));

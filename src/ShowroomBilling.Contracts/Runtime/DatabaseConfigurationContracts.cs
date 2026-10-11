@@ -12,8 +12,7 @@ public sealed record DatabaseConfigurationResponse(
     bool RequiresApiRestart,
     string EnvironmentName = "",
     bool IsEnvironmentOverridePresent = false,
-    string StorageProtection = "",
-    bool CanBootstrapWithoutAdmin = false);
+    string StorageProtection = "");
 
 public sealed record UpdateDatabaseConfigurationRequest(string ConnectionString);
 

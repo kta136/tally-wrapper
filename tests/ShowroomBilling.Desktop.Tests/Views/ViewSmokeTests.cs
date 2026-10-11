@@ -222,7 +222,6 @@ public sealed class ViewSmokeTests
         // The constructors only store their clients; no view-model method that
         // would call one is invoked here.
         var shell = new MainWindowViewModel(
-            runtimeApiClient: null!,
             settingsApiClient: null!,
             healthApiClient: null!,
             mastersApiClient: null!,
@@ -240,16 +239,9 @@ public sealed class ViewSmokeTests
             settings: new SettingsViewModel(),
             admin: new AdminUnlockViewModel(adminApi: null!, tokenStore),
             setupWizard: new SetupWizardViewModel(
-                runtimeApi: null!,
-                healthApi: null!,
                 settingsApi: null!,
-                childProcessSupervisor: null,
                 completionStore: null!),
             syntheticBatch: new SyntheticBatchViewModel());
-
-        // The usual state of the Database section: a connection is saved and admin is locked.
-        shell.Settings.Database.IsLocalDatabaseOverridePresent = true;
-        shell.Settings.Database.DatabaseMaskedConnectionString = "Host=db.example;Database=showroom;Username=app;Password=***";
 
         // Left open so the confirm overlay has its texts; nothing awaits the answer.
         _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));

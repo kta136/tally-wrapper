@@ -92,10 +92,10 @@ This current behavior wins over older requirement-doc wording.
 
 | Behavior | Redesign? | Target direction |
 |---|---|---|
-| Same-bill mutation after posting | Yes | Move to immutable finalized snapshots once numbered/pushed |
-| `Revise Posted` label/behavior mismatch | Yes | Make workflow explicit and consistent |
+| Same-bill mutation after posting | Yes | A posted bill is edited in place only by an admin; every edit is a new revision, and the next push alters the voucher Tally holds (§3.2) |
+| `Revise Posted` label/behavior mismatch | Yes | Edit and Revise are separate actions with their own rules (§3.2) |
 | Local sync states tied to desktop-owned posting | Yes | Move posting orchestration to the cloud API (in-process Tally calls) |
-| Local lock semantics | Yes | Replace with server-owned leases where needed |
+| Local lock semantics | Yes | No edit locks; a save that overtakes another is refused by the bill's row version (409) |
 
 ---
 
@@ -106,6 +106,7 @@ This current behavior wins over older requirement-doc wording.
 | State | Meaning |
 |---|---|
 | `pending` | Mutable saved bill not yet posted to Tally |
+| `draft` | Treated like `pending` wherever it is found; a new bill is saved as `pending` |
 | `posting` | API is mid-call to Tally right now (typically seconds; briefly visible while the HTTP post is in flight) |
 | `posted` | Tally accepted the voucher |
 | `failed` | Latest post attempt failed; operator must click Retry |
@@ -123,12 +124,12 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 | **Manual push** (operator click) | `pending`, `draft`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | API calls Tally XML synchronously via `ITallyPoster`; first pushes create a voucher, edited-after-push bills alter the prior Tally voucher. Transport timeouts/unreadable responses are ambiguous, not ordinary failures. |
 | Manual retry | `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | Same sync path as push. |
 | Manual repost | `posted`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | Same sync path; the caller-supplied repost idempotency key becomes the Tally `REMOTEID` for create/import. |
-| Revise bill content | `pending` only in normal flow | `revised` + new `pending` | Old pending bill becomes superseded |
-| **Edit in place** (admin-gated) | `pending`, `draft`, `failed`, `posted` | `pending` (with `EditedAfterPush=true` if reopened from non-pending) | Appends revision; invoice number unchanged. Blocked on `posting`. |
-| **Mark as Pushed** (admin-gated) | `pending`, `draft`, `failed`, `reconciliation_required` | `posted` | Local-only attestation — does not call Tally. This is one of the two explicit reconciliation exits. Requires reason ≥ 4 chars. |
+| Revise bill content | `pending`, `draft` | `revised` + new `pending` | The old bill becomes superseded; the new bill gets its own invoice number |
+| **Edit in place** | `pending`, `draft`, `failed`; `posted` with an admin session | `pending` | Appends a revision; invoice number unchanged. `EditedAfterPush=true` only when Tally holds the bill's voucher, so the next push alters it; a bill whose first push was rejected is pushed again as a create. Without an admin session an edit to a `posted` bill is `403 Admin session required`. Refused in `posting`, `reconciliation_required`, `voided` and `revised`. |
+| **Mark as Pushed** (admin-gated) | `pending`, `draft`, `failed`, `reconciliation_required` | `posted` | Local-only attestation — does not call Tally. This is one of the two explicit reconciliation exits. The Desktop asks for a reason of at least 4 characters. |
 | **Mark as Pending** (admin-gated) | `posted`, `failed`, `reconciliation_required` | `pending` | Local-only revert — does not touch Tally. This is the other explicit reconciliation exit. Clears `EditedAfterPush`. |
-| **Change bill number** (admin-gated) | any except `posting`, `reconciliation_required` | (same state) | Updates `bill.InvoiceNumber`. Warnings: `LeavesGap`, `TallyDiverges`, `ReservationOrphaned`. 409 on uniqueness conflict. |
-| Void before posting | `pending`, `draft`, `failed` | `voided` | |
+| **Change bill number** (admin-gated) | any except `posting`, `reconciliation_required` | same state; a bill whose voucher Tally holds becomes `pending` with `EditedAfterPush=true` | Updates `bill.InvoiceNumber` and `InvoiceCore`. Warnings: `LeavesGap`, `TallyDiverges`. 409 on uniqueness conflict. |
+| Void before posting | `pending`, `draft`, `failed` | `voided` | Refused while Tally holds the bill's voucher. The Desktop asks for confirmation first. |
 | **Delete local** (admin-gated, hard-delete) | any except `posting`, `reconciliation_required` | (row removed) | Cascades bill_revisions. Keeps the append-only audit history and a final `bill.deleted` tombstone. |
 
 ### 3.3 Target editability rules
@@ -138,21 +139,21 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 | `pending` | Yes | Normal editing state |
 | `posting` | No | Active Tally call — never editable |
 | `reconciliation_required` | No | Verify the voucher in Tally, then use admin Mark as Pushed or Mark as Pending |
-| `posted` | **Admin-only reopen** | Reopens to `pending`; sets `EditedAfterPush=true` |
-| `failed` | **Admin-only reopen** | Same as posted reopen |
+| `posted` | **Admin only** | Saving the edit needs a valid `X-Admin-Token` (403 without one). Reopens to `pending`; sets `EditedAfterPush=true`. The `bill.edit.reopened` audit row names the admin |
+| `failed` | Yes | No admin needed. Reopens to `pending`; `EditedAfterPush` is set only when Tally holds the voucher |
 | `revised` | No | Historical superseded record |
 | `voided` | No | Terminal |
 
 ### 3.4 Posting mechanics
 
-There is no `tally_posting_jobs` table or queue. On push/retry/repost, `BillService.PushInternalAsync`:
+There is no `tally_posting_jobs` table or queue. On push/retry/repost, `BillPostingWorkflow.PushInternalAsync`:
 
 1. Transitions the bill to `posting` and saves.
 2. If `EditedAfterPush=true`, resolves the previous Tally `MASTER ID` from the pre-edit `tally.posted` audit. If it cannot, the push fails with `TALLY_ALTER_TARGET_MISSING` without creating a fallback voucher.
 3. Calls `ITallyPoster.PostAsync` synchronously (builds create XML, or alter XML for edited-after-push, sends via HTTP to Tally, parses response).
 4. Writes `tally.posted`, `tally.failed`, or `tally.outcome.unknown` and transitions the bill to `posted`, `failed`, or `reconciliation_required`. The audit trail is append-only, including across edit-and-repush flows.
 
-If the API crashes mid-post, `StuckPostingRecoveryHostedService` moves any stranded `posting` bill to `reconciliation_required` with a `bill.posting.recovered` audit event. Because another counter's API may be mid-push on the same database, a `posting` claim is only treated as abandoned once it is older than 10 minutes (longer than the 300 s Tally budget plus settling); younger claims are re-checked later, conditionally on the claim being unchanged. It never makes a potentially duplicate write safe merely by restarting the API.
+If the API crashes mid-post, `StuckPostingRecoveryHostedService` moves any stranded `posting` bill to `reconciliation_required` with a `bill.posting.recovered` audit event. Because another API process on the same database may be mid-push, a `posting` claim is only treated as abandoned once it is older than 10 minutes (longer than the 300 s Tally budget plus settling); younger claims are re-checked later, conditionally on the claim being unchanged. It never makes a potentially duplicate write safe merely by restarting the API.
 
 ---
 
@@ -186,10 +187,10 @@ Everything Tally-related runs in-process in the API. There is no separate bridge
 ### Redesign
 
 - do not carry forward the current misleading `Revise Posted` label while changing semantics silently
-- do not let numbered/finalized bills remain casually mutable in Tally Wrapper
+- do not let posted bills remain casually mutable: editing one needs an admin session
 - do not let desktop clients directly own posting lifecycle state
 - do not rebuild the old local-state machine around local durable storage
 
 ### Decision note
 
-Tally Wrapper intentionally redesigns the posted-bill correction model. The new target is immutable finalized snapshots with explicit repost or revision workflows. That is a deliberate redesign, not an accidental drift.
+A posted bill is corrected in place, by an admin. The edit appends a revision (earlier revisions are never changed), returns the bill to `pending` with `EditedAfterPush=true`, and the next push alters the voucher Tally already holds. Repost is the separate action for sending a posted bill again as a new voucher.

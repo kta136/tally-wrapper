@@ -11,7 +11,7 @@ public sealed class BillStateCapabilitiesTests
             yield return new object[] { BillStates.Draft, true, true, false, false, true, true, true, true, true, true, false, false };
             yield return new object[] { BillStates.Pending, true, true, false, false, true, true, true, true, true, true, false, false };
             yield return new object[] { BillStates.Posting, false, false, false, false, false, false, false, false, false, false, false, false };
-            yield return new object[] { BillStates.Posted, false, false, false, true, true, false, true, true, true, false, true, true };
+            yield return new object[] { BillStates.Posted, false, false, false, true, false, false, true, true, true, false, true, true };
             yield return new object[] { BillStates.Failed, false, false, true, true, false, true, true, true, true, true, true, true };
             yield return new object[] { BillStates.ReconciliationRequired, false, false, false, false, false, false, false, false, false, true, true, true };
             yield return new object[] { BillStates.Revised, false, false, false, false, false, false, false, true, true, false, false, false };

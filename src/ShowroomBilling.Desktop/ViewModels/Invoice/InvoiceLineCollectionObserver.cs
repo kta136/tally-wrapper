@@ -8,7 +8,7 @@ namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 /// reset-safe detachment, and one-based row numbering. Billing behavior remains in the
 /// view model through the supplied callbacks.
 /// </summary>
-internal sealed class InvoiceLineCollectionObserver : IDisposable
+internal sealed class InvoiceLineCollectionObserver
 {
     private readonly ObservableCollection<BillLineViewModel> _lines;
     private readonly EventHandler _lineMutated;
@@ -57,15 +57,5 @@ internal sealed class InvoiceLineCollectionObserver : IDisposable
         {
             _lines[index].RowNumber = index + 1;
         }
-    }
-
-    public void Dispose()
-    {
-        _lines.CollectionChanged -= OnCollectionChanged;
-        foreach (var line in _observed)
-        {
-            line.MutationOccurred -= _lineMutated;
-        }
-        _observed.Clear();
     }
 }

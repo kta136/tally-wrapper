@@ -42,32 +42,25 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             Suffix: suffix);
     }
 
-    public async Task<ReserveNumberResponse> ReserveAsync(
-        ReserveNumberRequest request,
+    /// <summary>
+    /// Hands out the next free invoice number of the fiscal year and moves the
+    /// sequence past it. Inside a caller's transaction the number is only
+    /// taken when that transaction commits, together with the bill it is for.
+    /// </summary>
+    public async Task<ReservedNumber> ReserveAsync(
+        string documentType,
+        string? fiscalYear,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
-        {
-            throw new RequestValidationException("Idempotency key is required.");
-        }
-
-        var idempotencyKey = request.IdempotencyKey.Trim();
-        var normalizedType = NormalizeDocumentType(request.DocumentType);
-        var year = NormalizeFiscalYear(request.FiscalYear);
+        var normalizedType = NormalizeDocumentType(documentType);
+        var year = NormalizeFiscalYear(fiscalYear);
         var showroomId = Showrooms.DefaultId;
 
         for (var attempt = 1; attempt <= MaxReservationAttempts; attempt++)
         {
             try
             {
-                return await ReserveCoreAsync(
-                    request,
-                    idempotencyKey,
-                    normalizedType,
-                    year,
-                    showroomId,
-                    cancellationToken);
+                return await ReserveCoreAsync(normalizedType, year, showroomId, cancellationToken);
             }
             catch (DbUpdateException ex) when (IsRetryableReservationConflict(ex) && attempt < MaxReservationAttempts)
             {
@@ -78,22 +71,12 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
         throw new InvalidOperationException("Invoice number reservation retry loop exited unexpectedly.");
     }
 
-    private async Task<ReserveNumberResponse> ReserveCoreAsync(
-        ReserveNumberRequest request,
-        string idempotencyKey,
+    private async Task<ReservedNumber> ReserveCoreAsync(
         string normalizedType,
         string year,
         Guid showroomId,
         CancellationToken cancellationToken)
     {
-        var existing = await dbContext.InvoiceNumberReservations
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.IdempotencyKey == idempotencyKey, cancellationToken);
-        if (existing is not null)
-        {
-            return MapReservation(existing, alreadyExisted: true);
-        }
-
         var ambientTransaction = dbContext.Database.CurrentTransaction;
 
         // If the caller already opened a transaction, enlist in it and leave
@@ -107,11 +90,9 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
 
         var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
 
-        // Forward-skip past any core value whose formatted form already lives in
-        // `bills.InvoiceNumber` for this (showroom, fiscal year). This keeps the
-        // next reservation from colliding with a bill whose number was manually
-        // moved via change-number. Orphaned reservations don't block reuse —
-        // that was the pre-existing design intent (see docs/04).
+        // Forward-skip past any core a bill of this (showroom, fiscal year)
+        // already holds, so the next number never collides with a bill whose
+        // number was moved by hand via change-number.
         var startFrom = sequence?.NextValue ?? 1L;
         var reservedValue = await ComputeNextFreeCoreAsync(
             showroomId, year, startFrom, cancellationToken);
@@ -136,40 +117,11 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
 
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, reservedValue, year, padding);
 
-        var reservation = new InvoiceNumberReservationEntity
-        {
-            Id = Guid.CreateVersion7(),
-            IdempotencyKey = idempotencyKey,
-            ShowroomId = showroomId,
-            FiscalYear = year,
-            DocumentType = normalizedType,
-            ReservedValue = reservedValue,
-            FormattedNumber = formatted,
-            ReservedForReference = string.IsNullOrWhiteSpace(request.ReservedForReference)
-                ? null
-                : request.ReservedForReference.Trim(),
-            ReservedAtUtc = DateTimeOffset.UtcNow
-        };
-        dbContext.InvoiceNumberReservations.Add(reservation);
-
-        dbContext.AuditEvents.Add(AuditRow.Create(
-            "numbering",
-            reservation.Id.ToString(),
-            $"numbering.{normalizedType}.reserved",
-            AuditRow.System,
-            reservation.ReservedAtUtc,
-            new
-            {
-                fiscalYear = year,
-                reservedValue,
-                formatted
-            }));
-
         // Inside a caller-owned transaction the caller's SaveChanges persists
-        // the reservation, sequence and audit together with its own rows: one
-        // batched round trip to the database instead of two. (A failed insert
-        // aborts a PostgreSQL transaction anyway, so the retry loop above can
-        // only help when this method owns the transaction.)
+        // the sequence together with its own rows: one batched round trip to
+        // the database instead of two. (A failed insert aborts a PostgreSQL
+        // transaction anyway, so the retry loop above can only help when this
+        // method owns the transaction.)
         if (ambientTransaction is null)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -179,20 +131,8 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             await transaction.CommitAsync(cancellationToken);
         }
 
-        return MapReservation(reservation, alreadyExisted: false);
+        return new ReservedNumber(year, reservedValue, formatted);
     }
-
-    private static ReserveNumberResponse MapReservation(InvoiceNumberReservationEntity reservation, bool alreadyExisted) =>
-        new(
-            ReservationId: reservation.Id,
-            IdempotencyKey: reservation.IdempotencyKey,
-            ShowroomId: reservation.ShowroomId,
-            FiscalYear: reservation.FiscalYear,
-            DocumentType: reservation.DocumentType,
-            ReservedValue: reservation.ReservedValue,
-            FormattedNumber: reservation.FormattedNumber,
-            ReservedAtUtc: reservation.ReservedAtUtc,
-            AlreadyExisted: alreadyExisted);
 
     private static bool IsRetryableReservationConflict(DbUpdateException exception) =>
         exception.GetBaseException() is PostgresException

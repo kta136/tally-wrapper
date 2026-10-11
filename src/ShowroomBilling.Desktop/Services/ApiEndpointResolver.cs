@@ -7,18 +7,18 @@ public interface IApiEndpointResolver
 {
     string BaseUrl { get; }
 
-    bool IsServerMode { get; }
-
     bool ShouldUseDeviceToken { get; }
 }
 
 public sealed class ApiEndpointResolver(IOptions<DesktopBootstrapOptions> options) : IApiEndpointResolver
 {
-    private readonly DesktopBootstrapOptions _options = options.Value;
+    public string BaseUrl { get; } = options.Value.ApiBaseUrl;
 
-    public string BaseUrl => _options.EffectiveApiBaseUrl;
-
-    public bool IsServerMode => _options.IsServerMode;
-
-    public bool ShouldUseDeviceToken => !IsServerMode;
+    /// <summary>
+    /// The device token is a file the API and the Desktop both read, so it
+    /// only means something to an API on this machine: a development run. The
+    /// server trusts its LAN instead and never sees a workstation's token.
+    /// </summary>
+    public bool ShouldUseDeviceToken { get; } =
+        Uri.TryCreate(options.Value.ApiBaseUrl, UriKind.Absolute, out var uri) && uri.IsLoopback;
 }

@@ -30,13 +30,6 @@ public sealed record SyntheticBatchRequest(
     DateTimeOffset EndAtUtc,
     IReadOnlyList<string> SelectedKaratLabels);
 
-public sealed record SyntheticBatchCreatedBill(
-    Guid Id,
-    string? InvoiceNumber,
-    decimal GrandTotal,
-    DateTimeOffset ScheduledAtUtc);
-
 public sealed record SyntheticBatchResponse(
     int BillCount,
-    decimal TotalAmount,
-    IReadOnlyList<SyntheticBatchCreatedBill> CreatedBills);
+    decimal TotalAmount);

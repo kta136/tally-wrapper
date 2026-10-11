@@ -1,10 +1,7 @@
 <UserControl x:Class="ShowroomBilling.Desktop.Views.Bills.ReasonPromptDialog"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d">
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell">
     <Grid Background="{StaticResource DialogScrimBrush}">
         <Border Style="{StaticResource DialogPanel}"
                 Width="420"

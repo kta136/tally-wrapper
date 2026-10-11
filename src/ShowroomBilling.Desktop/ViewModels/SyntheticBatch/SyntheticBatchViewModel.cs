@@ -95,9 +95,6 @@ public partial class SyntheticBatchViewModel : ObservableObject
     [ObservableProperty] private string statusMessage = string.Empty;
     [ObservableProperty] private string? errorMessage;
     [ObservableProperty] private string? validationMessage;
-    [ObservableProperty] private int createdCount;
-    [ObservableProperty] private int totalCount;
-    [ObservableProperty] private decimal grandTotalSoFar;
 
     public bool HasValidation => !string.IsNullOrWhiteSpace(ValidationMessage);
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -223,9 +220,6 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
         _cts = new CancellationTokenSource();
         ErrorMessage = null;
-        CreatedCount = 0;
-        TotalCount = 0;
-        GrandTotalSoFar = 0m;
         IsRunning = true;
         StatusMessage = "Resolving admin session…";
 
@@ -242,9 +236,6 @@ public partial class SyntheticBatchViewModel : ObservableObject
             var request = BuildRequest();
             var response = await _billsApi.CreateSyntheticBatchAsync(request, token, _cts.Token);
 
-            CreatedCount = response.BillCount;
-            TotalCount = response.BillCount;
-            GrandTotalSoFar = response.TotalAmount;
             StatusMessage = $"Created {response.BillCount} bill(s) · ₹{response.TotalAmount:N0}.";
             BatchCompleted?.Invoke(this, EventArgs.Empty);
         }

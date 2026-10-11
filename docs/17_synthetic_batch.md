@@ -10,9 +10,10 @@ padding / business-day replay. Available in production, admin-gated.
 - **API:** `POST /api/bills/synthetic-batch` — `[Authorize(Policy = "Admin")]`, takes
   [`SyntheticBatchRequest`](../src/ShowroomBilling.Contracts/Bills/SyntheticBatchContracts.cs)
   and returns `SyntheticBatchResponse`.
-- **Desktop:** Settings → Advanced → **Open Batch Data Scheduler…** opens the
+- **Desktop:** Settings → Admin → **Open Batch Data Scheduler…** opens the
   [`SyntheticBatchDialog`](../src/ShowroomBilling.Desktop/Views/SyntheticBatch/SyntheticBatchDialog.xaml).
-  Admin unlock is prompted automatically if the session is locked.
+  The Admin section is shown only while admin is unlocked. If the session has
+  expired when **Start Schedule** is pressed, the unlock dialog opens first.
 
 ## Input model (V1-parity)
 
@@ -46,10 +47,11 @@ padding / business-day replay. Available in production, admin-gated.
    `MinQty = 0.001 g`.
 5. `SyntheticBatchExecutor` — loops planned bills, calls
    [`IBillService.CreateBackdatedDraftAsync`](../src/ShowroomBilling.Application/Bills/IBillService.cs)
-   with the planned `ScheduledAtUtc`. Each bill reserves the next invoice number
-   via the existing `NumberingService` (real-now — numbering is monotonic and
-   independent of business date), then persists bill + revision + the
-   `bill.pending.created` audit event, all stamped with the backfilled time.
+   with the planned `ScheduledAtUtc`. Each bill takes the next invoice number
+   from `NumberingService` exactly as a saved bill does (numbers follow the
+   order the bills are created in, within the fiscal year of the bill date),
+   then persists bill + revision + the `bill.pending.created` audit event, all
+   stamped with the backfilled time.
 
 ## Invariants
 
@@ -82,6 +84,10 @@ padding / business-day replay. Available in production, admin-gated.
 
 ### API smoke
 
+Run this against a scratch database only. A plain `dotnet run` uses whatever
+database connection this PC has saved; see
+[DEV_SETUP.md](../DEV_SETUP.md#run-against-a-scratch-database).
+
 ```powershell
 # 1. Start the API
 dotnet run --project src/ShowroomBilling.Api
@@ -111,9 +117,9 @@ curl -X POST http://localhost:5108/api/bills/synthetic-batch \
 
 ### Desktop smoke
 
-1. Launch the Desktop (`dotnet run --project src/ShowroomBilling.Desktop`).
-2. Press `~` to unlock admin.
-3. Navigate **Settings → Advanced → Open Batch Data Scheduler…**
+1. Launch the Desktop on a scratch database (`.\tools\run-scratch.ps1`).
+2. Press `~` to unlock admin (a new scratch database asks for a passcode to be set first).
+3. Navigate **Settings → Admin → Open Batch Data Scheduler…**
 4. Fill the form and click **Start Schedule**.
 5. The **Bills** tab refreshes automatically on completion; new bills appear
    with `Updated` timestamps inside the selected window, in state `pending`.

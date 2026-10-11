@@ -14,6 +14,7 @@ using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.ViewModels.Bills;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Printing;
 
@@ -25,6 +26,7 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly INumberingApiClient? _numberingApi;
     private readonly SettingsViewModel? _settings;
     private readonly IApiReadinessSignal? _apiReadiness;
+    private readonly BillsAdminTokenGate _adminTokenGate;
     private readonly InvoiceLineCollectionObserver _lineCollectionObserver;
     private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
     private bool _deferLineCollectionRecompute;
@@ -55,12 +57,14 @@ public partial class InvoiceViewModel : ObservableObject
         IBillsApiClient? billsApi,
         INumberingApiClient? numberingApi,
         SettingsViewModel? settings,
-        IApiReadinessSignal? apiReadiness = null)
+        IApiReadinessSignal? apiReadiness = null,
+        AdminTokenStore? adminTokens = null)
     {
         _billsApi = billsApi;
         _numberingApi = numberingApi;
         _settings = settings;
         _apiReadiness = apiReadiness;
+        _adminTokenGate = new BillsAdminTokenGate(adminTokens);
 
         Lines = new ObservableCollection<BillLineViewModel>();
         AddTrailingBlankRow();
@@ -105,9 +109,16 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private string? currentBillState;
     [ObservableProperty] private bool rateMissing;
     [ObservableProperty] private bool isEditingPosted;
-    [ObservableProperty] private bool isEditingExistingBill;
 
-    public bool IsDraftSaved => _draftBillId.HasValue;
+    /// <summary>
+    /// Handler the shell wires up to open the admin-unlock dialog and wait
+    /// until it closes. Used when the bill being saved is posted.
+    /// </summary>
+    public Func<CancellationToken, Task>? AdminUnlockHandler
+    {
+        get => _adminTokenGate.AdminUnlockHandler;
+        set => _adminTokenGate.AdminUnlockHandler = value;
+    }
 
     public event EventHandler<Guid>? SaveCompletedReadyForPrint;
     public event EventHandler<BillLineViewModel>? QuickAddCommitted;
@@ -489,6 +500,18 @@ public partial class InvoiceViewModel : ObservableObject
         }
         RateMissing = false;
 
+        // The server refuses an edit to a posted bill without an admin session.
+        string? adminToken = null;
+        if (_draftBillId is not null && BillStateCapabilities.IsPosted(CurrentBillState))
+        {
+            (adminToken, _) = await _adminTokenGate.EnsureAsync(cancellationToken);
+            if (adminToken is null)
+            {
+                SaveStatus = "Not saved: this bill is posted, and saving an edit to it needs admin unlock.";
+                return;
+            }
+        }
+
         IsSaving = true;
         SaveStatus = _draftBillId is null ? "Saving bill…" : "Updating bill…";
         Guid? savedBillId = null;
@@ -505,13 +528,13 @@ public partial class InvoiceViewModel : ObservableObject
                     cancellationToken);
                 _draftBillId = bill.Id;
                 _createOperationId = null;
-                OnPropertyChanged(nameof(IsDraftSaved));
             }
             else
             {
                 bill = await _billsApi.UpdateDraftAsync(
                     _draftBillId.Value,
                     new UpdateBillDraftRequest(payload, _draftRevisionId),
+                    adminToken,
                     cancellationToken);
             }
             _draftRevisionId = bill.CurrentRevisionId;
@@ -594,7 +617,6 @@ public partial class InvoiceViewModel : ObservableObject
         _createOperationId = null;
         _lastSavedBill = null;
         CurrentBillState = null;
-        OnPropertyChanged(nameof(IsDraftSaved));
         InvoiceNumber = InvoiceNumberPlaceholder;
         // The VM is a singleton: without this, a new bill keeps the date and
         // payment mode of the bill edited before it, or yesterday's date on a
@@ -608,7 +630,6 @@ public partial class InvoiceViewModel : ObservableObject
         SaveStatus = string.Empty;
         LastSavedAtUtc = null;
         RateMissing = false;
-        IsEditingExistingBill = false;
         IsEditingPosted = false;
         ReplaceLines([]);
         _ = RefreshNextNumberAsync();
@@ -620,8 +641,8 @@ public partial class InvoiceViewModel : ObservableObject
     /// <summary>
     /// Fetches the next-invoice-number preview and, if <paramref name="waitForApi"/>
     /// is true, defers the HTTP call until <see cref="IApiReadinessSignal"/>
-    /// reports the API child is reachable. The first activation of the Invoice
-    /// tab on a cold launch fires before the API child has bound its port; by
+    /// reports the API is reachable. The first activation of the Invoice
+    /// tab on a cold launch can fire before the API has answered; by
     /// waiting up to ~10 s for readiness we (a) make the preview actually land
     /// and (b) pre-pay the cold-pool / EF model-build / TLS handshake cost
     /// before the operator hits Save, so the first SaveDraft of the session
@@ -699,12 +720,10 @@ public partial class InvoiceViewModel : ObservableObject
             _draftRevisionId = bill.CurrentRevisionId;
             _lastSavedBill = null;
             CurrentBillState = bill.State;
-            IsEditingExistingBill = true;
             IsEditingPosted = !BillStateCapabilities.IsPendingLike(bill.State);
             RateMissing = false;
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
                 InvoiceNumber = bill.InvoiceNumber!;
-            OnPropertyChanged(nameof(IsDraftSaved));
             SaveStatus = IsEditingPosted
                 ? $"Editing {bill.InvoiceNumber} (was {bill.State}). Save re-queues to Tally."
                 : $"Editing {bill.InvoiceNumber ?? "(pending)"}";

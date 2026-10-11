@@ -7,10 +7,10 @@ using ShowroomBilling.Infrastructure.Persistence;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class SaveRoundTripPostgresTests(PostgresFixture fixture)
 {
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task CreateDraft_SavesInOneBatchedWriteAfterItsLookups()
     {
         await using var database = await fixture.CreateDatabaseAsync();

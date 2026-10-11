@@ -31,7 +31,7 @@ public static class AppPaths
 
     /// <summary>
     /// Files that must stay on this machine and not follow a roaming profile:
-    /// the device token and the extracted embedded API.
+    /// the device token.
     /// </summary>
     public static string LocalDirectory => Resolve(
         LocalDirectoryEnvironmentVariable, Environment.SpecialFolder.LocalApplicationData);

@@ -22,20 +22,8 @@
       "program": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows/TallyWrapper.exe",
       "cwd": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows",
       "env": {
-        "DOTNET_ENVIRONMENT": "Development"
-      },
-      "stopAtEntry": false,
-      "console": "internalConsole"
-    },
-    {
-      "name": "Desktop (API already launched)",
-      "type": "coreclr",
-      "request": "launch",
-      "program": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows/TallyWrapper.exe",
-      "cwd": "${workspaceFolder}/src/ShowroomBilling.Desktop/bin/Debug/net10.0-windows",
-      "env": {
         "DOTNET_ENVIRONMENT": "Development",
-        "SHOWROOM_DESKTOP_ChildProcesses__Api__Enabled": "false"
+        "SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl": "http://localhost:5108"
       },
       "stopAtEntry": false,
       "console": "internalConsole"
@@ -46,7 +34,7 @@
       "name": "Desktop + API",
       "configurations": [
         "API",
-        "Desktop (API already launched)"
+        "Desktop"
       ],
       "preLaunchTask": "build-solution",
       "stopAll": true

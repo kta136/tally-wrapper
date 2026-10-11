@@ -53,26 +53,18 @@ public sealed class SyntheticBatchExecutor(
             "Synthetic batch planned: {BillCount} bill(s), grand ₹{Grand:N0}, window [{Start:o}, {End:o}]",
             plan.Bills.Count, plan.TotalAmount, request.StartAtUtc, request.EndAtUtc);
 
-        var created = new List<SyntheticBatchCreatedBill>(plan.Bills.Count);
         foreach (var planned in plan.Bills)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var response = await billService.CreateBackdatedDraftAsync(
+            await billService.CreateBackdatedDraftAsync(
                 new CreateBillDraftRequest(CounterId: null, Payload: planned.Payload),
                 planned.ScheduledAtUtc,
                 cancellationToken);
-
-            created.Add(new SyntheticBatchCreatedBill(
-                Id: response.Id,
-                InvoiceNumber: response.InvoiceNumber,
-                GrandTotal: planned.Payload.Totals.GrandTotal,
-                ScheduledAtUtc: planned.ScheduledAtUtc));
         }
 
         return new SyntheticBatchResponse(
-            BillCount: created.Count,
-            TotalAmount: plan.TotalAmount,
-            CreatedBills: created);
+            BillCount: plan.Bills.Count,
+            TotalAmount: plan.TotalAmount);
     }
 
     private static IReadOnlyList<T> ReadMasters<T>(Func<string?, IReadOnlyList<T>> parse, string? json, string label)

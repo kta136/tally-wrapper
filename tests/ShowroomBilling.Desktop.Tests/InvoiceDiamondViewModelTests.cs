@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Contracts.Settings;
@@ -103,6 +104,72 @@ public sealed class InvoiceDiamondViewModelTests
         await refresh;
 
         Assert.Equal("SR/25-26/0001", vm.InvoiceNumber);
+    }
+
+    [Fact]
+    public async Task Saving_an_edit_to_a_posted_bill_sends_the_admin_token()
+    {
+        var (vm, api, prompts) = await LoadedForEditAsync(BillStates.Posted, unlocked: true);
+
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        Assert.Contains(api.Calls, call => call.StartsWith("update:", StringComparison.Ordinal));
+        Assert.Equal(["admin-token"], api.AdminTokens);
+        Assert.Equal(0, prompts());
+    }
+
+    [Fact]
+    public async Task Saving_an_edit_to_a_posted_bill_while_locked_asks_for_admin_and_saves_nothing_if_declined()
+    {
+        var (vm, api, prompts) = await LoadedForEditAsync(BillStates.Posted, unlocked: false);
+
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, prompts());
+        Assert.DoesNotContain(api.Calls, call => call.StartsWith("update:", StringComparison.Ordinal));
+        Assert.StartsWith("Not saved", vm.SaveStatus);
+        Assert.False(vm.IsSaving);
+    }
+
+    [Fact]
+    public async Task Saving_a_pending_bill_sends_no_admin_token_even_when_unlocked()
+    {
+        var (vm, api, _) = await LoadedForEditAsync(BillStates.Pending, unlocked: true);
+
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        Assert.Contains(api.Calls, call => call.StartsWith("update:", StringComparison.Ordinal));
+        Assert.Empty(api.AdminTokens);
+    }
+
+    private static async Task<(InvoiceViewModel Vm, FakeBillsApi Api, Func<int> UnlockPrompts)> LoadedForEditAsync(
+        string state,
+        bool unlocked)
+    {
+        var billId = Guid.NewGuid();
+        var payload = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null));
+        var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, payload) with { State = state } };
+        var tokens = new AdminTokenStore();
+        if (unlocked)
+        {
+            tokens.Set(new AdminUnlockResponse("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "test"));
+        }
+
+        var prompts = 0;
+        var vm = new InvoiceViewModel(api, null, null, null, tokens)
+        {
+            AdminUnlockHandler = _ =>
+            {
+                prompts++;
+                return Task.CompletedTask;
+            }
+        };
+        await vm.LoadBillForEditAsync(billId);
+        var line = vm.Lines[0];
+        line.ItemMaster = DiamondMaster();
+        line.GrossWeight = 2m;
+        line.DiamondRate = 3500m;
+        return (vm, api, () => prompts);
     }
 
     private sealed class GatedNumberingApi : INumberingApiClient

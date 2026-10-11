@@ -24,7 +24,6 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
 
         Assert.Equal(1L, preview1.PreviewValue);
         Assert.Equal(1L, preview2.PreviewValue);
-        Assert.Empty(await db.InvoiceNumberReservations.ToListAsync());
         Assert.Empty(await db.InvoiceSequences.ToListAsync());
     }
 
@@ -34,31 +33,14 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        var first = await service.ReserveAsync(new ReserveNumberRequest("k-1", SalesInvoice, "2026-27", null));
-        var second = await service.ReserveAsync(new ReserveNumberRequest("k-2", SalesInvoice, "2026-27", null));
-        var third = await service.ReserveAsync(new ReserveNumberRequest("k-3", SalesInvoice, "2026-27", null));
+        var first = await service.ReserveAsync(SalesInvoice, "2026-27");
+        var second = await service.ReserveAsync(SalesInvoice, "2026-27");
+        var third = await service.ReserveAsync(SalesInvoice, "2026-27");
 
         Assert.Equal(1L, first.ReservedValue);
         Assert.Equal(2L, second.ReservedValue);
         Assert.Equal(3L, third.ReservedValue);
-        Assert.False(first.AlreadyExisted);
         Assert.Contains("2026-27/0003", third.FormattedNumber);
-    }
-
-    [Fact]
-    public async Task Reserve_SameIdempotencyKey_ReturnsSameValue()
-    {
-        await using var db = CreateDbContext();
-        var service = new NumberingService(db);
-
-        var first = await service.ReserveAsync(new ReserveNumberRequest("key-abc", SalesInvoice, "2026-27", "bill-1"));
-        var second = await service.ReserveAsync(new ReserveNumberRequest("key-abc", SalesInvoice, "2026-27", "bill-1"));
-
-        Assert.Equal(first.ReservedValue, second.ReservedValue);
-        Assert.Equal(first.ReservationId, second.ReservationId);
-        Assert.False(first.AlreadyExisted);
-        Assert.True(second.AlreadyExisted);
-        Assert.Single(await db.InvoiceNumberReservations.ToListAsync());
     }
 
     [Fact]
@@ -67,8 +49,8 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        await service.ReserveAsync(new ReserveNumberRequest("k-1", SalesInvoice, "2026-27", null));
-        await service.ReserveAsync(new ReserveNumberRequest("k-2", SalesInvoice, "2026-27", null));
+        await service.ReserveAsync(SalesInvoice, "2026-27");
+        await service.ReserveAsync(SalesInvoice, "2026-27");
 
         var preview = await service.GetPreviewAsync(SalesInvoice, "2026-27", CancellationToken.None);
 
@@ -81,27 +63,15 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        var year1a = await service.ReserveAsync(new ReserveNumberRequest("y1-a", SalesInvoice, "2025-26", null));
-        var year1b = await service.ReserveAsync(new ReserveNumberRequest("y1-b", SalesInvoice, "2025-26", null));
-        var year2a = await service.ReserveAsync(new ReserveNumberRequest("y2-a", SalesInvoice, "2026-27", null));
+        var year1a = await service.ReserveAsync(SalesInvoice, "2025-26");
+        var year1b = await service.ReserveAsync(SalesInvoice, "2025-26");
+        var year2a = await service.ReserveAsync(SalesInvoice, "2026-27");
 
         Assert.Equal(1L, year1a.ReservedValue);
         Assert.Equal(2L, year1b.ReservedValue);
         Assert.Equal(1L, year2a.ReservedValue);
         Assert.Contains("2025-26/0002", year1b.FormattedNumber);
         Assert.Contains("2026-27/0001", year2a.FormattedNumber);
-    }
-
-    [Fact]
-    public async Task Reserve_WritesAuditEvent()
-    {
-        await using var db = CreateDbContext();
-        var service = new NumberingService(db);
-
-        await service.ReserveAsync(new ReserveNumberRequest("k-audit", SalesInvoice, "2026-27", null));
-
-        var audits = await db.AuditEvents.ToListAsync();
-        Assert.Contains(audits, a => a.EventType == $"numbering.{SalesInvoice}.reserved" && a.EntityType == "numbering");
     }
 
     [Fact]
@@ -159,7 +129,7 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         var service = new NumberingService(db);
 
         await Assert.ThrowsAsync<RequestValidationException>(() =>
-            service.ReserveAsync(new ReserveNumberRequest("k", "unknown_type", "2026-27", null)));
+            service.ReserveAsync("unknown_type", "2026-27"));
     }
 
     [Fact]
@@ -179,8 +149,8 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await db.SaveChangesAsync();
 
         var service = new NumberingService(db);
-        var first = await service.ReserveAsync(new ReserveNumberRequest("skip-1", SalesInvoice, "2026-27", null));
-        var second = await service.ReserveAsync(new ReserveNumberRequest("skip-2", SalesInvoice, "2026-27", null));
+        var first = await service.ReserveAsync(SalesInvoice, "2026-27");
+        var second = await service.ReserveAsync(SalesInvoice, "2026-27");
 
         Assert.Equal(1L, first.ReservedValue);
         Assert.Equal(3L, second.ReservedValue);
@@ -207,7 +177,7 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         var before = await service.GetPreviewAsync(SalesInvoice, "2026-27", CancellationToken.None);
         Assert.Equal(1L, before.PreviewValue);
 
-        await service.ReserveAsync(new ReserveNumberRequest("preview-skip", SalesInvoice, "2026-27", null));
+        await service.ReserveAsync(SalesInvoice, "2026-27");
 
         var after = await service.GetPreviewAsync(SalesInvoice, "2026-27", CancellationToken.None);
         Assert.Equal(3L, after.PreviewValue);

@@ -19,7 +19,5 @@ public sealed record SystemHealthSnapshot(
     TallyCompanyHealthResponse? TallyCompany,
     RuntimeHealthResponse? Runtime = null)
 {
-    public string MastersFreshness => Masters?.OverallStatus ?? "unknown";
-
     public static SystemHealthSnapshot Unreachable() => new(false, null, null, null);
 }

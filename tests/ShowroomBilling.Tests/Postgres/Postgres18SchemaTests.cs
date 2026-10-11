@@ -5,12 +5,12 @@ using Npgsql;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class Postgres18SchemaTests(PostgresFixture fixture)
 {
     private const string PreviousMigration = "20260724065618_AllowWatermarkPrintAssets";
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task MigratedSchema_UsesPostgres18AndValidBillSearchIndexes()
     {
         await using var database = await fixture.CreateDatabaseAsync();
@@ -28,7 +28,6 @@ public sealed class Postgres18SchemaTests(PostgresFixture fixture)
     }
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task BillSearchIndexMigration_RecoversFromAPartialConcurrentRun()
     {
         await using var database = await fixture.CreateDatabaseAtMigrationAsync(PreviousMigration);

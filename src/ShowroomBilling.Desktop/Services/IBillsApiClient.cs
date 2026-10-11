@@ -5,7 +5,8 @@ namespace ShowroomBilling.Desktop.Services;
 public interface IBillsApiClient
 {
     Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default);
-    Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, CancellationToken cancellationToken = default);
+    /// <param name="adminToken">Needed only when the bill being saved is posted.</param>
+    Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, string? adminToken = null, CancellationToken cancellationToken = default);
     Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default);
     Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default);
     Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default);
@@ -13,7 +14,6 @@ public interface IBillsApiClient
     Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default);
     Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default);
     Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default);
-    Task<BillPostingStatusResponse?> GetPostingStatusAsync(Guid billId, CancellationToken cancellationToken = default);
     Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default);
     Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default);
     Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default);

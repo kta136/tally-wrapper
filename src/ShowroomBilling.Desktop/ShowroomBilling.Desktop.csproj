@@ -7,7 +7,6 @@
     <Version>1.0</Version>
     <ApplicationIcon>Resources\Billing.ico</ApplicationIcon>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
-    <UserSecretsId>ShowroomBilling-Desktop-Foundation</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,16 +39,6 @@
     <None Update="Properties\launchSettings.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-
-  <!--
-    publish-prod.ps1 drops the published API as a zip into Resources/Embedded/api.zip
-    immediately before publishing the Desktop. When present we embed it as a manifest
-    resource named EmbeddedApi.zip so EmbeddedApiExtractor can spool it out to
-    %LOCALAPPDATA% on launch. Dev builds (no zip on disk) build cleanly.
-  -->
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\Embedded\api.zip" Condition="Exists('Resources\Embedded\api.zip')" LogicalName="EmbeddedApi.zip" />
   </ItemGroup>
 
   <!--

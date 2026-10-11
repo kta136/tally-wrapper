@@ -4,10 +4,10 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 
 ## Local storage is allowed only for
 
-- bootstrap/startup config needed to launch the desktop (API URL, counter name)
-- `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json`, but only `connectionMode` and `serverApiBaseUrl`
-- stable workstation identity used for server-mode client presence
-- protected secrets/tokens (admin unlock token cache, TTL-bounded)
+- the startup config needed to launch the desktop: the server address and the counter name (`DesktopBootstrap` in `appsettings.json`)
+- `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json`: the server address this workstation saved in Settings → Server
+- a stable workstation identity used for client presence (`desktop-identity.local.json`)
+- the admin unlock token, held in memory only (TTL-bounded)
 - logs
 - truly workstation-local UX preferences such as printer choice or last PDF directory
 
@@ -25,22 +25,21 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 
 ## Enforcement in this foundation
 
-- desktop local config (`appsettings.json`) is limited to `DesktopBootstrap`, `ChildProcesses` and `Logging`; `ConfigFilesTests` fails if another section appears. Workstation preferences (last printer, PDF folder, preview zoom, UI density) are not configuration: the app writes them to `print-preferences.json` and `ui-preferences.json` under `%APPDATA%\ShowroomBilling`
-- server-mode bootstrap overrides are typed and narrow: the local JSON file can switch between `LocalEmbedded` and `Server`, and can set the server API URL, but it cannot override `ChildProcesses`, DB settings, Tally settings, or shared business behavior
-- the desktop writes those two bootstrap fields through **Settings -> Database -> API Connection Mode**; saving restarts Billing so startup mode changes take effect; the last non-localhost server URL is preserved for switching back to server mode
-- the desktop Database section may edit the local embedded DB override only while running in `LocalEmbedded`; server-service DB configuration remains owned by the Tally server tray
-- the Database section presents the runtime path as Desktop -> API -> PostgreSQL. The Desktop never uses the PostgreSQL connection string directly. In `Server` mode, any LocalEmbedded override shown on the workstation is fallback state only and is explicitly labelled not in use.
-- the saved connection string holds the database password, so it is shown in full only to an unlocked admin: the editor is filled with it on unlock and emptied on lock (and after a save made without an admin session). Everyone else sees the masked form and can type a new value. The API never returns the connection string, only the masked form; the Desktop reads the saved value from the same Windows-encrypted override file.
-- **there is no separate bridge process** — its config has been removed. Tally connection details (host, port, active company) live in cloud settings and are read by the API's `ITallyPoster` on each posting call.
+- desktop local config (`appsettings.json`) is limited to `DesktopBootstrap` and `Logging`; `ConfigFilesTests` fails if another section appears. Workstation preferences (last printer, PDF folder, preview zoom, UI density) are not configuration: the app writes them to `print-preferences.json` and `ui-preferences.json` under `%APPDATA%\ShowroomBilling`
+- the only connection setting a workstation holds is the server address, `DesktopBootstrap:ApiBaseUrl`. The saved address overrides the built-in default, and the environment variable `SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl` overrides both
+- the desktop writes the address through **Settings → Server**; saving restarts Billing so the new address takes effect. `desktop-bootstrap.local.json` holds `serverApiBaseUrl` and a `connectionMode` that is always `Server`: the shape older builds wrote and read, so a counter configured by an older build needs nothing done
+- the Desktop holds no database connection string and has no screen that shows or changes one. The server's database connection is set only from the tray on the server PC. The API never returns the connection string, only a masked form
+- a workstation that ran a build with an embedded API may still have the folder `%LOCALAPPDATA%\ShowroomBilling\runtime\api` and a file `database.*.local.json` under `%APPDATA%\ShowroomBilling` (that workstation's old encrypted database connection). The Desktop reads neither; delete both when the workstation is upgraded, since the file still holds a database password
+- **there is no separate bridge process**. Tally connection details (host, port, active company) live in cloud settings and are read by the API on each Tally call.
 - API serves the shared settings through `/api/settings`; which setting lives where is this document, not an endpoint
 - shared settings are represented as API-owned, not as local files or a local settings database
 - tests verify that desktop appsettings files do not introduce shared/business settings sections (see `ConfigFilesTests`)
 
 ## Server-service local files
 
-When the API is installed as a Windows Service on the Tally server, machine-local operational files move under `C:\ProgramData\ShowroomBilling` through `SHOWROOM_BILLING_APPDATA`:
+The API runs as a Windows Service on the Tally server and keeps its machine-local operational files under `C:\ProgramData\ShowroomBilling` (set through `SHOWROOM_BILLING_APPDATA`):
 
-- DB override/protected DB configuration for that server install
+- `database.<Environment>.local.json`: the database connection the tray saved, protected with Windows DPAPI
 - `maintenance_token.txt`, generated by the installer and used only by the tray against localhost maintenance endpoints
 - rolling API logs under `C:\ProgramData\ShowroomBilling\logs`
 

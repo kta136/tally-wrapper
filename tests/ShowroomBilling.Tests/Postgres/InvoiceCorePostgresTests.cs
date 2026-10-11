@@ -9,12 +9,12 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
 {
     private const string MigrationBeforeInvoiceCore = "20261009153701_BillRowVersion";
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task Migration_BackfillsCoreFromReservationThenTrailingDigits()
     {
         await using var database = await fixture.CreateDatabaseAtMigrationAsync(MigrationBeforeInvoiceCore);
@@ -57,7 +57,6 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
     }
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task DeleteTrailingBill_WithLetterSuffix_ReusesFreedCoreWithoutDuplicating()
     {
         await using var database = await fixture.CreateDatabaseAsync();
@@ -75,7 +74,6 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
     }
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task Reserve_WithDigitSuffix_DoesNotMistakeSuffixForCore()
     {
         await using var database = await fixture.CreateDatabaseAsync();

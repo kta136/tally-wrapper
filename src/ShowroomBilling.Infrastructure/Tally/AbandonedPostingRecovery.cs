@@ -8,9 +8,9 @@ namespace ShowroomBilling.Infrastructure.Tally;
 
 /// <summary>
 /// Moves push attempts that can no longer be alive from <c>posting</c> to
-/// <c>reconciliation_required</c>. Several counters' APIs can share one
-/// database, so a bill in <c>posting</c> may be a live push on another
-/// counter. A push cannot outlast its own budgets (the Tally call is capped
+/// <c>reconciliation_required</c>. More than one API process can be on the
+/// same database, so a bill in <c>posting</c> may be a live push in another
+/// one. A push cannot outlast its own budgets (the Tally call is capped
 /// at 300 s and settling at 30 s), so only claims older than
 /// <see cref="AbandonAfter"/> are treated as abandoned. Each transition is
 /// conditional on the bill still holding the same claim, so it never

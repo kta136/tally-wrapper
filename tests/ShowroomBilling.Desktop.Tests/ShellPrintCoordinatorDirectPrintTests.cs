@@ -160,8 +160,6 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
             IReadOnlyList<byte[]> pageImages,
             string printerName,
             PrintJobSettings? settings = null) => false;
-
-        public string SavePdfToDisk(PrintDocumentOptions options, string directory, string fileNameWithoutExtension) => string.Empty;
     }
 
     private sealed class FakePrintPreferencesStore : IPrintPreferencesStore

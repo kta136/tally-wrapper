@@ -1,7 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
-                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+                    xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell">
 
     <!--  Base text defaults: the Windows-native UI font (see UiFontFamily in DesignTokens.xaml)  -->
     <Style TargetType="{x:Type TextBlock}">

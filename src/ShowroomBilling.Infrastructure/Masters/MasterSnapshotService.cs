@@ -23,8 +23,6 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         MasterTypeVoucherTypes
     ];
 
-    private const int SupersededBatchRetention = 3;
-
     public async Task<MasterSnapshotAcceptedResponse> IngestCompaniesAsync(
         PushCompanySnapshotRequest request,
         CancellationToken cancellationToken = default)
@@ -136,9 +134,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             cancellationToken);
     }
 
-    public async Task<CompanySnapshotResponse> GetCompaniesAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default)
+    public async Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeCompanies, cancellationToken);
         if (batch is null)
@@ -146,21 +142,17 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             return new CompanySnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeCompanies), []);
         }
 
-        var rowsQuery = dbContext.TallyCompanySnapshots
+        var items = await dbContext.TallyCompanySnapshots
             .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id);
-        rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
-
-        var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
+            .Where(x => x.BatchId == batch.Id)
+            .OrderBy(x => x.Name)
             .Select(row => new CompanySnapshotItem(row.Name, row.IsActive))
             .ToArrayAsync(cancellationToken);
 
         return new CompanySnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
     }
 
-    public async Task<LedgerSnapshotResponse> GetLedgersAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default)
+    public async Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeLedgers, cancellationToken);
         if (batch is null)
@@ -168,21 +160,17 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             return new LedgerSnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeLedgers), []);
         }
 
-        var rowsQuery = dbContext.TallyLedgerSnapshots
+        var items = await dbContext.TallyLedgerSnapshots
             .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id);
-        rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
-
-        var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
+            .Where(x => x.BatchId == batch.Id)
+            .OrderBy(x => x.Name)
             .Select(row => new LedgerSnapshotItem(row.Name, row.Parent, row.PrimaryGroup, row.IsRevenue, row.Gstin))
             .ToArrayAsync(cancellationToken);
 
         return new LedgerSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
     }
 
-    public async Task<StockItemSnapshotResponse> GetStockItemsAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default)
+    public async Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeStockItems, cancellationToken);
         if (batch is null)
@@ -190,21 +178,17 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             return new StockItemSnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeStockItems), []);
         }
 
-        var rowsQuery = dbContext.TallyStockItemSnapshots
+        var items = await dbContext.TallyStockItemSnapshots
             .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id);
-        rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
-
-        var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
+            .Where(x => x.BatchId == batch.Id)
+            .OrderBy(x => x.Name)
             .Select(row => new StockItemSnapshotItem(row.Name, row.Alias, row.BaseUnit, row.HsnCode, row.Karat))
             .ToArrayAsync(cancellationToken);
 
         return new StockItemSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
     }
 
-    public async Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default)
+    public async Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default)
     {
         var batch = await GetActiveBatchAsync(MasterTypeVoucherTypes, cancellationToken);
         if (batch is null)
@@ -212,12 +196,10 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             return new VoucherTypeSnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeVoucherTypes), []);
         }
 
-        var rowsQuery = dbContext.TallyVoucherTypeSnapshots
+        var items = await dbContext.TallyVoucherTypeSnapshots
             .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id);
-        rowsQuery = MasterSnapshotQueryFilters.ApplyNameQuery(rowsQuery, query);
-
-        var items = await MasterSnapshotQueryFilters.ApplyPaging(rowsQuery.OrderBy(x => x.Name), query)
+            .Where(x => x.BatchId == batch.Id)
+            .OrderBy(x => x.Name)
             .Select(row => new VoucherTypeSnapshotItem(row.Name, row.ParentType, row.IsDeemedPositive))
             .ToArrayAsync(cancellationToken);
 
@@ -292,7 +274,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         int itemCount,
         CancellationToken cancellationToken)
     {
-        await SupersedePriorBatchesAsync(showroomId, masterType, cancellationToken);
+        await DeletePriorBatchesAsync(showroomId, masterType, cancellationToken);
 
         var batch = new TallyMasterSnapshotBatchEntity
         {
@@ -321,7 +303,6 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             new { itemCount = batch.ItemCount, masterType = batch.MasterType }));
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        await PruneSupersededBatchesAsync(batch.ShowroomId, batch.MasterType, cancellationToken);
     }
 
     private async Task<TallyMasterSnapshotBatchEntity?> GetActiveBatchAsync(
@@ -349,38 +330,18 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         }
     }
 
-    private async Task SupersedePriorBatchesAsync(
+    /// <summary>
+    /// Only the newest snapshot is ever read, so the one it replaces is deleted
+    /// in the transaction that stores the new one; its rows go by cascade.
+    /// This also clears the "superseded" batches earlier builds kept.
+    /// </summary>
+    private Task DeletePriorBatchesAsync(
         Guid showroomId,
         string masterType,
         CancellationToken cancellationToken)
-    {
-        await dbContext.TallyMasterSnapshotBatches
-            .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType && x.Status == "active")
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(x => x.Status, "superseded"),
-                cancellationToken);
-    }
-
-    private async Task PruneSupersededBatchesAsync(
-        Guid showroomId,
-        string masterType,
-        CancellationToken cancellationToken)
-    {
-        var idsToDelete = await dbContext.TallyMasterSnapshotBatches
-            .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType && x.Status == "superseded")
-            .OrderByDescending(x => x.FetchedAtUtc)
-            .Skip(SupersededBatchRetention)
-            .Select(x => x.Id)
-            .ToListAsync(cancellationToken);
-        if (idsToDelete.Count == 0)
-        {
-            return;
-        }
-
-        await dbContext.TallyMasterSnapshotBatches
-            .Where(x => idsToDelete.Contains(x.Id))
+        => dbContext.TallyMasterSnapshotBatches
+            .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType)
             .ExecuteDeleteAsync(cancellationToken);
-    }
 
     private static void ValidateCommon(string showroomCode)
     {

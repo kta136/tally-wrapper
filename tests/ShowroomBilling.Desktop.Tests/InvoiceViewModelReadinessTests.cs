@@ -8,8 +8,8 @@ namespace ShowroomBilling.Desktop.Tests;
 /// <summary>
 /// Contract tests for the readiness-aware overload of
 /// <see cref="InvoiceViewModel.RefreshNextNumberAsync(bool, CancellationToken)"/>.
-/// On a cold launch the Invoice tab can activate before the API child has
-/// bound its port; without the wait the existing fire-and-forget call
+/// On a cold launch the Invoice tab can activate before the API has
+/// answered; without the wait the existing fire-and-forget call
 /// silently swallows the failure and the operator pays the full cold-path
 /// cost on first SaveDraft. These tests pin the contract:
 ///

@@ -1,15 +1,11 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
 using Npgsql;
 using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
-using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Health;
-using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Infrastructure.Health;
@@ -21,112 +17,20 @@ namespace ShowroomBilling.Api.Controllers;
 [Route("api/runtime")]
 public sealed class RuntimeController(
     IConfiguration configuration,
-    ICloudSettingsService cloudSettingsService,
     ShowroomBillingDbContext dbContext,
     HealthCheckService healthCheckService,
     IDatabaseConnectionVerifier databaseConnectionVerifier,
-    AppliedDatabaseConfiguration appliedDatabaseConfiguration,
     IHostEnvironment hostEnvironment,
-    IOptions<ApiRuntimeOptions> runtimeOptions,
-    IOptions<DeviceAuthOptions> deviceAuthOptions,
     MaintenanceTokenStore maintenanceTokenStore,
     ClientPresenceRegistry clientPresenceRegistry,
     IDatabaseSchemaState schemaState) : ControllerBase
 {
-    [HttpGet("bootstrap")]
-    public async Task<ActionResult<RuntimeBootstrapResponse>> GetBootstrap(CancellationToken cancellationToken)
-    {
-        var options = runtimeOptions.Value;
-        var databaseIdentity = await TryGetDatabaseIdentityAsync(cancellationToken);
-        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
-        var databaseIdentityMatches = DatabaseConnectionVerifier.DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity);
-        var notes = new List<string>
-        {
-            "Desktop bootstrap is local-only. Shared settings are loaded from the API.",
-            "Posting to Tally is synchronous and manual — no queue, no background workers."
-        };
-        notes.Add(databaseIdentityMatches == true
-            ? $"Database identity: {databaseIdentity}."
-            : $"Database identity mismatch: database says {databaseIdentity ?? "unavailable"}, API expects {expectedDatabaseIdentity}.");
-
-        try
-        {
-            var effectiveSettings = await cloudSettingsService.GetEffectiveSettingsAsync(cancellationToken);
-            notes.Insert(1, $"Active company: {effectiveSettings.Settings.Connection.ActiveCompanyName}. Tally endpoint: {effectiveSettings.Settings.Connection.Host}:{effectiveSettings.Settings.Connection.Port}.");
-        }
-        catch
-        {
-            notes.Insert(1, "Cloud settings are currently unavailable because PostgreSQL is not ready. Desktop should stay in degraded bootstrap mode.");
-        }
-
-        var response = new RuntimeBootstrapResponse(
-            options.ProductName,
-            hostEnvironment.EnvironmentName,
-            options.ApiVersion,
-            "cloud",
-            options.DefaultShowroomName,
-            null,
-            notes,
-            databaseIdentity,
-            expectedDatabaseIdentity,
-            databaseIdentityMatches);
-
-        return Ok(response);
-    }
-
-    [HttpGet("database")]
-    public ActionResult<DatabaseConfigurationResponse> GetDatabaseConfiguration()
-    {
-        if (ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
-        {
-            return denied;
-        }
-
-        var connectionString = configuration.GetConnectionString("Postgres") ?? string.Empty;
-        return Ok(BuildDatabaseConfigurationResponse(
-            connectionString,
-            requiresRestart: !IsAppliedConnectionString(connectionString)));
-    }
-
-    [HttpPut("database")]
-    [Authorize(Policy = AdminPolicy.PolicyName)]
-    public async Task<ActionResult<DatabaseConfigurationResponse>> UpdateDatabaseConfiguration(
-        [FromBody] UpdateDatabaseConfigurationRequest request,
-        CancellationToken cancellationToken)
-    {
-        return await VerifyAndSaveAsync(request, cancellationToken);
-    }
-
-    [HttpPut("database/bootstrap")]
-    [AllowAnonymous]
-    public async Task<ActionResult<DatabaseConfigurationResponse>> BootstrapDatabaseConfiguration(
-        [FromBody] UpdateDatabaseConfigurationRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
-        {
-            return denied;
-        }
-
-        if (!CanBootstrapDatabaseConfiguration())
-        {
-            return Conflict(new ProblemDetails
-            {
-                Title = "Database bootstrap is closed.",
-                Detail = "A local or environment database override is already configured. Use the admin-protected database update flow.",
-                Status = StatusCodes.Status409Conflict
-            });
-        }
-
-        return await VerifyAndSaveAsync(request, cancellationToken);
-    }
-
-    [HttpPost("database/test")]
-    public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfiguration(
+    [HttpPost("database/maintenance/test")]
+    public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(
         [FromBody] TestDatabaseConfigurationRequest request,
         CancellationToken cancellationToken)
     {
-        if (ServerRequestGuard.RequireLoopbackForServerMode(HttpContext, deviceAuthOptions.Value) is { } denied)
+        if (AuthorizeMaintenance() is { } denied)
         {
             return denied;
         }
@@ -149,19 +53,6 @@ public sealed class RuntimeController(
             ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
             cancellationToken);
         return Ok(new DatabaseConfigurationTestResponse(verification.Success, verification.Message));
-    }
-
-    [HttpPost("database/maintenance/test")]
-    public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(
-        [FromBody] TestDatabaseConfigurationRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (AuthorizeMaintenance() is { } denied)
-        {
-            return denied;
-        }
-
-        return await TestDatabaseConfiguration(request, cancellationToken);
     }
 
     [HttpPut("database/maintenance")]
@@ -259,14 +150,13 @@ public sealed class RuntimeController(
             RequiresApiRestart: requiresRestart,
             EnvironmentName: hostEnvironment.EnvironmentName,
             IsEnvironmentOverridePresent: !string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString()),
-            StorageProtection: "Windows DPAPI CurrentUser",
-            CanBootstrapWithoutAdmin: CanBootstrapDatabaseConfiguration());
+            StorageProtection: "Windows DPAPI CurrentUser");
     }
 
     /// <summary>
-    /// The one way a connection string is accepted, whoever is allowed to send
-    /// it: it must parse, reach the database, and be the right database for
-    /// this environment before it is written to the protected override file.
+    /// The one way a connection string is accepted: it must parse, reach the
+    /// database, and be the right database for this environment before it is
+    /// written to the protected override file.
     /// </summary>
     private async Task<ActionResult<DatabaseConfigurationResponse>> VerifyAndSaveAsync(
         UpdateDatabaseConfigurationRequest request,
@@ -313,10 +203,6 @@ public sealed class RuntimeController(
         return connectionString;
     }
 
-    private bool CanBootstrapDatabaseConfiguration() =>
-        !DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName)
-        && string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString());
-
     private ActionResult? AuthorizeMaintenance()
     {
         if (ServerRequestGuard.RequireLoopback(HttpContext) is { } denied)
@@ -356,12 +242,6 @@ public sealed class RuntimeController(
         }
     }
 
-    private bool IsAppliedConnectionString(string connectionString) =>
-        string.Equals(
-            NormalizeConnectionString(connectionString),
-            NormalizeConnectionString(appliedDatabaseConfiguration.PostgresConnectionString),
-            StringComparison.Ordinal);
-
     /// <summary>The last known count if the database cannot be asked right now.</summary>
     private async Task<int?> TryCountPendingMigrationsAsync(CancellationToken cancellationToken)
     {
@@ -397,9 +277,4 @@ public sealed class RuntimeController(
             : environmentName.Trim().Equals("Production", StringComparison.OrdinalIgnoreCase)
                 ? "PROD"
                 : environmentName.Trim().ToUpperInvariant();
-
-    private static string NormalizeConnectionString(string connectionString)
-    {
-        return DatabaseConnectionStringConfiguration.NormalizeOrOriginal(connectionString);
-    }
 }

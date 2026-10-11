@@ -18,13 +18,13 @@ namespace ShowroomBilling.Tests.Postgres;
 /// bill request failed while health read "Healthy".
 /// </summary>
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
 {
     // Two migrations short of the current schema.
     private const string Older = "20261009161104_PerformanceReadOptimizationsApplied";
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task A_service_role_that_may_not_migrate_leaves_the_api_up_and_the_shortfall_on_record()
     {
         await using var database = await fixture.CreateDatabaseAtMigrationAsync(Older);
@@ -89,7 +89,6 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
     }
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task An_up_to_date_database_reports_nothing_pending()
     {
         await using var database = await fixture.CreateDatabaseAsync();

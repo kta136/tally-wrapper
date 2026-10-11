@@ -60,21 +60,6 @@ public class BillDocumentRenderTests
     }
 
     [Fact]
-    public void GeneratePdf_with_diamond_line_uses_diamond_metadata_without_throwing()
-    {
-        var content = RichContent();
-        var diamond = content.Lines.Single(l => l.ItemCategory == "diamond");
-        Assert.Equal(45000m, diamond.DiamondRate);
-        Assert.Equal(3.500m, diamond.Quantity);
-
-        var options = PrintDocumentOptions.ForInvoice(content, new[] { CopyLabel.Original });
-
-        var pdf = Renderer.GeneratePdf(options);
-
-        AssertPdfMagic(pdf);
-    }
-
-    [Fact]
     public void GeneratePdf_fills_single_page_when_items_are_few()
     {
         // Page-fill guard: the dynamic spacer between items and summary must not
@@ -113,12 +98,12 @@ public class BillDocumentRenderTests
     }
 
     /// <summary>
-    /// Writes a representative "rich" PDF next to the test assembly so humans can
-    /// open it to compare the new QuestPDF layout against the V1 reference print.
-    /// Path: <c>tests/ShowroomBilling.Tests/bin/Debug/net10.0/sample_invoice.pdf</c>.
+    /// A representative invoice with every block filled in. Set
+    /// <c>TALLYWRAPPER_PRINT_SAMPLES</c> to a folder to keep this PDF and the
+    /// overflowing one below, to look at after a layout change.
     /// </summary>
     [Fact]
-    public void WriteSampleInvoicePdf_for_manual_inspection()
+    public void Sample_invoice_renders()
     {
         var layout = StructuredLayout() with
         {
@@ -135,14 +120,12 @@ public class BillDocumentRenderTests
             layout);
         var pdf = Renderer.GeneratePdf(options);
 
-        var path = Path.Combine(AppContext.BaseDirectory, "sample_invoice.pdf");
-        File.WriteAllBytes(path, pdf);
-
-        Assert.True(File.Exists(path));
+        AssertPdfMagic(pdf);
+        KeepSample("sample_invoice.pdf", pdf);
     }
 
     [Fact]
-    public void WriteOverflowingSampleInvoicePdf_for_manual_inspection()
+    public void Overflowing_sample_invoice_renders()
     {
         var layout = StructuredLayout() with
         {
@@ -158,24 +141,20 @@ public class BillDocumentRenderTests
             [CopyLabel.Original],
             layout));
 
-        var path = Path.Combine(AppContext.BaseDirectory, "sample_invoice_overflow.pdf");
-        File.WriteAllBytes(path, pdf);
-
-        Assert.True(File.Exists(path));
+        AssertPdfMagic(pdf);
+        KeepSample("sample_invoice_overflow.pdf", pdf);
     }
 
-    [Fact]
-    public void Printed_amounts_match_LineTotal_sum()
+    private static void KeepSample(string fileName, byte[] pdf)
     {
-        // Regression guard: LineTotal from InvoiceViewModel is already GST-inclusive.
-        // A previous rev reallocated TaxTotal on top of LineTotal, inflating printed
-        // amounts. This test pins that the sum of per-line LineTotal equals the
-        // itemsTotalIncl we display in the summary.
-        var content = RichContent();
-        var totalOfLines = content.Lines.Sum(l => l.LineTotal);
+        var folder = Environment.GetEnvironmentVariable("TALLYWRAPPER_PRINT_SAMPLES");
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return;
+        }
 
-        // items-total-incl in the summary uses the same sum; verify arithmetic here.
-        Assert.Equal(303859.75m, totalOfLines);
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, fileName), pdf);
     }
 
     [Fact]

@@ -83,6 +83,7 @@ public sealed class DomainExceptionHandler(IProblemDetailsService problemDetails
         AdminPasscodeNotConfiguredException => (StatusCodes.Status409Conflict, "Admin passcode not configured"),
         AdminPasscodeInvalidException => (StatusCodes.Status401Unauthorized, "Admin passcode invalid"),
         AdminUnlockThrottledException => (StatusCodes.Status429TooManyRequests, "Admin unlock throttled"),
+        AdminSessionRequiredException => (StatusCodes.Status403Forbidden, "Admin session required"),
         RequestValidationException => (StatusCodes.Status400BadRequest, "Bad request"),
         // Guard clauses and not-yet-converted input checks. Still a client error.
         ArgumentException => (StatusCodes.Status400BadRequest, "Bad request"),

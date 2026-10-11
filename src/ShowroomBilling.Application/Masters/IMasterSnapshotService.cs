@@ -20,21 +20,13 @@ public interface IMasterSnapshotService
         PushVoucherTypeSnapshotRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<CompanySnapshotResponse> GetCompaniesAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default);
+    Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default);
 
-    Task<LedgerSnapshotResponse> GetLedgersAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default);
+    Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default);
 
-    Task<StockItemSnapshotResponse> GetStockItemsAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default);
+    Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default);
 
-    Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(
-        MasterSnapshotQuery? query = null,
-        CancellationToken cancellationToken = default);
+    Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default);
 
     Task<MasterFreshnessSummaryResponse> GetFreshnessSummaryAsync(CancellationToken cancellationToken = default);
 }

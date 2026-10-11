@@ -347,8 +347,6 @@ public sealed class PrintPreviewViewModelPrintTests
             return pageImages.Count > 0;
         }
 
-        public string SavePdfToDisk(PrintDocumentOptions options, string directory, string fileNameWithoutExtension) => string.Empty;
-
         public async Task WaitForPreviewRenderAsync()
         {
             if (!await _previewRendered.WaitAsync(TimeSpan.FromSeconds(2)))

@@ -289,7 +289,6 @@ public class SettingsPreviewViewModelTests
             IReadOnlyList<byte[]> pageImages,
             string printerName,
             PrintJobSettings? settings = null) => false;
-        public string SavePdfToDisk(PrintDocumentOptions options, string directory, string fileName) => string.Empty;
 
         public async Task WaitForRenderCountAsync(int target, int timeoutMs = 3000)
         {

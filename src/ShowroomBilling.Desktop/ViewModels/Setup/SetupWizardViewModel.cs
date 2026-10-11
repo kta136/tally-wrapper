@@ -1,63 +1,40 @@
-using System.Diagnostics;
 using System.Globalization;
-using System.Net.Http;
-using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
-using ShowroomBilling.Desktop.Services.ProcessSupervision;
 
 namespace ShowroomBilling.Desktop.ViewModels.Setup;
 
+/// <summary>
+/// First-run prompt for the shared showroom settings (Tally connection,
+/// numbering, ledgers) while the server still reports that they need setting
+/// up. The server's own database connection is set from its tray, not here.
+/// </summary>
 public partial class SetupWizardViewModel : ObservableObject
 {
-    private static readonly TimeSpan DatabaseReadyTimeout = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan DatabaseReadyPollInterval = TimeSpan.FromMilliseconds(500);
-
-    private readonly IRuntimeApiClient _runtimeApi;
-    private readonly IHealthApiClient _healthApi;
     private readonly ISettingsApiClient _settingsApi;
-    private readonly IChildProcessSupervisor? _childProcessSupervisor;
     private readonly ISetupWizardCompletionStore _completionStore;
 
     private EffectiveCloudSettingsDto? _baselineSettings;
 
     public SetupWizardViewModel(
-        IRuntimeApiClient runtimeApi,
-        IHealthApiClient healthApi,
         ISettingsApiClient settingsApi,
-        IChildProcessSupervisor? childProcessSupervisor,
         ISetupWizardCompletionStore completionStore)
     {
-        _runtimeApi = runtimeApi;
-        _healthApi = healthApi;
         _settingsApi = settingsApi;
-        _childProcessSupervisor = childProcessSupervisor;
         _completionStore = completionStore;
 
-        SaveDatabaseCommand = new AsyncRelayCommand(SaveDatabaseAsync, CanSaveDatabase);
-        SaveBasicsCommand = new AsyncRelayCommand(SaveBasicsAsync, CanSaveBasics);
-        RestartDesktopCommand = new RelayCommand(RestartDesktop, () => RequiresDesktopRestart);
+        SaveBasicsCommand = new AsyncRelayCommand(SaveBasicsAsync, () => !IsBusy);
     }
 
     public event EventHandler? Completed;
 
-    public IAsyncRelayCommand SaveDatabaseCommand { get; }
-
     public IAsyncRelayCommand SaveBasicsCommand { get; }
 
-    public IRelayCommand RestartDesktopCommand { get; }
-
-    public Action RestartDesktopAction { get; set; } = AppRestart.Restart;
-
-    [ObservableProperty] private SetupWizardStep currentStep = SetupWizardStep.Database;
     [ObservableProperty] private bool isBusy;
-    [ObservableProperty] private bool requiresDesktopRestart;
     [ObservableProperty] private string statusMessage = string.Empty;
     [ObservableProperty] private string errorMessage = string.Empty;
-    [ObservableProperty] private string databaseConnectionString = string.Empty;
     [ObservableProperty] private string tallyHost = "127.0.0.1";
     [ObservableProperty] private string tallyPort = "9000";
     [ObservableProperty] private string tallyTimeoutSeconds = "30";
@@ -75,40 +52,22 @@ public partial class SetupWizardViewModel : ObservableObject
     [ObservableProperty] private string discountLedger = string.Empty;
     [ObservableProperty] private string salesVoucherType = string.Empty;
 
-    public bool IsDatabaseStep => CurrentStep == SetupWizardStep.Database;
-    public bool IsDatabaseSaveVisible => IsDatabaseStep && !RequiresDesktopRestart;
-    public bool IsBasicsStep => CurrentStep == SetupWizardStep.Basics;
-    public bool IsCompleteStep => CurrentStep == SetupWizardStep.Complete;
     public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
     public bool HasErrorMessage => !string.IsNullOrWhiteSpace(ErrorMessage);
-    public string StepLabel => CurrentStep switch
-    {
-        SetupWizardStep.Database => "STEP 1 OF 2",
-        SetupWizardStep.Basics => "STEP 2 OF 2",
-        _ => "SETUP COMPLETE"
-    };
 
+    /// <summary>
+    /// Loads the settings into the form and says whether the wizard should be
+    /// shown: only while the server reports that the shared settings still need
+    /// their first setup and this PC has not completed it before.
+    /// </summary>
     public async Task<bool> PrepareForStartupAsync(
-        SystemHealthSnapshot? healthSnapshot,
         EffectiveSettingsResponse? settingsResponse,
         CancellationToken cancellationToken = default)
     {
         ClearMessages();
 
-        DatabaseConfigurationResponse? database = null;
-        try
-        {
-            database = await _runtimeApi.GetDatabaseConfigurationAsync(cancellationToken);
-        }
-        catch (HttpRequestException ex)
-        {
-            SetError($"Setup check failed: {ApiResponseReader.FormatError(ex)}");
-            return false;
-        }
-
-        var databaseStepNeeded = NeedsDatabaseStep(database, healthSnapshot);
         var settings = settingsResponse;
-        if (!databaseStepNeeded && settings is null)
+        if (settings is null)
         {
             try
             {
@@ -120,112 +79,14 @@ public partial class SetupWizardViewModel : ObservableObject
             }
         }
 
-        var basicsStepNeeded = settings?.RequiresInitialSetup == true && !_completionStore.IsComplete();
-        if (!databaseStepNeeded && !basicsStepNeeded)
+        if (settings?.RequiresInitialSetup != true || _completionStore.IsComplete())
         {
             return false;
         }
 
-        if (databaseStepNeeded)
-        {
-            CurrentStep = SetupWizardStep.Database;
-            SetStatus("Paste the PostgreSQL connection string to finish first-run database setup.");
-            return true;
-        }
-
-        LoadBasics(settings!.Settings);
-        CurrentStep = SetupWizardStep.Basics;
+        LoadBasics(settings.Settings);
         SetStatus("Review the basic showroom and Tally settings before billing starts.");
         return true;
-    }
-
-    private static bool NeedsDatabaseStep(
-        DatabaseConfigurationResponse database,
-        SystemHealthSnapshot? healthSnapshot)
-    {
-        if (database.CanBootstrapWithoutAdmin)
-        {
-            return true;
-        }
-
-        var runtime = healthSnapshot?.Runtime;
-        return runtime is { DatabaseReachable: false }
-            && !database.IsLocalOverridePresent
-            && !database.IsEnvironmentOverridePresent;
-    }
-
-    private bool CanSaveDatabase() =>
-        !IsBusy && !RequiresDesktopRestart && !string.IsNullOrWhiteSpace(DatabaseConnectionString);
-
-    private bool CanSaveBasics() => !IsBusy && !RequiresDesktopRestart;
-
-    private async Task SaveDatabaseAsync(CancellationToken cancellationToken)
-    {
-        ClearMessages();
-        IsBusy = true;
-        try
-        {
-            SetStatus("Testing database connection...");
-            var test = await _runtimeApi.TestDatabaseConfigurationAsync(
-                new TestDatabaseConfigurationRequest(DatabaseConnectionString),
-                cancellationToken);
-            if (!test.Success)
-            {
-                SetError(test.Message);
-                return;
-            }
-
-            SetStatus("Saving encrypted database configuration...");
-            var response = await _runtimeApi.BootstrapDatabaseConfigurationAsync(
-                new UpdateDatabaseConfigurationRequest(DatabaseConnectionString),
-                cancellationToken);
-
-            if (response.RequiresApiRestart)
-            {
-                if (_childProcessSupervisor?.CanRestartApi != true)
-                {
-                    RequiresDesktopRestart = true;
-                    SetStatus("Database was saved. Restart the desktop app to apply it, then reopen setup.");
-                    return;
-                }
-
-                SetStatus("Restarting embedded API...");
-                var restarted = await Task.Run(() => _childProcessSupervisor.RestartApi(), cancellationToken);
-                if (!restarted)
-                {
-                    RequiresDesktopRestart = true;
-                    SetStatus("Database was saved, but the embedded API did not restart. Restart the desktop app.");
-                    return;
-                }
-
-                var ready = await WaitForDatabaseReadyAsync(cancellationToken);
-                if (!ready)
-                {
-                    SetError("The API restarted, but the database is not ready yet. Check the connection string.");
-                    return;
-                }
-            }
-
-            SetStatus("Loading shared settings...");
-            var settings = await _settingsApi.GetEffectiveSettingsAsync(cancellationToken);
-            if (settings.RequiresInitialSetup && !_completionStore.IsComplete())
-            {
-                LoadBasics(settings.Settings);
-                CurrentStep = SetupWizardStep.Basics;
-                SetStatus("Database is ready. Finish the basic showroom settings.");
-                return;
-            }
-
-            await CompleteAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            SetError(ApiResponseReader.FormatError(ex));
-        }
-        finally
-        {
-            IsBusy = false;
-        }
     }
 
     private async Task SaveBasicsAsync(CancellationToken cancellationToken)
@@ -248,7 +109,9 @@ public partial class SetupWizardViewModel : ObservableObject
         try
         {
             await _settingsApi.SaveEffectiveSettingsAsync(new UpdateEffectiveSettingsRequest(dto), cancellationToken);
-            await CompleteAsync(cancellationToken);
+            await _completionStore.MarkCompleteAsync(cancellationToken);
+            SetStatus("Setup complete.");
+            Completed?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
@@ -258,37 +121,6 @@ public partial class SetupWizardViewModel : ObservableObject
         {
             IsBusy = false;
         }
-    }
-
-    private async Task CompleteAsync(CancellationToken cancellationToken)
-    {
-        await _completionStore.MarkCompleteAsync(cancellationToken);
-        CurrentStep = SetupWizardStep.Complete;
-        SetStatus("Setup complete.");
-        Completed?.Invoke(this, EventArgs.Empty);
-    }
-
-    private async Task<bool> WaitForDatabaseReadyAsync(CancellationToken cancellationToken)
-    {
-        var deadline = DateTimeOffset.UtcNow + DatabaseReadyTimeout;
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            var snapshot = await _healthApi.GetSnapshotAsync(
-                includeTallyCompany: false,
-                includeMasterFreshness: false,
-                forceDatabaseHealth: true,
-                cancellationToken);
-            if (snapshot.ApiReachable
-                && snapshot.Runtime is { DatabaseConfigured: true, DatabaseReachable: true }
-                && snapshot.Runtime.DatabaseIdentityMatches != false)
-            {
-                return true;
-            }
-
-            await Task.Delay(DatabaseReadyPollInterval, cancellationToken);
-        }
-
-        return false;
     }
 
     private void LoadBasics(EffectiveCloudSettingsDto settings)
@@ -368,7 +200,6 @@ public partial class SetupWizardViewModel : ObservableObject
     {
         ErrorMessage = string.Empty;
         StatusMessage = string.Empty;
-        RequiresDesktopRestart = false;
     }
 
     private void SetStatus(string message)
@@ -383,35 +214,7 @@ public partial class SetupWizardViewModel : ObservableObject
         ErrorMessage = message;
     }
 
-    private void RestartDesktop()
-    {
-        RestartDesktopAction();
-    }
-
-    partial void OnCurrentStepChanged(SetupWizardStep value)
-    {
-        OnPropertyChanged(nameof(IsDatabaseStep));
-        OnPropertyChanged(nameof(IsDatabaseSaveVisible));
-        OnPropertyChanged(nameof(IsBasicsStep));
-        OnPropertyChanged(nameof(IsCompleteStep));
-        OnPropertyChanged(nameof(StepLabel));
-    }
-
-    partial void OnIsBusyChanged(bool value)
-    {
-        SaveDatabaseCommand.NotifyCanExecuteChanged();
-        SaveBasicsCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnRequiresDesktopRestartChanged(bool value)
-    {
-        RestartDesktopCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(IsDatabaseSaveVisible));
-        SaveDatabaseCommand.NotifyCanExecuteChanged();
-        SaveBasicsCommand.NotifyCanExecuteChanged();
-    }
-
+    partial void OnIsBusyChanged(bool value) => SaveBasicsCommand.NotifyCanExecuteChanged();
     partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
     partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(HasErrorMessage));
-    partial void OnDatabaseConnectionStringChanged(string value) => SaveDatabaseCommand.NotifyCanExecuteChanged();
 }

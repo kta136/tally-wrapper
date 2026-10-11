@@ -123,16 +123,16 @@ public sealed class TallyMasterRefresherTests
         public Task<MasterSnapshotAcceptedResponse> IngestVoucherTypesAsync(PushVoucherTypeSnapshotRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<CompanySnapshotResponse> GetCompaniesAsync(MasterSnapshotQuery? query = null, CancellationToken cancellationToken = default) =>
+        public Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<LedgerSnapshotResponse> GetLedgersAsync(MasterSnapshotQuery? query = null, CancellationToken cancellationToken = default) =>
+        public Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<StockItemSnapshotResponse> GetStockItemsAsync(MasterSnapshotQuery? query = null, CancellationToken cancellationToken = default) =>
+        public Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(MasterSnapshotQuery? query = null, CancellationToken cancellationToken = default) =>
+        public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<MasterFreshnessSummaryResponse> GetFreshnessSummaryAsync(CancellationToken cancellationToken = default) =>

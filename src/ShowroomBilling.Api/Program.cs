@@ -18,8 +18,7 @@ builder.Host.UseWindowsService(options =>
         : windowsServiceName;
 });
 
-// Outside Development, bind only to loopback unless told otherwise: an
-// embedded API serves the Desktop on the same PC and nobody else. The shared
+// Outside Development, bind only to loopback unless told otherwise. The
 // server install is the one case that listens on the network, and it says so
 // by setting `ASPNETCORE_URLS` (see ServerInstaller); device auth then limits
 // who may call it.
@@ -46,9 +45,6 @@ DatabaseConnectionStringConfiguration.NormalizePostgresConnectionString(builder.
 
 builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "api");
 
-builder.Services.AddSingleton(new AppliedDatabaseConfiguration(
-    DatabaseConnectionStringConfiguration.GetPostgresConnectionString(builder.Configuration)));
-builder.Services.Configure<ApiRuntimeOptions>(builder.Configuration.GetSection(ApiRuntimeOptions.SectionName));
 builder.Services.Configure<DeviceAuthOptions>(builder.Configuration.GetSection(DeviceAuthOptions.SectionName));
 builder.Services.AddSingleton<IDatabaseConnectionVerifier, DatabaseConnectionVerifier>();
 

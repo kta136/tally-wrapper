@@ -38,7 +38,7 @@ public static class BillStateCapabilities
 
     public static bool CanRepost(string? state) => IsPosted(state) || IsFailed(state);
 
-    public static bool CanRevise(string? state) => IsPendingLike(state) || IsPosted(state);
+    public static bool CanRevise(string? state) => IsPendingLike(state);
 
     public static bool CanVoid(string? state) => IsPendingLike(state) || IsFailed(state);
 

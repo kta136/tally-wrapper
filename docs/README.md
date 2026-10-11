@@ -1,6 +1,6 @@
 # Documentation Index
 
-Tally Wrapper is two processes on one Windows box: Desktop (WPF) + API (ASP.NET Core). The API calls Tally XML directly, synchronously, only when an operator clicks Push or Refresh. There is no bridge process, no job queue, no polling loop, no automatic retry.
+Tally Wrapper is a Desktop (WPF) on each counter and one API (ASP.NET Core) that runs as a Windows Service on the Tally server. The Desktop is a client of that API and never starts one. The API calls Tally XML directly, synchronously, only when an operator clicks Push or Refresh. There is no bridge process, no job queue, no polling loop, no automatic retry.
 
 ## Current architecture
 
@@ -9,7 +9,7 @@ Tally Wrapper is two processes on one Windows box: Desktop (WPF) + API (ASP.NET 
 - [05_tally_integration_contract.md](./05_tally_integration_contract.md) — Desktop ↔ API ↔ Tally responsibility split. Single-process API; no bridge.
 - [06_tally_xml_golden_path.md](./06_tally_xml_golden_path.md) — canonical Tally XML write + read paths (in-process).
 - [07_printing_spec.md](./07_printing_spec.md) — operator-visible printing behavior.
-- [08_settings_catalog.md](./08_settings_catalog.md) — per-field settings catalog.
+- [08_settings_catalog.md](./08_settings_catalog.md) — where settings are defined, validated and edited.
 - [09_api_spec.md](./09_api_spec.md) — backend API surface (desktop-facing, admin, health).
 - [10_database_schema.md](./10_database_schema.md) — PostgreSQL 18 schema (bills, revisions, numbering, audit, masters).
 - [11_deployment_and_ops.md](./11_deployment_and_ops.md) — deployment topology, OpenBao database-secret workflow, shared PostgreSQL/PgBouncer test environment, Oracle VPS operations, health checks, startup recovery, upgrade flow.

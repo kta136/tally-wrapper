@@ -14,6 +14,7 @@ namespace ShowroomBilling.Tests.Postgres;
 /// before it drops them, and must be able to put them back.
 /// </summary>
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixture)
 {
     private const string Previous = "20261009161104_PerformanceReadOptimizationsApplied";
@@ -21,7 +22,6 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
     private const string RawXml = """{"xml": "<COMPANY NAME=\"ACME\"/>"}""";
 
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task Dropped_values_are_copied_aside_first_and_come_back_on_the_way_down()
     {
         await using var database = await fixture.CreateDatabaseAsync();

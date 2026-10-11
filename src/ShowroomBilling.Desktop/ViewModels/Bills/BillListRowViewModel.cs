@@ -34,8 +34,6 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
     public bool CanBePushed => BillStateCapabilities.CanPush(State);
     public bool CanBeRetried => BillStateCapabilities.CanRetry(State);
     public bool CanBeReposted => BillStateCapabilities.CanRepost(State);
-    public bool CanBeRevised => BillStateCapabilities.CanRevise(State);
-    public bool CanBeVoided => BillStateCapabilities.CanVoid(State);
     public bool CanBeEdited => BillStateCapabilities.CanEdit(State);
     public bool CanChangeNumber => BillStateCapabilities.CanChangeNumber(State);
     public bool CanBeDeleted => BillStateCapabilities.CanDelete(State);

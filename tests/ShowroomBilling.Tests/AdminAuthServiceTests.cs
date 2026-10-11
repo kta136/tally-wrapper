@@ -91,6 +91,39 @@ public sealed class AdminAuthServiceTests(PostgresFixture postgres) : DatabaseTe
     }
 
     [Fact]
+    public async Task UnlockAsync_RemovesSessionsThatExpiredOverThirtyDaysAgo_AndKeepsTheRest()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var longExpired = Guid.NewGuid();
+        var recentlyExpired = Guid.NewGuid();
+        await using var db = CreateDbContext();
+        db.AdminSessions.AddRange(
+            Session(longExpired, expiresAt: now.AddDays(-40)),
+            Session(recentlyExpired, expiresAt: now.AddDays(-2)));
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        await service.SetPasscodeAsync(new AdminSetPasscodeRequest(null, "111111"));
+
+        await service.UnlockAsync(new AdminUnlockRequest("111111", null));
+
+        await using var check = CreateDbContext();
+        var remaining = await check.AdminSessions.Select(x => x.Id).ToListAsync();
+        Assert.DoesNotContain(longExpired, remaining);
+        Assert.Contains(recentlyExpired, remaining);
+        Assert.Equal(2, remaining.Count);
+    }
+
+    private static ShowroomBilling.Infrastructure.Persistence.Entities.AdminSessionEntity Session(Guid id, DateTimeOffset expiresAt) => new()
+    {
+        Id = id,
+        ShowroomId = Guid.NewGuid(),
+        TokenHash = Guid.NewGuid().ToString("N"),
+        ActorLabel = "test",
+        IssuedAtUtc = expiresAt.AddMinutes(-30),
+        ExpiresAtUtc = expiresAt,
+    };
+
+    [Fact]
     public async Task UnlockAsync_ThrowsIfNoPasscodeConfigured()
     {
         await using var db = CreateDbContext();

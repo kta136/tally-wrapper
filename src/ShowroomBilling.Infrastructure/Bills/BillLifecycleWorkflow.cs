@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Numbering;
 using ShowroomBilling.Contracts.Bills;
@@ -29,6 +30,7 @@ internal sealed class BillLifecycleWorkflow(
     internal async Task<BillResponse> UpdateDraftAsync(
         Guid billId,
         UpdateBillDraftRequest request,
+        bool callerIsAdmin,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -45,6 +47,13 @@ internal sealed class BillLifecycleWorkflow(
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}' and cannot be edited.");
+        }
+        // Saving an edit to a posted bill sends it back to pending, so the
+        // next push changes a voucher Tally already holds.
+        if (bill.State is BillStates.Posted && !callerIsAdmin)
+        {
+            throw new AdminSessionRequiredException(
+                $"Bill {bill.InvoiceNumber ?? billId.ToString()} is already posted. Unlock admin to edit it.");
         }
         EnsureBillDateMatchesFiscalYear(bill, request.Payload);
 
@@ -164,7 +173,7 @@ internal sealed class BillLifecycleWorkflow(
         // commit together so a failure leaves the original bill untouched.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var reservation = await ReserveNumberAsync(newBillId, payload.BillDate, cancellationToken);
+        var reservation = await ReserveNumberAsync(payload.BillDate, cancellationToken);
 
         // A reservation retry clears the change tracker; re-attach the prior bill.
         priorBill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
@@ -190,7 +199,6 @@ internal sealed class BillLifecycleWorkflow(
             {
                 supersedesBillId = priorBill.Id,
                 invoiceNumber = reservation.FormattedNumber,
-                reservationId = reservation.ReservationId,
                 fiscalYear = reservation.FiscalYear
             });
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -313,11 +321,11 @@ internal sealed class BillLifecycleWorkflow(
         var showroomId = Showrooms.DefaultId;
         var billId = Guid.CreateVersion7();
 
-        // Reservation + bill/revision/audit share one transaction so a failed
-        // bill persist doesn't leave an orphaned reserved number behind.
+        // The number and the bill/revision/audit share one transaction so a
+        // failed bill persist doesn't use up an invoice number.
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var reservation = await ReserveNumberAsync(billId, request.Payload.BillDate, cancellationToken);
+        var reservation = await ReserveNumberAsync(request.Payload.BillDate, cancellationToken);
 
         var bill = NewPendingBill(billId, showroomId, request.CounterId, BillTypeSales, reservation, now);
         bill.CreateOperationId = request.ClientOperationId;
@@ -335,7 +343,6 @@ internal sealed class BillLifecycleWorkflow(
             new
             {
                 invoiceNumber = reservation.FormattedNumber,
-                reservationId = reservation.ReservationId,
                 fiscalYear = reservation.FiscalYear
             });
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -350,13 +357,10 @@ internal sealed class BillLifecycleWorkflow(
     /// bill date decides the series: a 31 March bill entered on 1 April still
     /// belongs to the year that is closing.
     /// </summary>
-    private Task<ReserveNumberResponse> ReserveNumberAsync(Guid billId, DateOnly billDate, CancellationToken cancellationToken)
+    private Task<ReservedNumber> ReserveNumberAsync(DateOnly billDate, CancellationToken cancellationToken)
         => numberingService.ReserveAsync(
-            new ReserveNumberRequest(
-                IdempotencyKey: $"draft:{billId:N}",
-                DocumentType: INumberingService.DocumentTypeSalesInvoice,
-                FiscalYear: InvoiceNumberFormatter.ComputeFiscalYear(billDate),
-                ReservedForReference: billId.ToString()),
+            INumberingService.DocumentTypeSalesInvoice,
+            InvoiceNumberFormatter.ComputeFiscalYear(billDate),
             cancellationToken);
 
     /// <summary>A new bill, pending, carrying the number just reserved for it.</summary>
@@ -365,7 +369,7 @@ internal sealed class BillLifecycleWorkflow(
         Guid showroomId,
         Guid? counterId,
         string billType,
-        ReserveNumberResponse reservation,
+        ReservedNumber reservation,
         DateTimeOffset now) => new()
         {
             Id = billId,

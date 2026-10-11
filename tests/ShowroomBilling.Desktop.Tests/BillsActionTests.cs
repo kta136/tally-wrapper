@@ -16,29 +16,15 @@ namespace ShowroomBilling.Desktop.Tests;
 public sealed class BillsActionTests
 {
     [Fact]
-    public async Task Void_asks_first_and_does_nothing_when_declined()
+    public async Task A_row_action_calls_the_api_and_reloads_the_list()
     {
-        var (vm, api, asked) = await LoadedAsync(answer: false, Summary("SR/25-26/0001"));
-
-        await vm.VoidRowCommand.ExecuteAsync(vm.Items[0]);
-
-        var question = Assert.Single(asked);
-        Assert.Equal("Confirm Void", question.Title);
-        Assert.Contains("SR/25-26/0001", question.Message);
-        Assert.True(question.IsWarning);
-        Assert.Empty(api.Calls);
-    }
-
-    [Fact]
-    public async Task Void_confirmed_calls_the_api_reports_it_and_reloads_the_list()
-    {
-        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"));
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001", BillStates.Failed));
         var billId = vm.Items[0].Id;
         var loadsBefore = api.SearchCount;
 
-        await vm.VoidRowCommand.ExecuteAsync(vm.Items[0]);
+        await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
 
-        Assert.Equal([$"void:{billId}"], api.Calls);
+        Assert.Equal([$"retry:{billId}"], api.Calls);
         Assert.Equal(loadsBefore + 1, api.SearchCount);
         Assert.False(vm.IsActing);
     }
@@ -46,18 +32,18 @@ public sealed class BillsActionTests
     [Fact]
     public async Task A_refused_action_shows_the_servers_reason()
     {
-        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"));
-        api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Bill is already voided.", null);
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001", BillStates.Failed));
+        api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Bill is already posted.", null);
         var statuses = new List<string>();
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(BillsViewModel.StatusMessage)) statuses.Add(vm.StatusMessage);
         };
 
-        await vm.VoidRowCommand.ExecuteAsync(vm.Items[0]);
+        await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
 
         // The reload that follows every action then writes its own summary.
-        Assert.Contains("Void failed: Bill is already voided.", statuses);
+        Assert.Contains("Retry failed: Bill is already posted.", statuses);
         Assert.False(vm.IsActing);
     }
 
@@ -107,24 +93,24 @@ public sealed class BillsActionTests
     }
 
     [Fact]
-    public async Task Void_selected_calls_once_per_row_and_stops_at_the_first_failure()
+    public async Task A_selection_action_calls_once_per_row_and_stops_at_the_first_failure()
     {
         var (vm, api, _) = await LoadedAsync(
             answer: true,
-            Summary("SR/25-26/0001"),
-            Summary("SR/25-26/0002"),
-            Summary("SR/25-26/0003"));
+            Summary("SR/25-26/0001", BillStates.Failed),
+            Summary("SR/25-26/0002", BillStates.Failed),
+            Summary("SR/25-26/0003", BillStates.Failed));
         vm.ToggleVisibleSelection(true);
         var ids = vm.Items.Select(x => x.Id).ToArray();
 
-        await vm.VoidSelectedCommand.ExecuteAsync(null);
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
 
-        Assert.Equal(ids.Select(id => $"void:{id}"), api.Calls);
+        Assert.Equal(ids.Select(id => $"retry:{id}"), api.Calls);
 
         api.Calls.Clear();
-        api.FailWith = new ApiException(HttpStatusCode.Conflict, null, "Bill is already voided.", null);
+        api.FailWith = new ApiException(HttpStatusCode.Conflict, null, "Bill is already posted.", null);
         vm.ToggleVisibleSelection(true);
-        await vm.VoidSelectedCommand.ExecuteAsync(null);
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
 
         Assert.Single(api.Calls);
     }
@@ -198,14 +184,89 @@ public sealed class BillsActionTests
     [Fact]
     public async Task Without_a_confirm_overlay_nothing_destructive_runs()
     {
-        var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001")]) };
+        var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001", BillStates.Posted)]) };
         var vm = new BillsViewModel(api);
         await vm.LoadAsync();
 
-        await vm.VoidRowCommand.ExecuteAsync(vm.Items[0]);
+        await vm.RepostRowCommand.ExecuteAsync(vm.Items[0]);
 
         Assert.Empty(api.Calls);
         Assert.Equal("Confirmation prompt is not wired.", vm.StatusMessage);
+
+        var billId = Guid.NewGuid();
+        api.GetResponse = FakeBillsApi.Bill(billId);
+        var details = new BillDetailsViewModel(api);
+        await details.LoadAsync(billId);
+        api.Calls.Clear();
+
+        await details.VoidCommand.ExecuteAsync(null);
+
+        Assert.Empty(api.Calls);
+    }
+
+    [Fact]
+    public async Task Editing_a_posted_bill_asks_for_admin_first_and_stops_if_it_is_declined()
+    {
+        var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001", BillStates.Posted)]) };
+        var tokens = new AdminTokenStore();
+        var opened = new List<Guid>();
+        var prompts = 0;
+        var vm = new BillsViewModel(api, tokens)
+        {
+            EditBillHandler = (id, _) =>
+            {
+                opened.Add(id);
+                return Task.CompletedTask;
+            },
+            AdminUnlockHandler = _ =>
+            {
+                prompts++;
+                return Task.CompletedTask;
+            }
+        };
+        await vm.LoadAsync();
+
+        await vm.EditRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal(1, prompts);
+        Assert.Empty(opened);
+        Assert.Equal("SR/25-26/0001 is posted; editing it needs admin unlock.", vm.StatusMessage);
+
+        vm.AdminUnlockHandler = _ =>
+        {
+            tokens.Set(new AdminUnlockResponse("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "test"));
+            return Task.CompletedTask;
+        };
+        await vm.EditRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal([vm.Items[0].Id], opened);
+    }
+
+    [Fact]
+    public async Task Editing_a_pending_bill_does_not_ask_for_admin()
+    {
+        var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001")]) };
+        var opened = new List<Guid>();
+        var prompts = 0;
+        var vm = new BillsViewModel(api, new AdminTokenStore())
+        {
+            EditBillHandler = (id, _) =>
+            {
+                opened.Add(id);
+                return Task.CompletedTask;
+            },
+            AdminUnlockHandler = _ =>
+            {
+                prompts++;
+                return Task.CompletedTask;
+            }
+        };
+        await vm.LoadAsync();
+
+        await vm.EditRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal(0, prompts);
+        Assert.Equal([vm.Items[0].Id], opened);
     }
 
     [Fact]
@@ -255,7 +316,35 @@ public sealed class BillsActionTests
     }
 
     [Fact]
-    public async Task Details_loads_the_bill_its_posting_status_and_its_timeline()
+    public async Task Details_void_asks_first_and_does_nothing_when_declined()
+    {
+        var (details, api, asked) = await DetailsLoadedAsync(answer: false);
+
+        await details.VoidCommand.ExecuteAsync(null);
+
+        var question = Assert.Single(asked);
+        Assert.Equal("Confirm Void", question.Title);
+        Assert.Contains("SR/25-26/0001", question.Message);
+        Assert.True(question.IsWarning);
+        Assert.Empty(api.Calls);
+        Assert.Equal(BillStates.Pending, details.Bill?.State);
+    }
+
+    [Fact]
+    public async Task Details_void_confirmed_voids_the_bill()
+    {
+        var (details, api, _) = await DetailsLoadedAsync(answer: true);
+        var billId = details.Bill!.Id;
+
+        await details.VoidCommand.ExecuteAsync(null);
+
+        Assert.Contains($"void:{billId}", api.Calls);
+        Assert.Equal(BillStates.Voided, details.Bill?.State);
+        Assert.Equal("Bill voided.", details.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Details_loads_the_bill_and_its_timeline()
     {
         var billId = Guid.NewGuid();
         var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, BillStates.Failed) };
@@ -265,11 +354,29 @@ public sealed class BillsActionTests
 
         Assert.Equal(billId, details.Bill?.Id);
         Assert.Equal(
-            new[] { $"audit:{billId}", $"get:{billId}", $"posting-status:{billId}" },
+            new[] { $"audit:{billId}", $"get:{billId}" },
             api.Calls.Order());
         Assert.Equal(string.Empty, details.StatusMessage);
         Assert.True(details.RetryCommand.CanExecute(null));
         Assert.False(details.PushCommand.CanExecute(null));
+    }
+
+    private static async Task<(BillDetailsViewModel Details, FakeBillsApi Api, List<ConfirmRequest> Asked)> DetailsLoadedAsync(bool answer)
+    {
+        var billId = Guid.NewGuid();
+        var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId) };
+        var asked = new List<ConfirmRequest>();
+        var details = new BillDetailsViewModel(api)
+        {
+            ConfirmHandler = request =>
+            {
+                asked.Add(request);
+                return Task.FromResult(answer);
+            }
+        };
+        await details.LoadAsync(billId);
+        api.Calls.Clear();
+        return (details, api, asked);
     }
 
     private static async Task<(BillsViewModel Vm, FakeBillsApi Api, List<ConfirmRequest> Asked)> LoadedAsync(

@@ -195,7 +195,6 @@ public sealed record ChangeBillNumberResponse(
     bool Committed,
     bool LeavesGap,
     bool TallyDiverges,
-    bool ReservationOrphaned,
     long? SequenceNextValue,
     string? WarningSummary);
 

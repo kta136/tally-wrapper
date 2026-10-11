@@ -20,6 +20,4 @@ public static class PaymentMode
             ? Cash
             : CreditDebit;
     }
-
-    public static bool IsCash(string? value) => Normalize(value) == Cash;
 }

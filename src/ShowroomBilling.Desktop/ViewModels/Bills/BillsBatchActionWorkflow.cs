@@ -66,37 +66,6 @@ internal sealed class BillsBatchActionWorkflow(
             cancellationToken);
     }
 
-    internal async Task VoidSelectedAsync(CancellationToken cancellationToken)
-    {
-        if (billsApi is null) return;
-        var rows = runner.SelectedRows();
-        if (rows.Count == 0) return;
-        if (!await runner.ConfirmAsync(BillConfirmations.Void($"{rows.Count} bill(s)"))) return;
-
-        await runner.ForEachRowAsync(
-            rows,
-            "Voiding",
-            "Void stopped",
-            row => billsApi.VoidAsync(row.Id, new VoidBillRequest("Voided from Bills tab"), cancellationToken),
-            count => $"Voided {count} bill(s).",
-            cancellationToken);
-    }
-
-    internal async Task ReviseSelectedAsync(CancellationToken cancellationToken)
-    {
-        if (billsApi is null) return;
-        var rows = runner.SelectedRows();
-        if (rows.Count == 0) return;
-
-        await runner.ForEachRowAsync(
-            rows,
-            "Revising",
-            "Revise stopped",
-            row => billsApi.ReviseAsync(row.Id, new ReviseBillRequest(null), cancellationToken),
-            count => $"Revised {count} bill(s).",
-            cancellationToken);
-    }
-
     internal async Task RepostSelectedAsync(CancellationToken cancellationToken)
     {
         if (billsApi is null) return;

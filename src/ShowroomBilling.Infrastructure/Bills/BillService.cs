@@ -50,8 +50,9 @@ public sealed class BillService : IBillService
     public Task<BillResponse> UpdateDraftAsync(
         Guid billId,
         UpdateBillDraftRequest request,
+        bool callerIsAdmin = false,
         CancellationToken cancellationToken = default)
-        => _lifecycle.UpdateDraftAsync(billId, request, cancellationToken);
+        => _lifecycle.UpdateDraftAsync(billId, request, callerIsAdmin, cancellationToken);
 
     public Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
         => _read.GetAsync(billId, cancellationToken);

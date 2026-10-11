@@ -6,6 +6,7 @@ using ShowroomBilling.Infrastructure.Persistence.CompiledModels;
 namespace ShowroomBilling.Tests.Postgres;
 
 [Collection(PostgresCollection.Name)]
+[Trait("Category", "Postgres")]
 public sealed class CompiledModelPostgresTests(PostgresFixture fixture)
 {
     /// <summary>
@@ -13,7 +14,6 @@ public sealed class CompiledModelPostgresTests(PostgresFixture fixture)
     /// which uses the precompiled model.
     /// </summary>
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task Migrate_WorksThroughAContextOnThePrecompiledModel()
     {
         await using var database = await fixture.CreateDatabaseAtMigrationAsync("20261009153701_BillRowVersion");
@@ -29,7 +29,6 @@ public sealed class CompiledModelPostgresTests(PostgresFixture fixture)
 
     /// <summary>The API runs on the precompiled model; exercise the bill workflow through it.</summary>
     [Fact]
-    [Trait("Category", "Postgres")]
     public async Task BillWorkflow_RunsOnThePrecompiledModel()
     {
         await using var database = await fixture.CreateDatabaseAsync();

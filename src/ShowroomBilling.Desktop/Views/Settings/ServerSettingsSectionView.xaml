@@ -1,0 +1,58 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.ServerSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+        <TextBlock Text="Server" Style="{StaticResource SectionHeader}" Margin="0,0,0,6" />
+        <TextBlock FontSize="{DynamicResource FontSizeLabel}"
+                   Foreground="{StaticResource InkMutedBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12"
+                   Text="This workstation works against the Tally Wrapper server on the Tally PC. That server holds the database connection and talks to Tally; both are set from the tray on the server itself." />
+
+        <Border Style="{StaticResource Panel}" Padding="14,11" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="SERVER ADDRESS" />
+                <TextBox Text="{Binding ServerAddress, UpdateSourceTrigger=PropertyChanged}"
+                         FontFamily="{StaticResource MonoFontFamily}"
+                         FontSize="{DynamicResource FontSizeMono}" />
+                <TextBlock FontSize="{DynamicResource FontSizeSm}"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           TextWrapping="Wrap"
+                           Margin="0,7,0,9">
+                    <Run Text="In use now:" />
+                    <Run Text="{Binding CurrentServerAddress, Mode=OneWay}" FontFamily="{StaticResource MonoFontFamily}" />
+                    <Run Text="· A change applies after Billing restarts." />
+                </TextBlock>
+
+                <WrapPanel>
+                    <Button Style="{StaticResource BtnSm}"
+                            Content="Test server"
+                            Command="{Binding TestCommand}"
+                            Margin="0,0,7,0" />
+                    <Button Style="{StaticResource BtnSm}"
+                            Content="Find server"
+                            Command="{Binding FindCommand}"
+                            Margin="0,0,7,0" />
+                    <Button Style="{StaticResource BtnPrimary}"
+                            Content="Save and restart Billing"
+                            Command="{Binding SaveCommand}" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource AdminBannerInfo}"
+                Visibility="{Binding HasStatus, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="{Binding Status}"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource InfoInkBrush}" />
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -1,4 +1,3 @@
-using System.IO;
 using ShowroomBilling.Contracts;
 using ShowroomBilling.Contracts.Device;
 using ShowroomBilling.Desktop.Configuration;
@@ -23,7 +22,6 @@ public sealed class TestIsolationTests
             AppPaths.DataDirectory,
             AppPaths.LogsDirectory,
             AppPaths.LocalDirectory,
-            DesktopLocalDatabaseOverrideStore.ConfigPath,
             DesktopBootstrapLocalOverrideStore.ConfigPath,
             SetupWizardCompletionStore.FilePath,
             SettingsFolderLauncher.AppDataFolderPath,
@@ -35,11 +33,10 @@ public sealed class TestIsolationTests
     }
 
     [Fact]
-    public void A_settings_screen_built_in_a_test_holds_no_saved_database_connection()
+    public void A_settings_screen_built_in_a_test_points_at_no_real_server()
     {
         var settings = new SettingsViewModel();
 
-        Assert.Equal(string.Empty, settings.Database.DatabaseConnectionString);
-        Assert.False(File.Exists(DesktopLocalDatabaseOverrideStore.ConfigPath));
+        Assert.Equal("http://localhost:5107", settings.Server.ServerAddress);
     }
 }

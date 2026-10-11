@@ -11,7 +11,6 @@ using Microsoft.Extensions.Options;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
-using ShowroomBilling.Desktop.Services.ProcessSupervision;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Bills;
@@ -59,14 +58,6 @@ public partial class App : System.Windows.Application
         var totalTimer = Stopwatch.StartNew();
         var phaseTimer = Stopwatch.StartNew();
 
-        // If the publish-prod build embedded the API as a zipped resource inside
-        // this exe, extract it now (before the host binds ChildProcessOptions) and
-        // override the configured API path so ChildProcessSupervisor spawns the
-        // extracted copy instead of looking for a sibling folder.
-        var embeddedApi = EmbeddedApiExtractor.ExtractIfPresent();
-        var embeddedExtractMs = phaseTimer.ElapsedMilliseconds;
-        phaseTimer.Restart();
-
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {
             ApplicationName = typeof(App).Assembly.GetName().Name,
@@ -93,28 +84,15 @@ public partial class App : System.Windows.Application
             .AddInMemoryCollection(DesktopBootstrapLocalOverrideStore.LoadConfigurationPairs())
             .AddEnvironmentVariables(prefix: "SHOWROOM_DESKTOP_");
 
-        if (embeddedApi is not null)
-        {
-            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ChildProcesses:Api:ExecutablePath"] = embeddedApi.ApiExePath,
-                ["ChildProcesses:Api:WorkingDirectory"] = embeddedApi.WorkingDirectory,
-            });
-        }
-
         builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "desktop");
 
         builder.Services.Configure<DesktopBootstrapOptions>(builder.Configuration.GetSection(DesktopBootstrapOptions.SectionName));
-        builder.Services.Configure<ChildProcessOptions>(builder.Configuration.GetSection(ChildProcessOptions.SectionName));
         builder.Services.AddSingleton<IApiEndpointResolver, ApiEndpointResolver>();
         builder.Services.AddSingleton<DesktopDeviceIdentityStore>();
-        builder.Services.AddSingleton<ChildProcessSupervisor>();
-        builder.Services.AddSingleton<IChildProcessSupervisor>(sp => sp.GetRequiredService<ChildProcessSupervisor>());
         builder.Services.AddSingleton<ISetupWizardCompletionStore, SetupWizardCompletionStore>();
         builder.Services.AddSingleton<DeviceTokenProvider>();
         builder.Services.AddTransient<CorrelationIdHandler>();
         builder.Services.AddTransient<DeviceTokenHandler>();
-        builder.Services.AddApiClient<IRuntimeApiClient, RuntimeApiClient>();
         builder.Services.AddApiClient<ISettingsApiClient, SettingsApiClient>();
         builder.Services.AddApiClient<IBillsApiClient, BillsApiClient>();
         builder.Services.AddApiClient<INumberingApiClient, NumberingApiClient>();
@@ -125,7 +103,7 @@ public partial class App : System.Windows.Application
         builder.Services.AddApiClient<IClientPresenceApiClient, ClientPresenceApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddHostedService<ClientPresenceHeartbeatService>();
         builder.Services.AddSingleton<AdminTokenStore>();
-        // Set by MainWindow.OnLoaded after the API child is reachable; awaited
+        // Set by MainWindow.OnLoaded once the API has been given a moment to answer; awaited
         // by InvoiceViewModel.RefreshNextNumberAsync(waitForApi: true) so the
         // first numbering preview lands on a hot connection.
         builder.Services.AddSingleton<IApiReadinessSignal, ApiReadinessSignal>();
@@ -140,7 +118,8 @@ public partial class App : System.Windows.Application
             sp.GetService<IBillsApiClient>(),
             sp.GetService<INumberingApiClient>(),
             sp.GetService<SettingsViewModel>(),
-            sp.GetService<IApiReadinessSignal>()));
+            sp.GetService<IApiReadinessSignal>(),
+            sp.GetService<AdminTokenStore>()));
         builder.Services.AddSingleton(sp => new BillsViewModel(
             sp.GetService<IBillsApiClient>(),
             sp.GetService<AdminTokenStore>()));
@@ -153,10 +132,6 @@ public partial class App : System.Windows.Application
             sp.GetService<IPrintAssetApiClient>(),
             sp.GetService<IPrintDispatcher>(),
             sp.GetService<IPrintPreferencesStore>(),
-            sp.GetService<IRuntimeApiClient>(),
-            sp.GetService<IHealthApiClient>(),
-            sp.GetService<AdminTokenStore>(),
-            sp.GetService<IChildProcessSupervisor>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DesktopBootstrapOptions>>().Value));
         builder.Services.AddSingleton<AdminUnlockViewModel>();
         builder.Services.AddSingleton(sp => new ViewModels.SyntheticBatch.SyntheticBatchViewModel(
@@ -164,10 +139,7 @@ public partial class App : System.Windows.Application
             sp.GetService<AdminTokenStore>(),
             sp.GetService<SettingsViewModel>()));
         builder.Services.AddSingleton(sp => new SetupWizardViewModel(
-            sp.GetRequiredService<IRuntimeApiClient>(),
-            sp.GetRequiredService<IHealthApiClient>(),
             sp.GetRequiredService<ISettingsApiClient>(),
-            sp.GetService<IChildProcessSupervisor>(),
             sp.GetRequiredService<ISetupWizardCompletionStore>()));
         builder.Services.AddSingleton<MainWindowViewModel>();
         builder.Services.AddSingleton<MainWindow>();
@@ -183,11 +155,6 @@ public partial class App : System.Windows.Application
         var hostStartMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
 
-        // Materialize the device token and spawn the API child while WPF resolves
-        // MainWindow. The order inside the worker is still important: the API
-        // child reads the token file during its own startup.
-        var apiChildStartupTask = StartApiChildAsync(_host.Services);
-
         var window = _host.Services.GetRequiredService<MainWindow>();
         var resolveWindowMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
@@ -195,19 +162,13 @@ public partial class App : System.Windows.Application
         var showWindowMs = phaseTimer.ElapsedMilliseconds;
         var windowVisibleMs = totalTimer.ElapsedMilliseconds;
 
-        var apiChildStartup = await apiChildStartupTask;
-
         var startupLogger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
         startupLogger.LogInformation(
-            "[startup-timing] embeddedExtract={EmbeddedExtractMs}ms hostBuild={HostBuildMs}ms hostStart={HostStartMs}ms resolveWindow={ResolveWindowMs}ms showWindow={ShowWindowMs}ms deviceToken={DeviceTokenMs}ms supervisor={SupervisorMs}ms apiChildStarted={ApiChildStarted} windowVisibleAt={WindowVisibleMs}ms",
-            embeddedExtractMs,
+            "[startup-timing] hostBuild={HostBuildMs}ms hostStart={HostStartMs}ms resolveWindow={ResolveWindowMs}ms showWindow={ShowWindowMs}ms windowVisibleAt={WindowVisibleMs}ms",
             hostBuildMs,
             hostStartMs,
             resolveWindowMs,
             showWindowMs,
-            apiChildStartup.DeviceTokenMs,
-            apiChildStartup.SupervisorMs,
-            apiChildStartup.Succeeded,
             windowVisibleMs);
     }
 
@@ -242,49 +203,12 @@ public partial class App : System.Windows.Application
         Shutdown(-1);
     }
 
-    private static Task<ApiChildStartupTiming> StartApiChildAsync(IServiceProvider services)
-        => Task.Run(() =>
-        {
-            var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-            var spawnTimer = Stopwatch.StartNew();
-            long deviceTokenMs = 0;
-
-            try
-            {
-                var endpoint = services.GetRequiredService<IApiEndpointResolver>();
-                if (endpoint.IsServerMode)
-                {
-                    return new ApiChildStartupTiming(deviceTokenMs, spawnTimer.ElapsedMilliseconds, Succeeded: true);
-                }
-
-                services.GetRequiredService<DeviceTokenProvider>().GetOrCreateToken();
-                deviceTokenMs = spawnTimer.ElapsedMilliseconds;
-                spawnTimer.Restart();
-
-                // Spawn the API as a child inside a Windows Job Object.
-                // KillOnJobClose guarantees it dies when this process exits (even on crash).
-                services.GetRequiredService<ChildProcessSupervisor>().Start();
-                return new ApiChildStartupTiming(deviceTokenMs, spawnTimer.ElapsedMilliseconds, Succeeded: true);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed while preparing the device token or starting the API child process.");
-                return new ApiChildStartupTiming(deviceTokenMs, spawnTimer.ElapsedMilliseconds, Succeeded: false);
-            }
-        });
-
-    private readonly record struct ApiChildStartupTiming(long DeviceTokenMs, long SupervisorMs, bool Succeeded);
-
     protected override void OnExit(ExitEventArgs e)
     {
         if (_host is not null)
         {
-            // Disposing the supervisor first closes the Job Object handle,
-            // which terminates every spawned API child via KillOnJobClose.
-            // Must run synchronously so WPF doesn't tear down the process
-            // before the API and hosted services have stopped.
-            try { _host.Services.GetRequiredService<ChildProcessSupervisor>().Dispose(); } catch { }
-
+            // Synchronously, so WPF doesn't tear down the process before the
+            // hosted services have stopped.
             try { _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult(); } catch { }
             try { _host.Dispose(); } catch { }
         }
