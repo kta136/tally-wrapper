@@ -168,9 +168,7 @@ internal sealed class BillAdminWorkflow(
         // recent reservation) immediately reclaims the freed slot for the next
         // ReserveAsync. Without the rollback, NextValue would stay anchored past
         // the now-empty core and the next bill would skip 94 forever.
-        await using var transaction = dbContext.UsesInMemoryProvider()
-            ? null
-            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -187,10 +185,7 @@ internal sealed class BillAdminWorkflow(
                 keepCoreReserved: tallyDiverges ? oldCore : null);
         }
 
-        if (transaction is not null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
+        await transaction.CommitAsync(cancellationToken);
 
         // Re-read the sequence so the response reflects the post-rollback value
         // when the rename freed the trailing core.
@@ -332,9 +327,7 @@ internal sealed class BillAdminWorkflow(
         // Backref-clear + delete + sequence-rollback share one transaction so
         // a failed delete doesn't leave dangling cleared references on prior
         // bills, and a failed rollback doesn't leak an inconsistent NextValue.
-        await using var transaction = dbContext.UsesInMemoryProvider()
-            ? null
-            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         // Clear superseded-by back-references
         await ClearSupersededByReferencesAsync(billId, now, cancellationToken);
@@ -356,10 +349,7 @@ internal sealed class BillAdminWorkflow(
                 keepCoreReserved: inTally ? core : null);
         }
 
-        if (transaction is not null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
+        await transaction.CommitAsync(cancellationToken);
 
         return new DeleteBillResponse(
             BillId: billId,
@@ -413,23 +403,12 @@ internal sealed class BillAdminWorkflow(
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken)
     {
-        var query = dbContext.Bills.Where(b => b.SupersededByBillId == billId);
-        if (dbContext.UsesInMemoryProvider())
-        {
-            var rows = await query.ToListAsync(cancellationToken);
-            foreach (var row in rows)
-            {
-                row.SupersededByBillId = null;
-                row.UpdatedAtUtc = updatedAt;
-            }
-
-            return;
-        }
-
-        await query.ExecuteUpdateAsync(
-            setters => setters
-                .SetProperty(b => b.SupersededByBillId, (Guid?)null)
-                .SetProperty(b => b.UpdatedAtUtc, updatedAt),
-            cancellationToken);
+        await dbContext.Bills
+            .Where(b => b.SupersededByBillId == billId)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(b => b.SupersededByBillId, (Guid?)null)
+                    .SetProperty(b => b.UpdatedAtUtc, updatedAt),
+                cancellationToken);
     }
 }

@@ -65,28 +65,14 @@ public static class AbandonedPostingRecovery
         DateTimeOffset nowUtc,
         CancellationToken cancellationToken)
     {
-        int affected;
-        if (db.UsesInMemoryProvider())
-        {
-            var bill = await db.Bills.FirstOrDefaultAsync(b => b.Id == billId, cancellationToken);
-            affected = bill is { State: BillStates.Posting } && bill.UpdatedAtUtc == claimedAtUtc ? 1 : 0;
-            if (affected == 1)
-            {
-                bill!.State = BillStates.ReconciliationRequired;
-                bill.UpdatedAtUtc = nowUtc;
-            }
-        }
-        else
-        {
-            affected = await db.Bills
-                .Where(b => b.Id == billId
-                    && b.State == BillStates.Posting
-                    && b.UpdatedAtUtc == claimedAtUtc)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(b => b.State, BillStates.ReconciliationRequired)
-                    .SetProperty(b => b.UpdatedAtUtc, nowUtc),
-                    cancellationToken);
-        }
+        var affected = await db.Bills
+            .Where(b => b.Id == billId
+                && b.State == BillStates.Posting
+                && b.UpdatedAtUtc == claimedAtUtc)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.State, BillStates.ReconciliationRequired)
+                .SetProperty(b => b.UpdatedAtUtc, nowUtc),
+                cancellationToken);
 
         if (affected == 0)
         {

@@ -1,4 +1,4 @@
-# Shared by run-postgres-tests.ps1 and run-scratch.ps1: start a throwaway
+# Used by run-scratch.ps1: start a throwaway
 # PostgreSQL container on a Docker context and find out where it listens.
 # Dot-source it; it defines functions only.
 

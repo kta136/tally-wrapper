@@ -2,10 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class MasterSnapshotServiceTests
+public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     private const string ShowroomCode = "DEV-SHOWROOM";
 
@@ -46,7 +47,10 @@ public sealed class MasterSnapshotServiceTests
             ShowroomCode, DateTimeOffset.UtcNow,
             [new CompanySnapshotItem("ACME Jewellers", true)]));
 
-        var batches = await db.TallyMasterSnapshotBatches.ToListAsync();
+        // A second context: the first still tracks the old batch as it was
+        // loaded, and the service supersedes it with a set-based update.
+        await using var stored = CreateDbContext();
+        var batches = await stored.TallyMasterSnapshotBatches.ToListAsync();
         Assert.Equal(2, batches.Count);
         Assert.Single(batches, b => b.Status == "active" && b.Id.ToString() == latest.BatchId);
         Assert.Single(batches, b => b.Status == "superseded");
@@ -136,13 +140,5 @@ public sealed class MasterSnapshotServiceTests
         Assert.Empty(read.Companies);
         Assert.Equal("missing", read.Metadata.Freshness);
         Assert.Null(read.Metadata.BatchId);
-    }
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ShowroomBillingDbContext(options);
     }
 }

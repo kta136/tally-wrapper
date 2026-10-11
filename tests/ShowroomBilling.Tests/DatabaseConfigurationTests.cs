@@ -18,6 +18,7 @@ using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests;
 
@@ -45,6 +46,7 @@ public sealed class PoolDefaultsTests
     }
 }
 
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class DatabaseConfigurationTests
 {
     [Fact]

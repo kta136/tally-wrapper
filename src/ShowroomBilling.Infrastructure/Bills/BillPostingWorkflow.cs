@@ -191,53 +191,41 @@ internal sealed class BillPostingWorkflow(
         //      Tally round-trip, so StuckPostingRecoveryHostedService can heal
         //      a stuck row if the API crashes mid-call. Do NOT wrap this flip
         //      and the Tally call in a single transaction.
-        if (dbContext.UsesInMemoryProvider())
-        {
-            // ExecuteUpdateAsync is not reliably supported on the InMemory provider
-            // used in unit tests, and those tests don't simulate real concurrency
-            // (see CLAUDE.md "Test-harness reality"). Fall back to the original
-            // mutate-then-save pattern for the in-memory code path only.
-            bill.State = BillStates.Posting;
-            bill.UpdatedAtUtc = now;
-        }
-        else
-        {
-            var claimedRevisionId = currentRevision.Id;
-            var rowsAffected = await dbContext.Bills
-                .Where(b => b.Id == billId
-                    && b.CurrentRevisionId == claimedRevisionId
-                    && (b.State == BillStates.Pending
-                        || b.State == BillStates.Draft
-                        || b.State == BillStates.Failed
-                        || allowPostedSource && b.State == BillStates.Posted))
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(b => b.State, BillStates.Posting)
-                    .SetProperty(b => b.UpdatedAtUtc, now),
-                    cancellationToken);
+        var claimedRevisionId = currentRevision.Id;
+        var rowsAffected = await dbContext.Bills
+            .Where(b => b.Id == billId
+                && b.CurrentRevisionId == claimedRevisionId
+                && (b.State == BillStates.Pending
+                    || b.State == BillStates.Draft
+                    || b.State == BillStates.Failed
+                    || allowPostedSource && b.State == BillStates.Posted))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.State, BillStates.Posting)
+                .SetProperty(b => b.UpdatedAtUtc, now),
+                cancellationToken);
 
-            if (rowsAffected == 0)
+        if (rowsAffected == 0)
+        {
+            // Another concurrent push won the flip (or state drifted).
+            // Reload and return whatever is current; caller sees the same
+            // shape as the "already posting" short-circuit above.
+            dbContext.ChangeTracker.Clear();
+            var refreshed = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
+            if (refreshed.CurrentRevisionId != claimedRevisionId
+                && refreshed.State is not BillStates.Posting)
             {
-                // Another concurrent push won the flip (or state drifted).
-                // Reload and return whatever is current; caller sees the same
-                // shape as the "already posting" short-circuit above.
-                dbContext.ChangeTracker.Clear();
-                var refreshed = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-                if (refreshed.CurrentRevisionId != claimedRevisionId
-                    && refreshed.State is not BillStates.Posting)
-                {
-                    throw new BillStateConflictException(
-                        $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' was edited while the push was starting. Review the latest version and push again.");
-                }
-                var refreshedRevision = refreshed.CurrentRevisionId is Guid rid
-                    ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == rid, cancellationToken)
-                    : null;
-                return BillSerialization.MapResponse(refreshed, refreshedRevision);
+                throw new BillStateConflictException(
+                    $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' was edited while the push was starting. Review the latest version and push again.");
             }
-
-            // Sync tracked entity snapshot with the row we just updated so the
-            // final settle-state SaveChanges does not replay the posting flip.
-            await dbContext.Entry(bill).ReloadAsync(CancellationToken.None);
+            var refreshedRevision = refreshed.CurrentRevisionId is Guid rid
+                ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == rid, cancellationToken)
+                : null;
+            return BillSerialization.MapResponse(refreshed, refreshedRevision);
         }
+
+        // Sync tracked entity snapshot with the row we just updated so the
+        // final settle-state SaveChanges does not replay the posting flip.
+        await dbContext.Entry(bill).ReloadAsync(CancellationToken.None);
 
         using var claimCts = new CancellationTokenSource(SettleBudget, _timeProvider);
         var claimToken = claimCts.Token;

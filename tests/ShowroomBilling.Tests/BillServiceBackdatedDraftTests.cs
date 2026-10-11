@@ -5,10 +5,11 @@ using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class BillServiceBackdatedDraftTests
+public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task CreateBackdatedDraftAsync_UsesOverrideForBillAndAudit()
@@ -64,14 +65,6 @@ public sealed class BillServiceBackdatedDraftTests
     {
         var numbering = new NumberingService(db);
         return new BillService(db, numbering, new FakePoster());
-    }
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ShowroomBillingDbContext(options);
     }
 
     private sealed class FakePoster : ITallyPoster

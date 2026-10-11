@@ -94,12 +94,11 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             return MapReservation(existing, alreadyExisted: true);
         }
 
-        var isInMemory = dbContext.UsesInMemoryProvider();
         var ambientTransaction = dbContext.Database.CurrentTransaction;
 
         // If the caller already opened a transaction, enlist in it and leave
         // commit responsibility to them. Otherwise own the txn here.
-        await using var transaction = isInMemory || ambientTransaction is not null
+        await using var transaction = ambientTransaction is not null
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
@@ -195,18 +194,11 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext) : INumb
             ReservedAtUtc: reservation.ReservedAtUtc,
             AlreadyExisted: alreadyExisted);
 
-    private bool IsRetryableReservationConflict(DbUpdateException exception)
-    {
-        if (dbContext.UsesInMemoryProvider())
-        {
-            return false;
-        }
-
-        return exception.GetBaseException() is PostgresException
+    private static bool IsRetryableReservationConflict(DbUpdateException exception) =>
+        exception.GetBaseException() is PostgresException
         {
             SqlState: PostgresErrorCodes.UniqueViolation
         };
-    }
 
     /// <summary>
     /// The invoice prefix, suffix and padding a fresh reservation uses. Public

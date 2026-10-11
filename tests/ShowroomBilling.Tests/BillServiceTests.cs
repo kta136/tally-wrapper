@@ -11,10 +11,11 @@ using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class BillServiceTests
+public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task GetMany_MoreThanTheLimit_IsRejectedInsteadOfSilentlyCutShort()
@@ -1570,14 +1571,6 @@ public sealed class BillServiceTests
             poster ?? new FakeTallyPoster(),
             tallyHealth ?? FakeTallyHealth.Healthy(),
             timeProvider: timeProvider);
-    }
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ShowroomBillingDbContext(options);
     }
 
     private static void AssertVersion7(Guid id) =>

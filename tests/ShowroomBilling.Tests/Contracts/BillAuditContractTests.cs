@@ -2,15 +2,17 @@ using System.Net;
 using System.Net.Http.Json;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Device;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests.Contracts;
 
-public sealed class BillAuditContractTests
+[Trait("Category", "Postgres")]
+public sealed class BillAuditContractTests(PostgresFixture postgres)
 {
     [Fact]
     public async Task DeviceAuthenticatedMutation_RecordsRequestActor()
     {
-        await using var factory = new TestApiFactory();
+        await using var factory = new TestApiFactory(postgres);
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add(DeviceTokenConstants.HeaderName, factory.GetDeviceToken());
         var total = 1_000m;

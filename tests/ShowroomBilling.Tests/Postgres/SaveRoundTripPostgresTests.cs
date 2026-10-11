@@ -9,7 +9,7 @@ namespace ShowroomBilling.Tests.Postgres;
 [Collection(PostgresCollection.Name)]
 public sealed class SaveRoundTripPostgresTests(PostgresFixture fixture)
 {
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task CreateDraft_SavesInOneBatchedWriteAfterItsLookups()
     {

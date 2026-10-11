@@ -3,10 +3,11 @@ using ShowroomBilling.Application;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.PrintAssets;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class PrintAssetServiceTests
+public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task UploadAsync_PersistsBytes_AndAssignsId()
@@ -143,12 +144,4 @@ public sealed class PrintAssetServiceTests
 
     private static byte[] PngBytes(byte payload) =>
         [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, payload];
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ShowroomBillingDbContext(options);
-    }
 }

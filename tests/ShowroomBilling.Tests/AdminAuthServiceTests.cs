@@ -4,10 +4,11 @@ using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Infrastructure.Admin;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class AdminAuthServiceTests
+public sealed class AdminAuthServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task GetPasscodeStatusAsync_ReturnsFalse_WhenNoPasscodeConfigured()
@@ -136,14 +137,6 @@ public sealed class AdminAuthServiceTests
         var session = await service.ValidateTokenAsync("junk-token");
 
         Assert.Null(session);
-    }
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ShowroomBillingDbContext(options);
     }
 
     private static AdminAuthService CreateService(ShowroomBillingDbContext db) =>

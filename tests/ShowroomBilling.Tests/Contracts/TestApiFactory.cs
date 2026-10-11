@@ -5,11 +5,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Bills;
@@ -18,19 +17,21 @@ using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Masters;
-using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests.Contracts;
 
 /// <summary>
 /// Boots the real API in-process for contract tests via Microsoft.AspNetCore.Mvc.Testing.
 ///
-/// Three things are stubbed so the boot doesn't need real infrastructure:
-/// 1. The DbContext is swapped to InMemory so hosted services don't try to
-///    reach Postgres. (DB-touching contract tests would need Testcontainers;
-///    the current tests only validate HTTP wire shapes.)
-/// 2. <c>AutoMigrateOnStartup</c> is forced false so the migration hosted
-///    service no-ops cleanly.
+/// Three things are set up so the boot needs nothing outside the test run:
+/// 1. The API's <see cref="NpgsqlDataSource"/> is replaced with one for a
+///    database of this factory's own on the test PostgreSQL server (see
+///    <see cref="PostgresFixture"/>). The context and the readiness check both
+///    use that registration, so nothing in the API can reach another database,
+///    whatever connection string the machine's configuration holds.
+/// 2. <c>AutoMigrateOnStartup</c> is forced false: the database is created
+///    already migrated.
 /// 3. <see cref="ITallyMasterRefresher"/> is replaced with
 ///    <see cref="StubTallyMasterRefresher"/> so the refresh endpoint
 ///    returns deterministic results without dialing Tally.
@@ -42,24 +43,27 @@ namespace ShowroomBilling.Tests.Contracts;
 public sealed class TestApiFactory : WebApplicationFactory<Program>
 {
     private readonly IReadOnlyDictionary<string, string?> _extraConfiguration;
-    private readonly string _databaseName = $"contract-test-{Guid.NewGuid():N}";
+    private readonly PostgresFixture _postgres;
+    private PostgresFixture.PostgresTestDatabase? _database;
     private readonly string _deviceTokenRoot = Path.Combine(
         Path.GetTempPath(),
         $"tally-wrapper-contract-{Guid.NewGuid():N}");
 
-    public TestApiFactory()
-        : this(new Dictionary<string, string?>())
+    public TestApiFactory(PostgresFixture postgres)
+        : this(postgres, new Dictionary<string, string?>())
     {
     }
 
-    internal TestApiFactory(IReadOnlyDictionary<string, string?> extraConfiguration)
+    internal TestApiFactory(PostgresFixture postgres, IReadOnlyDictionary<string, string?> extraConfiguration)
     {
+        _postgres = postgres;
         _extraConfiguration = extraConfiguration;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        var database = _database ??= _postgres.CreateDatabase();
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
@@ -73,11 +77,8 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
-            services.RemoveAll<ShowroomBillingDbContext>();
-            services.RemoveAll<DbContextOptions<ShowroomBillingDbContext>>();
-            services.RemoveAll<IDbContextOptionsConfiguration<ShowroomBillingDbContext>>();
-            services.AddDbContext<ShowroomBillingDbContext>(options =>
-                options.UseInMemoryDatabase(_databaseName));
+            services.RemoveAll<NpgsqlDataSource>();
+            services.AddSingleton(_ => NpgsqlDataSource.Create(database.ConnectionString));
 
             services.RemoveAll<ITallyMasterRefresher>();
             services.AddScoped<ITallyMasterRefresher, StubTallyMasterRefresher>();
@@ -133,6 +134,10 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
         {
             return;
         }
+
+        // After the host: its data source is closed by then.
+        _database?.Dispose();
+        _database = null;
 
         try
         {

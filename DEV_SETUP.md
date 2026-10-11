@@ -116,29 +116,25 @@ dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserr
 .\tools\Test-Coverage.ps1 -NoBuild
 ```
 
-`Test-Coverage.ps1` builds by default when used on its own; pass `-NoBuild` only after building the same configuration. CI publishes TRX and Cobertura artifacts, enforces a 64% line floor on hand-written code (generated EF migrations and the compiled model are excluded, the two test projects' reports are merged per source line, and the floor is the script's default), and runs the Postgres category in a separate Ubuntu/Docker job. Package versions are centrally pinned in `Directory.Packages.props`; the package-audit command must stay clean before dependency updates are merged.
+`Test-Coverage.ps1` builds by default when used on its own; pass `-NoBuild` only after building the same configuration. It runs both test projects, merges their reports per source line and enforces a 64% line floor on hand-written code (generated EF migrations and the compiled model are excluded; the floor is the script's default). CI splits that across three jobs: Windows builds and runs every test that needs no database (`-Tests WithoutDatabase`), Ubuntu runs the database tests (`-Tests DatabaseOnly`) because a Windows runner cannot run the PostgreSQL container, and a last job merges both halves' reports and enforces the floor (`-Tests None`). Each half publishes its TRX and Cobertura files as artifacts. Package versions are centrally pinned in `Directory.Packages.props`; the package-audit command must stay clean before dependency updates are merged.
 
-Postgres integration tests are opt-in because they require either a local Docker
-endpoint reachable by Testcontainers or an explicit remote Postgres test
-connection string. They create isolated test databases; they do not read local
-or production Oracle VPS connection strings.
+### Database tests
 
-```powershell
-.\tools\run-postgres-tests.ps1
-```
+Every test that touches the database runs on PostgreSQL 18, the production version; there is no in-memory stand-in. A plain `dotnet test` runs them with everything else. `PostgresFixture` starts one server for the run the first time a test asks for a database, migrates a template database once, and gives each test its own copy of it, dropped afterwards. The tests never read the local or production Oracle VPS connection strings.
 
-The script starts a temporary `postgres:18` container on the configured Docker
-context, matching production. It runs `Category=Postgres` and stops the
-container afterward. To run
-against an already-running remote Postgres instance instead:
+The server is the first of these that applies:
+
+1. `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`, when set: an already-running PostgreSQL 18 whose role may create databases, for example `Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=<password>`.
+2. A throwaway `postgres:18` container started with the `docker` command, when the current Docker context is a remote engine (`ssh://` or `tcp://`, such as the `proxmox-docker` context). Testcontainers can only drive a local engine. The container is stopped when the run ends, and stops itself after two hours if the run was killed.
+3. A Testcontainers container on the local Docker engine. This is what CI uses.
+
+With no Docker and no connection string the database tests fail, each saying what is missing; they are not skipped. They carry the trait `Category=Postgres`, so the two halves can be run separately:
 
 ```powershell
-$env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS='1'
-$env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=postgres'
 dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category=Postgres"
+dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category!=Postgres"
 ```
 
-If Docker Desktop is configured to use a remote SSH context, Testcontainers may still look for a local named pipe. Use `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION` or switch to a local Docker context in that case. The CI Postgres job is the authoritative relational check for `FOR UPDATE`, conditional updates, and unique-index-backed behavior.
 
 ## Run the API
 

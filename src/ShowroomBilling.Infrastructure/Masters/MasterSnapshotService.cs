@@ -257,9 +257,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         Action<TallyMasterSnapshotBatchEntity> addRows,
         CancellationToken cancellationToken)
     {
-        await using var transaction = dbContext.UsesInMemoryProvider()
-            ? null
-            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         try
         {
@@ -274,19 +272,13 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
 
             await FinalizeAsync(batch, cancellationToken);
 
-            if (transaction is not null)
-            {
-                await transaction.CommitAsync(cancellationToken);
-            }
+            await transaction.CommitAsync(cancellationToken);
 
             return MasterSnapshotMetadataFactory.AcceptedResponse(batch);
         }
         catch
         {
-            if (transaction is not null)
-            {
-                await transaction.RollbackAsync(CancellationToken.None);
-            }
+            await transaction.RollbackAsync(CancellationToken.None);
 
             dbContext.ChangeTracker.Clear();
             throw;
@@ -362,23 +354,11 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         string masterType,
         CancellationToken cancellationToken)
     {
-        var priorActive = dbContext.TallyMasterSnapshotBatches
-            .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType && x.Status == "active");
-
-        if (dbContext.UsesInMemoryProvider())
-        {
-            var rows = await priorActive.ToListAsync(cancellationToken);
-            foreach (var row in rows)
-            {
-                row.Status = "superseded";
-            }
-
-            return;
-        }
-
-        await priorActive.ExecuteUpdateAsync(
-            setters => setters.SetProperty(x => x.Status, "superseded"),
-            cancellationToken);
+        await dbContext.TallyMasterSnapshotBatches
+            .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType && x.Status == "active")
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(x => x.Status, "superseded"),
+                cancellationToken);
     }
 
     private async Task PruneSupersededBatchesAsync(
@@ -397,15 +377,9 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             return;
         }
 
-        var stale = dbContext.TallyMasterSnapshotBatches.Where(x => idsToDelete.Contains(x.Id));
-        if (dbContext.UsesInMemoryProvider())
-        {
-            dbContext.TallyMasterSnapshotBatches.RemoveRange(await stale.ToListAsync(cancellationToken));
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return;
-        }
-
-        await stale.ExecuteDeleteAsync(cancellationToken);
+        await dbContext.TallyMasterSnapshotBatches
+            .Where(x => idsToDelete.Contains(x.Id))
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     private static void ValidateCommon(string showroomCode)

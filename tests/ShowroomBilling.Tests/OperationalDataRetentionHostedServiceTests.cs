@@ -4,10 +4,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class OperationalDataRetentionHostedServiceTests
+public sealed class OperationalDataRetentionHostedServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task Purge_RemovesOnlyOperationalRowsOlderThanRetentionWindow()
@@ -15,10 +16,9 @@ public sealed class OperationalDataRetentionHostedServiceTests
         var now = DateTimeOffset.UtcNow;
         var staleSessionId = Guid.NewGuid();
         var currentSessionId = Guid.NewGuid();
-        var databaseName = Guid.NewGuid().ToString();
 
         var services = new ServiceCollection();
-        services.AddDbContext<ShowroomBillingDbContext>(options => options.UseInMemoryDatabase(databaseName));
+        services.AddDbContext<ShowroomBillingDbContext>(Database.Configure);
         await using var provider = services.BuildServiceProvider();
 
         await using (var seedScope = provider.CreateAsyncScope())

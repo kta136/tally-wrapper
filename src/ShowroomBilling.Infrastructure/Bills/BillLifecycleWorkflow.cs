@@ -162,9 +162,7 @@ internal sealed class BillLifecycleWorkflow(
         // The revised bill is a new bill and needs its own number, exactly
         // like a fresh draft. Reservation, new bill, supersession and audit
         // commit together so a failure leaves the original bill untouched.
-        await using var transaction = dbContext.UsesInMemoryProvider()
-            ? null
-            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var reservation = await ReserveNumberAsync(newBillId, payload.BillDate, cancellationToken);
 
@@ -197,10 +195,7 @@ internal sealed class BillLifecycleWorkflow(
             });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (transaction is not null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
+        await transaction.CommitAsync(cancellationToken);
 
         return BillSerialization.MapResponse(newBill, newRevision);
     }
@@ -307,9 +302,8 @@ internal sealed class BillLifecycleWorkflow(
         return BillSerialization.MapResponse(existing, current);
     }
 
-    private bool IsUniqueViolation(DbUpdateException exception) =>
-        !dbContext.UsesInMemoryProvider()
-        && exception.GetBaseException() is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation };
+    private static bool IsUniqueViolation(DbUpdateException exception) =>
+        exception.GetBaseException() is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation };
 
     private async Task<BillResponse> CreateNewDraftAsync(
         CreateBillDraftRequest request,
@@ -321,9 +315,7 @@ internal sealed class BillLifecycleWorkflow(
 
         // Reservation + bill/revision/audit share one transaction so a failed
         // bill persist doesn't leave an orphaned reserved number behind.
-        await using var transaction = dbContext.UsesInMemoryProvider()
-            ? null
-            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var reservation = await ReserveNumberAsync(billId, request.Payload.BillDate, cancellationToken);
 
@@ -348,10 +340,7 @@ internal sealed class BillLifecycleWorkflow(
             });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        if (transaction is not null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
+        await transaction.CommitAsync(cancellationToken);
 
         return BillSerialization.MapResponse(bill, revision);
     }

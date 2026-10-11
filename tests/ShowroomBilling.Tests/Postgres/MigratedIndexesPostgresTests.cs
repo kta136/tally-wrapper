@@ -11,7 +11,7 @@ public sealed class MigratedIndexesPostgresTests(PostgresFixture fixture)
     /// Catches a migration EF cannot discover (missing [Migration] attribute
     /// or Designer file): the model would list indexes no database has.
     /// </summary>
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task EveryIndexInTheModelExistsAfterMigrating()
     {

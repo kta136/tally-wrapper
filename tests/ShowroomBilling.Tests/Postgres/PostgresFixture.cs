@@ -3,157 +3,174 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using ShowroomBilling.Infrastructure.Persistence;
-using Testcontainers.PostgreSql;
+using ShowroomBilling.Tests.Postgres;
+
+[assembly: AssemblyFixture(typeof(PostgresFixture))]
 
 namespace ShowroomBilling.Tests.Postgres;
 
+/// <summary>
+/// Keeps the tests that race several connections against each other (the
+/// classes in this folder) from running at the same time as one another.
+/// </summary>
 [CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
+public sealed class PostgresCollection
 {
     public const string Name = "Postgres";
 }
 
-public sealed class PostgresFixture : IAsyncLifetime
+/// <summary>
+/// One PostgreSQL 18 server for the whole test run, shared by every test
+/// class that asks for this fixture. Nothing is started until the first test
+/// asks for a database, so a run that touches no database needs no server.
+///
+/// A test gets its own database: a copy of a template that was migrated once,
+/// which takes a fraction of the time of migrating each one.
+/// </summary>
+public sealed class PostgresFixture : IAsyncDisposable
 {
-    private const string ExternalConnectionStringVariable = "SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION";
-    private readonly SemaphoreSlim databaseGate = new(1, 1);
-    private PostgreSqlContainer? container;
-    private string? externalConnectionString;
+    private readonly Lazy<Task<PostgresTestServer>> server = new(static () => Task.Run(PostgresTestServer.StartAsync));
+    private readonly Lazy<Task<string>> template;
 
-    public async ValueTask InitializeAsync()
+    public PostgresFixture()
     {
-        externalConnectionString = Environment.GetEnvironmentVariable(ExternalConnectionStringVariable);
-        if (!string.IsNullOrWhiteSpace(externalConnectionString))
-        {
-            return;
-        }
-
-        container = new PostgreSqlBuilder("postgres:18")
-            .Build();
-
-        await container.StartAsync();
+        template = new Lazy<Task<string>>(() => Task.Run(CreateTemplateAsync));
     }
 
     public async ValueTask DisposeAsync()
     {
-        databaseGate.Dispose();
-
-        if (container is not null)
+        if (!server.IsValueCreated)
         {
-            await container.DisposeAsync().AsTask();
+            return;
         }
+
+        PostgresTestServer started;
+        try
+        {
+            started = await server.Value;
+        }
+        catch
+        {
+            return;
+        }
+
+        if (template.IsValueCreated && template.Value.IsCompletedSuccessfully)
+        {
+            await DropDatabaseAsync(started, await template.Value);
+        }
+
+        await started.DisposeAsync();
     }
 
+    /// <summary>A new database with every migration applied.</summary>
     public async Task<PostgresTestDatabase> CreateDatabaseAsync(CancellationToken cancellationToken = default)
-        => await CreateDatabaseCoreAsync(targetMigration: null, cancellationToken);
+    {
+        var started = await server.Value;
+        var templateName = await template.Value;
+        var databaseName = NewDatabaseName();
+        await ExecuteOnServerAsync(
+            started, $"CREATE DATABASE \"{databaseName}\" TEMPLATE \"{templateName}\"", cancellationToken);
+        return new PostgresTestDatabase(started, databaseName);
+    }
 
+    /// <summary>
+    /// <see cref="CreateDatabaseAsync"/> for callers that cannot await, such
+    /// as the host builder of the contract tests' API.
+    /// </summary>
+    public PostgresTestDatabase CreateDatabase() =>
+        Task.Run(() => CreateDatabaseAsync()).GetAwaiter().GetResult();
+
+    /// <summary>A new database migrated only as far as <paramref name="targetMigration"/>.</summary>
     public async Task<PostgresTestDatabase> CreateDatabaseAtMigrationAsync(
         string targetMigration,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(targetMigration);
-        return await CreateDatabaseCoreAsync(targetMigration, cancellationToken);
+
+        var started = await server.Value;
+        var databaseName = NewDatabaseName();
+        await ExecuteOnServerAsync(started, $"CREATE DATABASE \"{databaseName}\"", cancellationToken);
+
+        var database = new PostgresTestDatabase(started, databaseName);
+        await using (var db = database.CreateContext())
+        {
+            await db.GetService<IMigrator>().MigrateAsync(targetMigration, cancellationToken);
+        }
+
+        return database;
     }
 
-    private async Task<PostgresTestDatabase> CreateDatabaseCoreAsync(
-        string? targetMigration,
+    private async Task<string> CreateTemplateAsync()
+    {
+        var started = await server.Value;
+        var templateName = $"tw_template_{Guid.NewGuid():N}";
+        await ExecuteOnServerAsync(started, $"CREATE DATABASE \"{templateName}\"", CancellationToken.None);
+
+        // Unpooled, so no connection stays open on the template: PostgreSQL
+        // refuses to copy a database that anyone is connected to.
+        var options = BuildOptions(started.ConnectionStringFor(templateName, pooling: false));
+        await using var db = new ShowroomBillingDbContext(options);
+        await db.GetService<IMigrator>().MigrateAsync();
+
+        return templateName;
+    }
+
+    private static async Task DropDatabaseAsync(PostgresTestServer started, string databaseName)
+    {
+        // This database's idle connections only; other tests keep theirs.
+        using (var pooled = new NpgsqlConnection(started.ConnectionStringFor(databaseName)))
+        {
+            NpgsqlConnection.ClearPool(pooled);
+        }
+
+        try
+        {
+            await ExecuteOnServerAsync(
+                started, $"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", CancellationToken.None);
+        }
+        catch (NpgsqlException)
+        {
+            // A database left behind goes with the container. A failed drop
+            // must not turn a passed test into a failed one.
+        }
+    }
+
+    private static async Task ExecuteOnServerAsync(
+        PostgresTestServer started,
+        string sql,
         CancellationToken cancellationToken)
     {
-        var databaseName = $"tw_test_{Guid.NewGuid():N}";
-        await databaseGate.WaitAsync(cancellationToken);
-        try
-        {
-            await using var admin = new NpgsqlConnection(GetAdminConnectionString());
-            await admin.OpenAsync(cancellationToken);
-            await using var command = admin.CreateCommand();
-            command.CommandText = $"CREATE DATABASE \"{databaseName}\"";
-            await command.ExecuteNonQueryAsync(cancellationToken);
-        }
-        finally
-        {
-            databaseGate.Release();
-        }
-
-        var connectionString = GetConnectionString(databaseName);
-        var options = BuildOptions(connectionString);
-        await using (var db = new ShowroomBillingDbContext(options))
-        {
-            var migrator = db.GetService<IMigrator>();
-            await migrator.MigrateAsync(targetMigration, cancellationToken);
-        }
-
-        return new PostgresTestDatabase(this, databaseName, connectionString, options);
+        await using var connection = new NpgsqlConnection(started.ConnectionStringFor("postgres"));
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task DropDatabaseAsync(string databaseName)
+    private static string NewDatabaseName() => $"tw_test_{Guid.NewGuid():N}";
+
+    private static DbContextOptions<ShowroomBillingDbContext> BuildOptions(string connectionString)
     {
-        NpgsqlConnection.ClearAllPools();
-        await databaseGate.WaitAsync();
-        try
-        {
-            await using var admin = new NpgsqlConnection(GetAdminConnectionString());
-            await admin.OpenAsync();
-            await using var command = admin.CreateCommand();
-            command.CommandText = $"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)";
-            await command.ExecuteNonQueryAsync();
-        }
-        finally
-        {
-            databaseGate.Release();
-        }
+        var builder = new DbContextOptionsBuilder<ShowroomBillingDbContext>();
+        Configure(builder, connectionString);
+        return builder.Options;
     }
 
-    private string GetAdminConnectionString()
+    private static void Configure(DbContextOptionsBuilder builder, string connectionString) =>
+        builder.UseNpgsql(connectionString, npgsql => npgsql.SetPostgresVersion(18, 0));
+
+    public sealed class PostgresTestDatabase : IAsyncDisposable, IDisposable
     {
-        var builder = new NpgsqlConnectionStringBuilder(GetBaseConnectionString())
-        {
-            Database = "postgres"
-        };
-        return builder.ConnectionString;
-    }
-
-    private string GetConnectionString(string databaseName)
-    {
-        var builder = new NpgsqlConnectionStringBuilder(GetBaseConnectionString())
-        {
-            Database = databaseName
-        };
-        return builder.ConnectionString;
-    }
-
-    private string GetBaseConnectionString()
-    {
-        if (!string.IsNullOrWhiteSpace(externalConnectionString))
-        {
-            return externalConnectionString;
-        }
-
-        return GetContainer().GetConnectionString();
-    }
-
-    private PostgreSqlContainer GetContainer() =>
-        container ?? throw new InvalidOperationException("Postgres container has not been started.");
-
-    private static DbContextOptions<ShowroomBillingDbContext> BuildOptions(string connectionString) =>
-        new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseNpgsql(connectionString, npgsql => npgsql.SetPostgresVersion(18, 0))
-            .Options;
-
-    public sealed class PostgresTestDatabase : IAsyncDisposable
-    {
-        private readonly PostgresFixture owner;
+        private readonly PostgresTestServer server;
         private readonly string databaseName;
+        private int dropped;
 
-        internal PostgresTestDatabase(
-            PostgresFixture owner,
-            string databaseName,
-            string connectionString,
-            DbContextOptions<ShowroomBillingDbContext> options)
+        internal PostgresTestDatabase(PostgresTestServer server, string databaseName)
         {
-            this.owner = owner;
+            this.server = server;
             this.databaseName = databaseName;
-            ConnectionString = connectionString;
-            Options = options;
+            ConnectionString = server.ConnectionStringFor(databaseName);
+            Options = BuildOptions(ConnectionString);
         }
 
         public string ConnectionString { get; }
@@ -162,9 +179,17 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         public ShowroomBillingDbContext CreateContext() => new(Options);
 
+        /// <summary>For a test that registers the context in its own service collection.</summary>
+        public void Configure(DbContextOptionsBuilder builder) => PostgresFixture.Configure(builder, ConnectionString);
+
         public async ValueTask DisposeAsync()
         {
-            await owner.DropDatabaseAsync(databaseName);
+            if (Interlocked.Exchange(ref dropped, 1) == 0)
+            {
+                await DropDatabaseAsync(server, databaseName);
+            }
         }
+
+        public void Dispose() => Task.Run(() => DisposeAsync().AsTask()).GetAwaiter().GetResult();
     }
 }

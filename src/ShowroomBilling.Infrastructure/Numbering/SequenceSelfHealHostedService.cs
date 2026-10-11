@@ -45,18 +45,13 @@ public sealed class SequenceSelfHealHostedService(
                 // The reclaimer's FOR UPDATE only holds the sequence row
                 // inside a transaction; without one a concurrent
                 // reservation could allocate the core being rolled back.
-                await using var transaction = db.UsesInMemoryProvider()
-                    ? null
-                    : await db.Database.BeginTransactionAsync(timeboxed);
+                await using var transaction = await db.Database.BeginTransactionAsync(timeboxed);
                 if (await NumberingSequenceReclaimer.ReclaimAsync(
                     db, s.ShowroomId, s.FiscalYear, "startup-self-heal", timeboxed))
                 {
                     moved++;
                 }
-                if (transaction is not null)
-                {
-                    await transaction.CommitAsync(timeboxed);
-                }
+                await transaction.CommitAsync(timeboxed);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

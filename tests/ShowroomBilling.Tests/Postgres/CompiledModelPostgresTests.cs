@@ -12,7 +12,7 @@ public sealed class CompiledModelPostgresTests(PostgresFixture fixture)
     /// DatabaseInitializationHostedService migrates through the DI context,
     /// which uses the precompiled model.
     /// </summary>
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task Migrate_WorksThroughAContextOnThePrecompiledModel()
     {
@@ -28,7 +28,7 @@ public sealed class CompiledModelPostgresTests(PostgresFixture fixture)
     }
 
     /// <summary>The API runs on the precompiled model; exercise the bill workflow through it.</summary>
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task BillWorkflow_RunsOnThePrecompiledModel()
     {

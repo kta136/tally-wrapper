@@ -129,8 +129,6 @@ internal static class NumberingSequenceReclaimer
     /// Loads the sequence row for a scope and locks it with <c>FOR UPDATE</c>
     /// until the surrounding transaction ends, so two reservations (or a
     /// reservation and a rollback) cannot read the same <c>NextValue</c>.
-    /// The InMemory provider used by unit tests has no row locks and reads
-    /// the row plainly.
     /// </summary>
     internal static async Task<InvoiceSequenceEntity?> LoadSequenceForUpdateAsync(
         ShowroomBillingDbContext dbContext,
@@ -139,15 +137,6 @@ internal static class NumberingSequenceReclaimer
         string documentType,
         CancellationToken cancellationToken)
     {
-        if (dbContext.UsesInMemoryProvider())
-        {
-            return await dbContext.InvoiceSequences.FirstOrDefaultAsync(
-                x => x.ShowroomId == showroomId
-                     && x.FiscalYear == fiscalYear
-                     && x.DocumentType == documentType,
-                cancellationToken);
-        }
-
         var locked = await dbContext.InvoiceSequences
             .FromSqlInterpolated($@"
 SELECT * FROM public.invoice_sequences

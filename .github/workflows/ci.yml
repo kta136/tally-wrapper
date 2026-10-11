@@ -12,6 +12,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The tests are split across two machines and their coverage is judged
+  # together in the last job:
+  #   build-test      Windows: the build, and every test that needs no database.
+  #   database-tests  Linux: the tests that need PostgreSQL. They start it in a
+  #                   container, which a Windows runner cannot run.
+  #   coverage        merges both halves' reports and enforces the floor.
   build-test:
     # WPF (net10.0-windows) needs a Windows runner for the Desktop + Desktop.Tests
     # projects. Don't downgrade to ubuntu-latest without first excluding those.
@@ -46,9 +52,9 @@ jobs:
       - name: Build
         run: dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
 
-      - name: Test and enforce coverage
+      - name: Test (everything that needs no database)
         shell: pwsh
-        run: ./tools/Test-Coverage.ps1 -NoBuild
+        run: ./tools/Test-Coverage.ps1 -NoBuild -Tests WithoutDatabase -SkipThreshold
 
       - name: Upload test results
         if: always()
@@ -62,11 +68,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: coverage
+          name: coverage-without-database
           path: artifacts/coverage/**/coverage.cobertura*.xml
           if-no-files-found: error
 
-  postgres-integration:
+  database-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -79,18 +85,47 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Restore integration-test project
-        run: dotnet restore tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj
+      - name: Test (everything that needs PostgreSQL 18)
+        shell: pwsh
+        run: ./tools/Test-Coverage.ps1 -Tests DatabaseOnly -SkipThreshold
 
-      - name: Run Docker-backed Postgres tests
-        env:
-          SHOWROOM_BILLING_RUN_POSTGRES_TESTS: '1'
-        run: dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --configuration Release --filter "Category=Postgres" -- --report-trx --report-trx-filename postgres-test-results.trx
-
-      - name: Upload Postgres test results
+      - name: Upload database test results
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: postgres-test-results
-          path: '**/TestResults/*.trx'
+          name: database-test-results
+          path: 'artifacts/coverage/**/*.trx'
           if-no-files-found: error
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-database
+          path: artifacts/coverage/**/coverage.cobertura*.xml
+          if-no-files-found: error
+
+  coverage:
+    needs: [build-test, database-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download coverage (without database)
+        uses: actions/download-artifact@v7
+        with:
+          name: coverage-without-database
+          path: artifacts/coverage/without-database
+
+      - name: Download coverage (database)
+        uses: actions/download-artifact@v7
+        with:
+          name: coverage-database
+          path: artifacts/coverage/database
+
+      - name: Enforce merged coverage
+        shell: pwsh
+        run: ./tools/Test-Coverage.ps1 -Tests None

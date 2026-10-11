@@ -1,15 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
 using ShowroomBilling.Contracts.Admin;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests.Contracts;
 
-public sealed class AdminPasscodeContractTests
+[Trait("Category", "Postgres")]
+public sealed class AdminPasscodeContractTests(PostgresFixture postgres)
 {
     [Fact]
     public async Task Changing_an_existing_passcode_requires_an_admin_session()
     {
-        await using var factory = new TestApiFactory();
+        await using var factory = new TestApiFactory(postgres);
         var client = factory.CreateClient();
 
         var initial = await client.PostAsJsonAsync("/api/admin/passcode", new AdminSetPasscodeRequest(null, "111111"));

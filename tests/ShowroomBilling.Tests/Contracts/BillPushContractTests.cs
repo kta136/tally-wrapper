@@ -3,15 +3,17 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Device;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests.Contracts;
 
-public sealed class BillPushContractTests
+[Trait("Category", "Postgres")]
+public sealed class BillPushContractTests(PostgresFixture postgres)
 {
     [Fact]
     public async Task Push_when_tally_preflight_is_unhealthy_returns_503_and_leaves_bill_pending()
     {
-        await using var factory = new TestApiFactory(new Dictionary<string, string?>
+        await using var factory = new TestApiFactory(postgres, new Dictionary<string, string?>
         {
             ["Testing:Bills:PushThrowsTallyPreflight"] = "true"
         });

@@ -4,15 +4,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ShowroomBilling.Api.Options;
 using ShowroomBilling.Contracts.Clients;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests.Contracts;
 
-public sealed class DeviceAuthContractTests
+[Trait("Category", "Postgres")]
+public sealed class DeviceAuthContractTests(PostgresFixture postgres)
 {
     [Fact]
     public async Task LocalFile_mode_still_rejects_mutating_endpoint_without_device_token()
     {
-        await using var factory = new TestApiFactory();
+        await using var factory = new TestApiFactory(postgres);
         var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync(
@@ -25,7 +27,7 @@ public sealed class DeviceAuthContractTests
     [Fact]
     public async Task TrustedLan_mode_accepts_loopback_mutating_endpoint_without_device_token()
     {
-        await using var factory = new TestApiFactory(new Dictionary<string, string?>
+        await using var factory = new TestApiFactory(postgres, new Dictionary<string, string?>
         {
             ["DeviceAuth:Mode"] = "TrustedLan",
             ["DeviceAuth:TrustedNetworks:0"] = "127.0.0.0/8"

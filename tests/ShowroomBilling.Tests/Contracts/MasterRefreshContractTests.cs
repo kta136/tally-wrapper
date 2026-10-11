@@ -14,6 +14,7 @@ namespace ShowroomBilling.Tests.Contracts;
 /// <c>IReadOnlyList&lt;TallyMasterRefreshResult&gt;</c> — the slice 1 bug.
 /// Treat this file as the source of truth for what shape callers see.
 /// </summary>
+[Trait("Category", "Postgres")]
 public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
 {
     private readonly TestApiFactory _factory;

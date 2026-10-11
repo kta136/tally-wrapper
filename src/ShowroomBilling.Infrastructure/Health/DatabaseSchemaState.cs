@@ -17,19 +17,13 @@ public sealed class DatabaseSchemaState : IDatabaseSchemaState
 
     /// <summary>
     /// Asks the database which of this build's migrations it has not had and
-    /// records the answer. Null (and nothing recorded) for a provider without
-    /// migrations, which is the in-memory one the tests use.
+    /// records the answer.
     /// </summary>
-    public static async Task<int?> CheckAsync(
+    public static async Task<int> CheckAsync(
         ShowroomBillingDbContext dbContext,
         IDatabaseSchemaState state,
         CancellationToken cancellationToken)
     {
-        if (dbContext.UsesInMemoryProvider())
-        {
-            return null;
-        }
-
         var pending = (await dbContext.Database.GetPendingMigrationsAsync(cancellationToken)).Count();
         state.Record(pending);
         return pending;

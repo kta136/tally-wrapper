@@ -7,7 +7,7 @@ namespace ShowroomBilling.Tests.Postgres;
 [Collection(PostgresCollection.Name)]
 public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
 {
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task RecoverAsync_OnlyRecoversClaimsOlderThanAnyLivePush()
     {

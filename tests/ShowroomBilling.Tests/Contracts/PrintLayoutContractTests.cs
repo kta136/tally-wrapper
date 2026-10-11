@@ -6,6 +6,7 @@ using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Tests.Contracts;
 
+[Trait("Category", "Postgres")]
 public sealed class PrintLayoutContractTests : IClassFixture<TestApiFactory>
 {
     private readonly TestApiFactory _factory;

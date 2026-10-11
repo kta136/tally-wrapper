@@ -3,10 +3,11 @@ using Microsoft.Extensions.Time.Testing;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Settings;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class EffectiveSettingsCacheTests
+public sealed class EffectiveSettingsCacheTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task Settings_are_kept_for_five_seconds_and_no_longer()
@@ -87,9 +88,4 @@ public sealed class EffectiveSettingsCacheTests
 
         Assert.True((await service.GetEffectiveSettingsAsync()).RequiresInitialSetup);
     }
-
-    private static ShowroomBillingDbContext CreateDbContext()
-        => new(new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
-            .Options);
 }

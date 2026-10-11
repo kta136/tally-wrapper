@@ -25,20 +25,9 @@ public sealed class OperationalDataRetentionHostedService(
         var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
         var cutoff = DateTimeOffset.UtcNow.Subtract(Retention);
 
-        int sessionsDeleted;
-        if (db.UsesInMemoryProvider())
-        {
-            var sessions = await db.AdminSessions.Where(x => x.ExpiresAtUtc < cutoff).ToListAsync(timeboxed);
-            db.AdminSessions.RemoveRange(sessions);
-            await db.SaveChangesAsync(timeboxed);
-            sessionsDeleted = sessions.Count;
-        }
-        else
-        {
-            sessionsDeleted = await db.AdminSessions
-                .Where(x => x.ExpiresAtUtc < cutoff)
-                .ExecuteDeleteAsync(timeboxed);
-        }
+        var sessionsDeleted = await db.AdminSessions
+            .Where(x => x.ExpiresAtUtc < cutoff)
+            .ExecuteDeleteAsync(timeboxed);
 
         if (sessionsDeleted > 0)
         {

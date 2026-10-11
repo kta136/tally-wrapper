@@ -3,10 +3,11 @@ using ShowroomBilling.Application;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Settings;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class CloudSettingsServiceTests
+public sealed class CloudSettingsServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task GetEffectiveSettingsAsync_SeedsDefaultRow_WhenDatabaseIsEmpty()
@@ -282,13 +283,4 @@ public sealed class CloudSettingsServiceTests
             null,
             PrintLayoutDefaults.CreateWatermark(Guid.NewGuid()),
             PrintLayoutDefaults.CreatePageLayout());
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-
-        return new ShowroomBillingDbContext(options);
-    }
 }

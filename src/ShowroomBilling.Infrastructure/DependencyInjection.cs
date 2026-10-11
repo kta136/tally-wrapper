@@ -65,9 +65,12 @@ public static class DependencyInjection
 
         var dataSource = new NpgsqlDataSourceBuilder(ApplyPoolDefaults(connectionString)).Build();
         services.AddSingleton(dataSource);
-        services.AddDbContextPool<ShowroomBillingDbContext>(options =>
+        services.AddDbContextPool<ShowroomBillingDbContext>((provider, options) =>
             options
-                .UseNpgsql(dataSource, npgsql =>
+                // The registered data source, not the local above: a host that
+                // replaces the registration (the contract tests do) moves the
+                // context and the readiness check together.
+                .UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(), npgsql =>
                 {
                     npgsql.SetPostgresVersion(18, 0);
                     npgsql.CommandTimeout(15);

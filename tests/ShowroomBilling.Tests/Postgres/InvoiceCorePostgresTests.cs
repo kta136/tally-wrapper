@@ -13,7 +13,7 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
 {
     private const string MigrationBeforeInvoiceCore = "20261009153701_BillRowVersion";
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task Migration_BackfillsCoreFromReservationThenTrailingDigits()
     {
@@ -56,7 +56,7 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         Assert.Null(cores[custom]);
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task DeleteTrailingBill_WithLetterSuffix_ReusesFreedCoreWithoutDuplicating()
     {
@@ -74,7 +74,7 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         Assert.EndsWith("/0002-A", third.InvoiceNumber);
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task Reserve_WithDigitSuffix_DoesNotMistakeSuffixForCore()
     {

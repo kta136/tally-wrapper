@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
@@ -20,10 +21,10 @@ namespace ShowroomBilling.Tests;
 ///   3. A faulted database-ready signal does NOT throw out of the service —
 ///      warmup is best-effort; the API stays online.
 ///
-/// These tests exercise the contract with a real InMemory DbContext + the
+/// These tests exercise the contract with a real DbContext on PostgreSQL + the
 /// real StartupStatus; the only thing mocked is timing.
 /// </summary>
-public sealed class DatabaseWarmupHostedServiceTests
+public sealed class DatabaseWarmupHostedServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     [Fact]
     public async Task StartAsync_ReturnsImmediately_EvenIfDatabaseNotReady()
@@ -123,12 +124,10 @@ public sealed class DatabaseWarmupHostedServiceTests
         Assert.Fail(failureMessage);
     }
 
-    private static ServiceProvider BuildProvider(Action<ShowroomBillingDbContext>? seed = null)
+    private ServiceProvider BuildProvider(Action<ShowroomBillingDbContext>? seed = null)
     {
         var services = new ServiceCollection();
-        // Each test gets its own isolated InMemory database.
-        var dbName = Guid.NewGuid().ToString();
-        services.AddDbContext<ShowroomBillingDbContext>(options => options.UseInMemoryDatabase(dbName));
+        services.AddDbContext<ShowroomBillingDbContext>(Database.Configure);
         var provider = services.BuildServiceProvider();
 
         if (seed is not null)

@@ -20,7 +20,7 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
     private const string Totals = """{"grandTotal": 1234.5}""";
     private const string RawXml = """{"xml": "<COMPANY NAME=\"ACME\"/>"}""";
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task Dropped_values_are_copied_aside_first_and_come_back_on_the_way_down()
     {

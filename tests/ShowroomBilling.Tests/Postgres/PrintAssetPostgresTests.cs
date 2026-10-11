@@ -8,7 +8,7 @@ namespace ShowroomBilling.Tests.Postgres;
 [Collection(PostgresCollection.Name)]
 public sealed class PrintAssetPostgresTests(PostgresFixture fixture)
 {
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task Asset_kind_constraint_accepts_watermark_and_rejects_unknown_values()
     {

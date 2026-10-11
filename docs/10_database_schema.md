@@ -85,7 +85,7 @@ Constraints / indexes:
 
 - PK `(showroom_id, fiscal_year, document_type)`
 - check `next_value > 0`
-- row-lock via `SELECT ... FOR UPDATE` during allocation (Npgsql path); InMemory test path uses a plain fetch
+- row-lock via `SELECT ... FOR UPDATE` during allocation
 
 ### 1.3a `invoice_number_reservations`
 

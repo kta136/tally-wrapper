@@ -94,7 +94,6 @@ tools/
   publish-server-tray.ps1
   publish-server-api.ps1
   uninstall-server-api-service.ps1
-  run-postgres-tests.ps1
   run-scratch.ps1               dev build on a throwaway database with a stand-in Tally
 
 docs/
@@ -395,21 +394,10 @@ Run API contract tests only:
 dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "FullyQualifiedName~Contracts"
 ```
 
-Run the opt-in Postgres integration tests, which require a local Docker endpoint
-reachable by Testcontainers or an explicit Postgres test connection string:
+The tests that touch the database run on PostgreSQL 18 and start it themselves, so the full suite needs Docker (a local engine, or a remote Docker context the `docker` command can reach) or `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION` pointing at a PostgreSQL 18 server. See [Development Setup](DEV_SETUP.md#database-tests). To run only the tests that need no database:
 
 ```powershell
-.\tools\run-postgres-tests.ps1
-```
-
-The script starts a temporary `postgres:18` container on the configured Docker
-context, runs `Category=Postgres`, and stops the container afterward. To run the
-tests against an already-running remote Postgres instance instead:
-
-```powershell
-$env:SHOWROOM_BILLING_RUN_POSTGRES_TESTS='1'
-$env:SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION='Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=postgres'
-dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category=Postgres"
+dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category!=Postgres"
 ```
 
 What the tests cover:
@@ -423,7 +411,7 @@ What the tests cover:
 - WPF ViewModel workflows
 - printing/rendering helpers
 
-The test DB provider is EF Core InMemory for most DB-backed unit tests. It validates behavior shape, not Postgres locking, unique-index enforcement, or real race semantics. CI therefore runs `Category=Postgres` separately against PostgreSQL 18, matching production. That job is required for numbering, locking, conditional-transition, migration, or unique-index changes.
+Every database-backed test runs on PostgreSQL 18, matching production: each test gets its own freshly migrated database, so locking, unique indexes, set-based updates and real races are exercised rather than approximated. CI runs these tests on Linux (the container cannot run on a Windows runner) and the rest on Windows, then judges their coverage together.
 
 The persistent `tally_wrapper_test` deployment database is not the connection for this harness: the fixture requires permission to create and drop `tw_test_<guid>` databases, while the persistent API role is intentionally restricted to its one PgBouncer mapping. See [Development Setup](DEV_SETUP.md#shared-persistent-test-database).
 

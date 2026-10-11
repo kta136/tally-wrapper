@@ -5,10 +5,11 @@ using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
+using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
-public sealed class NumberingServiceTests
+public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
     private const string SalesInvoice = INumberingService.DocumentTypeSalesInvoice;
 
@@ -219,13 +220,5 @@ public sealed class NumberingServiceTests
         var bytes = System.Text.Encoding.UTF8.GetBytes("default");
         var hash = System.Security.Cryptography.MD5.HashData(bytes);
         return new Guid(hash);
-    }
-
-    private static ShowroomBillingDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options;
-        return new ShowroomBillingDbContext(options);
     }
 }

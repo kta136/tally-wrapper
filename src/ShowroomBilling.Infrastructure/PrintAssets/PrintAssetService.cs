@@ -50,7 +50,12 @@ public sealed class PrintAssetService(
             throw new RequestValidationException("FileName is required.");
         }
         var fileName = request.FileName.Trim();
-        if (fileName.Length > 256 || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
+        // Both separators are named: Path.GetFileName only knows the ones of
+        // the system it runs on, and the name ends up on Windows PCs.
+        if (fileName.Length > 256
+            || fileName.Contains('/')
+            || fileName.Contains('\\')
+            || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
         {
             throw new RequestValidationException("FileName must be a plain file name of at most 256 characters.");
         }

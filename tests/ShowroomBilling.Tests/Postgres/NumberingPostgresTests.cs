@@ -8,7 +8,7 @@ namespace ShowroomBilling.Tests.Postgres;
 [Collection(PostgresCollection.Name)]
 public sealed class NumberingPostgresTests(PostgresFixture fixture)
 {
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task ReserveAsync_ConcurrentFirstReservations_AllocatesDistinctSequentialValues()
     {
@@ -45,7 +45,7 @@ public sealed class NumberingPostgresTests(PostgresFixture fixture)
         Assert.Equal(count, await verify.InvoiceNumberReservations.CountAsync());
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task ReserveAsync_ConcurrentSameIdempotencyKey_ReturnsSingleReservation()
     {

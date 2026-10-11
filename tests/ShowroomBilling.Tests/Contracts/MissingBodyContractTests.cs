@@ -11,6 +11,7 @@ namespace ShowroomBilling.Tests.Contracts;
 /// ProblemDetails body, answered by the framework before the action runs.
 /// Actions therefore do not check their request for null themselves.
 /// </summary>
+[Trait("Category", "Postgres")]
 public sealed class MissingBodyContractTests : IClassFixture<TestApiFactory>
 {
     private readonly TestApiFactory _factory;

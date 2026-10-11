@@ -113,7 +113,6 @@ Properties:
 - **Anchors a stale `NextValue` on first delete.** If `NextValue` was sitting higher than the actual occupied range (e.g. the prior bill was deleted before this feature shipped, or after a manual sequence bump that no bill ever consumed), the next delete in scope pulls `NextValue` down to `max(parsedCore) + 1`. This is intentional — the alternative would be a permanent skip past cores that have no remaining bill evidence.
 - **Atomic with the delete.** Both run inside the same transaction, with a `FOR UPDATE` lock on the `invoice_sequences` row so a concurrent reservation cannot allocate a core the rollback is about to free.
 - **Audit-logged.** A single `numbering.sales_invoice.rolled_back` event is written per delete that actually moves `NextValue`, recording `from`, `to`, `maxOccupiedCore`, and `triggeredByBillId`.
-- **InMemory test provider** forks to a plain `FirstOrDefaultAsync` (no `FOR UPDATE`); production race semantics are not exercised in unit tests. Real concurrency requires a Postgres test harness.
 
 ---
 

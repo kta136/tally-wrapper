@@ -8,7 +8,7 @@ namespace ShowroomBilling.Tests.Postgres;
 [Collection(PostgresCollection.Name)]
 public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
 {
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task DeleteAsync_TrailingBill_RollsBackSequenceAndReusesFreedCore()
     {
@@ -29,7 +29,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(4L, await db.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task ChangeInvoiceNumber_MovesTrailingDown_RollsBackSequenceAndReusesFreedCore()
     {
@@ -53,7 +53,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Contains("/0003", next.InvoiceNumber);
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task ReviseAsync_ReservesNumberAndRevisedBillPushes()
     {
@@ -72,7 +72,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(3L, await db.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task PushAsync_EditLandsDuringPreflight_DoesNotPushTheOlderRevision()
     {
@@ -99,7 +99,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(BillStates.Pending, await verify.Bills.Select(static x => x.State).SingleAsync());
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task StaleBillRow_SavedAfterAnotherTransition_IsRejected()
     {
@@ -121,7 +121,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(BillStates.Posted, await verify.Bills.Select(static x => x.State).SingleAsync());
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task CreateDraftAsync_ConcurrentReplaysOfOneSave_CreateOneBill()
     {
@@ -146,7 +146,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(2L, await verify.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task SearchAsync_MatchesPartyNameRegardlessOfCase()
     {
@@ -163,7 +163,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal("Beta 100% Gold", Assert.Single(literalPercent.Items).PartyName);
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task PushAsync_OverlappingCalls_PostsToTallyOnlyOnce()
     {
@@ -199,7 +199,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         Assert.Equal(BillStates.Posted, finalState);
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task PushAsync_EditAfterPush_PreservesAppendOnlyAuditHistory()
     {

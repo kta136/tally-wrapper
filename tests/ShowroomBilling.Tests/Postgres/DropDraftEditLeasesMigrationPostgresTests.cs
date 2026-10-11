@@ -16,7 +16,7 @@ public sealed class DropDraftEditLeasesMigrationPostgresTests(PostgresFixture fi
     private const string Previous = "20261010124946_DropUnusedColumnsAndIndexes";
     private const string Backup = DropDraftEditLeases.Backup;
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task An_empty_table_is_dropped_and_leaves_no_copy()
     {
@@ -34,7 +34,7 @@ public sealed class DropDraftEditLeasesMigrationPostgresTests(PostgresFixture fi
         await MigrateAsync(database, target: null);
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task Rows_are_copied_aside_first_and_come_back_on_the_way_down()
     {

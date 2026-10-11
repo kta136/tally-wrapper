@@ -9,7 +9,7 @@ public sealed class Postgres18SchemaTests(PostgresFixture fixture)
 {
     private const string PreviousMigration = "20260724065618_AllowWatermarkPrintAssets";
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task MigratedSchema_UsesPostgres18AndValidBillSearchIndexes()
     {
@@ -27,7 +27,7 @@ public sealed class Postgres18SchemaTests(PostgresFixture fixture)
         Assert.Equal(2L, await CountValidSearchIndexesAsync(connection));
     }
 
-    [PostgresFact]
+    [Fact]
     [Trait("Category", "Postgres")]
     public async Task BillSearchIndexMigration_RecoversFromAPartialConcurrentRun()
     {
