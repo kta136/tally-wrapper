@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
              xmlns:settingsViews="clr-namespace:ShowroomBilling.Desktop.Views.Settings"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
              mc:Ignorable="d"
@@ -14,177 +15,259 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="SettingsViewResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!--  The heading of the open section. Shared sections get a band with their buttons in it; the
+                  band turns pale indigo while the section is being edited.  -->
+            <Style x:Key="SectionHeader" TargetType="Border">
+                <Setter Property="Padding" Value="32,28,32,0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0,0,0,1" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding HasHeaderBand}" Value="True">
+                        <Setter Property="Padding" Value="32,16,32,14" />
+                        <Setter Property="Background" Value="{StaticResource BgPanelBrush}" />
+                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsEditingBand}" Value="True">
+                        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <!--  The chip beside the title: who the section belongs to, or "Unsaved changes".  -->
+            <Style x:Key="ScopeChip" BasedOn="{StaticResource Chip}" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="ThisPc">
+                        <Setter Property="Background" Value="{StaticResource NeutralChipBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="AdminOnly">
+                        <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsDirtyDraftSection}" Value="True">
+                        <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="ScopeChipText" BasedOn="{StaticResource ToneChipText}" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="ThisPc">
+                        <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="AdminOnly">
+                        <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsDirtyDraftSection}" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+            <Style x:Key="ScopeChipIcon" BasedOn="{StaticResource ScopeChipText}" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Text" Value="&#xE716;" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="ThisPc">
+                        <Setter Property="Text" Value="&#xE7F4;" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="AdminOnly">
+                        <Setter Property="Text" Value="&#xE785;" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsDirtyDraftSection}" Value="True">
+                        <Setter Property="Text" Value="●" />
+                        <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+                        <Setter Property="FontSize" Value="9" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-        <!--  Row 0: meta strip  -->
-        <Border Grid.Row="0"
-                Padding="14,8"
+        <!--  Sidebar: the sections under what they belong to  -->
+        <Border Grid.Column="0"
                 Background="{StaticResource BgPanelBrush}"
                 BorderBrush="{StaticResource BorderBrushTok}"
-                BorderThickness="0,0,0,1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                    <TextBlock Text="Source" Foreground="{StaticResource InkMutedBrush}" FontSize="{DynamicResource FontSizeSm}" VerticalAlignment="Center" />
-                    <TextBlock Margin="6,0,0,0"
-                               FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="{DynamicResource FontSizeLabel}"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis"
-                               Text="{Binding SettingsSource}" />
-                    <Border Margin="12,0,0,0"
-                            Padding="8,2"
-                            Background="{StaticResource BgSunkenBrush}"
-                            BorderBrush="{StaticResource BorderBrushTok}"
-                            BorderThickness="1"
-                            CornerRadius="2"
-                            VerticalAlignment="Center">
-                        <TextBlock FontSize="{DynamicResource FontSizeSm}"
-                                   Foreground="{StaticResource InkSoftBrush}"
-                                   TextTrimming="CharacterEllipsis"
-                                   Text="{Binding Summary, TargetNullValue=''}" />
-                    </Border>
-                    <TextBlock Margin="12,0,0,0"
-                               FontSize="{DynamicResource FontSizeSm}"
-                               Foreground="{StaticResource InkMutedBrush}"
-                               VerticalAlignment="Center"
-                               Text="Updated" />
-                    <TextBlock Margin="6,0,0,0"
-                               FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="{DynamicResource FontSizeSm}"
-                               Foreground="{StaticResource InkSoftBrush}"
-                               VerticalAlignment="Center"
-                               Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm', TargetNullValue='—'}" />
-                    <Border Margin="12,0,0,0"
-                            Padding="6,2"
-                            Background="{StaticResource WarnSoftBrush}"
-                            CornerRadius="2"
-                            VerticalAlignment="Center"
-                            Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}">
-                        <TextBlock FontSize="{DynamicResource FontSizeXs}"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource WarnInkBrush}"
-                                   Text="UNSAVED CHANGES" />
-                    </Border>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontSize="{DynamicResource FontSizeSm}"
-                               Foreground="{StaticResource InkMutedBrush}"
-                               Text="{Binding StatusMessage}" />
-                    <Button Style="{StaticResource BtnSm}"
-                            Margin="0,0,6,0"
-                            Command="{Binding RefreshCommand}"
-                            Content="Refresh"
-                            Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}" />
-                    <Button Style="{StaticResource BtnSm}"
-                            Margin="0,0,6,0"
-                            Command="{Binding BeginEditCommand}"
-                            Content="Edit"
-                            Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}" />
-                    <Button Style="{StaticResource BtnSm}"
-                            Margin="0,0,6,0"
-                            Command="{Binding DiscardChangesCommand}"
-                            Content="Discard"
-                            Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" />
-                    <Button Style="{StaticResource BtnPrimary}"
-                            Command="{Binding SaveAllCommand}"
-                            Content="Save All"
-                            Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}" />
-                </StackPanel>
-            </Grid>
+                BorderThickness="0,0,1,0">
+            <ListBox Background="Transparent"
+                     BorderThickness="0"
+                     ItemContainerStyle="{StaticResource NavItem}"
+                     ItemsSource="{Binding SectionGroups}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     SelectedItem="{Binding SelectedSection}">
+                <ListBox.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Name}">
+                                    <TextBlock.Style>
+                                        <Style BasedOn="{StaticResource NavGroupHeading}" TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Name}" Value="Admin, unlocked">
+                                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </ListBox.GroupStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="SectionIcon"
+                                       Width="22"
+                                       VerticalAlignment="Center"
+                                       FontFamily="{StaticResource IconFontFamily}"
+                                       FontSize="16"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
+                            <TextBlock x:Name="SectionLabel"
+                                       Margin="12,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
+                        </StackPanel>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Server}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xEDA2;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Server" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Connection}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71B;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Connection" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Invoice}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE8A5;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Invoice" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.PrintLayout}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE749;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Print layout" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Ledgers}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE736;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Ledgers" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Masters}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71D;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Masters" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Advanced}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE713;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Advanced" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Admin}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE7EF;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Admin" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </Border>
 
-        <!--  Row 1: nav + detail + (optional) live preview  -->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="200" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <!--  The open section: its heading, then its cards  -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-            <Border Grid.Column="0"
-                    Background="{StaticResource BgPanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushTok}"
-                    BorderThickness="0,0,1,0">
-                <ListBox ItemsSource="{Binding Sections}"
-                         SelectedItem="{Binding SelectedSection}"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         ItemContainerStyle="{StaticResource NavItem}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Height="48">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="24" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="SectionIcon"
-                                           VerticalAlignment="Center"
-                                           FontFamily="{StaticResource IconFontFamily}"
-                                           FontSize="16"
-                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
-                                <TextBlock x:Name="SectionLabel"
-                                           Grid.Column="1"
-                                           Margin="8,0,0,0"
-                                           VerticalAlignment="Center"
-                                           FontSize="{DynamicResource FontSizeUi}"
-                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
-                            </Grid>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Server}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xEDA2;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Server" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Connection}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71B;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Connection" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Invoice}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE8A5;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Invoice" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.PrintLayout}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE749;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Print Layout" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Ledgers}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE736;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Ledgers" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Masters}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71D;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Masters" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Advanced}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE713;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Advanced" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Admin}">
-                                    <Setter TargetName="SectionIcon" Property="Text" Value="&#xE7EF;" />
-                                    <Setter TargetName="SectionLabel" Property="Text" Value="Admin" />
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+            <Border Grid.Row="0" Style="{StaticResource SectionHeader}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center"
+                                       FontSize="{StaticResource FontSizeTitle}"
+                                       FontWeight="Bold"
+                                       Text="{Binding SelectedSectionTitle}" />
+                            <Border Margin="12,0,0,0" Style="{StaticResource ScopeChip}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Margin="0,0,7,0" Style="{StaticResource ScopeChipIcon}" />
+                                    <TextBlock Style="{StaticResource ScopeChipText}" Text="{Binding SelectedSectionChipText}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Margin="0,6,0,0"
+                                   Text="{Binding SelectedSectionSubtitle}">
+                            <TextBlock.Style>
+                                <Style BasedOn="{StaticResource TxtHint}" TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedSectionSubtitle}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Margin="0,2,0,0"
+                                   Text="{Binding StatusMessage}">
+                            <TextBlock.Style>
+                                <Style BasedOn="{StaticResource TxtHint}" TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding StatusMessage}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!--  Buttons of a section edited as one draft  -->
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Visibility="{Binding ShowsDraftButtons, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding IsEditing, Converter={StaticResource InverseBoolToVis}}">
+                            <Button Command="{Binding RefreshCommand}" Content="Refresh" />
+                            <Button Margin="10,0,0,0"
+                                    Command="{Binding BeginEditCommand}"
+                                    Content="Edit"
+                                    Style="{StaticResource BtnAccentOutline}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}">
+                            <Button Command="{Binding DiscardChangesCommand}" Content="Discard" />
+                            <Button Margin="10,0,0,0"
+                                    Command="{Binding SaveAllCommand}"
+                                    Content="Save all"
+                                    Style="{StaticResource BtnPrimary}"
+                                    shell:Kbd.Hint="Ctrl+S" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!--  The print layout is saved on its own  -->
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Visibility="{Binding IsPrintLayoutVisible, Converter={StaticResource BoolToVis}}">
+                        <Button Command="{Binding PrintLayout.LoadCommand}" Content="Refresh" />
+                        <Button Margin="10,0,0,0"
+                                Command="{Binding PrintLayout.SaveCommand}"
+                                Content="Save"
+                                Style="{StaticResource BtnPrimary}"
+                                shell:Kbd.Hint="Ctrl+S" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                <Grid Margin="20,16,20,20">
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <Grid Margin="32,24,32,32">
                     <settingsViews:ConnectionSettingsSectionView DataContext="{Binding MasterData}"
                                                                  Visibility="{Binding DataContext.IsConnectionVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:InvoiceSettingsSectionView Visibility="{Binding IsInvoiceVisible, Converter={StaticResource BoolToVis}}" />
@@ -200,13 +283,12 @@
                     <settingsViews:AdminSettingsSectionView Visibility="{Binding IsAdminVisible, Converter={StaticResource BoolToVis}}" />
                 </Grid>
             </ScrollViewer>
-
-            <!--  Live print preview (Invoice + Print Layout sections)  -->
-            <settingsViews:SettingsPreviewPaneView Grid.Column="2"
-                                                   Grid.ColumnSpan="2"
-                                                   DataContext="{Binding Preview}"
-                                                   HostWidth="{Binding ActualWidth, ElementName=SettingsRoot}"
-                                                   Visibility="{Binding DataContext.IsPreviewVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
         </Grid>
+
+        <!--  Live print preview (Invoice and Print layout)  -->
+        <settingsViews:SettingsPreviewPaneView Grid.Column="2"
+                                               DataContext="{Binding Preview}"
+                                               HostWidth="{Binding ActualWidth, ElementName=SettingsRoot}"
+                                               Visibility="{Binding DataContext.IsPreviewVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
     </Grid>
 </UserControl>

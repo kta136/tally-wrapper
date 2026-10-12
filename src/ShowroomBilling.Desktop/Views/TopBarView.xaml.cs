@@ -3,9 +3,9 @@ using System.Windows.Controls;
 
 namespace ShowroomBilling.Desktop.Views;
 
-public partial class TitleBarView : UserControl
+public partial class TopBarView : UserControl
 {
-    public TitleBarView()
+    public TopBarView()
     {
         InitializeComponent();
     }

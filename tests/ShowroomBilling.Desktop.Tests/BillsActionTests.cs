@@ -125,7 +125,9 @@ public sealed class BillsActionTests
         await vm.DeleteRowCommand.ExecuteAsync(vm.Items[0]);
 
         Assert.Equal([$"delete-check:{billId}", $"delete:{billId}"], api.Calls);
-        Assert.Contains("will NOT remove it from Tally", Assert.Single(asked).Message);
+        var question = Assert.Single(asked);
+        Assert.Contains("does not remove it from Tally", question.Message);
+        Assert.True(question.IsDestructive);
         Assert.All(api.AdminTokens, token => Assert.Equal("admin-token", token));
     }
 
@@ -323,9 +325,9 @@ public sealed class BillsActionTests
         await details.VoidCommand.ExecuteAsync(null);
 
         var question = Assert.Single(asked);
-        Assert.Equal("Confirm Void", question.Title);
-        Assert.Contains("SR/25-26/0001", question.Message);
-        Assert.True(question.IsWarning);
+        Assert.Equal("Void invoice SR/25-26/0001?", question.Title);
+        Assert.True(question.IsDestructive);
+        Assert.Equal("This cannot be undone.", question.Note);
         Assert.Empty(api.Calls);
         Assert.Equal(BillStates.Pending, details.Bill?.State);
     }

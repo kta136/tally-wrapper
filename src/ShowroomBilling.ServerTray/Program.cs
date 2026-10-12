@@ -24,10 +24,9 @@ internal static class Program
             catch (Exception ex)
             {
                 ServerInstaller.Log(options, $"FAILED {ex}");
-                MessageBox.Show(
-                    $"Server setup failed:\n\n{ex.Message}\n\nLog: {options.InstallLogPath}",
-                    ServerTrayOptions.ProductName,
-                    MessageBoxButtons.OK,
+                CopyableMessageDialog.ShowMessage(
+                    null,
+                    $"Setup failed.\n\n{ex.Message}\n\nThe install log has the rest: {options.InstallLogPath}",
                     MessageBoxIcon.Error);
                 Environment.ExitCode = 1;
             }
@@ -38,10 +37,9 @@ internal static class Program
         var installed = ServerInstaller.EnsureInstalledInteractive(options);
         if (!installed)
         {
-            MessageBox.Show(
-                "Server setup did not complete. The tray will open, but the API service may be unavailable.",
-                ServerTrayOptions.ProductName,
-                MessageBoxButtons.OK,
+            CopyableMessageDialog.ShowMessage(
+                null,
+                "Setup did not finish.\n\nThe tray icon will still appear, but counters may not be able to bill. Open the dashboard from it to see what is missing.",
                 MessageBoxIcon.Warning);
         }
 

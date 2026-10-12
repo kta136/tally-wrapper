@@ -102,7 +102,11 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     partial void OnTotalAmountChanged(long value) => RecomputeValidation();
     partial void OnMaxBillAmountChanged(long value) => RecomputeValidation();
-    partial void OnRate24KtChanged(decimal value) => RecomputeValidation();
+    partial void OnRate24KtChanged(decimal value)
+    {
+        OnPropertyChanged(nameof(IsRateMissing));
+        RecomputeValidation();
+    }
     partial void OnMinItemsPerBillChanged(int value) => RecomputeValidation();
     partial void OnMaxItemsPerBillChanged(int value) => RecomputeValidation();
     partial void OnStartAtChanged(DateTimeOffset value) => RecomputeValidation();
@@ -221,6 +225,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
         _cts = new CancellationTokenSource();
         ErrorMessage = null;
         IsRunning = true;
+        RunState = "Running";
         StatusMessage = "Resolving admin session…";
 
         try
@@ -229,6 +234,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(token))
             {
                 StatusMessage = "Admin unlock cancelled.";
+                RunState = "Not started";
                 return;
             }
 
@@ -237,16 +243,19 @@ public partial class SyntheticBatchViewModel : ObservableObject
             var response = await _billsApi.CreateSyntheticBatchAsync(request, token, _cts.Token);
 
             StatusMessage = $"Created {response.BillCount} bill(s) · ₹{response.TotalAmount:N0}.";
+            RunState = "Done";
             BatchCompleted?.Invoke(this, EventArgs.Empty);
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "Batch cancelled.";
+            RunState = "Stopped";
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
             StatusMessage = "Batch failed.";
+            RunState = "Failed";
         }
         finally
         {

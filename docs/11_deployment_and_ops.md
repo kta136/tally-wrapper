@@ -73,7 +73,7 @@ No local durable business cache is allowed.
 
 - structured logging to rolling log files: `C:\ProgramData\ShowroomBilling\logs` for the server service
 - `/api/health/live` and `/api/health/ready` endpoints
-- `StuckPostingRecoveryHostedService` runs once on boot — any bill stranded in `posting` from a prior crash moves to `reconciliation_required` with a `bill.posting.recovered` audit event
+- `StuckPostingRecoveryHostedService` sweeps at start-up and every 5 minutes — any bill stranded in `posting` (the API stopped mid-push, or lost the database before it could record the outcome) moves to `reconciliation_required` with a `bill.posting.recovered` audit event once its claim is older than 10 minutes
 - each successful admin unlock deletes the admin sessions that expired more than 30 days ago; nothing else is purged
 - API errors are returned as RFC 7807 `application/problem+json` via a global `IExceptionHandler`, with no typed-body exceptions. See [`09_api_spec.md`](./09_api_spec.md) §1.
 - API admin endpoints are gated via ASP.NET Core authentication/authorization — scheme `AdminToken` + policy `Admin`. No framework-wide authentication is required for non-admin routes.
@@ -103,7 +103,7 @@ The service install sets:
 - `DeviceAuth__Mode=TrustedLan`
 - `DeviceAuth__TrustedNetworks__0=<LanCidr>`
 
-It also creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt` and a Windows Firewall rule scoped to the configured LAN CIDR. The range must be a network in CIDR form; it is checked before anything is written. A later run that only upgrades the API (a newer `TallyWrapper.Server.exe`) keeps the range already configured on the service and does not ask again. **Install / Repair Server** in the dashboard does ask, starting from the current range. The one-EXE installer uses the default LocalSystem service identity; DB configuration is written through the tray's localhost maintenance flow under `C:\ProgramData\ShowroomBilling`.
+It also creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt` and a Windows Firewall rule scoped to the configured LAN CIDR. The range must be a network in CIDR form; it is checked before anything is written. A later run that only upgrades the API (a newer `TallyWrapper.Server.exe`) keeps the range already configured on the service and does not ask again. **Repair installation…** in the dashboard or the tray menu does ask, starting from the current range. The one-EXE installer uses the default LocalSystem service identity; DB configuration is written through the tray's localhost maintenance flow under `C:\ProgramData\ShowroomBilling`.
 
 The server intentionally trusts clients inside the configured LAN CIDR for normal writes. Admin actions still require `X-Admin-Token`. The database maintenance endpoints and the initial admin-passcode setup are accepted from the server PC only, so the first admin passcode is set there (for example from a Desktop running on the server PC).
 
@@ -249,24 +249,28 @@ The EF provider is explicitly targeted at PostgreSQL 18. New application-created
 
 `ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. It uses Windows Service Control Manager for service state and control, so start/stop/restart still works when the API is stopped.
 
-Tray features:
+The dashboard (double-click the tray icon, or **Open dashboard** in its menu) opens on one sentence: **Ready for billing**, or **Counters cannot bill** and why. Under it:
 
-- show service state, API liveness, DB health, and recently seen workstation clients (counter, machine\user, address, last seen)
-- install/repair the server, start/stop/restart the API Windows Service, open the local health page, open logs/config/install-log folders, and copy the workstation server URL from either the tray menu or the main dashboard window
-- configure/test/save the server's database connection through localhost-only maintenance endpoints using `maintenance_token.txt`; this is the only place it is changed, and no Desktop screen shows it. DB maintenance result dialogs include a **Copy** action for supportable error messages
-- exit the tray by stopping the API Windows Service first, then closing the companion UI
-- no Tally polling; Tally is checked only by operator-triggered push/refresh/System Health flows
+- three health lines, each with a dot, a sentence and a chip: **Windows service** (with **Start** when it is stopped, **Restart** and **Stop** when it is running, **Install** when it is missing), **Server** (whether the API answers on this PC) and **Database** (answering, not answering, upgrade needed, or marked as another database)
+- **Address for the counters**, with **Copy**: what goes into Settings → Server on each counter
+- **Counters connected**: the workstations heard from in the last 2 minutes (counter, PC and user, address, last seen)
+- **Database connection**: paste a new connection string, **Test**, then **Save**. This goes through localhost-only maintenance endpoints using `maintenance_token.txt`; it is the only place the connection is changed, and no screen shows the stored one. A saved connection is used once the service has been restarted
+- in the grey foot: **Logs**, **Data folder**, **Install log**, **Repair installation…**, and on the right **Stop server and exit**
 
-The tray's normal **Exit Tray** action stops `ShowroomBilling.Api` through Windows Service Control Manager before closing the companion tray UI. This is the server shutdown path for the Tally host.
+The tray menu offers the same, plus **Open health page**. Every message is a dialog whose text can be copied (**Copy**), so an error can be sent on as text. There is no Tally polling; Tally is checked only by operator-triggered push/refresh/System Health flows.
+
+**Stop server and exit** asks first, then stops `ShowroomBilling.Api` through Windows Service Control Manager and closes the tray. This is the server shutdown path for the Tally host. (Builds up to 11 October 2026 called it **Exit Tray**, and the buttons above **Install / Repair Server**, **Start / Stop / Restart API Service**, **Test DB** and **Save DB**.)
+
+The look is the Desktop's Ledger Clear, drawn in WinForms: see [15_ui_design_reference.md §12](15_ui_design_reference.md).
 
 ---
 
 ## 6. Start-up tasks
 
-- `DatabaseInitializationHostedService` — applies pending EF migrations when auto-migrate is on, and records how many are pending.
-- `StuckPostingRecoveryHostedService` — moves abandoned `posting` bills to `reconciliation_required`.
+- `DatabaseInitializationHostedService` — applies pending EF migrations when auto-migrate is on, and records how many are pending. A bounded start-up task.
+- `StuckPostingRecoveryHostedService` — moves abandoned `posting` bills to `reconciliation_required`. It sweeps once the database initialiser has finished and then every 5 minutes for as long as the service runs, also when the database was not reachable at start-up. A sweep is one small read (plus one update per abandoned bill); it holds off while the database is behind its migrations, and a sweep that fails is logged and followed by the next.
 
-These are bounded start-up tasks. There is no recurring posting, Tally polling, or retention worker after they finish.
+The recovery sweep is the only recurring work, and it touches the database only. Nothing posts to Tally, polls Tally or purges data in the background.
 
 ---
 
@@ -303,7 +307,8 @@ Should capture:
 - state transitions (bill.* audit events are also on disk via DB)
 - Tally call outcomes (`tally.posted`, `tally.failed`, `tally.outcome.unknown`, `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, etc.) and safe-read retry attempts emitted by `Microsoft.Extensions.Http.Resilience`
 - admin and recovery actions
-- `StuckPostingRecoveryHostedService` startup report
+- `StuckPostingRecoveryHostedService` recoveries and failed sweeps
+- one line when the database stops answering (`The database is not answering.`) and one when it answers again; the health checks in between write nothing
 
 Location: `C:\ProgramData\ShowroomBilling\logs` on the server (`api-*.log`). An API started by hand in development writes to its own data folder: `%APPDATA%\ShowroomBilling\logs`, or the scratch folder under `tools\run-scratch.ps1`.
 
@@ -317,12 +322,12 @@ Location: `C:\ProgramData\ShowroomBilling\logs` on the server (`api-*.log`). An 
 - `/api/health/ready` — whether PostgreSQL answers (pending migrations are reported by `/api/runtime/health`)
 - `/api/health/masters` — freshness of companies/ledgers/stock-items/voucher-types snapshots
 - `/api/health/tally-company` — operator-triggered Tally reachability + active-company check
-- `/api/runtime/health` — cheap runtime status by default; pass `?forceDatabase=true` for a PostgreSQL-backed DB/identity probe
+- `/api/runtime/health` — runtime status from a check of PostgreSQL (reachable, identity, pending migrations) that is at most 5 seconds old
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
 
-Desktop background health polling uses cheap runtime probes so it does not add a database round trip on every tick. Full DB health, Tally-company health, and master freshness are requested on startup, explicit System Health refreshes, and a slower scheduled probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
+Every Desktop and the server tray poll `/api/runtime/health` every 15 seconds, and each answer comes from a real check of the database; the API keeps one check for 5 seconds, so they share it. (Builds up to 11 October 2026 skipped the database on the routine poll, a habit from a provider that billed for the time the database was awake: a counter could show `READY` for up to 30 minutes after the database had gone, and the tray's database line always read "idle".) Tally-company health and master freshness are requested on startup, on explicit System Health refreshes, and by a slower 30-minute probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
 
-When the server reports that it cannot reach its database, the Desktop shows the limited-mode screen with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection." It does not open a settings screen by itself.
+When the server reports that it cannot reach its database, the Desktop's database pill turns red at once. The database is across the internet from the server, so one poll without an answer is not treated as an outage: the limited-mode screen, with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.", appears when the next poll agrees (within about 30 seconds of the database going), and at once at start-up or when the operator presses Refresh in System Health. It goes with the first poll that gets an answer. The Desktop does not open a settings screen by itself. The tray's database line reads `ready`, `not ready`, or `upgrade needed`.
 
 ### Tally reachability
 
@@ -348,7 +353,7 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 ### API restart
 
 - safe
-- `StuckPostingRecoveryHostedService` moves any bill stranded in `posting` to `reconciliation_required`; the operator verifies Tally and chooses admin Mark as Pushed or Mark as Pending
+- `StuckPostingRecoveryHostedService` moves any bill stranded in `posting` to `reconciliation_required`; the operator verifies Tally and chooses admin Mark as Pushed or Mark as Pending. A restart is not needed for this: the same sweep runs every 5 minutes while the service is up
 - data is in PostgreSQL; nothing lost
 
 ### Tally outage recovery
@@ -368,7 +373,7 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
   - The server service does try at start-up (the tray installer sets `Database__AutoMigrateOnStartup=true`), but it connects as the restricted application role, which may not create or alter objects. As soon as a migration is pending its attempt is refused with SQLSTATE `42501`, logged as a warning, and the API carries on. A release with nothing pending never reaches that code, which is how this stayed hidden until 10 October 2026.
   - The Desktop has no API and migrates nothing.
   - A build running against a database that has not had its migrations cannot read or save a bill, although PostgreSQL is reachable and settings and masters load. It says so in four places: bill and numbering requests answer `503 Database upgrade needed`; `/api/runtime/health` reports `pendingMigrationCount` (see [09_api_spec.md](09_api_spec.md)); the Desktop shows `DB BEHIND`, a banner, and the reason above the Bills list; the server tray's database line reads `upgrade needed: N migration(s) not applied`. Before 10 October 2026 none of this existed: those requests were a bare `500`, health read Healthy and the Bills tab was simply empty. The detailed reason for a refused start-up migration is in the server's log (`C:\ProgramData\ShowroomBilling\logs\api-*.log`, search for `migration`).
-  - To apply them: first look at what the database has (`SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1 DESC LIMIT 3`); do not assume. Then either generate a script with `dotnet ef migrations script <last applied migration> --idempotent --output <file>` (no database connection needed) and run it with `psql -v ON_ERROR_STOP=1` as the owner role where the database is reachable, or run `dotnet ef database update --connection ...` with the owner role's connection string. Restart the API service afterwards so the start-up tasks that stepped aside run.
+  - To apply them: first look at what the database has (`SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1 DESC LIMIT 3`); do not assume. Then either generate a script with `dotnet ef migrations script <last applied migration> --idempotent --output <file>` (no database connection needed) and run it with `psql -v ON_ERROR_STOP=1` as the owner role where the database is reachable, or run `dotnet ef database update --connection ...` with the owner role's connection string. The API service does not have to be restarted afterwards: the next health check, seconds later, finds nothing pending, the banner goes, and the stuck-posting sweeps, which hold off while the database is behind, resume. (Restarting it does no harm.)
   - A development or test database whose application role owns its tables does migrate itself; that is why this does not show up there.
 - preserve backward-compatibility window if desktop rollout is staged
 
@@ -400,7 +405,7 @@ A migration that removes data must also protect itself, because that step can be
 
 ### Online-first consequence
 
-This architecture is intentionally online-first. If the API is unavailable, the desktop cannot save bills. There is one API for the whole showroom: while the server PC is off or its service is stopped (the tray's **Exit Tray** stops it), every counter shows the limited-mode screen. Reasoning:
+This architecture is intentionally online-first. If the API is unavailable, the desktop cannot save bills. There is one API for the whole showroom: while the server PC is off or its service is stopped (the tray's **Stop server and exit** stops it), every counter shows the limited-mode screen. Reasoning:
 
 - no local durable business storage on the desktop
 - invoice numbers are reserved at save time by the API's numbering service

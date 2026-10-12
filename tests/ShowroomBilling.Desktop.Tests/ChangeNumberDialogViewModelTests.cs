@@ -11,7 +11,8 @@ public sealed class ChangeNumberDialogViewModelTests
 
         dialog.NewNumberRaw = "42";
 
-        Assert.Equal("Will save as: SR/2025-26/0042", dialog.PreviewText);
+        Assert.Equal("SR/2025-26/0042", dialog.PreviewNumber);
+        Assert.Equal("The bill will become **SR/2025-26/0042**.", dialog.PreviewMarkup);
         Assert.True(dialog.OkCommand.CanExecute(null));
     }
 
@@ -28,7 +29,9 @@ public sealed class ChangeNumberDialogViewModelTests
         dialog.NewNumberRaw = input;
 
         Assert.False(dialog.OkCommand.CanExecute(null));
-        Assert.StartsWith("Digits only", dialog.PreviewText);
+        Assert.True(dialog.IsInvalid);
+        Assert.False(dialog.HasPreview);
+        Assert.StartsWith("Digits only", dialog.InvalidText);
     }
 
     [Fact]

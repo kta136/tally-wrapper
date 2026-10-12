@@ -15,117 +15,93 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
+    <shell:ReadingColumn MaxContentWidth="760">
     <StackPanel DataContext="{Binding AdminVm}">
-        <TextBlock Text="Admin" Style="{StaticResource SectionHeader}" Margin="0,0,0,16" />
 
-        <!--  Unlocked / locked status strip  -->
-        <Border Style="{StaticResource AdminBannerInfo}"
-                Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
+        <!--  Unlocked, or locked  -->
+        <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerOk}" Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="7"
-                             Height="7"
-                             Margin="0,0,8,0"
-                             VerticalAlignment="Center"
-                             Fill="{StaticResource OkBrush}" />
-                    <TextBlock Text="{Binding SessionSummary}"
-                               Foreground="{StaticResource OkInkBrush}"
+                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                    <Ellipse Width="9" Height="9" Margin="0,0,12,0" VerticalAlignment="Center" Fill="{StaticResource OkBrush}" />
+                    <TextBlock VerticalAlignment="Center"
                                FontWeight="Medium"
-                               VerticalAlignment="Center" />
+                               Foreground="{StaticResource OkInkBrush}"
+                               Text="{Binding SessionSummary}" />
                 </StackPanel>
-                <Button Grid.Column="1"
-                        Style="{StaticResource BtnBase}"
-                        Content="Lock session"
-                        Command="{Binding LockCommand}" />
+                <Button Grid.Column="1" Command="{Binding LockCommand}" Content="Lock session" />
             </Grid>
         </Border>
 
-        <Border Style="{StaticResource AdminBannerErr}"
-                Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="12"
-                       Foreground="{StaticResource ErrInkBrush}"
-                       TextWrapping="Wrap">
-                <Run Text="Admin is locked. Press " /><Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource ErrBrush}" Text="~" /><Run Text=" (backtick) to open the unlock dialog." />
+        <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerErr}" Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}">
+            <TextBlock Foreground="{StaticResource ErrInkBrush}" TextWrapping="Wrap">
+                <Run Text="Admin is locked. Press " /><Run FontFamily="{StaticResource MonoFontFamily}" FontWeight="SemiBold" Text="~" /><Run Text=" (backtick) to open the unlock dialog." />
             </TextBlock>
         </Border>
 
-        <!--  Error / status inline (bound to AdminVm)  -->
-        <Border Style="{StaticResource AdminBannerErr}"
-                Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="12"
-                       Foreground="{StaticResource ErrInkBrush}"
-                       TextWrapping="Wrap"
-                       Text="{Binding ErrorMessage}" />
+        <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerErr}" Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
+            <TextBlock Foreground="{StaticResource ErrInkBrush}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
         </Border>
-        <Border Style="{StaticResource AdminBannerInfo}"
-                Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="12"
-                       Foreground="{StaticResource InfoInkBrush}"
-                       TextWrapping="Wrap"
-                       Text="{Binding StatusMessage}" />
+        <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerInfo}" Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
+            <TextBlock Foreground="{StaticResource InfoInkBrush}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
         </Border>
 
-        <!--  Set / change passcode  -->
-        <Border Style="{StaticResource AdminSectionPanel}">
+        <!--  Set or change the passcode  -->
+        <Border Margin="0,0,0,16" Style="{StaticResource SettingsCard}">
             <StackPanel>
-                <Grid Margin="0,0,0,8">
-                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
-                               Margin="0"
-                               Text="CHANGE PASSCODE"
-                               Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}" />
-                    <TextBlock Style="{StaticResource TxtSectionTitleSpaced}"
-                               Margin="0"
-                               Text="SET PASSCODE"
-                               Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource InverseBoolToVis}}" />
+                <Grid Margin="0,0,0,16">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Change passcode" Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Set passcode" Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource InverseBoolToVis}}" />
                     <TextBlock HorizontalAlignment="Right"
-                               FontSize="{DynamicResource FontSizeXs}"
+                               VerticalAlignment="Center"
                                Foreground="{StaticResource InkSoftBrush}"
-                               Text="Min. 6 characters"
-                               VerticalAlignment="Center" />
+                               Style="{StaticResource TxtHint}"
+                               Text="At least 6 characters" />
                 </Grid>
-                <StackPanel Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Style="{StaticResource FieldLabel}" Text="CURRENT PASSCODE" />
-                    <PasswordBox shell:PasswordBinding.Password="{Binding CurrentPasscode}" />
-                </StackPanel>
-                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="NEW PASSCODE" />
-                <PasswordBox shell:PasswordBinding.Password="{Binding NewPasscode}" />
-                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,3" Text="CONFIRM NEW PASSCODE" />
-                <PasswordBox shell:PasswordBinding.Password="{Binding ConfirmNewPasscode}" />
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                    <Button Style="{StaticResource BtnPrimary}"
-                            MinWidth="120"
+                <StackPanel HorizontalAlignment="Left" Width="420">
+                    <StackPanel Visibility="{Binding IsPasscodeConfigured, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Current passcode" />
+                        <PasswordBox Margin="0,0,0,14" shell:PasswordBinding.Password="{Binding CurrentPasscode}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="New passcode" />
+                    <PasswordBox Margin="0,0,0,14" shell:PasswordBinding.Password="{Binding NewPasscode}" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Confirm new passcode" />
+                    <PasswordBox Margin="0,0,0,18" shell:PasswordBinding.Password="{Binding ConfirmNewPasscode}" />
+                    <Button HorizontalAlignment="Left"
+                            MinWidth="140"
+                            Command="{Binding SetOrChangePasscodeCommand}"
                             Content="Save passcode"
-                            Command="{Binding SetOrChangePasscodeCommand}" />
+                            Style="{StaticResource BtnPrimary}" />
                 </StackPanel>
             </StackPanel>
         </Border>
 
         <!--
-            Batch Data Scheduler — admin-only; lives here now
-            (previously in Advanced). The inner DataContext is
-            AdminVm, so walk to Window to reach
-            MainWindowViewModel.OpenSyntheticBatchCommand.
+            Batch data scheduler: admin-only. The inner DataContext is AdminVm, so the
+            button reaches MainWindowViewModel.OpenSyntheticBatchCommand through the Window.
         -->
-        <Border Style="{StaticResource AdminSectionPanel}"
-                Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
+        <Border Style="{StaticResource SettingsCard}" Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
             <StackPanel>
-                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Margin="0,0,0,8" Text="BATCH DATA SCHEDULER" />
-                <TextBlock FontSize="12"
-                           LineHeight="19"
-                           TextWrapping="Wrap"
-                           Foreground="{StaticResource InkMutedBrush}"
-                           Margin="0,0,0,10">
-                    <Run Text="Generates a cluster of realistic " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="pending" /><Run Text=" bills by partitioning a total target amount into bills of ₹25,000–₹1,99,000, scattered across a chosen time window. No Tally traffic; audit timestamps are backfilled." />
+                <TextBlock Margin="0,0,0,8" Style="{StaticResource CardTitle}" Text="Batch data scheduler" />
+                <TextBlock Margin="0,0,0,16" Foreground="{StaticResource InkMutedBrush}" TextWrapping="Wrap">
+                    <Run Text="Generates a cluster of realistic " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="pending" /><Run Text=" bills by splitting a total target amount into bills of ₹25,000 to ₹1,99,000, spread across a time window you choose. Nothing is sent to Tally, and the audit timestamps are backfilled." />
                 </TextBlock>
-                <Button HorizontalAlignment="Left"
-                        Style="{StaticResource BtnBase}"
-                        Command="{Binding DataContext.OpenSyntheticBatchCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                        Content="Open Batch Data Scheduler…" />
+                <StackPanel Orientation="Horizontal">
+                    <Button Command="{Binding DataContext.OpenSyntheticBatchCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="Open Batch data scheduler…" />
+                    <StackPanel Margin="16,0,0,0" VerticalAlignment="Center" Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontFamily="{StaticResource IconFontFamily}"
+                                   FontSize="14"
+                                   Foreground="{StaticResource WarnInkBrush}"
+                                   Text="&#xE7BA;" />
+                        <TextBlock Margin="8,0,0,0" FontWeight="Medium" Foreground="{StaticResource WarnInkBrush}" Text="Creates bills in the live database" />
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </Border>
     </StackPanel>
+    </shell:ReadingColumn>
 </UserControl>

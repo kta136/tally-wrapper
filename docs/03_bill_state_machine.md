@@ -153,7 +153,7 @@ There is no `tally_posting_jobs` table or queue. On push/retry/repost, `BillPost
 3. Calls `ITallyPoster.PostAsync` synchronously (builds create XML, or alter XML for edited-after-push, sends via HTTP to Tally, parses response).
 4. Writes `tally.posted`, `tally.failed`, or `tally.outcome.unknown` and transitions the bill to `posted`, `failed`, or `reconciliation_required`. The audit trail is append-only, including across edit-and-repush flows.
 
-If the API crashes mid-post, `StuckPostingRecoveryHostedService` moves any stranded `posting` bill to `reconciliation_required` with a `bill.posting.recovered` audit event. Because another API process on the same database may be mid-push, a `posting` claim is only treated as abandoned once it is older than 10 minutes (longer than the 300 s Tally budget plus settling); younger claims are re-checked later, conditionally on the claim being unchanged. It never makes a potentially duplicate write safe merely by restarting the API.
+If the API crashes mid-post, or cannot reach the database to record the outcome once Tally has answered, the bill is left in `posting`. `StuckPostingRecoveryHostedService`, which sweeps at API start and every 5 minutes after, moves any stranded `posting` bill to `reconciliation_required` with a `bill.posting.recovered` audit event. Because another API process on the same database may be mid-push, a `posting` claim is only treated as abandoned once it is older than 10 minutes (longer than the 300 s Tally budget plus settling); younger claims are re-checked later, conditionally on the claim being unchanged. It never makes a potentially duplicate write safe merely by restarting the API.
 
 ---
 

@@ -17,8 +17,8 @@ public sealed class StartupStatus
 
     public void RecordDatabaseFailure(string error)
     {
-        // Awaiters of WaitForDatabaseReadyAsync (e.g. stuck-posting recovery) get
-        // a fault rather than hanging forever — they should treat it as "skip this run".
+        // Awaiters of WaitForDatabaseReadyAsync (stuck-posting recovery) get a
+        // fault rather than hanging forever; the database may still answer later.
         _databaseReadyTcs.TrySetException(new DatabaseNotReadyException(error));
     }
 

@@ -39,7 +39,7 @@ public sealed class ShellHealthCoordinatorTests
     }
 
     [Fact]
-    public async Task RefreshHealthAsync_SaysTheDatabaseNeedsItsMigrations_AndKeepsAskingUntilItHasThem()
+    public async Task RefreshHealthAsync_SaysTheDatabaseNeedsItsMigrations_UntilItHasThem()
     {
         var host = new FakeShellHealthHost();
         var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, null, null, Runtime(pending: 6)));
@@ -53,20 +53,82 @@ public sealed class ShellHealthCoordinatorTests
         Assert.Contains("6 schema migration(s)", host.BannerText);
         Assert.Contains("administrator", host.BannerText);
 
-        // The next poll would normally be the cheap one (the database was
-        // checked a moment ago). While it is behind, the full check is asked for.
+        // Every poll is a real check, so the banner goes with the first one
+        // after the migrations have been applied.
         client.Snapshot = new SystemHealthSnapshot(true, null, null, Runtime(pending: 0));
         await coordinator.RefreshHealthAsync();
 
-        Assert.True(client.LastForceDatabaseHealth);
         Assert.Equal(SystemState.Healthy, host.SystemState);
         Assert.Equal("READY", host.StatusBar.StatusText);
         Assert.Equal(string.Empty, host.BannerText);
-
-        // Up to date again: back to the cheap probe.
-        await coordinator.RefreshHealthAsync();
-        Assert.False(client.LastForceDatabaseHealth);
     }
+
+    [Fact]
+    public async Task RefreshHealthAsync_KeepsTheBillOnScreenThroughOneMissedAnswerFromTheDatabase()
+    {
+        var host = new FakeShellHealthHost();
+        var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, null, null, Runtime(pending: 0)));
+        var coordinator = new ShellHealthCoordinator(client, new FakeMastersApiClient(), host);
+        await coordinator.RefreshHealthAsync();
+        Assert.Equal(SystemState.Healthy, host.SystemState);
+
+        // One poll without an answer: the pill says so, the screen stays.
+        client.Snapshot = new SystemHealthSnapshot(true, null, null, DatabaseDown());
+        await coordinator.RefreshHealthAsync();
+
+        Assert.Equal(SystemState.Healthy, host.SystemState);
+        Assert.Equal("READY", host.StatusBar.StatusText);
+        Assert.Equal("DB PROD", host.StatusBar.DatabaseEnvironment);
+        Assert.Equal("err", host.Health.DatabaseDot);
+
+        // The next poll agrees: it is an outage.
+        await coordinator.RefreshHealthAsync();
+
+        Assert.Equal(SystemState.Limited, host.SystemState);
+        Assert.Equal("DB DOWN", host.StatusBar.StatusText);
+        Assert.Contains("cannot reach its database", host.BannerText);
+
+        // It is over with the first poll that gets an answer.
+        client.Snapshot = new SystemHealthSnapshot(true, null, null, Runtime(pending: 0));
+        await coordinator.RefreshHealthAsync();
+
+        Assert.Equal(SystemState.Healthy, host.SystemState);
+        Assert.Equal("READY", host.StatusBar.StatusText);
+        Assert.Equal(string.Empty, host.BannerText);
+    }
+
+    [Fact]
+    public async Task RefreshHealthAsync_ReportsADatabaseThatIsDownAtOnce_AtStartUpAndWhenTheOperatorAsks()
+    {
+        // At start-up there is no earlier answer to stay with.
+        var host = new FakeShellHealthHost();
+        var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, null, null, DatabaseDown()));
+        var coordinator = new ShellHealthCoordinator(client, new FakeMastersApiClient(), host);
+        await coordinator.RefreshHealthAsync();
+
+        Assert.Equal(SystemState.Limited, host.SystemState);
+        Assert.Equal("DB DOWN", host.StatusBar.StatusText);
+
+        client.Snapshot = new SystemHealthSnapshot(true, null, null, Runtime(pending: 0));
+        await coordinator.RefreshHealthAsync();
+        Assert.Equal("READY", host.StatusBar.StatusText);
+
+        // Refresh in System Health shows the check as it came back.
+        client.Snapshot = new SystemHealthSnapshot(true, null, null, DatabaseDown());
+        await coordinator.RefreshHealthAsync(forceTallyCompany: true);
+
+        Assert.Equal(SystemState.Limited, host.SystemState);
+        Assert.Equal("DB DOWN", host.StatusBar.StatusText);
+    }
+
+    private static RuntimeHealthResponse DatabaseDown() => new(
+        "Unhealthy",
+        ApiAvailable: true,
+        DatabaseConfigured: true,
+        DatabaseReachable: false,
+        SettingsLoadedFromApi: true,
+        Message: "API is online. PostgreSQL must be configured and reachable for readiness.",
+        ExpectedDatabaseIdentity: "PROD");
 
     private static RuntimeHealthResponse Runtime(int pending) => new(
         pending > 0 ? "Unhealthy" : "Healthy",
@@ -97,17 +159,11 @@ public sealed class ShellHealthCoordinatorTests
     {
         public SystemHealthSnapshot Snapshot { get; set; } = snapshot;
 
-        public bool LastForceDatabaseHealth { get; private set; }
-
         public Task<SystemHealthSnapshot> GetSnapshotAsync(
             bool includeTallyCompany,
             bool includeMasterFreshness = true,
-            bool forceDatabaseHealth = false,
-            CancellationToken cancellationToken = default)
-        {
-            LastForceDatabaseHealth = forceDatabaseHealth;
-            return Task.FromResult(Snapshot);
-        }
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Snapshot);
     }
 
     private sealed class FakeMastersApiClient : IMastersApiClient

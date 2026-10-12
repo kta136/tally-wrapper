@@ -11,11 +11,11 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
     {
         var installed = ServerInstaller.EnsureInstalledInteractive(options, forceRepair: true);
         StatusChanged?.Invoke(this, EventArgs.Empty);
-        ShowMessage(
+        CopyableMessageDialog.ShowMessage(
             owner,
             installed
-                ? "Server setup is installed, repaired, and started."
-                : "Server setup was cancelled or did not complete.",
+                ? "The server is installed and running."
+                : "Setup did not finish.\n\nIt was cancelled, or Windows did not allow it. The install log has the details.",
             installed ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         return installed;
     }
@@ -39,8 +39,16 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
     /// <summary>The API service's status, or null when it is not installed.</summary>
     public ServiceControllerStatus? GetServiceStatus() => ServerInstaller.TryGetServiceStatus(options.ServiceName);
 
-    /// <summary>The status as shown to the operator, e.g. "Running" or "not installed".</summary>
-    public static string Describe(ServiceControllerStatus? status) => status?.ToString() ?? "not installed";
+    /// <summary>The status as the tray icon's tooltip says it: "running", "stopped", "not installed".</summary>
+    public static string Describe(ServiceControllerStatus? status) => status switch
+    {
+        null => "not installed",
+        ServiceControllerStatus.Running => "running",
+        ServiceControllerStatus.Stopped => "stopped",
+        ServiceControllerStatus.StartPending => "starting",
+        ServiceControllerStatus.StopPending => "stopping",
+        _ => "paused",
+    };
 
     public string GetWorkstationUrl() => ServerUrlHelper.GetWorkstationApiBaseUrl(options.ApiBaseUrl);
 
@@ -92,9 +100,9 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
         }
         catch (Exception ex)
         {
-            ShowMessage(
+            CopyableMessageDialog.ShowMessage(
                 owner,
-                $"Service {verb} failed: {ex.Message}\n\nRun the tray as Administrator or grant service-control rights to this user.",
+                $"The service did not {verb}.\n\n{ex.Message}\n\nWindows lets an administrator start and stop services. Run Tally Wrapper Server as administrator, or give this user that right.",
                 MessageBoxIcon.Error);
             StatusChanged?.Invoke(this, EventArgs.Empty);
             return false;
@@ -110,11 +118,5 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
     private static void OpenUrl(string url)
     {
         Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-    }
-
-    private static void ShowMessage(IWin32Window? owner, string text, MessageBoxIcon icon)
-    {
-        // A null owner is fine: the box is then centred on the screen.
-        MessageBox.Show(owner, text, ServerTrayOptions.ProductName, MessageBoxButtons.OK, icon);
     }
 }

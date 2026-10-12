@@ -1,0 +1,86 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.BannerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--  The strip under the top bar that says what is wrong, or what to know: information, a
+          warning, or an error. It shows only when there is something to say. Its state is the shell
+          view model's BannerTone, BannerText and IsBannerVisible.  -->
+        <Border Visibility="{Binding IsBannerVisible, Converter={StaticResource BoolToVis}}">
+            <Border.Style>
+                <Style BasedOn="{StaticResource BannerInfo}" TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding BannerTone}" Value="warn">
+                            <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource WarnBorderBrush}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding BannerTone}" Value="err">
+                            <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource ErrBorderBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           FontFamily="{StaticResource IconFontFamily}"
+                           FontSize="18"
+                           Text="&#xE946;">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding BannerTone}" Value="warn">
+                                    <Setter Property="Text" Value="&#xE7BA;" />
+                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding BannerTone}" Value="err">
+                                    <Setter Property="Text" Value="&#xE783;" />
+                                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Grid.Column="1"
+                           Margin="12,0,12,0"
+                           VerticalAlignment="Center"
+                           FontWeight="Medium"
+                           Text="{Binding BannerText}"
+                           TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding BannerTone}" Value="warn">
+                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding BannerTone}" Value="err">
+                                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button Grid.Column="2"
+                        VerticalAlignment="Center"
+                        Command="{Binding DismissBannerCommand}"
+                        Content="Got it"
+                        Style="{StaticResource BtnSm}"
+                        Visibility="{Binding IsBannerDismissible, Converter={StaticResource BoolToVis}}" />
+                <Button Grid.Column="2"
+                        VerticalAlignment="Center"
+                        Command="{Binding RefreshHealthCommand}"
+                        Content="Retry now"
+                        Style="{StaticResource BtnSm}">
+                    <Button.Visibility>
+                        <Binding Path="BannerTone" Converter="{StaticResource StringEqualsVis}" ConverterParameter="err" />
+                    </Button.Visibility>
+                </Button>
+            </Grid>
+        </Border>
+</UserControl>

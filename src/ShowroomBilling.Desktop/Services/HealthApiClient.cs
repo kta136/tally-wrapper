@@ -11,7 +11,6 @@ public sealed class HealthApiClient(HttpClient httpClient) : IHealthApiClient
     public async Task<SystemHealthSnapshot> GetSnapshotAsync(
         bool includeTallyCompany,
         bool includeMasterFreshness = true,
-        bool forceDatabaseHealth = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -23,10 +22,10 @@ public sealed class HealthApiClient(HttpClient httpClient) : IHealthApiClient
             return SystemHealthSnapshot.Unreachable();
         }
 
-        var runtimeUri = forceDatabaseHealth
-            ? "/api/runtime/health?forceDatabase=true"
-            : "/api/runtime/health";
-        var runtime = await TryGetAsync<RuntimeHealthResponse>(runtimeUri, cancellationToken);
+        // forceDatabase is for a server older than this Desktop, which answers
+        // without checking its database unless asked to. A current server
+        // always checks and ignores it.
+        var runtime = await TryGetAsync<RuntimeHealthResponse>("/api/runtime/health?forceDatabase=true", cancellationToken);
         var masters = includeMasterFreshness
             ? await TryGetAsync<MasterFreshnessSummaryResponse>("/api/health/masters", cancellationToken)
             : null;

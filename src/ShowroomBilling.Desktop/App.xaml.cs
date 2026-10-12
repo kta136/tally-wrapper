@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Bills;
@@ -29,6 +30,7 @@ public partial class App : System.Windows.Application
 
     public App()
     {
+        UiCulture.Apply();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;

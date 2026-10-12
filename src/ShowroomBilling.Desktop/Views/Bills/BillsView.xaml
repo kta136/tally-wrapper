@@ -24,11 +24,26 @@
     </UserControl.InputBindings>
 
     <UserControl.Resources>
-        <Style x:Key="TableHeaderBorder" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
-            <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="10,6" />
+        <!--  The eight columns of the list. Party and the note share what is left, the note a little more.  -->
+        <GridLength x:Key="ColCheck">48</GridLength>
+        <GridLength x:Key="ColInvoice">172</GridLength>
+        <GridLength x:Key="ColState">138</GridLength>
+        <GridLength x:Key="ColAmount">130</GridLength>
+        <GridLength x:Key="ColBillDate">130</GridLength>
+        <GridLength x:Key="ColUpdated">150</GridLength>
+
+        <Style x:Key="HeadCell" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
+            <Setter Property="Margin" Value="10,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--  A count of bills that wait on the operator, in the colour of what it counts.  -->
+        <Style x:Key="SummaryPill" TargetType="Border">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
         </Style>
 
         <Style x:Key="BillRowContainer" TargetType="ListBoxItem">
@@ -55,6 +70,14 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!--  The small grey label that heads the admin-only group of the row menu.  -->
+        <Style x:Key="MenuGroupLabel" TargetType="MenuItem">
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -62,448 +85,559 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Padding="14,10"
-                Background="{StaticResource BgPanelBrush}"
+        <!--  Row 0: title, and a count of what needs doing  -->
+        <Grid Grid.Row="0" Margin="16,14,16,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="Bills &amp; sync history" />
+                <TextBlock Margin="0,2,0,0"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           Style="{StaticResource TxtHint}"
+                           Text="Bills are saved here first and go to Tally only when you push them." />
+            </StackPanel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+                <Border Background="{StaticResource WarnSoftBrush}"
+                        BorderBrush="{StaticResource WarnBorderBrush}"
+                        Style="{StaticResource SummaryPill}"
+                        Visibility="{Binding HasWaitingForTally, Converter={StaticResource BoolToVis}}">
+                    <shell:StateChip Padding="0"
+                                     Background="Transparent"
+                                     Kind="half"
+                                     Label="{Binding WaitingForTallyText}"
+                                     Tone="warn" />
+                </Border>
+                <Border Background="{StaticResource WarnSoftBrush}"
+                        BorderBrush="{StaticResource WarnBorderBrush}"
+                        Style="{StaticResource SummaryPill}"
+                        Visibility="{Binding HasPosting, Converter={StaticResource BoolToVis}}">
+                    <shell:StateChip Padding="0"
+                                     Background="Transparent"
+                                     Kind="half"
+                                     Label="{Binding PostingText}"
+                                     Tone="warn" />
+                </Border>
+                <Border Background="{StaticResource ErrSoftBrush}"
+                        BorderBrush="{StaticResource ErrBorderBrush}"
+                        Style="{StaticResource SummaryPill}"
+                        Visibility="{Binding HasNeedAttention, Converter={StaticResource BoolToVis}}">
+                    <shell:StateChip Padding="0"
+                                     Background="Transparent"
+                                     Kind="bang"
+                                     Label="{Binding NeedAttentionText}"
+                                     Tone="err" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!--  Row 1: filters  -->
+        <Grid Grid.Row="1" Margin="16,0,16,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="270" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="State" />
+                <ComboBox ItemsSource="{Binding StateFilterOptions}" SelectedItem="{Binding StateFilter}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Width="184" Margin="14,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="From" />
+                <DatePicker shell:FieldAdorn.Placeholder="Any date" SelectedDate="{Binding FromDate}" />
+            </StackPanel>
+            <TextBlock Grid.Column="2"
+                       Margin="12,0,12,6"
+                       VerticalAlignment="Bottom"
+                       Foreground="{StaticResource InkSoftBrush}"
+                       Text="→" />
+            <StackPanel Grid.Column="3" Width="158">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="To" />
+                <DatePicker shell:FieldAdorn.Placeholder="Any date" SelectedDate="{Binding ToDate}" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Margin="14,0,0,0">
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Search" />
+                <TextBox Padding="32,0,10,0"
+                         shell:FieldAdorn.Placeholder="Invoice number or party"
+                         ToolTip="Search invoice number or party name. Press Enter or click Apply to reload."
+                         Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}">
+                    <shell:FieldAdorn.Prefix>
+                        <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="13" Text="&#xE721;" />
+                    </shell:FieldAdorn.Prefix>
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding ApplyFiltersCommand}" />
+                    </TextBox.InputBindings>
+                </TextBox>
+            </StackPanel>
+            <StackPanel Grid.Column="5"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Bottom"
+                        Orientation="Horizontal">
+                <Button Command="{Binding ApplyFiltersCommand}" Content="Apply" MinWidth="66" Style="{StaticResource BtnPrimary}" />
+                <Button Margin="10,0,0,0" Command="{Binding ClearFiltersCommand}" Content="Clear" MinWidth="62" />
+            </StackPanel>
+            <CheckBox Grid.Column="6"
+                      Margin="0,0,0,6"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Bottom"
+                      Foreground="{StaticResource InkMutedBrush}"
+                      IsChecked="{Binding HideFullyPostedDays, Mode=TwoWay}"
+                      ToolTip="Hide date groups in which every bill is already posted to Tally. Leaves only days that still have unposted work.">
+                <TextBlock Foreground="{StaticResource InkMutedBrush}" Text="Hide fully posted days" />
+            </CheckBox>
+        </Grid>
+
+        <!--  Row 2: what to do with the selected bills, and the one action for all pending ones  -->
+        <Border Grid.Row="2"
+                Padding="16,10"
+                Background="{StaticResource BgSunkenBrush}"
                 BorderBrush="{StaticResource BorderBrushTok}"
-                BorderThickness="0,0,0,1">
+                BorderThickness="0,1,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-
-                <TextBlock Style="{StaticResource TxtPageTitle}" Text="Bills &amp; Sync History" />
-
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button Style="{StaticResource BtnSm}"
-                            Margin="0,0,6,0"
-                            Command="{Binding DataContext.OpenBillDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            Content="Open Details"
+                <StackPanel Orientation="Horizontal">
+                    <Border Height="24"
+                            Padding="10,0"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource AccentSoftPressedBrush}"
+                            CornerRadius="12"
+                            Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="{DynamicResource FontSizeLabel}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentInkBrush}"
+                                   Text="{Binding SelectionSummaryText}" />
+                    </Border>
+                    <TextBlock VerticalAlignment="Center"
+                               Text="Select bills to act on them">
+                        <TextBlock.Style>
+                            <Style BasedOn="{StaticResource TxtHint}" TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSelection}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <Button Margin="8,0,0,0"
+                            Command="{Binding ClearSelectionCommand}"
+                            Content="Clear"
+                            Style="{StaticResource BtnGhost}"
+                            Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}" />
+                    <Rectangle Width="1" Height="22" Margin="10,0" Fill="{StaticResource BorderBrushTok}" />
+                    <Button Command="{Binding DataContext.OpenBillDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Content="Open details"
                             shell:Kbd.Hint="Enter" />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry Push" shell:Kbd.Hint="Ctrl+R" />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding PushSelectedCommand}" Content="Push to Tally" />
-                    <Button Style="{StaticResource BtnSm}"
-                            Margin="0,0,6,0"
-                            Command="{Binding PushAllPendingCommand}"
-                            Content="Push All Pending"
-                            ToolTip="Push every pending/draft bill to Tally, oldest first. Stops on the first failure." />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RepostSelectedCommand}" Content="Repost to Tally" shell:Kbd.Hint="Ctrl+Shift+R" />
-                    <Button Style="{StaticResource BtnSm}"
-                            Margin="0,0,6,0"
+                    <Button Margin="8,0,0,0"
                             Command="{Binding EditRowCommand}"
                             CommandParameter="{Binding SelectedRow}"
                             Content="Edit"
                             shell:Kbd.Hint="Ctrl+Shift+E" />
-                    <Button Style="{StaticResource BtnSm}"
+                    <Button Margin="8,0,0,0" Command="{Binding PushSelectedCommand}" Content="Push to Tally" />
+                    <Button Margin="8,0,0,0"
+                            Command="{Binding RetrySelectedCommand}"
+                            Content="Retry push"
+                            shell:Kbd.Hint="Ctrl+R" />
+                    <Button Margin="8,0,0,0"
+                            Command="{Binding RepostSelectedCommand}"
+                            Content="Repost"
+                            shell:Kbd.Hint="Ctrl+Shift+R" />
+                    <Button Margin="8,0,0,0"
                             Command="{Binding DataContext.OpenSelectedBillsPrintPreviewCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             Content="Print"
                             shell:Kbd.Hint="Ctrl+P" />
                 </StackPanel>
+                <Button Grid.Column="1"
+                        Command="{Binding PushAllPendingCommand}"
+                        Style="{StaticResource BtnPrimary}"
+                        ToolTip="Push every pending and draft bill to Tally, oldest first. Stops on the first failure.">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Push all pending" />
+                        <Border Height="18"
+                                MinWidth="18"
+                                Margin="8,0,0,0"
+                                Padding="5,0"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource OnFilledChipBrush}"
+                                CornerRadius="9">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource FontSizeXs}"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding WaitingForTallyCount}" />
+                        </Border>
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
 
-        <Border Grid.Row="1"
-                Padding="14,10"
-                Background="{StaticResource BgPanelBrush}"
-                BorderBrush="{StaticResource BorderBrushTok}"
-                BorderThickness="0,0,0,1">
+        <!--  Row 3: admin-only actions, there only while the session is unlocked  -->
+        <Border Grid.Row="3"
+                Padding="16,10"
+                Background="{StaticResource EditBannerSoftBrush}"
+                BorderBrush="{StaticResource EditBannerBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="220" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="State" />
-                    <ComboBox Width="150"
-                              Height="26"
-                              FontSize="{DynamicResource FontSizeLabel}"
-                              ItemsSource="{Binding StateFilterOptions}"
-                              SelectedItem="{Binding StateFilter}" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="From" />
-                    <DatePicker Width="124" Height="26" SelectedDate="{Binding FromDate}" />
-                </StackPanel>
-                <TextBlock Grid.Column="2" Margin="10,0" VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" Text="→" />
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="To" />
-                    <DatePicker Width="124" Height="26" SelectedDate="{Binding ToDate}" />
-                </StackPanel>
-                <StackPanel Grid.Column="4" Orientation="Horizontal" Margin="10,0,0,0">
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding ApplyFiltersCommand}" Content="Apply" />
-                    <Button Style="{StaticResource BtnSm}" Command="{Binding ClearFiltersCommand}" Content="Clear" />
-                </StackPanel>
-                <StackPanel Grid.Column="5" Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource InkMutedBrush}" Text="Search" />
-                    <TextBox Width="160"
-                             Height="26"
-                             FontFamily="{StaticResource MonoFontFamily}"
-                             FontSize="{DynamicResource FontSizeLabel}"
-                             ToolTip="Search invoice number or party name. Press Enter or click Apply to reload."
-                             Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}">
-                        <TextBox.InputBindings>
-                            <KeyBinding Key="Enter" Command="{Binding ApplyFiltersCommand}" />
-                        </TextBox.InputBindings>
-                    </TextBox>
-                </StackPanel>
-                <CheckBox Grid.Column="6"
-                          Margin="14,0,0,0"
-                          VerticalAlignment="Center"
-                          HorizontalAlignment="Left"
-                          IsChecked="{Binding HideFullyPostedDays, Mode=TwoWay}"
-                          Foreground="{StaticResource InkMutedBrush}"
-                          ToolTip="Hide date groups in which every bill is already posted to Tally. Leaves only days that still have unposted work.">
-                    <TextBlock Text="Hide fully posted days" Foreground="{StaticResource InkMutedBrush}" />
-                </CheckBox>
-            </Grid>
-        </Border>
-
-        <Border Grid.Row="2"
-                Padding="14,6"
-                Background="{StaticResource AccentSoftBrush}"
-                BorderBrush="{StaticResource BorderBrushTok}"
-                BorderThickness="0,0,0,1"
-                Visibility="{Binding IsSelectionBarVisible, Converter={StaticResource BoolToVis}}">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Style="{StaticResource Chip}">
-                    <TextBlock Text="{Binding SelectionSummaryText}"
-                               FontFamily="{StaticResource MonoFontFamily}"
-                               FontSize="{DynamicResource FontSizeXs}"
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center"
+                               FontFamily="{StaticResource IconFontFamily}"
+                               FontSize="14"
+                               Foreground="{StaticResource EditBannerInkBrush}"
+                               Text="&#xE785;" />
+                    <TextBlock Margin="8,0,16,0"
+                               VerticalAlignment="Center"
                                FontWeight="SemiBold"
-                               Foreground="{StaticResource AccentBrush}" />
-                </Border>
-                <Button Style="{StaticResource BtnSm}" Margin="8,0,0,0" Command="{Binding ClearSelectionCommand}" Content="Clear" />
-                <Rectangle Width="1" Height="18" Margin="10,0" Fill="{StaticResource DividerBrush}" />
-                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding RetrySelectedCommand}" Content="Retry Push" />
-                <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding PushSelectedCommand}" Content="Push to Tally" />
-                <Button Style="{StaticResource BtnSm}"
-                        Margin="0,0,6,0"
-                        Command="{Binding MarkPostedSelectedCommand}"
-                        Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}"
-                        Content="Mark Pushed" />
-                <Button Style="{StaticResource BtnSm}"
-                        Margin="0,0,6,0"
-                        Command="{Binding MarkPendingSelectedCommand}"
-                        Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}"
-                        Content="Mark Pending" />
-                <Button Style="{StaticResource BtnSm}"
-                        Margin="0,0,6,0"
-                        Command="{Binding DataContext.OpenSelectedBillsPrintPreviewCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                        Content="Print" />
-                <!--  Delete is server-side admin-gated; hide it when locked so the operator sees only actions they can actually run.  -->
-                <Button Style="{StaticResource BtnDanger}"
+                               Foreground="{StaticResource EditBannerInkBrush}"
+                               Text="Admin only" />
+                    <Button Command="{Binding ChangeNumberRowCommand}" CommandParameter="{Binding SelectedRow}" Content="Change bill number…" />
+                    <Button Margin="8,0,0,0" Command="{Binding MarkPostedSelectedCommand}" Content="Mark as pushed…" />
+                    <Button Margin="8,0,0,0" Command="{Binding MarkPendingSelectedCommand}" Content="Mark as pending…" />
+                </StackPanel>
+                <Button Grid.Column="1"
                         Command="{Binding DeleteSelectedCommand}"
-                        Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}"
-                        Content="Delete Selected" />
-            </StackPanel>
-        </Border>
-
-        <Border Grid.Row="3" Background="{StaticResource BgPanelBrush}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <Grid Grid.Row="0" Background="{StaticResource BgSunkenBrush}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="34" />
-                        <ColumnDefinition Width="150" />
-                        <ColumnDefinition Width="96" />
-                        <ColumnDefinition Width="*" MinWidth="240" />
-                        <ColumnDefinition Width="130" />
-                        <ColumnDefinition Width="116" />
-                        <ColumnDefinition Width="142" />
-                        <ColumnDefinition Width="*" MinWidth="220" />
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Style="{StaticResource TableHeaderBorder}">
-                        <CheckBox HorizontalAlignment="Center"
-                                  VerticalAlignment="Center"
-                                  IsChecked="{Binding AreAllVisibleSelected, Mode=TwoWay}" />
-                    </Border>
-                    <Border Grid.Column="1" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="INVOICE #" />
-                    </Border>
-                    <Border Grid.Column="2" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="STATUS" />
-                    </Border>
-                    <Border Grid.Column="3" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="PARTY" />
-                    </Border>
-                    <Border Grid.Column="4" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="AMOUNT" TextAlignment="Right" />
-                    </Border>
-                    <Border Grid.Column="5" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="BILL DATE" />
-                    </Border>
-                    <Border Grid.Column="6" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="UPDATED" />
-                    </Border>
-                    <Border Grid.Column="7" Style="{StaticResource TableHeaderBorder}">
-                        <TextBlock Style="{StaticResource TableHeaderText}" Text="LAST ERROR / NOTE" />
-                    </Border>
-                </Grid>
-
-                <!--  A failed load: without this the list is just empty.  -->
-                <Border Grid.Row="1"
-                        Padding="14,8"
-                        Background="{StaticResource ErrSoftBrush}"
-                        BorderBrush="{StaticResource ErrBrush}"
-                        BorderThickness="0,0,0,1"
-                        Visibility="{Binding HasLoadError, Converter={StaticResource BoolToVis}}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center"
-                                   Foreground="{StaticResource ErrInkBrush}"
-                                   TextWrapping="Wrap">
-                            <Run FontWeight="SemiBold" Text="Bills could not be loaded. " /><Run Text="{Binding LoadError, Mode=OneWay}" />
-                        </TextBlock>
-                        <Button Grid.Column="1"
-                                Margin="12,0,0,0"
-                                VerticalAlignment="Center"
-                                Style="{StaticResource BtnSm}"
-                                Command="{Binding RefreshCommand}"
-                                Content="Try again" />
-                    </Grid>
-                </Border>
-
-                <ListBox Grid.Row="2"
-                         ItemsSource="{Binding GroupedItems}"
-                         SelectionMode="Extended"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         ItemContainerStyle="{StaticResource BillRowContainer}"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         VirtualizingPanel.IsVirtualizing="True"
-                         VirtualizingPanel.VirtualizationMode="Recycling"
-                         VirtualizingPanel.ScrollUnit="Pixel"
-                         VirtualizingPanel.IsVirtualizingWhenGrouping="True">
-                    <ListBox.GroupStyle>
-                        <GroupStyle>
-                            <GroupStyle.HeaderTemplate>
-                                <DataTemplate>
-                                    <Border Background="{StaticResource BgSunkenBrush}"
-                                            BorderBrush="{StaticResource BorderBrushTok}"
-                                            BorderThickness="0,0,0,1"
-                                            Padding="14,4">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock FontSize="{DynamicResource FontSizeLabel}"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{StaticResource InkSoftBrush}"
-                                                           Text="{Binding Name, Converter={StaticResource BillDateGroupHeader}}" />
-                                                <TextBlock Margin="10,0,0,0"
-                                                           FontFamily="{StaticResource MonoFontFamily}"
-                                                           FontSize="{DynamicResource FontSizeXs}"
-                                                           Foreground="{StaticResource InkMutedBrush}">
-                                                    <Run Text="(" /><Run Text="{Binding ItemCount, Mode=OneWay}" /><Run Text=")" />
-                                                </TextBlock>
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="1"
-                                                       FontFamily="{StaticResource MonoFontFamily}"
-                                                       FontSize="{DynamicResource FontSizeLabel}"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{StaticResource InkBrush}"
-                                                       Text="{Binding Items, Converter={StaticResource GroupAmountSum}}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </GroupStyle.HeaderTemplate>
-                        </GroupStyle>
-                    </ListBox.GroupStyle>
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Border BorderBrush="{StaticResource DividerBrush}"
-                                    BorderThickness="0,0,0,1"
-                                    MinHeight="{DynamicResource RowHeight}"
-                                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    Background="Transparent"
-                                    MouseLeftButtonDown="OnBillRowMouseLeftButtonDown"
-                                    PreviewMouseRightButtonDown="OnBillRowRightClick">
-                                <Border.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Open Details" InputGestureText="Enter"
-                                                  Command="{Binding PlacementTarget.Tag.OpenDetailsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                        <MenuItem Header="Edit" InputGestureText="Ctrl+Shift+E"
-                                                  Visibility="{Binding CanBeEdited, Converter={StaticResource BoolToVis}}"
-                                                  Command="{Binding PlacementTarget.Tag.EditRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}" />
-                                        <Separator />
-                                        <MenuItem Header="Retry Push" InputGestureText="Ctrl+R"
-                                                  Visibility="{Binding CanBeRetried, Converter={StaticResource BoolToVis}}"
-                                                  Command="{Binding PlacementTarget.Tag.RetryRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}" />
-                                        <MenuItem Header="Push to Tally"
-                                                  Visibility="{Binding CanBePushed, Converter={StaticResource BoolToVis}}"
-                                                  Command="{Binding PlacementTarget.Tag.PushRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}" />
-                                        <MenuItem Header="Repost to Tally" InputGestureText="Ctrl+Shift+R"
-                                                  Visibility="{Binding CanBeReposted, Converter={StaticResource BoolToVis}}"
-                                                  Command="{Binding PlacementTarget.Tag.RepostRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}" />
-                                        <Separator />
-                                        <MenuItem Header="Print" InputGestureText="Ctrl+P"
-                                                  Command="{Binding PlacementTarget.Tag.PrintSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                        <MenuItem Header="Copy Invoice Number"
-                                                  Visibility="{Binding CanCopyInvoiceNumber, Converter={StaticResource BoolToVis}}"
-                                                  Command="{Binding PlacementTarget.Tag.CopyInvoiceNumberCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}" />
-                                        <!--
-                                            Admin-only (server-side [Authorize(Policy="Admin")]). ContextMenu
-                                            lives in a separate visual tree, so we can't walk to the UserControl
-                                            directly — the row Border already exposes BillsViewModel via its Tag,
-                                            so reach through PlacementTarget.Tag.
-                                        -->
-                                        <MenuItem Header="Change Bill Number…"
-                                                  Command="{Binding PlacementTarget.Tag.ChangeNumberRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}"
-                                                  Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                                        <MenuItem Header="Mark as Pushed…"
-                                                  Command="{Binding PlacementTarget.Tag.MarkPostedRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}"
-                                                  ToolTip="Flip the bill to 'posted' without calling Tally. Use when the voucher is already in Tally (manual reconciliation)."
-                                                  Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                                        <MenuItem Header="Mark as Pending…"
-                                                  Command="{Binding PlacementTarget.Tag.MarkPendingRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}"
-                                                  ToolTip="Revert a posted/failed bill to 'pending'. Doesn't touch Tally."
-                                                  Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                                        <Separator />
-                                        <MenuItem Header="Delete Local…"
-                                                  Command="{Binding PlacementTarget.Tag.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                                  CommandParameter="{Binding}"
-                                                  Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
-                                    </ContextMenu>
-                                </Border.ContextMenu>
-
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="34" />
-                                        <ColumnDefinition Width="150" />
-                                        <ColumnDefinition Width="96" />
-                                        <ColumnDefinition Width="*" MinWidth="240" />
-                                        <ColumnDefinition Width="130" />
-                                        <ColumnDefinition Width="116" />
-                                        <ColumnDefinition Width="142" />
-                                        <ColumnDefinition Width="*" MinWidth="220" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <!--  Selection accent stripe (3 px, left edge of row, indigo).
-                                          Mirrors the design's `.selected` row treatment.  -->
-                                    <Rectangle Grid.Column="0"
-                                               Width="3"
-                                               HorizontalAlignment="Left"
-                                               VerticalAlignment="Stretch"
-                                               Fill="{StaticResource AccentBrush}"
-                                               Visibility="{Binding IsSelected, Converter={StaticResource BoolToVis}}" />
-
-                                    <CheckBox Grid.Column="0"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-
-                                    <TextBlock Grid.Column="1"
-                                               Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               FontFamily="{StaticResource MonoFontFamily}"
-                                               FontWeight="SemiBold"
-                                               Text="{Binding InvoiceNumberDisplay}" />
-
-                                    <Border Grid.Column="2" Style="{StaticResource ToneChip}" HorizontalAlignment="Left" Tag="{Binding StateTone}">
-                                        <TextBlock Style="{StaticResource ToneChipText}" Tag="{Binding StateTone}" Text="{Binding StateChipLabel}" />
-                                    </Border>
-
-                                    <TextBlock Grid.Column="3"
-                                               Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               FontWeight="SemiBold"
-                                               Text="{Binding PartyName}" />
-
-                                    <TextBlock Grid.Column="4"
-                                               Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               TextAlignment="Right"
-                                               FontFamily="{StaticResource MonoFontFamily}"
-                                               FontWeight="SemiBold">
-                                        <Run Text="₹" />
-                                        <Run Text="{Binding GrandTotal, StringFormat=N0, Mode=OneWay}" />
-                                    </TextBlock>
-
-                                    <TextBlock Grid.Column="5"
-                                               Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               FontFamily="{StaticResource MonoFontFamily}"
-                                               Foreground="{StaticResource InkMutedBrush}"
-                                               Text="{Binding BillDate, StringFormat='yyyy-MM-dd', TargetNullValue='—'}" />
-
-                                    <TextBlock Grid.Column="6"
-                                               Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               FontFamily="{StaticResource MonoFontFamily}"
-                                               FontSize="{DynamicResource FontSizeXs}"
-                                               Foreground="{StaticResource InkMutedBrush}"
-                                               Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='yyyy-MM-dd HH:mm'}" />
-
-                                    <TextBlock Grid.Column="7"
-                                               Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               FontSize="{DynamicResource FontSizeLabel}"
-                                               Foreground="{StaticResource InkMutedBrush}"
-                                               Text="{Binding RowNote}" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <Border Margin="28"
-                        Padding="16"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Background="{StaticResource InfoSoftBrush}"
-                        BorderBrush="{StaticResource InfoBrush}"
-                        BorderThickness="1"
-                        CornerRadius="{StaticResource Radius}"
-                        Visibility="{Binding IsFilteredEmpty, Converter={StaticResource BoolToVis}}">
-                    <StackPanel>
-                        <TextBlock FontSize="13"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource InfoInkBrush}"
-                                   Text="Only posted days are hidden" />
-                        <TextBlock Margin="0,6,0,10"
-                                   Foreground="{StaticResource InfoInkBrush}"
-                                   Text="Turn off Hide fully posted days to show the rows on this page." />
-                        <Button Style="{StaticResource BtnSm}"
-                                HorizontalAlignment="Left"
-                                Command="{Binding ShowPostedDaysCommand}"
-                                Content="Show posted days" />
-                    </StackPanel>
-                </Border>
+                        Content="Delete selected"
+                        Style="{StaticResource BtnDanger}"
+                        shell:Kbd.Hint="Shift+Del" />
             </Grid>
         </Border>
 
-        <Border Grid.Row="4"
-                Padding="14,6"
+        <!--  Row 4: the list  -->
+        <Grid Grid.Row="4" Background="{StaticResource BgPanelBrush}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    Height="34"
+                    Background="{StaticResource BgSunkenBrush}"
+                    BorderBrush="{StaticResource BorderBrushTok}"
+                    BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource ColCheck}" />
+                        <ColumnDefinition Width="{StaticResource ColInvoice}" />
+                        <ColumnDefinition Width="{StaticResource ColState}" />
+                        <ColumnDefinition Width="*" MinWidth="200" />
+                        <ColumnDefinition Width="{StaticResource ColAmount}" />
+                        <ColumnDefinition Width="{StaticResource ColBillDate}" />
+                        <ColumnDefinition Width="{StaticResource ColUpdated}" />
+                        <ColumnDefinition Width="1.25*" MinWidth="200" />
+                    </Grid.ColumnDefinitions>
+                    <CheckBox Grid.Column="0"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              IsChecked="{Binding AreAllVisibleSelected, Mode=TwoWay}" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource HeadCell}" Text="Invoice no." />
+                    <TextBlock Grid.Column="2" Style="{StaticResource HeadCell}" Text="Status" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource HeadCell}" Text="Party" />
+                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource HeadCell}" Text="Amount" />
+                    <TextBlock Grid.Column="5" Style="{StaticResource HeadCell}" Text="Bill date" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource HeadCell}" Text="Updated" />
+                    <TextBlock Grid.Column="7" Style="{StaticResource HeadCell}" Text="Last error or note" />
+                </Grid>
+            </Border>
+
+            <!--  A failed load: without this the list is just empty.  -->
+            <Border Grid.Row="1"
+                    Padding="16,9"
+                    Background="{StaticResource ErrSoftBrush}"
+                    BorderBrush="{StaticResource ErrBorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    Visibility="{Binding HasLoadError, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="{StaticResource ErrInkBrush}"
+                               TextWrapping="Wrap">
+                        <Run FontWeight="SemiBold" Text="Bills could not be loaded. " /><Run Text="{Binding LoadError, Mode=OneWay}" />
+                    </TextBlock>
+                    <Button Grid.Column="1"
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Center"
+                            Command="{Binding RefreshCommand}"
+                            Content="Try again"
+                            Style="{StaticResource BtnSm}" />
+                </Grid>
+            </Border>
+
+            <ListBox Grid.Row="2"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     ItemContainerStyle="{StaticResource BillRowContainer}"
+                     ItemsSource="{Binding GroupedItems}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     SelectionMode="Extended"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     VirtualizingPanel.VirtualizationMode="Recycling">
+                <ListBox.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <Border Height="36"
+                                        Padding="16,0"
+                                        Background="{StaticResource BgSunkenBrush}"
+                                        BorderBrush="{StaticResource BorderStrongBrush}"
+                                        BorderThickness="0,1,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name, Converter={StaticResource BillDateGroupHeader}}" />
+                                            <Border Height="20"
+                                                    Margin="10,0,0,0"
+                                                    Padding="8,0"
+                                                    VerticalAlignment="Center"
+                                                    Background="{StaticResource NeutralChipBrush}"
+                                                    CornerRadius="10">
+                                                <TextBlock VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource InkMutedBrush}">
+                                                    <Run Text="{Binding ItemCount, Mode=OneWay}" /><Run Text="{Binding ItemCount, Mode=OneWay, Converter={StaticResource CountWord}, ConverterParameter=' bill| bills'}" />
+                                                </TextBlock>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding Items, Converter={StaticResource GroupAmountSum}}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </ListBox.GroupStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="Transparent"
+                                BorderBrush="{StaticResource DividerBrush}"
+                                BorderThickness="0,0,0,1"
+                                MinHeight="{DynamicResource ListRowHeight}"
+                                MouseLeftButtonDown="OnBillRowMouseLeftButtonDown"
+                                PreviewMouseRightButtonDown="OnBillRowRightClick"
+                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.OpenDetailsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Header="Open details"
+                                              InputGestureText="Enter" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.EditRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Edit"
+                                              InputGestureText="Ctrl+Shift+E" />
+                                    <Separator />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.RetryRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Retry push"
+                                              InputGestureText="Ctrl+R"
+                                              Visibility="{Binding CanBeRetried, Converter={StaticResource BoolToVis}}" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.PushRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Push to Tally" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.RepostRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Repost to Tally"
+                                              InputGestureText="Ctrl+Shift+R"
+                                              Visibility="{Binding CanBeReposted, Converter={StaticResource BoolToVis}}" />
+                                    <Separator />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.PrintSelectedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Header="Print"
+                                              InputGestureText="Ctrl+P" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.CopyInvoiceNumberCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Copy invoice number" />
+                                    <!--
+                                        Admin-only (server-side [Authorize(Policy="Admin")]). A context menu is
+                                        a separate visual tree, so the row Border hands BillsViewModel down in
+                                        its Tag and these items reach it through PlacementTarget.Tag.
+                                    -->
+                                    <Separator Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                    <MenuItem Header="Admin only"
+                                              IsEnabled="False"
+                                              Style="{StaticResource MenuGroupLabel}"
+                                              Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.ChangeNumberRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Change bill number…"
+                                              Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.MarkPostedRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Mark as pushed…"
+                                              ToolTip="Flip the bill to 'posted' without calling Tally. Use when the voucher is already in Tally (manual reconciliation)."
+                                              Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.MarkPendingRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Header="Mark as pending…"
+                                              ToolTip="Revert a posted or failed bill to 'pending'. Does not touch Tally."
+                                              Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                    <Separator Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                    <MenuItem Command="{Binding PlacementTarget.Tag.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding}"
+                                              Foreground="{StaticResource ErrTextBrush}"
+                                              Header="Delete local…"
+                                              Visibility="{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}" />
+                                </ContextMenu>
+                            </Border.ContextMenu>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{StaticResource ColCheck}" />
+                                    <ColumnDefinition Width="{StaticResource ColInvoice}" />
+                                    <ColumnDefinition Width="{StaticResource ColState}" />
+                                    <ColumnDefinition Width="*" MinWidth="200" />
+                                    <ColumnDefinition Width="{StaticResource ColAmount}" />
+                                    <ColumnDefinition Width="{StaticResource ColBillDate}" />
+                                    <ColumnDefinition Width="{StaticResource ColUpdated}" />
+                                    <ColumnDefinition Width="1.25*" MinWidth="200" />
+                                </Grid.ColumnDefinitions>
+
+                                <CheckBox Grid.Column="0"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+
+                                <TextBlock Grid.Column="1"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding InvoiceNumberDisplay}"
+                                           TextTrimming="CharacterEllipsis">
+                                    <TextBlock.Style>
+                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsVoided}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <shell:StateChip Grid.Column="2"
+                                                 Margin="10,0"
+                                                 HorizontalAlignment="Left"
+                                                 Kind="{Binding StateKind}"
+                                                 Label="{Binding StateChipLabel}"
+                                                 Tone="{Binding StateTone}" />
+
+                                <shell:FillCell Grid.Column="3">
+                                    <TextBlock Margin="10,0"
+                                               VerticalAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding PartyName}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </shell:FillCell>
+
+                                <TextBlock Grid.Column="4"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding GrandTotal, StringFormat=₹{0:N0}, Mode=OneWay}"
+                                           TextAlignment="Right">
+                                    <TextBlock.Style>
+                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <!--  A voided bill's amount is struck through: it is no longer owed.  -->
+                                                <DataTrigger Binding="{Binding IsVoided}" Value="True">
+                                                    <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                    <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <TextBlock Grid.Column="5"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource InkMutedBrush}"
+                                           Text="{Binding BillDate, StringFormat='dd MMM yyyy', TargetNullValue='—'}" />
+
+                                <TextBlock Grid.Column="6"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource InkMutedBrush}"
+                                           Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='dd MMM · HH:mm'}" />
+
+                                <TextBlock Grid.Column="7"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Text="{Binding RowNote}"
+                                           TextTrimming="CharacterEllipsis">
+                                    <TextBlock.Style>
+                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding NoteTone}" Value="err">
+                                                    <Setter Property="Foreground" Value="{StaticResource ErrTextBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Border Grid.Row="2"
+                    Margin="28"
+                    Padding="18,16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{StaticResource InfoSoftBrush}"
+                    BorderBrush="{StaticResource InfoBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource RadiusLg}"
+                    Visibility="{Binding IsFilteredEmpty, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="{StaticResource InfoInkBrush}"
+                               Text="Only posted days are hidden" />
+                    <TextBlock Margin="0,6,0,12"
+                               Foreground="{StaticResource InfoInkBrush}"
+                               Text="Turn off Hide fully posted days to show the rows on this page." />
+                    <Button HorizontalAlignment="Left"
+                            Command="{Binding ShowPostedDaysCommand}"
+                            Content="Show posted days" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!--  Row 5: how many are shown, and the pager  -->
+        <Border Grid.Row="5"
+                Padding="16,10"
                 Background="{StaticResource BgSunkenBrush}"
                 BorderBrush="{StaticResource BorderBrushTok}"
                 BorderThickness="0,1,0,0">
@@ -512,28 +646,19 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock VerticalAlignment="Center"
-                           FontSize="{DynamicResource FontSizeXs}"
-                           Foreground="{StaticResource InkSoftBrush}">
-                    <Run Text="Showing " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
-                    <Run Text=" of " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding TotalDisplay, Mode=OneWay}" />
-                    <Run Text=" bills · " />
-                    <Run FontFamily="{StaticResource MonoFontFamily}" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
-                    <Run Text=" hidden by posted-day filter · Right-click row for actions" />
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" TextTrimming="CharacterEllipsis">
+                    <Run Text="Showing " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
+                    <Run Text=" of " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding TotalDisplay, Mode=OneWay}" />
+                    <Run Text=" bills · " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
+                    <Run Text=" hidden by the posted-day filter · Right-click a row for more actions" />
                 </TextBlock>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <!--  Change Bill Number is admin-only server-side; hide when locked.  -->
-                    <Button Style="{StaticResource BtnGhost}"
-                            Margin="0,0,12,0"
-                            Command="{Binding ChangeNumberRowCommand}"
-                            CommandParameter="{Binding SelectedRow}"
-                            Visibility="{Binding IsAdminUnlocked, Converter={StaticResource BoolToVis}}"
-                            Content="Change Bill Number" />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding PrevPageCommand}" Content="‹ Prev" />
-                    <Button Style="{StaticResource BtnSm}" Margin="0,0,6,0" Command="{Binding NextPageCommand}" Content="Next ›" />
-                    <Button Style="{StaticResource BtnSm}" Command="{Binding RefreshCommand}" Content="Refresh" />
+                    <Button Command="{Binding PrevPageCommand}" Content="‹ Prev" />
+                    <Button Margin="8,0,0,0" Command="{Binding NextPageCommand}" Content="Next ›" />
+                    <Button Margin="8,0,0,0"
+                            Command="{Binding RefreshCommand}"
+                            Content="Refresh"
+                            shell:Kbd.Hint="F5" />
                 </StackPanel>
             </Grid>
         </Border>

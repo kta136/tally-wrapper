@@ -286,7 +286,7 @@ One server PC runs TallyPrime and the Tally Wrapper API; every counter connects 
    - registers the tray companion at user login
    - starts the API service
 
-6. On the server PC, set the database connection in the tray dashboard: **Test DB**, **Save DB**, then **Restart API Service**.
+6. On the server PC, set the database connection in the tray dashboard, under **Database connection**: paste it, **Test**, **Save**, then **Restart** on the Windows service line.
 
 7. On each workstation, open:
 
@@ -388,7 +388,7 @@ The persistent `tally_wrapper_test` deployment database is not the connection fo
 | Tally push is blocked, fails, or needs reconciliation | TallyPrime closed, wrong company open, business XML rejection, or the write response was lost | Preflight blocks leave state unchanged; definite rejections can be retried after correction. For `reconciliation_required`, verify the voucher in Tally and use admin Mark as Pushed or Mark as Pending before another push. |
 | Workstation cannot reach server | Firewall/CIDR/API URL mismatch | Re-run server installer and verify `http://<server>:5107/api/health/live` |
 | Admin action returns 401 | Admin token expired or not unlocked | Press `~` in Desktop and unlock again |
-| Server tray DB save fails | Maintenance token missing or API not running locally | Run Install / Repair Server from the tray dashboard |
+| Server tray DB save fails | Maintenance token missing or API not running locally | Choose **Repair installation…** in the tray dashboard |
 
 ## Documentation
 

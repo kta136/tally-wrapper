@@ -27,7 +27,7 @@ internal sealed class SettingsEditWorkflow(
         host.Draft.LoadFrom(host.Settings);
         host.IsDirty = false;
         host.IsEditing = true;
-        host.StatusMessage = "Editing — Save to persist, Discard to cancel.";
+        host.StatusMessage = string.Empty;
     }
 
     public void DiscardChanges()

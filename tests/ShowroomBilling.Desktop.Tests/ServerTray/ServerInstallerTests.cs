@@ -20,6 +20,15 @@ public sealed class ServerInstallerTests
         Assert.False(ServerInstaller.IsServiceInstalled(name));
     }
 
+    [Fact]
+    public void The_install_prompt_says_what_is_wrong_with_a_range_and_nothing_about_a_good_one()
+    {
+        Assert.Null(ServerInstaller.LanCidrProblem(" 192.168.1.0/24 "));
+        Assert.Equal(
+            $"'the whole shop' is not a network range. Enter one such as {ServerInstaller.DefaultLanCidr}.",
+            ServerInstaller.LanCidrProblem(" the whole shop "));
+    }
+
     [Theory]
     [InlineData("192.168.0.0/16", "192.168.0.0/16")]
     [InlineData("  10.0.0.0/24  ", "10.0.0.0/24")]

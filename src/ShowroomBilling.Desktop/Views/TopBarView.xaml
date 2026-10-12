@@ -1,0 +1,355 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.TopBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
+             Height="44">
+    <!--  One 44 px bar: brand, the three tabs, the admin pill, the health pills, the operator and
+          the window buttons. It replaces the old title bar and tab row. The window's caption is
+          this bar, so everything that has to be clickable sits in an element that sets
+          WindowChrome.IsHitTestVisibleInChrome.  -->
+    <UserControl.Resources>
+        <!--  A tab: icon, label and its shortcut. The active one is bold with a 3 px indigo rule under it.  -->
+        <Style x:Key="NavItem" TargetType="RadioButton">
+            <Setter Property="GroupName" Value="Nav" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Cursor" Value="Arrow" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid x:Name="tab" Background="{TemplateBinding Background}">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}">
+                                <ContentPresenter.Resources>
+                                    <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" />
+                                    </Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+                            <Border x:Name="rule"
+                                    Height="3"
+                                    Margin="10,0"
+                                    VerticalAlignment="Bottom"
+                                    Background="{StaticResource AccentBrush}"
+                                    CornerRadius="3,3,0,0"
+                                    Visibility="Collapsed" />
+                            <Border x:Name="focusEdge"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="0"
+                                    IsHitTestVisible="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="tab" Property="Background" Value="{StaticResource BgSunkenBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="tab" Property="Background" Value="Transparent" />
+                                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                                <Setter TargetName="rule" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focusEdge" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TabIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--  A health pill. It is plain text with a dot while all is well; the colour comes only when its Tag, the dot tone, is warn or err.  -->
+        <Style x:Key="HealthPill" BasedOn="{StaticResource BtnGhost}" TargetType="Button">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                </Trigger>
+                <Trigger Property="Tag" Value="warn">
+                    <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                </Trigger>
+                <Trigger Property="Tag" Value="err">
+                    <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="AdminPill" BasedOn="{StaticResource BtnBase}" TargetType="Button">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource OkBorderBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource OkSoftHoverBrush}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource OkBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--  The "?" key chip that opens the shortcut list.  -->
+        <Style x:Key="KbdButton" TargetType="Button">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="halo"
+                                    Margin="-3"
+                                    BorderBrush="{StaticResource AccentRingBrush}"
+                                    BorderThickness="0"
+                                    CornerRadius="7"
+                                    IsHitTestVisible="False" />
+                            <Border x:Name="bd"
+                                    Background="{StaticResource ResultTintBrush}"
+                                    BorderBrush="{StaticResource BorderStrongBrush}"
+                                    BorderThickness="1,1,1,2"
+                                    CornerRadius="4">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           FontSize="{DynamicResource FontSizeXs}"
+                                           FontWeight="Medium"
+                                           Foreground="{TemplateBinding Foreground}"
+                                           Text="{TemplateBinding Content}" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BgHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="halo" Property="BorderThickness" Value="3" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{StaticResource BgPanelBrush}"
+            BorderBrush="{StaticResource BorderBrushTok}"
+            BorderThickness="0,0,0,1">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!--  Brand: the part of the bar that drags the window.  -->
+            <StackPanel Grid.Column="0"
+                        Margin="16,0,22,0"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        ToolTip="{Binding TitleBar.Version}">
+                <Border Width="24"
+                        Height="24"
+                        Background="{StaticResource AccentBrush}"
+                        CornerRadius="6">
+                    <TextBlock HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="13"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource InkInverseBrush}"
+                               Text="S" />
+                </Border>
+                <TextBlock Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold"
+                           Text="{Binding TitleBar.AppName}" />
+            </StackPanel>
+
+            <!--  Tabs  -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                <RadioButton AutomationProperties.Name="Invoice"
+                             Style="{StaticResource NavItem}"
+                             Command="{Binding SwitchTabCommand}"
+                             IsChecked="{Binding ActiveTab, Converter={StaticResource NavTabToBoolConverter}, ConverterParameter={x:Static shell:NavTab.Invoice}}">
+                    <RadioButton.CommandParameter>
+                        <shell:NavTab>Invoice</shell:NavTab>
+                    </RadioButton.CommandParameter>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource TabIcon}" Text="&#xE8A5;" />
+                        <TextBlock Margin="8,0,0,0" Text="Invoice" />
+                        <ContentControl Margin="8,0,0,0" Content="Ctrl+1" Style="{StaticResource Kbd}" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton AutomationProperties.Name="Bills"
+                             Style="{StaticResource NavItem}"
+                             Command="{Binding SwitchTabCommand}"
+                             IsChecked="{Binding ActiveTab, Converter={StaticResource NavTabToBoolConverter}, ConverterParameter={x:Static shell:NavTab.Bills}}">
+                    <RadioButton.CommandParameter>
+                        <shell:NavTab>Bills</shell:NavTab>
+                    </RadioButton.CommandParameter>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource TabIcon}" Text="&#xF0E3;" />
+                        <TextBlock Margin="8,0,0,0" Text="Bills" />
+                        <ContentControl Margin="8,0,0,0" Content="Ctrl+2" Style="{StaticResource Kbd}" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton AutomationProperties.Name="Settings"
+                             Style="{StaticResource NavItem}"
+                             Command="{Binding SwitchTabCommand}"
+                             IsChecked="{Binding ActiveTab, Converter={StaticResource NavTabToBoolConverter}, ConverterParameter={x:Static shell:NavTab.Settings}}">
+                    <RadioButton.CommandParameter>
+                        <shell:NavTab>Settings</shell:NavTab>
+                    </RadioButton.CommandParameter>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource TabIcon}" Text="&#xE9E9;" />
+                        <TextBlock Margin="8,0,0,0" Text="Settings" />
+                        <ContentControl Margin="8,0,0,0" Content="Ctrl+3" Style="{StaticResource Kbd}" />
+                    </StackPanel>
+                </RadioButton>
+            </StackPanel>
+
+            <!--  Admin pill: only while unlocked. Click locks the session again.  -->
+            <StackPanel Grid.Column="2"
+                        Margin="14,0,0,0"
+                        VerticalAlignment="Center"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        Visibility="{Binding Admin.IsUnlocked, Converter={StaticResource BoolToVis}}">
+                <Button AutomationProperties.Name="Admin unlocked, press to lock"
+                        Command="{Binding Admin.LockCommand}"
+                        Style="{StaticResource AdminPill}"
+                        ToolTip="{Binding Admin.SessionSummary}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontFamily="{StaticResource IconFontFamily}"
+                                   FontSize="14"
+                                   Text="&#xE785;" />
+                        <TextBlock Margin="8,0,0,0" Text="Admin unlocked" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!--  Health pills  -->
+            <StackPanel Grid.Column="4"
+                        Margin="0,0,6,0"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button AutomationProperties.Name="Cloud status"
+                        Command="{Binding OpenHealthCommand}"
+                        Style="{StaticResource HealthPill}"
+                        Tag="{Binding Health.CloudDot}"
+                        ToolTip="{Binding Health.CloudTooltip}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Health.CloudDot, Converter={StaticResource DotToBrushConverter}}" />
+                        <TextBlock Margin="8,0,0,0" Text="Cloud" />
+                    </StackPanel>
+                </Button>
+                <Button AutomationProperties.Name="Database status"
+                        Command="{Binding OpenHealthCommand}"
+                        Style="{StaticResource HealthPill}"
+                        Tag="{Binding Health.DatabaseDot}"
+                        ToolTip="{Binding Health.DatabaseTooltip}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Health.DatabaseDot, Converter={StaticResource DotToBrushConverter}}" />
+                        <TextBlock Margin="8,0,0,0" Text="{Binding Health.DatabasePillText}" />
+                    </StackPanel>
+                </Button>
+                <Button AutomationProperties.Name="Tally status"
+                        Command="{Binding OpenHealthCommand}"
+                        Style="{StaticResource HealthPill}"
+                        Tag="{Binding Health.TallyDot}"
+                        ToolTip="{Binding Health.TallyTooltip}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="{Binding Health.TallyDot, Converter={StaticResource DotToBrushConverter}}" />
+                        <TextBlock Margin="8,0,0,0" Text="Tally" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!--  Operator and shortcuts  -->
+            <StackPanel Grid.Column="5"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                <Rectangle Width="1" Height="20" Margin="0,0,12,0" Fill="{StaticResource BorderBrushTok}" />
+                <Border Width="28"
+                        Height="28"
+                        Background="{StaticResource AccentSoftPressedBrush}"
+                        CornerRadius="14"
+                        ToolTip="{Binding TitleBar.OperatorName}">
+                    <TextBlock HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource FontSizeXs}"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource AccentInkBrush}"
+                               Text="{Binding TitleBar.OperatorInitials}" />
+                </Border>
+                <Button Margin="12,0,0,0"
+                        AutomationProperties.Name="Keyboard shortcuts"
+                        Command="{Binding OpenShortcutsCommand}"
+                        Content="?"
+                        Style="{StaticResource KbdButton}"
+                        ToolTip="Keyboard shortcuts" />
+            </StackPanel>
+
+            <!--  Window buttons  -->
+            <StackPanel Grid.Column="6"
+                        Orientation="Horizontal"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button AutomationProperties.Name="Minimize"
+                        Click="OnMinimizeClick"
+                        Style="{StaticResource WinChromeBtn}"
+                        ToolTip="Minimize">
+                    <Path Data="M 0,5 L 10,5"
+                          Stroke="{StaticResource InkMutedBrush}"
+                          StrokeThickness="1" />
+                </Button>
+                <Button x:Name="MaxBtn"
+                        AutomationProperties.Name="Maximize"
+                        Click="OnMaximizeClick"
+                        Style="{StaticResource WinChromeBtn}"
+                        ToolTip="Maximize">
+                    <Path Data="M 0.5,0.5 L 9.5,0.5 L 9.5,9.5 L 0.5,9.5 Z"
+                          Stroke="{StaticResource InkMutedBrush}"
+                          StrokeThickness="1" />
+                </Button>
+                <Button AutomationProperties.Name="Close window"
+                        Click="OnCloseClick"
+                        Style="{StaticResource WinChromeBtnClose}"
+                        ToolTip="Close">
+                    <Path Data="M 0,0 L 10,10 M 10,0 L 0,10"
+                          Stroke="{StaticResource InkMutedBrush}"
+                          StrokeThickness="1" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

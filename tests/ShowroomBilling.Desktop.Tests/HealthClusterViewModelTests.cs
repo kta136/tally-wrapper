@@ -116,43 +116,41 @@ public sealed class HealthClusterViewModelTests
     }
 
     [Fact]
-    public void Apply_MapsSkippedDatabaseHealthToIdle()
+    public void Apply_MapsADatabaseThatDoesNotAnswerToErr()
     {
         var vm = new HealthClusterViewModel();
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
-            "Skipped",
+            "Unhealthy",
             ApiAvailable: true,
             DatabaseConfigured: true,
             DatabaseReachable: false,
-            SettingsLoadedFromApi: false,
-            Message: "PostgreSQL health check skipped for cheap background health probe.",
-            DatabaseHealthSkipped: true,
-            DatabaseHealthSkipReason: "cheap background health probe")));
+            SettingsLoadedFromApi: true,
+            Message: "API is online. PostgreSQL must be configured and reachable for readiness.",
+            ExpectedDatabaseIdentity: "PROD")));
 
-        Assert.Equal("neutral", vm.DatabaseDot);
-        Assert.Equal("DB IDLE", vm.DatabaseLabel);
-        Assert.Contains("skipped", vm.DatabaseTooltip);
+        Assert.Equal("err", vm.DatabaseDot);
+        Assert.Equal("DB ?", vm.DatabaseLabel);
+        Assert.Contains("reachable", vm.DatabaseTooltip);
     }
 
     [Theory]
-    [InlineData(true)]  // the cheap probe, which carries the last count found
-    [InlineData(false)] // a full check
-    public void Apply_MapsADatabaseThatIsBehindToErr_EvenOnTheCheapProbe(bool skipped)
+    [InlineData(true)]
+    [InlineData(false)] // it does not answer now; the count is the last one found
+    public void Apply_MapsADatabaseThatIsBehindToErr_WhetherOrNotItAnswers(bool reachable)
     {
         var vm = new HealthClusterViewModel();
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
-            skipped ? "Skipped" : "Unhealthy",
+            "Unhealthy",
             ApiAvailable: true,
             DatabaseConfigured: true,
-            DatabaseReachable: !skipped,
-            SettingsLoadedFromApi: !skipped,
+            DatabaseReachable: reachable,
+            SettingsLoadedFromApi: true,
             Message: "whatever the server says",
-            DatabaseIdentity: skipped ? null : "PROD",
+            DatabaseIdentity: reachable ? "PROD" : null,
             ExpectedDatabaseIdentity: "PROD",
-            DatabaseIdentityMatches: skipped ? null : true,
-            DatabaseHealthSkipped: skipped,
+            DatabaseIdentityMatches: reachable ? true : null,
             PendingMigrationCount: 6)));
 
         Assert.Equal("err", vm.DatabaseDot);

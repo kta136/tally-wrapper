@@ -25,7 +25,7 @@ public partial class SetupWizardViewModel : ObservableObject
         _settingsApi = settingsApi;
         _completionStore = completionStore;
 
-        SaveBasicsCommand = new AsyncRelayCommand(SaveBasicsAsync, () => !IsBusy);
+        SaveBasicsCommand = new AsyncRelayCommand(SaveBasicsAsync, () => !IsBusy && CanFinish);
     }
 
     public event EventHandler? Completed;

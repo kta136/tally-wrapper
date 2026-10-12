@@ -12,5 +12,17 @@
     <conv:BillDateGroupHeaderConverter x:Key="BillDateGroupHeader" />
     <conv:GroupAmountSumConverter x:Key="GroupAmountSum" />
     <conv:UtcToLocalConverter x:Key="UtcToLocal" />
+    <conv:AddDoubleConverter x:Key="AddDouble" />
+    <conv:StringEqualsToBoolConverter x:Key="StringEqualsBool" />
+    <conv:MasterOptionLabelConverter x:Key="MasterLabel" />
+    <conv:FreshnessToneConverter x:Key="FreshnessTone" />
+    <conv:SentenceCaseConverter x:Key="SentenceCase" />
+    <conv:StringEqualsToVisibilityConverter x:Key="StringEqualsVis" />
+    <conv:CountWordConverter x:Key="CountWord" />
+    <conv:GroupedNumberConverter x:Key="GroupedNumber" />
+    <conv:DotToStatusWordConverter x:Key="DotToStatusWord" />
+    <conv:MasterTypeLabelConverter x:Key="MasterTypeLabel" />
+    <conv:FreshnessLabelConverter x:Key="FreshnessLabel" />
+    <conv:MastersOverallLabelConverter x:Key="MastersOverallLabel" />
 
 </ResourceDictionary>

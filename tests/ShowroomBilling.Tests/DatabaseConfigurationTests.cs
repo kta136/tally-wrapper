@@ -247,23 +247,21 @@ public sealed class DatabaseConfigurationTests
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Postgres"] = string.Empty })
             .Build();
 
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddHealthChecks();
-        using var provider = services.BuildServiceProvider();
-
+        // The maintenance endpoints never ask the health probe for anything.
+        var unusedDataSource = Npgsql.NpgsqlDataSource.Create("Host=localhost;Database=test;Username=test;Password=test");
         var controller = new RuntimeController(
             configuration,
-            new ShowroomBillingDbContext(new DbContextOptionsBuilder<ShowroomBillingDbContext>()
-                .UseNpgsql("Host=localhost;Database=test;Username=test;Password=test")
-                .Options),
-            provider.GetRequiredService<HealthCheckService>(),
             verifier ?? new FakeDatabaseConnectionVerifier(
                 DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD")),
             new FakeHostEnvironment("Production"),
             new MaintenanceTokenStore(),
             new ClientPresenceRegistry(),
-            new ShowroomBilling.Infrastructure.Health.DatabaseSchemaState());
+            new ShowroomBilling.Infrastructure.Health.DatabaseHealthProbe(
+                unusedDataSource,
+                new ShowroomBilling.Infrastructure.Health.PostgresReadinessHealthCheck(unusedDataSource),
+                new ShowroomBilling.Infrastructure.Health.DatabaseSchemaState()),
+            new ShowroomBilling.Infrastructure.Health.DatabaseHealthCache(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<RuntimeController>.Instance);
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()

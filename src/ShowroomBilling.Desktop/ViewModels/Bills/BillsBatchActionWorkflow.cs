@@ -29,8 +29,8 @@ internal sealed class BillsBatchActionWorkflow(
     {
         if (billsApi is null) return;
         var confirmed = await runner.ConfirmAsync(new ConfirmRequest(
-            "Confirm Push All Pending",
-            "Push every pending/draft bill to Tally? Bills are pushed oldest-first; the run stops on the first failure.",
+            "Push all pending bills?",
+            "Every pending and draft bill goes to Tally, oldest first. The run stops at the first failure.",
             "Push all"));
         if (!confirmed) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;

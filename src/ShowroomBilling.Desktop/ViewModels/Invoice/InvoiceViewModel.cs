@@ -42,7 +42,7 @@ public partial class InvoiceViewModel : ObservableObject
     // Shown until the server assigns a number, including on an estimate
     // printed before the bill is saved. Deliberately not shaped like a real
     // number: the old placeholder carried a prefix and a past fiscal year.
-    private const string InvoiceNumberPlaceholder = "(assigned on save)";
+    private const string InvoiceNumberPlaceholder = "Assigned on save";
     /// <summary>
     /// Upper bound on the readiness wait when <c>RefreshNextNumberAsync(waitForApi: true)</c>
     /// is called. If the API is genuinely down past this we bail to the
@@ -73,13 +73,15 @@ public partial class InvoiceViewModel : ObservableObject
         RemoveFocusedRowCommand = new RelayCommand(RemoveFocusedRow, () => Lines.Count > 1);
         RemoveLineCommand = new RelayCommand<BillLineViewModel?>(RemoveLine, line => line is not null && Lines.Count > 1);
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, CanSaveDraft);
-        ClearCommand = new RelayCommand(ClearInvoice);
+        ClearCommand = new RelayCommand(ClearInvoice, HasAnythingToClear);
         _lineCollectionObserver = new InvoiceLineCollectionObserver(
             Lines,
             OnLineMutated,
             OnLineCollectionChanged);
         QuickAddResults = new ObservableCollection<ItemMasterRowVm>();
         QuickAddCommitCommand = new RelayCommand<ItemMasterRowVm?>(CommitQuickAdd);
+        OpenQuickAddCommand = new RelayCommand(() => IsQuickAddOpen = true);
+        CloseQuickAddCommand = new RelayCommand(() => IsQuickAddOpen = false);
         AttachItemMasterObservers();
         RefreshQuickAddResults();
 
@@ -96,9 +98,14 @@ public partial class InvoiceViewModel : ObservableObject
     public IAsyncRelayCommand SaveDraftCommand { get; }
     public IRelayCommand ClearCommand { get; }
     public IRelayCommand<ItemMasterRowVm?> QuickAddCommitCommand { get; }
+    public IRelayCommand OpenQuickAddCommand { get; }
+    public IRelayCommand CloseQuickAddCommand { get; }
     public ObservableCollection<ItemMasterRowVm> QuickAddResults { get; }
 
     [ObservableProperty] private string quickAddQuery = string.Empty;
+
+    /// <summary>"10 items" while the search box is empty, "6 matches for “22kt”" once it is not.</summary>
+    [ObservableProperty] private string quickAddCountText = string.Empty;
     [ObservableProperty] private ItemMasterRowVm? quickAddSelection;
 
     partial void OnQuickAddQueryChanged(string value) => RefreshQuickAddResults();
@@ -157,18 +164,83 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private decimal grandTotal;
     [ObservableProperty] private decimal finalAmount;
     [ObservableProperty] private int itemCount;
-    [ObservableProperty] private decimal totalWeight;
 
     [ObservableProperty] private int focusedRowIndex;
+
+    /// <summary>Today's 24K, 22K and 18K rates per gram, or null until a 24K rate is typed.</summary>
+    [ObservableProperty] private RateLadder? rates;
+
+    /// <summary>How the focused line was priced, for the strip under the table; null while that line is blank.</summary>
+    [ObservableProperty] private LineExplanation? focusExplanation;
+
+    /// <summary>The weight columns added up, grams and carats apart.</summary>
+    [ObservableProperty] private LineWeightTotals weightTotals = LineWeightTotals.Empty;
+
+    /// <summary>The sum of every line total, GST included: the figure at the foot of the Line total column.</summary>
+    [ObservableProperty] private decimal inclusiveTotal;
+
+    /// <summary>Whether the Quick add panel is open beside the table, or folded to its rail.</summary>
+    [ObservableProperty] private bool isQuickAddOpen;
+
+    /// <summary>What the bar beside Save bill says about the bill: new, draft, saved, or what went wrong.</summary>
+    [ObservableProperty] private string statusText = "New bill";
+
+    /// <summary>"ok", "warn", "err" or "neutral": the colour of the dot before <see cref="StatusText"/>.</summary>
+    [ObservableProperty] private string statusTone = "neutral";
+
+    private bool _hasUnsavedChanges;
+    private bool _suspendDirtyTracking;
+
+    partial void OnFocusedRowIndexChanged(int value) => UpdateFocusExplanation();
+
+    /// <summary>False while the box still shows the "Assigned on save" hint, so it can be drawn as one.</summary>
+    public bool IsInvoiceNumberAssigned => InvoiceNumber != InvoiceNumberPlaceholder;
+
+    partial void OnInvoiceNumberChanged(string value) => OnPropertyChanged(nameof(IsInvoiceNumberAssigned));
+    partial void OnSaveStatusChanged(string value) => UpdateStatus();
+    partial void OnPartyNameChanged(string value)
+    {
+        MarkChanged();
+        ClearCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnNarrationChanged(string value)
+    {
+        MarkChanged();
+        ClearCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnPaymentChanged(string value) => MarkChanged();
+    partial void OnCurrentBillStateChanged(string? value)
+    {
+        UpdateStatus();
+        ClearCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnItemCountChanged(int value)
+    {
+        UpdateStatus();
+        ClearCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Clear has nothing to do on an untouched bill, so the button is greyed.</summary>
+    private bool HasAnythingToClear()
+        => ItemCount > 0
+           || _draftBillId is not null
+           || !string.IsNullOrWhiteSpace(PartyName)
+           || !string.IsNullOrWhiteSpace(Narration);
 
     partial void OnRate24KtChanged(decimal? value)
     {
         if (value is > 0m) RateMissing = false;
+        RefreshRates();
+        MarkChanged();
         Recompute();
     }
     partial void OnDiscountChanged(decimal value)
     {
         if (_syncingLinkedTotals) return;
+        MarkChanged();
 
         if (value < 0m)
         {
@@ -220,6 +292,7 @@ public partial class InvoiceViewModel : ObservableObject
 
         TryAttachMasterByName(line);
         RecomputeLine(line);
+        MarkChanged();
 
         var index = Lines.IndexOf(line);
         if (index == Lines.Count - 1 && !line.IsEmpty)
@@ -342,6 +415,59 @@ public partial class InvoiceViewModel : ObservableObject
         Recompute();
     }
 
+    /// <summary>Re-reads today's rates; the shell calls it when the karat masters change.</summary>
+    public void RefreshRates() => Rates = RateLadder.For(Rate24Kt, KaratMasters);
+
+    private void UpdateFocusExplanation()
+    {
+        var line = Lines.Count == 0 ? null : Lines[Math.Clamp(FocusedRowIndex, 0, Lines.Count - 1)];
+        FocusExplanation = line is null || line.IsEmpty
+            ? null
+            : LineExplainer.Describe(line, Rate24Kt ?? 0m, ResolvePurityPercent(line));
+    }
+
+    private void MarkChanged()
+    {
+        if (_suspendDirtyTracking) return;
+        _hasUnsavedChanges = true;
+        UpdateStatus();
+    }
+
+    private void UpdateStatus()
+    {
+        if (IsSaving)
+        {
+            (StatusText, StatusTone) = (string.IsNullOrWhiteSpace(SaveStatus) ? "Saving…" : SaveStatus, "neutral");
+        }
+        else if (!string.IsNullOrWhiteSpace(SaveStatus) && !(_hasUnsavedChanges && IsSavedMessage(SaveStatus)))
+        {
+            (StatusText, StatusTone) = (SaveStatus, ToneOf(SaveStatus));
+        }
+        else if (_hasUnsavedChanges && (_draftBillId is not null || ItemCount > 0 || !string.IsNullOrWhiteSpace(PartyName)))
+        {
+            (StatusText, StatusTone) = (_draftBillId is null ? "Draft, not saved" : "Unsaved changes", "warn");
+        }
+        else if (_draftBillId is not null)
+        {
+            (StatusText, StatusTone) = ($"Saved · {InvoiceNumber}", "ok");
+        }
+        else
+        {
+            (StatusText, StatusTone) = ("New bill", "neutral");
+        }
+    }
+
+    private static bool IsSavedMessage(string text)
+        => text.StartsWith("Saved", StringComparison.Ordinal) || text.StartsWith("Printed", StringComparison.Ordinal);
+
+    /// <summary>Colour of a status message: done is green, in progress is grey, anything else needs a look.</summary>
+    internal static string ToneOf(string text)
+    {
+        if (IsSavedMessage(text)) return "ok";
+        if (text.EndsWith('…') || text.StartsWith("Editing", StringComparison.Ordinal)) return "neutral";
+        return "err";
+    }
+
     private void RemoveFocusedRow()
     {
         if (Lines.Count <= 1) return;
@@ -391,7 +517,9 @@ public partial class InvoiceViewModel : ObservableObject
 
     private void RecomputeTotalsFromCurrentLines()
     {
-        var (inclusiveTotal, weight, count) = SummarizeCurrentLines();
+        var (inclusiveTotal, count) = SummarizeCurrentLines();
+        InclusiveTotal = inclusiveTotal;
+        WeightTotals = LineWeightTotals.Of(Lines);
         // Discount is money: keep it to paise so the saved totals and the
         // Tally voucher legs balance exactly.
         var effectiveDiscount = Math.Round(Math.Max(0m, Discount), 2, MidpointRounding.AwayFromZero);
@@ -406,16 +534,15 @@ public partial class InvoiceViewModel : ObservableObject
         GrandTotal = totals.GrandTotal;
         SetFromLinkedTotals(() => FinalAmount = totals.GrandTotal);
         ItemCount = count;
-        TotalWeight = weight;
         DiscountPercentHint = (effectiveDiscount > 0m && Subtotal > 0m)
-            ? $"≈ {(double)(effectiveDiscount / Subtotal) * 100.0:0.0}%"
+            ? $"{(double)(effectiveDiscount / Subtotal) * 100.0:0.0}%"
             : string.Empty;
+        UpdateFocusExplanation();
     }
 
-    private (decimal InclusiveTotal, decimal Weight, int Count) SummarizeCurrentLines()
+    private (decimal InclusiveTotal, int Count) SummarizeCurrentLines()
     {
         decimal inclusiveTotal = 0m;
-        decimal weight = 0m;
         int count = 0;
 
         foreach (var line in Lines)
@@ -423,17 +550,16 @@ public partial class InvoiceViewModel : ObservableObject
             if (line.IsEmpty) continue;
 
             inclusiveTotal += line.LineTotal;
-            weight += line.NetWeight;
             count++;
         }
 
-        return (inclusiveTotal, weight, count);
+        return (inclusiveTotal, count);
     }
 
     private void ApplyFinalAmount(decimal requestedFinalAmount)
     {
         var targetGrand = Math.Round(Math.Max(0m, requestedFinalAmount), 0, MidpointRounding.AwayFromZero);
-        var (inclusiveTotal, _, _) = SummarizeCurrentLines();
+        var (inclusiveTotal, _) = SummarizeCurrentLines();
         var undiscounted = BillCalculator.BuildTotals(inclusiveTotal, 0m);
 
         if (targetGrand >= undiscounted.GrandTotal)
@@ -486,7 +612,11 @@ public partial class InvoiceViewModel : ObservableObject
            && _billsApi is not null
            && Lines.Any(l => !l.IsEmpty);
 
-    partial void OnIsSavingChanged(bool value) => SaveDraftCommand.NotifyCanExecuteChanged();
+    partial void OnIsSavingChanged(bool value)
+    {
+        SaveDraftCommand.NotifyCanExecuteChanged();
+        UpdateStatus();
+    }
 
     private async Task SaveDraftAsync(CancellationToken cancellationToken)
     {
@@ -542,6 +672,7 @@ public partial class InvoiceViewModel : ObservableObject
             CurrentBillState = bill.State;
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
                 InvoiceNumber = bill.InvoiceNumber!;
+            _hasUnsavedChanges = false;
             SaveStatus = $"Saved · {bill.State} · {InvoiceNumber}";
             LastSavedAtUtc = DateTimeOffset.UtcNow;
             savedBillId = bill.Id;
@@ -589,6 +720,11 @@ public partial class InvoiceViewModel : ObservableObject
         foreach (var match in matches)
             QuickAddResults.Add(match);
 
+        var total = (ItemMasters ?? []).Count(master => !string.IsNullOrWhiteSpace(master.Name));
+        QuickAddCountText = query.Length == 0
+            ? (total == 1 ? "1 item" : $"{total} items")
+            : $"{matches.Count} {(matches.Count == 1 ? "match" : "matches")} for “{query}”";
+
         QuickAddSelection = QuickAddResults.FirstOrDefault();
     }
 
@@ -612,6 +748,23 @@ public partial class InvoiceViewModel : ObservableObject
 
     private void ClearInvoice()
     {
+        _suspendDirtyTracking = true;
+        try
+        {
+            ResetForNewBill();
+        }
+        finally
+        {
+            _suspendDirtyTracking = false;
+        }
+
+        _hasUnsavedChanges = false;
+        UpdateStatus();
+        _ = RefreshNextNumberAsync();
+    }
+
+    private void ResetForNewBill()
+    {
         _draftBillId = null;
         _draftRevisionId = null;
         _createOperationId = null;
@@ -632,7 +785,6 @@ public partial class InvoiceViewModel : ObservableObject
         RateMissing = false;
         IsEditingPosted = false;
         ReplaceLines([]);
-        _ = RefreshNextNumberAsync();
     }
 
     public Task RefreshNextNumberAsync(CancellationToken cancellationToken = default)
@@ -707,6 +859,7 @@ public partial class InvoiceViewModel : ObservableObject
             }
             var payload = bill.CurrentRevision.Payload;
 
+            _suspendDirtyTracking = true;
             PartyName = payload.PartyName ?? string.Empty;
             Payment = InvoiceEditMapper.ResolvePayment(payload.Payment, PaymentOptions, Payment);
             BillDate = new DateTimeOffset(payload.BillDate.ToDateTime(TimeOnly.MinValue), DateTimeOffset.Now.Offset);
@@ -715,6 +868,8 @@ public partial class InvoiceViewModel : ObservableObject
             DiscountEnabled = payload.Totals.DiscountTotal > 0m;
             Rate24Kt = payload.Rate24Kt;
             ReplaceLines(InvoiceEditMapper.CreateRows(payload, ItemMasters, KaratMasters));
+            _suspendDirtyTracking = false;
+            _hasUnsavedChanges = false;
 
             _draftBillId = bill.Id;
             _draftRevisionId = bill.CurrentRevisionId;
@@ -730,6 +885,7 @@ public partial class InvoiceViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            _suspendDirtyTracking = false;
             SaveStatus = $"Load failed: {ex.Message}";
         }
         finally

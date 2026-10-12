@@ -1,20 +1,9 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
-using Microsoft.Extensions.Options;
-using ShowroomBilling.Contracts.Bills;
-using ShowroomBilling.Desktop.Configuration;
-using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels;
-using ShowroomBilling.Desktop.ViewModels.Admin;
-using ShowroomBilling.Desktop.ViewModels.Bills;
-using ShowroomBilling.Desktop.ViewModels.Invoice;
-using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
-using ShowroomBilling.Desktop.ViewModels.Setup;
-using ShowroomBilling.Desktop.ViewModels.SyntheticBatch;
 using ShowroomBilling.Desktop.Views;
 using ShowroomBilling.Desktop.Views.Bills;
 using ShowroomBilling.Desktop.Views.Invoice;
@@ -46,10 +35,10 @@ public sealed class ViewSmokeTests
     private static List<string> LoadEveryView()
     {
         var problems = new List<string>();
-        var shell = CreateShell();
+        var shell = DesignSample.CreateShell();
         var window = new Window { DataContext = shell };
 
-        using var bindingErrors = BindingErrorListener.Attach();
+        using var bindingErrors = BindingErrors.Attach();
         foreach (var viewType in ViewTypes())
         {
             try
@@ -186,123 +175,6 @@ public sealed class ViewSmokeTests
         if (viewType == typeof(InvoiceView)) return shell.Invoice;
         if (viewType == typeof(BillsView)) return shell.Bills;
         if (viewType == typeof(SettingsView)) return shell.Settings;
-        if (viewType == typeof(TitleBarView)) return shell.TitleBar;
-        if (viewType == typeof(FKeyStripView)) return shell.FKeys;
-        if (viewType == typeof(StatusBarView)) return shell.StatusBar;
         return null;
-    }
-
-    private static MainWindowViewModel CreateShell()
-    {
-        var tokenStore = new AdminTokenStore();
-        var bills = new BillsViewModel { HideFullyPostedDays = false };
-        // One row per state, so the row template, its context menu and every
-        // chip tone are realised.
-        var number = 0;
-        foreach (var state in new[]
-        {
-            BillStates.Posted, BillStates.Pending, BillStates.Draft, BillStates.Posting, BillStates.Failed,
-            BillStates.ReconciliationRequired, BillStates.Revised, BillStates.Voided,
-        })
-        {
-            number++;
-            bills.Items.Add(new BillListRowViewModel(new BillSummaryItem(
-                Guid.NewGuid(),
-                state,
-                $"SR/2026-27/{number:0000}",
-                "Walk-in Customer",
-                new DateOnly(2026, 10, number <= 4 ? 10 : 9),
-                1000m * number,
-                DateTimeOffset.UtcNow,
-                DateTimeOffset.UtcNow)));
-        }
-
-        bills.Items[1].IsSelected = true;
-
-        // The constructors only store their clients; no view-model method that
-        // would call one is invoked here.
-        var shell = new MainWindowViewModel(
-            settingsApiClient: null!,
-            healthApiClient: null!,
-            mastersApiClient: null!,
-            billsApiClient: null!,
-            bootstrapOptions: Options.Create(new DesktopBootstrapOptions()),
-            companyProfileProvider: null!,
-            printLayoutOptionsProvider: null!,
-            printDispatcher: null!,
-            printPreferences: null!,
-            adminTokenStore: tokenStore,
-            invoice: new InvoiceViewModel(),
-            bills: bills,
-            billDetails: new BillDetailsViewModel(),
-            printPreview: new PrintPreviewViewModel(),
-            settings: new SettingsViewModel(),
-            admin: new AdminUnlockViewModel(adminApi: null!, tokenStore),
-            setupWizard: new SetupWizardViewModel(
-                settingsApi: null!,
-                completionStore: null!),
-            syntheticBatch: new SyntheticBatchViewModel());
-
-        // Left open so the confirm overlay has its texts; nothing awaits the answer.
-        _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));
-        return shell;
-    }
-
-    /// <summary>Collects WPF data-binding errors, which are only ever traced.</summary>
-    private sealed class BindingErrorListener : TraceListener
-    {
-        private readonly List<string> _errors = [];
-        private SourceLevels _previousLevel;
-
-        public static BindingErrorListener Attach()
-        {
-            // Binding tracing is off outside a debugger until refreshed.
-            PresentationTraceSources.Refresh();
-            var listener = new BindingErrorListener
-            {
-                _previousLevel = PresentationTraceSources.DataBindingSource.Switch.Level,
-            };
-            PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Error;
-            PresentationTraceSources.DataBindingSource.Listeners.Add(listener);
-            return listener;
-        }
-
-        public IReadOnlyList<string> Take()
-        {
-            var taken = _errors.ToList();
-            _errors.Clear();
-            return taken;
-        }
-
-        public override void Write(string? message)
-        {
-        }
-
-        public override void WriteLine(string? message)
-        {
-            if (!string.IsNullOrWhiteSpace(message) && !IsTemplateFreezableArtifact(message))
-            {
-                _errors.Add(message.Trim());
-            }
-        }
-
-        // The two preview panes scale each page with a ScaleTransform inside an
-        // item template, bound to an ancestor. WPF evaluates that binding once
-        // on the template's own shared copy of the transform, which has no
-        // ancestors, and traces this error; every real item then binds normally.
-        private static bool IsTemplateFreezableArtifact(string message)
-            => message.Contains("Cannot find source for binding with reference 'RelativeSource FindAncestor", StringComparison.Ordinal)
-                && message.Contains("target element is 'ScaleTransform'", StringComparison.Ordinal);
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                PresentationTraceSources.DataBindingSource.Listeners.Remove(this);
-                PresentationTraceSources.DataBindingSource.Switch.Level = _previousLevel;
-            }
-
-            base.Dispose(disposing);
-        }
     }
 }

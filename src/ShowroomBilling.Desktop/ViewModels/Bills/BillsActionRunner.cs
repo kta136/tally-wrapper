@@ -11,7 +11,7 @@ internal interface IBillsActionWorkflowHost
     bool IsActing { get; set; }
     Func<Guid, CancellationToken, Task>? EditBillHandler { get; }
     Func<BillListRowViewModel, CancellationToken, Task<(bool Confirmed, string NewNumber, string? Reason)>>? ChangeNumberPromptHandler { get; }
-    Func<string, string, CancellationToken, Task<string?>>? ReasonPromptHandler { get; }
+    Func<ReasonRequest, CancellationToken, Task<string?>>? ReasonPromptHandler { get; }
     Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; }
     Task<bool> EnsureTallyPushAllowedAsync(CancellationToken cancellationToken);
     Task LoadAsync(CancellationToken cancellationToken = default);
@@ -115,15 +115,20 @@ internal static class BillConfirmations
     /// <param name="tallyMayHoldVoucher">True when a bill in the set is posted, so Tally may still hold its voucher.</param>
     public static ConfirmRequest Repost(string what, bool tallyMayHoldVoucher) => tallyMayHoldVoucher
         ? new ConfirmRequest(
-            "Confirm Repost",
-            $"Repost {what}?\n\nA repost sends a new voucher to Tally. If Tally still holds the original voucher, "
-            + "this creates a duplicate sale. Repost only after the original voucher has been deleted in Tally.",
-            "Repost",
-            IsWarning: true)
-        : new ConfirmRequest("Confirm Repost", $"Repost {what} to Tally?", "Repost");
+            $"Repost {what}?",
+            "A repost sends a new voucher to Tally. If Tally still holds the original voucher, this creates a duplicate sale.",
+            "Repost to Tally",
+            IsWarning: true,
+            Note: "Repost only after the original voucher has been deleted in Tally.")
+        : new ConfirmRequest($"Repost {what}?", "The bill goes to Tally again as a new voucher.", "Repost to Tally");
 
     public static ConfirmRequest Void(string what)
-        => new("Confirm Void", $"Void {what}? This cannot be undone.", "Void", IsWarning: true);
+        => new(
+            $"Void {what}?",
+            "The bill is marked void. It can no longer be edited or sent to Tally.",
+            "Void bill",
+            IsDestructive: true,
+            Note: "This cannot be undone.");
 
     public static bool IsPosted(BillListRowViewModel row) => BillStateCapabilities.IsPosted(row.State);
 }

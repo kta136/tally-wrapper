@@ -44,6 +44,29 @@ public sealed class StatusFormReportTests
     }
 
     [Fact]
+    public void A_saved_connection_shows_what_was_stored_with_its_password_hidden_and_what_happens_next()
+    {
+        var report = Report(
+            HttpStatusCode.OK,
+            """{"provider":"PostgreSQL","maskedConnectionString":"Host=db;Database=tally_wrapper_prod;Password=***","requiresApiRestart":true}""");
+
+        Assert.Equal(MessageBoxIcon.Information, report.Icon);
+        Assert.Equal(
+            "Test database succeeded.\r\n\r\nStored: Host=db;Database=tally_wrapper_prod;Password=***"
+            + "\r\n\r\nThe server starts using it when the Windows service restarts.",
+            report.Message);
+    }
+
+    [Theory]
+    [InlineData("Save succeeded.\r\n\r\nStored: Host=db\r\n\r\nRestart.", "Save succeeded.", "Stored: Host=db\n\nRestart.")]
+    [InlineData("The server is installed and running.", "The server is installed and running.", null)]
+    [InlineData("  Setup failed.\n\n  ", "Setup failed.", null)]
+    public void A_message_is_shown_as_a_title_and_the_rest(string message, string title, string? details)
+    {
+        Assert.Equal((title, details), CopyableMessageDialog.Split(message));
+    }
+
+    [Fact]
     public void A_success_with_some_other_body_shows_the_body()
     {
         var report = Report(HttpStatusCode.OK, """{"provider":"PostgreSQL"}""");

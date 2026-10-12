@@ -46,14 +46,22 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
         BillStates.Pending or BillStates.Draft => "Awaiting Tally push",
         BillStates.Posting => "Posting in progress",
         BillStates.Posted => EditedAfterPush ? "Edited after push" : "—",
-        BillStates.Failed => "Requires retry or repost",
+        BillStates.Failed => "Push failed. Open details for the reason",
         BillStates.ReconciliationRequired => "Verify the voucher in Tally before another write",
         BillStates.Voided => "Voided locally",
         BillStates.Revised => "Revision created",
         _ => "—"
     };
 
+    /// <summary>"err" when the note says something has to be done before the bill can move on; the list draws it in red.</summary>
+    public string NoteTone => BillStateDisplay.Tone(State) == BillStateDisplay.ToneErr ? BillStateDisplay.ToneErr : BillStateDisplay.ToneNeutral;
+
+    public bool IsVoided => State == BillStates.Voided;
+
     public string StateChipLabel => BillStateDisplay.Label(State, EditedAfterPush);
+
+    /// <summary>The shape drawn before the state's word; see <see cref="BillStateDisplay.Kind"/>.</summary>
+    public string StateKind => BillStateDisplay.Kind(State);
 
     /// <summary>Colour tone of the state chip; see <see cref="BillStateDisplay"/>.</summary>
     public string StateTone => BillStateDisplay.Tone(State);

@@ -58,6 +58,9 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
         _extraConfiguration = extraConfiguration;
     }
 
+    /// <summary>This factory's own database, for a test that puts something between the API and it.</summary>
+    internal string DatabaseConnectionString => (_database ??= _postgres.CreateDatabase()).ConnectionString;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");

@@ -50,7 +50,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     /// Handler the shell wires up to prompt for a reason. Returns null if user cancels;
     /// otherwise the entered reason (min 4 chars guaranteed by dialog).
     /// </summary>
-    public Func<string, string, CancellationToken, Task<string?>>? ReasonPromptHandler { get; set; }
+    public Func<ReasonRequest, CancellationToken, Task<string?>>? ReasonPromptHandler { get; set; }
 
     /// <summary>
     /// Handler the shell wires up to ask a yes/no question in the confirm
@@ -240,10 +240,45 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     public bool IsSelectionBarVisible => HasSelection;
     public string SelectionSummaryText => HasSelection ? $"{SelectedCount} selected" : "No selection";
 
-    public bool AreAllVisibleSelected
+    /// <summary>True when every row is ticked, null when only some are (the header box shows a dash), false when none is.</summary>
+    public bool? AreAllVisibleSelected
     {
-        get => Items.Count > 0 && Items.All(x => x.IsSelected);
-        set => ToggleVisibleSelection(value);
+        get
+        {
+            if (Items.Count == 0 || !Items.Any(x => x.IsSelected)) return false;
+            return Items.All(x => x.IsSelected) ? true : null;
+        }
+        set => ToggleVisibleSelection(value == true);
+    }
+
+    /// <summary>Bills waiting for the operator to push them (pending or draft).</summary>
+    public int WaitingForTallyCount => Items.Count(x => x.IsPendingLike);
+
+    /// <summary>Bills with a push in flight.</summary>
+    public int PostingCount => Items.Count(x => x.State == BillStates.Posting);
+
+    /// <summary>Bills that failed or need their voucher checked in Tally before anything else is done to them.</summary>
+    public int NeedAttentionCount => Items.Count(x => x.State is BillStates.Failed or BillStates.ReconciliationRequired);
+
+    public bool HasWaitingForTally => WaitingForTallyCount > 0;
+    public bool HasPosting => PostingCount > 0;
+    public bool HasNeedAttention => NeedAttentionCount > 0;
+
+    public string WaitingForTallyText => $"{WaitingForTallyCount} waiting for Tally";
+    public string PostingText => $"{PostingCount} posting";
+    public string NeedAttentionText => $"{NeedAttentionCount} need attention";
+
+    private void RaiseCounts()
+    {
+        OnPropertyChanged(nameof(WaitingForTallyCount));
+        OnPropertyChanged(nameof(PostingCount));
+        OnPropertyChanged(nameof(NeedAttentionCount));
+        OnPropertyChanged(nameof(HasWaitingForTally));
+        OnPropertyChanged(nameof(HasPosting));
+        OnPropertyChanged(nameof(HasNeedAttention));
+        OnPropertyChanged(nameof(WaitingForTallyText));
+        OnPropertyChanged(nameof(PostingText));
+        OnPropertyChanged(nameof(NeedAttentionText));
     }
 
     public IReadOnlyList<Guid> SelectedBillIds =>
@@ -483,6 +518,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
         RecomputeFullyPostedDates();
         GroupedItems.Refresh();
+        RaiseCounts();
     }
 
     private bool FilterRow(object obj)

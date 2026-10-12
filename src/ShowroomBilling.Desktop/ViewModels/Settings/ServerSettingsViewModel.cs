@@ -99,10 +99,11 @@ public partial class ServerSettingsViewModel : ObservableObject
 
     private async Task<bool> ConfirmRestartAsync()
         => ConfirmHandler is not null && await ConfirmHandler(new ConfirmRequest(
+            "Restart Billing?",
+            "Billing must restart to use a different server.",
             "Restart Billing",
-            "Billing must restart to use a different server. Unsaved Settings edits will be lost. Continue?",
-            "Restart",
-            IsWarning: true));
+            IsWarning: true,
+            Note: "Unsaved Settings edits will be lost."));
 
     private async Task TestAsync(CancellationToken cancellationToken)
     {

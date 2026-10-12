@@ -9,7 +9,6 @@ public interface IHealthApiClient
     Task<SystemHealthSnapshot> GetSnapshotAsync(
         bool includeTallyCompany,
         bool includeMasterFreshness = true,
-        bool forceDatabaseHealth = false,
         CancellationToken cancellationToken = default);
 }
 

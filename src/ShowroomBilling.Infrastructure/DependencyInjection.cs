@@ -121,8 +121,13 @@ public static class DependencyInjection
 
         services.AddSingleton<StartupStatus>();
         services.AddSingleton<DatabaseSchemaState>();
+        services.AddSingleton<DatabaseHealthCache>();
+        services.AddSingleton<DatabaseHealthProbe>();
         services.AddHostedService<DatabaseInitializationHostedService>();
         services.AddHostedService<StuckPostingRecoveryHostedService>();
+        // One instance for both callers: /api/health/ready through the health
+        // check service, and DatabaseHealthProbe, which asks it directly.
+        services.AddSingleton<PostgresReadinessHealthCheck>();
         services.AddHealthChecks().AddCheck<PostgresReadinessHealthCheck>("postgres");
 
         return services;

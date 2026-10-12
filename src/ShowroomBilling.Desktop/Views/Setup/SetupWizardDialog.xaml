@@ -1,187 +1,320 @@
 <UserControl x:Class="ShowroomBilling.Desktop.Views.Setup.SetupWizardDialog"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:setup="clr-namespace:ShowroomBilling.Desktop.ViewModels.Setup"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell">
+    <UserControl.Resources>
+        <!--  A choice from what Tally holds (a ledger, a voucher type, a company), or something typed.  -->
+        <Style x:Key="WizardCombo" BasedOn="{StaticResource {x:Type ComboBox}}" TargetType="{x:Type ComboBox}">
+            <Setter Property="DisplayMemberPath" Value="Name" />
+            <Setter Property="IsEditable" Value="True" />
+            <Setter Property="TextSearch.TextPath" Value="Name" />
+            <Setter Property="shell:FieldAdorn.Placeholder" Value="Choose a ledger" />
+        </Style>
 
-    <Grid Background="{StaticResource DialogScrimBrush}">
-        <Border Style="{StaticResource DialogPanel}"
-                Width="720"
-                MaxHeight="680"
-                DataContext="{Binding SetupWizard}">
+        <Style x:Key="WizardSectionTitle" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontSize" Value="{StaticResource FontSizeHeading}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--  One step of the rail: a bubble joined to the next one by a line, the name and what it holds.
+              Done is green with a tick, the current one is indigo with its number, the rest are plain.  -->
+        <DataTemplate x:Key="StepTemplate" DataType="{x:Type setup:SetupStep}">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Rectangle x:Name="joint"
+                           Width="2"
+                           Margin="0,34,0,-6"
+                           HorizontalAlignment="Center"
+                           Fill="{StaticResource BorderStrongBrush}" />
+                <Border x:Name="halo"
+                        Width="38"
+                        Height="38"
+                        Margin="0,-5,0,0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
+                        Background="{StaticResource AccentRingBrush}"
+                        CornerRadius="19"
+                        Visibility="Collapsed" />
+                <Border x:Name="bubble"
+                        Width="28"
+                        Height="28"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
+                        Background="{StaticResource BgPanelBrush}"
+                        BorderBrush="{StaticResource BorderStrongBrush}"
+                        BorderThickness="2"
+                        CornerRadius="14">
+                    <Grid>
+                        <TextBlock x:Name="number"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource InkMutedBrush}"
+                                   Text="{Binding Number}" />
+                        <TextBlock x:Name="tick"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontFamily="{StaticResource IconFontFamily}"
+                                   FontSize="13"
+                                   Foreground="{StaticResource InkInverseBrush}"
+                                   Text="&#xE73E;"
+                                   Visibility="Collapsed" />
+                    </Grid>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="0,0,0,26">
+                    <TextBlock x:Name="title"
+                               FontWeight="SemiBold"
+                               Text="{Binding Title}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Margin="0,2,0,0"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="{Binding Detail}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsLast}" Value="True">
+                    <Setter TargetName="joint" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                    <Setter TargetName="bubble" Property="Background" Value="{StaticResource OkBrush}" />
+                    <Setter TargetName="bubble" Property="BorderBrush" Value="{StaticResource OkBrush}" />
+                    <Setter TargetName="number" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="tick" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="joint" Property="Fill" Value="{StaticResource OkBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                    <Setter TargetName="halo" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="bubble" Property="Background" Value="{StaticResource AccentBrush}" />
+                    <Setter TargetName="bubble" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                    <Setter TargetName="number" Property="Foreground" Value="{StaticResource InkInverseBrush}" />
+                    <Setter TargetName="title" Property="Foreground" Value="{StaticResource AccentInkBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
 
-                <Border Grid.Row="0"
-                        Padding="16,12"
-                        BorderBrush="{StaticResource DividerBrush}"
-                        BorderThickness="0,0,0,1">
+    <!--  The first-launch form. The rail on the left says how far along it is; the form on the right is
+          three sections, each with a chip that says Done or what is left. Finish stays off until all
+          three are done, and the foot says what is missing.  -->
+    <shell:DialogFrame BodyPadding="0"
+                       BodyScroll="Disabled"
+                       DataContext="{Binding SetupWizard}"
+                       PanelWidth="900"
+                       Subtitle="Set the minimum shared settings needed before billing starts. Item masters, karats and print layout stay in Settings."
+                       Title="First launch setup">
+        <shell:DialogFrame.HeaderChips>
+            <Border Style="{StaticResource ToneChip}" Tag="accent">
+                <TextBlock Style="{StaticResource ToneChipText}" Tag="accent" Text="Setup required" />
+            </Border>
+        </shell:DialogFrame.HeaderChips>
+        <shell:DialogFrame.FooterNote>
+            <TextBlock Text="{Binding FooterNote}" />
+        </shell:DialogFrame.FooterNote>
+        <shell:DialogFrame.Footer>
+            <Button MinWidth="130"
+                    Command="{Binding SaveBasicsCommand}"
+                    Content="Finish setup"
+                    Style="{StaticResource BtnPrimary}" />
+        </shell:DialogFrame.Footer>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--  The rail  -->
+            <Border Padding="22,24,20,20"
+                    Background="{StaticResource BgSunkenBrush}"
+                    BorderBrush="{StaticResource DividerBrush}"
+                    BorderThickness="0,0,1,0">
+                <StackPanel>
+                    <ItemsControl ItemTemplate="{StaticResource StepTemplate}" ItemsSource="{Binding Steps}" />
+                    <Border Margin="0,6,0,0"
+                            Padding="14,12"
+                            Background="{StaticResource BgPanelBrush}"
+                            BorderBrush="{StaticResource BorderStrongBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusLg}">
+                        <TextBlock Foreground="{StaticResource InkMutedBrush}"
+                                   Text="You can change all of this later in Settings."
+                                   TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!--  The form  -->
+            <ScrollViewer Grid.Column="1"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="28,22,28,24">
+                    <Border Margin="0,0,0,16"
+                            Style="{StaticResource AdminBannerErr}"
+                            Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Foreground="{StaticResource ErrInkBrush}"
+                                   Text="{Binding ErrorMessage}"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                    <Border Margin="0,0,0,16"
+                            Style="{StaticResource AdminBannerInfo}"
+                            Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Foreground="{StaticResource InfoInkBrush}"
+                                   Text="{Binding StatusMessage}"
+                                   TextWrapping="Wrap" />
+                    </Border>
+
+                    <!--  1. Tally  -->
+                    <StackPanel Margin="0,0,0,18" Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource WizardSectionTitle}" Text="1. Tally" />
+                        <Border Margin="10,0,0,0"
+                                Style="{StaticResource ToneChip}"
+                                Tag="ok"
+                                Visibility="{Binding IsTallyDone, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ToneChipText}" Tag="ok" Text="Done" />
+                        </Border>
+                    </StackPanel>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="96" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="96" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Tally host" />
+                            <TextBox Text="{Binding TallyHost, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Port" />
+                            <TextBox Text="{Binding TallyPort, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Timeout, s" />
+                            <TextBox Text="{Binding TallyTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Active Tally company" />
+                    <ComboBox shell:FieldAdorn.Placeholder="Choose a company"
+                              ItemsSource="{Binding DataContext.Settings.MasterData.Companies, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              Style="{StaticResource WizardCombo}"
+                              Text="{Binding ActiveCompanyName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Rectangle Height="1" Margin="0,22,0,22" Fill="{StaticResource DividerBrush}" />
+
+                    <!--  2. Company and numbers  -->
+                    <StackPanel Margin="0,0,0,18" Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource WizardSectionTitle}" Text="2. Company and numbers" />
+                        <Border Margin="10,0,0,0"
+                                Style="{StaticResource ToneChip}"
+                                Tag="ok"
+                                Visibility="{Binding IsCompanyDone, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ToneChipText}" Tag="ok" Text="Done" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Company name on the invoice" />
+                    <TextBox Margin="0,0,0,14" Text="{Binding PrintCompanyName, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="96" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Invoice prefix" />
+                            <TextBox Text="{Binding InvoicePrefix, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Invoice suffix" />
+                            <TextBox shell:FieldAdorn.Placeholder="None" Text="{Binding InvoiceSuffix, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Digits" />
+                            <TextBox Text="{Binding InvoicePadding, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Foreground="{StaticResource InkMutedBrush}"
+                               shell:RichText.Markup="{Binding FirstNumberMarkup}"
+                               TextWrapping="Wrap" />
+
+                    <Rectangle Height="1" Margin="0,22,0,22" Fill="{StaticResource DividerBrush}" />
+
+                    <!--  3. Ledgers  -->
+                    <StackPanel Margin="0,0,0,18" Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource WizardSectionTitle}" Text="3. Ledgers" />
+                        <Border Margin="10,0,0,0"
+                                Style="{StaticResource ToneChip}"
+                                Tag="ok"
+                                Visibility="{Binding IsLedgersDone, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource ToneChipText}" Tag="ok" Text="Done" />
+                        </Border>
+                        <Border Margin="10,0,0,0"
+                                Style="{StaticResource ToneChip}"
+                                Tag="accent"
+                                Visibility="{Binding IsLedgersDone, Converter={StaticResource InverseBoolToVis}}">
+                            <TextBlock Style="{StaticResource ToneChipText}" Tag="accent" Text="{Binding LedgersBadge}" />
+                        </Border>
+                    </StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="First Launch Setup"
-                                       FontSize="15"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource InkBrush}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Sales ledger" />
+                            <ComboBox Margin="0,0,0,14"
+                                      ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding SalesLedger, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Cash ledger" />
+                            <ComboBox Margin="0,0,0,14"
+                                      ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding CashLedger, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="CGST ledger" />
+                            <ComboBox Margin="0,0,0,14"
+                                      ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding CgstLedger, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Round off ledger" />
+                            <ComboBox ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding RoundOffLedger, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
-                        <Border Grid.Column="1"
-                                Padding="8,2"
-                                Height="22"
-                                VerticalAlignment="Center"
-                                Background="{StaticResource AccentSoftBrush}"
-                                CornerRadius="2">
-                            <TextBlock Text="SETUP REQUIRED"
-                                       FontFamily="{StaticResource MonoFontFamily}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       VerticalAlignment="Center" />
-                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Sales voucher type" />
+                            <ComboBox Margin="0,0,0,14"
+                                      shell:FieldAdorn.Placeholder="Choose a voucher type"
+                                      ItemsSource="{Binding DataContext.Settings.MasterData.VoucherTypeOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding SalesVoucherType, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Card, UPI and other non-cash ledger" />
+                            <ComboBox Margin="0,0,0,14"
+                                      ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding CreditDebitLedger, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="SGST ledger" />
+                            <ComboBox Margin="0,0,0,14"
+                                      ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding SgstLedger, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="Discount ledger" />
+                            <ComboBox ItemsSource="{Binding DataContext.Settings.MasterData.LedgerOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                      Style="{StaticResource WizardCombo}"
+                                      Text="{Binding DiscountLedger, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
                     </Grid>
-                </Border>
-
-                <ScrollViewer Grid.Row="1" Padding="16,14" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <Border Style="{StaticResource AdminBannerErr}"
-                                Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="{Binding ErrorMessage}"
-                                       TextWrapping="Wrap"
-                                       Foreground="{StaticResource ErrInkBrush}" />
-                        </Border>
-
-                        <Border Style="{StaticResource AdminBannerInfo}"
-                                Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Text="{Binding StatusMessage}"
-                                       TextWrapping="Wrap"
-                                       Foreground="{StaticResource InfoInkBrush}" />
-                        </Border>
-
-                        <Border Style="{StaticResource AdminSectionPanel}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource TxtSectionTitleSpaced}" Text="SHOWROOM BASICS" />
-                                <TextBlock Margin="0,0,0,10"
-                                           FontSize="{DynamicResource FontSizeLabel}"
-                                           Foreground="{StaticResource InkSoftBrush}"
-                                           TextWrapping="Wrap"
-                                           Text="Set the minimum shared settings needed before billing starts. Item masters, karats, print layout, and advanced setup remain in Settings." />
-
-                                <Grid Margin="0,0,0,12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="12" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="12" />
-                                        <ColumnDefinition Width="110" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="TALLY HOST" />
-                                        <TextBox Text="{Binding TallyHost, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="PORT" />
-                                        <TextBox Text="{Binding TallyPort, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="4">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="TIMEOUT" />
-                                        <TextBox Text="{Binding TallyTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </Grid>
-
-                                <Grid Margin="0,0,0,12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="12" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="ACTIVE TALLY COMPANY" />
-                                        <TextBox Text="{Binding ActiveCompanyName, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="PRINT COMPANY NAME" />
-                                        <TextBox Text="{Binding PrintCompanyName, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </Grid>
-
-                                <Grid Margin="0,0,0,12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="12" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="12" />
-                                        <ColumnDefinition Width="90" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="INVOICE PREFIX" />
-                                        <TextBox Text="{Binding InvoicePrefix, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="INVOICE SUFFIX" />
-                                        <TextBox Text="{Binding InvoiceSuffix, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="4">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="PADDING" />
-                                        <TextBox Text="{Binding InvoicePadding, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </Grid>
-
-                                <UniformGrid Columns="2" Margin="0,0,0,2">
-                                    <StackPanel Margin="0,0,6,8">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="SALES LEDGER" />
-                                        <TextBox Text="{Binding SalesLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="6,0,0,8">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="CASH LEDGER" />
-                                        <TextBox Text="{Binding CashLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="0,0,6,8">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="CARD / UPI LEDGER" />
-                                        <TextBox Text="{Binding CreditDebitLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="6,0,0,8">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="SALES VOUCHER TYPE" />
-                                        <TextBox Text="{Binding SalesVoucherType, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="0,0,6,8">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="CGST LEDGER" />
-                                        <TextBox Text="{Binding CgstLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="6,0,0,8">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="SGST LEDGER" />
-                                        <TextBox Text="{Binding SgstLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="0,0,6,0">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="ROUND OFF LEDGER" />
-                                        <TextBox Text="{Binding RoundOffLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="6,0,0,0">
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="DISCOUNT LEDGER" />
-                                        <TextBox Text="{Binding DiscountLedger, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </UniformGrid>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-
-                <Border Grid.Row="2"
-                        Background="{StaticResource BgSunkenBrush}"
-                        BorderBrush="{StaticResource DividerBrush}"
-                        BorderThickness="0,1,0,0"
-                        Padding="14,10">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Style="{StaticResource BtnPrimary}"
-                                MinWidth="140"
-                                Content="Finish setup"
-                                Command="{Binding SaveBasicsCommand}" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-        </Border>
-    </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </shell:DialogFrame>
 </UserControl>

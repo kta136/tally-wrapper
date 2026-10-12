@@ -1,0 +1,79 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.LedgerField"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding Label, ElementName=Root}" />
+        <Grid>
+            <ComboBox DisplayMemberPath="Name"
+                      ItemsSource="{Binding Options, ElementName=Root}"
+                      Text="{Binding Text, ElementName=Root, UpdateSourceTrigger=LostFocus}">
+                <ComboBox.Style>
+                    <Style BasedOn="{StaticResource SettingsCombo}" TargetType="ComboBox">
+                        <Setter Property="Margin" Value="0,0,0,0" />
+                        <Setter Property="Padding" Value="10,0,58,0" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding MatchState, ElementName=Root}" Value="Missing">
+                                <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ComboBox.Style>
+            </ComboBox>
+            <!--  A tick when Tally has this ledger; a warning when it does not  -->
+            <TextBlock HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       FontFamily="{StaticResource IconFontFamily}"
+                       FontSize="14"
+                       IsHitTestVisible="False">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Setter Property="Margin" Value="0,0,12,0" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                <Setter Property="Margin" Value="0,0,34,0" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MatchState, ElementName=Root}" Value="Found">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Setter Property="Text" Value="&#xE73E;" />
+                                <Setter Property="Foreground" Value="{StaticResource OkBrush}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding MatchState, ElementName=Root}" Value="Missing">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Setter Property="Text" Value="&#xE7BA;" />
+                                <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
+        <TextBlock Margin="0,8,0,0"
+                   Text="{Binding MissingHint, ElementName=Root}">
+            <TextBlock.Style>
+                <Style BasedOn="{StaticResource TxtHint}" TargetType="TextBlock">
+                    <Setter Property="FontWeight" Value="Medium" />
+                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MatchState, ElementName=Root}" Value="Missing">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+        <Border Height="14" />
+    </StackPanel>
+</UserControl>

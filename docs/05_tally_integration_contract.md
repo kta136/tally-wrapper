@@ -50,7 +50,7 @@ The API does everything else:
 - store posting outcomes as audit events on the bill
 - fetch Tally masters on operator demand via `ITallyMasterRefresher`
 - expose masters to desktop from server-owned snapshots
-- recover stuck `posting` bills on API boot (`StuckPostingRecoveryHostedService`)
+- recover stuck `posting` bills at API start and every 5 minutes after (`StuckPostingRecoveryHostedService`; database only, it never contacts Tally)
 
 ### 1.3 TallyPrime
 
@@ -205,7 +205,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 |---|---|
 | Tally down or wrong active company, API up | Push is blocked by preflight with `503 Tally unavailable`; the bill remains `pending`/`failed`/`posted` as it was. Operator opens Tally or the correct company, then retries. |
 | API down | Desktop shows "Cloud unavailable"; bills stay in `pending` on whatever was last persisted; clicking Push is disabled. |
-| API crashes mid-post | Bill is stuck in `posting` until an API restart; `StuckPostingRecoveryHostedService` moves it to `reconciliation_required` with an audit breadcrumb once the claim is older than 10 minutes (longer than any push can run, so a push still running in another API process on the same database is never touched). Operator verifies Tally before resolving it. |
+| API crashes mid-post, or loses the database before it can record the outcome | Bill is left in `posting`. `StuckPostingRecoveryHostedService`, which sweeps at API start and every 5 minutes after, moves it to `reconciliation_required` with an audit breadcrumb once the claim is older than 10 minutes (longer than any push can run, so a push still running in another API process on the same database is never touched). No restart is needed. Operator verifies Tally before resolving it. |
 | Caller disconnects mid-post | The push keeps its own 30 s settle budget and records the known or unknown outcome; it is never left in `posting`. A cancellation noticed before anything is sent restores the prior state. |
 | Desktop down during a push | That push fails; no correctness lost (the API either completed the post or crashed; either way recovery is deterministic). |
 | Network partitions after preflight / mid-post | Timeout → `reconciliation_required` → operator verifies in Tally → Mark as Pushed or Mark as Pending. |

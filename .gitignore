@@ -68,3 +68,11 @@ graphify-out/
 
 # Review notes stay local: this repository is public.
 docs/audits/
+
+# The redesign pictures in docs/design/redesign/*.png are the design target; the HTML they were
+# exported from is editable source for them, kept on disk and not in the repository.
+docs/design/redesign/html/
+
+# Profiler output (dotnet-trace and its speedscope conversion).
+*.nettrace
+*.speedscope.json

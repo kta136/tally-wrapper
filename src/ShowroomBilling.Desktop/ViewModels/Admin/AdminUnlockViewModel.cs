@@ -29,6 +29,7 @@ public partial class AdminUnlockViewModel : ObservableObject
             OnPropertyChanged(nameof(IsLocked));
             OnPropertyChanged(nameof(ShowUnlockForm));
             OnPropertyChanged(nameof(ShowInitialSetupForm));
+            OnPropertyChanged(nameof(DialogTitle));
             OnPropertyChanged(nameof(SessionSummary));
         };
     }
@@ -40,6 +41,7 @@ public partial class AdminUnlockViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(ShowUnlockForm));
         OnPropertyChanged(nameof(ShowInitialSetupForm));
+        OnPropertyChanged(nameof(DialogTitle));
     }
 
     [ObservableProperty]
@@ -79,6 +81,11 @@ public partial class AdminUnlockViewModel : ObservableObject
 
     public bool ShowInitialSetupForm => !_tokenStore.IsUnlocked && !IsPasscodeConfigured;
 
+    /// <summary>The dialog's title: setting the first passcode is a different job from unlocking.</summary>
+    public string DialogTitle => ShowInitialSetupForm ? "Set an admin passcode" : "Administrator unlock";
+
+    /// <summary>Beside the new-passcode label; the length comes from the same limit the server enforces.</summary>
+    public string PasscodeLengthHint => $"At least {SettingLimits.MinAdminPasscodeLength} characters";
 
     public string SessionSummary
     {

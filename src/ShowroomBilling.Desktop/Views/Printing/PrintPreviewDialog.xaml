@@ -3,252 +3,233 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Printing"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:PrintPreviewViewModel, IsDesignTimeCreatable=False}">
-    <Grid Background="{StaticResource DialogScrimBrush}">
-        <Border Style="{StaticResource DialogPanel}"
-                Width="{Binding DataContext.PrintPreview.DialogWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                Height="{Binding DataContext.PrintPreview.DialogHeight, RelativeSource={RelativeSource AncestorType=Window}}"
-                MinWidth="760"
-                MinHeight="520"
-                MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}">
-            <Grid DataContext="{Binding PrintPreview}">
+    <UserControl.Resources>
+        <!--  A heading in the settings column.  -->
+        <Style x:Key="PanelHeading" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+    </UserControl.Resources>
+
+    <!--  The panel is as big as the operator last made it (DialogWidth, DialogHeight); the grip at the
+          bottom right resizes it. The preview takes the room the settings column leaves.  -->
+    <shell:DialogFrame BodyPadding="20,16"
+                       BodyScroll="Disabled"
+                       CloseCommand="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                       DataContext="{Binding PrintPreview}"
+                       PanelHeight="{Binding DialogHeight}"
+                       PanelMinHeight="520"
+                       PanelMinWidth="760"
+                       PanelWidth="{Binding DialogWidth}"
+                       Subtitle="{Binding SubtitleText}"
+                       Title="Print preview">
+        <shell:DialogFrame.HeaderChips>
+            <TextBlock VerticalAlignment="Center"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource InkMutedBrush}"
+                       Text="{Binding InvoiceNumber, TargetNullValue='(pending)'}" />
+        </shell:DialogFrame.HeaderChips>
+        <shell:DialogFrame.FooterNote>
+            <Button Command="{Binding SavePdfCommand}"
+                    Content="Save as PDF"
+                    shell:Kbd.Hint="Ctrl+Shift+S" />
+        </shell:DialogFrame.FooterNote>
+        <shell:DialogFrame.Footer>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Margin="0,0,16,0"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           Text="{Binding FooterText}"
+                           TextTrimming="CharacterEllipsis" />
+                <Button Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        Content="Close"
+                        shell:Kbd.Hint="Esc" />
+                <Button x:Name="PrintButton"
+                        Margin="10,0,0,0"
+                        Command="{Binding PrintCommand}"
+                        IsDefault="True"
+                        shell:Kbd.Hint="Enter"
+                        Style="{StaticResource BtnPrimary}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,8,0"
+                                   VerticalAlignment="Center"
+                                   FontFamily="{StaticResource IconFontFamily}"
+                                   FontSize="14"
+                                   Text="&#xE749;" />
+                        <TextBlock VerticalAlignment="Center" Text="Print" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </shell:DialogFrame.Footer>
+        <shell:DialogFrame.Overlay>
+            <Thumb Width="16"
+                   Height="16"
+                   Margin="0,0,3,3"
+                   Cursor="SizeNWSE"
+                   DragDelta="OnResizeThumbDragDelta"
+                   ToolTip="Resize preview">
+                <Thumb.Template>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Grid Width="16" Height="16" Background="Transparent">
+                            <Path Data="M 4,14 L 14,4 M 8,14 L 14,8 M 12,14 L 14,12"
+                                  Stroke="{StaticResource InkSoftBrush}"
+                                  StrokeThickness="1" />
+                        </Grid>
+                    </ControlTemplate>
+                </Thumb.Template>
+            </Thumb>
+        </shell:DialogFrame.Overlay>
+
+        <Grid Margin="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="24" />
+                <ColumnDefinition Width="268" />
+            </Grid.ColumnDefinitions>
+
+            <!--  The preview: zoom controls and the page count above, the pages below  -->
+            <Grid Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!--  Header  -->
-                <Border Grid.Row="0"
-                        Padding="14,10"
-                        BorderBrush="{StaticResource DividerBrush}"
-                        BorderThickness="0,0,0,1">
-                    <Grid>
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock FontSize="13"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
-                                           Text="Print Preview" />
-                                <TextBlock Margin="10,0,0,0"
-                                           VerticalAlignment="Center"
-                                           FontFamily="{StaticResource MonoFontFamily}"
-                                           FontSize="{DynamicResource FontSizeSm}"
-                                           Foreground="{StaticResource InkMutedBrush}"
-                                           Text="{Binding InvoiceNumber, TargetNullValue='(pending)'}" />
-                            </StackPanel>
-                            <TextBlock Margin="0,3,0,0"
-                                       FontSize="{DynamicResource FontSizeSm}"
-                                       Foreground="{StaticResource InkMutedBrush}"
-                                       Text="{Binding StatusMessage}" />
-                        </StackPanel>
-                        <Button HorizontalAlignment="Right"
-                                VerticalAlignment="Top"
-                                Style="{StaticResource BtnGhost}"
-                                Width="28"
-                                Height="24"
+                <Grid Margin="0,0,0,12">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Width="34"
                                 Padding="0"
-                                ToolTip="Close (Esc)"
-                                Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                Content="✕" />
-                    </Grid>
-                </Border>
-
-                <!--  Body: preview + sidebar  -->
-                <Grid Grid.Row="1" Margin="16,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="260" />
-                    </Grid.ColumnDefinitions>
-
-                    <Border x:Name="PreviewViewport"
-                            Grid.Column="0"
-                            Background="{StaticResource BgSunkenBrush}"
-                            BorderBrush="{StaticResource BorderBrushTok}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="12"
-                            MinHeight="480">
-                        <ListBox x:Name="PreviewList"
-                                 ItemsSource="{Binding PreviewPages}"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                                 VirtualizingPanel.IsVirtualizing="True"
-                                 VirtualizingPanel.VirtualizationMode="Recycling">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Focusable" Value="False" />
-                                    <Setter Property="HorizontalContentAlignment" Value="Center" />
-                                    <Setter Property="Padding" Value="0" />
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                </Style>
-                            </ListBox.ItemContainerStyle>
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="0,0,0,10"
-                                                Background="White"
-                                                BorderBrush="{StaticResource BorderBrushTok}"
-                                                BorderThickness="1">
-                                            <Border.LayoutTransform>
-                                                <ScaleTransform ScaleX="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                                                ScaleY="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}" />
-                                            </Border.LayoutTransform>
-                                            <Image Source="{Binding}"
-                                                   Stretch="Uniform" />
-                                        </Border>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                    </Border>
-
-                    <ScrollViewer Grid.Column="1"
-                                  Margin="16,0,0,0"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource TxtSectionTitle}" Text="COPIES" />
-                            <StackPanel Margin="0,6,0,14">
-                                <CheckBox Margin="0,3" IsChecked="{Binding CopyOriginal}" Content="Original (for customer)" />
-                                <CheckBox Margin="0,3" IsChecked="{Binding CopyDuplicate}" Content="Duplicate (for showroom)" />
-                                <CheckBox Margin="0,3" IsChecked="{Binding CopyTriplicate}" Content="Triplicate (for transport)" />
-                            </StackPanel>
-
-                            <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINTER" />
-                            <ComboBox Margin="0,6,0,14"
-                                      ItemsSource="{Binding Printers}"
-                                      SelectedItem="{Binding SelectedPrinter}" />
-
-                            <TextBlock Style="{StaticResource TxtSectionTitle}" Text="PRINT SETTINGS" />
-                            <StackPanel Margin="0,6,0,14">
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="DUPLEX" />
-                                <ComboBox Margin="0,4,0,10"
-                                          Tag="Duplex"
-                                          ItemsSource="{Binding DuplexOptions}"
-                                          DisplayMemberPath="DisplayName"
-                                          SelectedValuePath="Value"
-                                          SelectedValue="{Binding SelectedDuplexMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          SelectionChanged="OnPrintSettingSelectionChanged"
-                                          IsEnabled="{Binding HasSelectedPrinter}" />
-
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="COLOR" />
-                                <ComboBox Margin="0,4,0,10"
-                                          Tag="Color"
-                                          ItemsSource="{Binding ColorOptions}"
-                                          DisplayMemberPath="DisplayName"
-                                          SelectedValuePath="Value"
-                                          SelectedValue="{Binding SelectedColorMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          SelectionChanged="OnPrintSettingSelectionChanged"
-                                          IsEnabled="{Binding HasSelectedPrinter}" />
-
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="COLLATION" />
-                                <ComboBox Margin="0,4,0,0"
-                                          Tag="Collation"
-                                          ItemsSource="{Binding CollationOptions}"
-                                          DisplayMemberPath="DisplayName"
-                                          SelectedValuePath="Value"
-                                          SelectedValue="{Binding SelectedCollationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          SelectionChanged="OnPrintSettingSelectionChanged"
-                                          IsEnabled="{Binding HasSelectedPrinter}" />
-                            </StackPanel>
-
-                            <CheckBox Margin="0,0,0,14"
-                                      IsChecked="{Binding DirectPrintAfterSave}"
-                                      Content="Direct print after save (skip preview)" />
-
-                            <Border Background="{StaticResource BgSunkenBrush}"
-                                    BorderBrush="{StaticResource BorderBrushTok}"
-                                    BorderThickness="1"
-                                    CornerRadius="3"
-                                    Padding="8">
-                                <TextBlock FontSize="{DynamicResource FontSizeSm}"
-                                           TextWrapping="Wrap"
-                                           Foreground="{StaticResource InkMutedBrush}"
-                                           Text="Printing does not change bill state. Push to Tally from the Bills tab." />
-                            </Border>
-                        </StackPanel>
-                    </ScrollViewer>
+                                Command="{Binding ZoomOutCommand}"
+                                ToolTip="Zoom out">
+                            <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="12" Text="&#xE738;" />
+                        </Button>
+                        <Button MinWidth="60"
+                                Margin="8,0"
+                                Command="{Binding ResetZoomCommand}"
+                                Content="{Binding PreviewZoomDisplay}"
+                                ToolTip="Reset zoom" />
+                        <Button Width="34"
+                                Padding="0"
+                                Command="{Binding ZoomInCommand}"
+                                ToolTip="Zoom in">
+                            <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="12" Text="&#xE710;" />
+                        </Button>
+                        <Button Margin="8,0,0,0"
+                                Click="OnFitPageClick"
+                                Content="Fit page"
+                                ToolTip="Fit the whole page in the preview" />
+                    </StackPanel>
+                    <TextBlock HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="{Binding PageCountText}" />
                 </Grid>
 
-                <!--  Footer  -->
-                <Border Grid.Row="2"
-                        Background="{StaticResource BgSunkenBrush}"
+                <Border x:Name="PreviewViewport"
+                        Grid.Row="1"
+                        Padding="12"
+                        Background="{StaticResource BgHoverBrush}"
                         BorderBrush="{StaticResource DividerBrush}"
-                        BorderThickness="0,1,0,0"
-                        Padding="14,10">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
-                            <Button Style="{StaticResource BtnGhost}"
-                                    Width="28"
-                                    Padding="0"
-                                    Command="{Binding ZoomOutCommand}"
-                                    Content="-"
-                                    ToolTip="Zoom out" />
-                            <Button Style="{StaticResource BtnGhost}"
-                                    MinWidth="48"
-                                    Margin="4,0"
-                                    Padding="8,0"
-                                    Command="{Binding ResetZoomCommand}"
-                                    Content="{Binding PreviewZoomDisplay}"
-                                    ToolTip="Reset zoom" />
-                            <Button Style="{StaticResource BtnGhost}"
-                                    Width="28"
-                                    Padding="0"
-                                    Command="{Binding ZoomInCommand}"
-                                    Content="+"
-                                    ToolTip="Zoom in" />
-                            <Button Margin="4,0,0,0"
-                                    Style="{StaticResource BtnGhost}"
-                                    Padding="8,0"
-                                    Click="OnFitPageClick"
-                                    Content="Fit Page"
-                                    ToolTip="Fit the whole page in the preview" />
-                            <Button Margin="12,0,0,0"
-                                    Style="{StaticResource BtnBase}"
-                                    Command="{Binding SavePdfCommand}"
-                                    Content="Save as PDF (Ctrl+Shift+S)" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
-                            <Button Style="{StaticResource BtnBase}"
-                                    Margin="0,0,6,0"
-                                    Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Content="Close (Esc)" />
-                            <Button x:Name="PrintButton"
-                                    Style="{StaticResource BtnPrimary}"
-                                    Command="{Binding PrintCommand}"
-                                    Content="Print (Enter)"
-                                    IsDefault="True" />
-                        </StackPanel>
-                        <Thumb Grid.Column="1"
-                               Width="16"
-                               Height="16"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Bottom"
-                               Cursor="SizeNWSE"
-                               DragDelta="OnResizeThumbDragDelta"
-                               ToolTip="Resize preview">
-                            <Thumb.Template>
-                                <ControlTemplate TargetType="Thumb">
-                                    <Grid Width="16" Height="16" Background="Transparent">
-                                        <Path Stroke="{StaticResource InkMutedBrush}"
-                                              StrokeThickness="1"
-                                              Data="M 4,14 L 14,4 M 8,14 L 14,8 M 12,14 L 14,12" />
-                                    </Grid>
-                                </ControlTemplate>
-                            </Thumb.Template>
-                        </Thumb>
-                    </Grid>
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource RadiusLg}">
+                    <ListBox x:Name="PreviewList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ItemsSource="{Binding PreviewPages}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="{x:Type ListBoxItem}">
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="BorderThickness" Value="0" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,10"
+                                        Background="White"
+                                        BorderBrush="{StaticResource BorderStrongBrush}"
+                                        BorderThickness="1"
+                                        Effect="{StaticResource PopupShadow}">
+                                    <Border.LayoutTransform>
+                                        <ScaleTransform ScaleX="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                        ScaleY="{Binding DataContext.PreviewScale, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+                                    </Border.LayoutTransform>
+                                    <Image Source="{Binding}" Stretch="Uniform" />
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </Border>
             </Grid>
-        </Border>
-    </Grid>
+
+            <!--  Copies, printer and print settings  -->
+            <ScrollViewer Grid.Column="2"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,0,2,0">
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="Copies" />
+                    <StackPanel Margin="0,0,0,18">
+                        <CheckBox Margin="0,0,0,10" Content="Original, for the customer" IsChecked="{Binding CopyOriginal}" />
+                        <CheckBox Margin="0,0,0,10" Content="Duplicate, for the showroom" IsChecked="{Binding CopyDuplicate}" />
+                        <CheckBox Content="Triplicate, for transport" IsChecked="{Binding CopyTriplicate}" />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="Printer" />
+                    <ComboBox Margin="0,0,0,18"
+                              ItemsSource="{Binding Printers}"
+                              SelectedItem="{Binding SelectedPrinter}" />
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="Print settings" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Two-sided" />
+                    <ComboBox Margin="0,0,0,12"
+                              DisplayMemberPath="DisplayName"
+                              IsEnabled="{Binding HasSelectedPrinter}"
+                              ItemsSource="{Binding DuplexOptions}"
+                              SelectedValue="{Binding SelectedDuplexMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              SelectedValuePath="Value"
+                              SelectionChanged="OnPrintSettingSelectionChanged"
+                              Tag="Duplex" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Colour" />
+                    <ComboBox Margin="0,0,0,12"
+                              DisplayMemberPath="DisplayName"
+                              IsEnabled="{Binding HasSelectedPrinter}"
+                              ItemsSource="{Binding ColorOptions}"
+                              SelectedValue="{Binding SelectedColorMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              SelectedValuePath="Value"
+                              SelectionChanged="OnPrintSettingSelectionChanged"
+                              Tag="Color" />
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Collate" />
+                    <ComboBox Margin="0,0,0,18"
+                              DisplayMemberPath="DisplayName"
+                              IsEnabled="{Binding HasSelectedPrinter}"
+                              ItemsSource="{Binding CollationOptions}"
+                              SelectedValue="{Binding SelectedCollationMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              SelectedValuePath="Value"
+                              SelectionChanged="OnPrintSettingSelectionChanged"
+                              Tag="Collation" />
+
+                    <CheckBox Margin="0,0,0,16"
+                              Content="Skip this preview after saving"
+                              IsChecked="{Binding DirectPrintAfterSave}" />
+
+                    <Border Padding="14,12"
+                            Background="{StaticResource BgSunkenBrush}"
+                            CornerRadius="{StaticResource RadiusLg}">
+                        <TextBlock Foreground="{StaticResource InkMutedBrush}"
+                                   shell:RichText.Markup="To send the bill to Tally, use **Push** in the Bills tab."
+                                   TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </shell:DialogFrame>
 </UserControl>

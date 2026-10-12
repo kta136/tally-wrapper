@@ -47,6 +47,7 @@ public partial class PrintPreviewViewModel : ObservableObject
 
         Printers = new ObservableCollection<string>();
         PreviewPages = new ObservableCollection<BitmapSource>();
+        PreviewPages.CollectionChanged += (_, _) => NotifyDisplayChanged();
         DuplexOptions = new ObservableCollection<PrintSettingOption<PrintDuplexMode>>();
         ColorOptions = new ObservableCollection<PrintSettingOption<PrintColorMode>>();
         CollationOptions = new ObservableCollection<PrintSettingOption<PrintCollationMode>>();
@@ -95,8 +96,8 @@ public partial class PrintPreviewViewModel : ObservableObject
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string invoiceNumber = string.Empty;
     [ObservableProperty] private int documentCount = 1;
-    [ObservableProperty] private double dialogWidth = 980;
-    [ObservableProperty] private double dialogHeight = 680;
+    [ObservableProperty] private double dialogWidth = 990;
+    [ObservableProperty] private double dialogHeight = 710;
     [ObservableProperty] private double previewZoomPercent = 100;
 
     public bool IsSingleDocument => DocumentCount == 1;
@@ -114,6 +115,7 @@ public partial class PrintPreviewViewModel : ObservableObject
     partial void OnDocumentCountChanged(int value)
     {
         OnPropertyChanged(nameof(IsSingleDocument));
+        NotifyDisplayChanged();
         SavePdfCommand.NotifyCanExecuteChanged();
     }
 
@@ -121,6 +123,7 @@ public partial class PrintPreviewViewModel : ObservableObject
     {
         PrintCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasSelectedPrinter));
+        NotifyDisplayChanged();
 
         var version = Interlocked.Increment(ref _printerCapabilityLoadVersion);
         if (_dispatcher is null || string.IsNullOrWhiteSpace(value))
@@ -171,6 +174,7 @@ public partial class PrintPreviewViewModel : ObservableObject
             return;
         }
         PrintCommand.NotifyCanExecuteChanged();
+        NotifyDisplayChanged();
         SchedulePreviewRender();
     }
 
@@ -187,6 +191,7 @@ public partial class PrintPreviewViewModel : ObservableObject
         InvoiceNumber = DocumentCount <= 1
             ? _contents.FirstOrDefault()?.InvoiceNumber ?? string.Empty
             : $"{DocumentCount} bills";
+        NotifyDisplayChanged();
 
         // Apply copy defaults inside the suppress gate so the per-property handler
         // does not kick off a render against the previous _contents. The single
@@ -520,7 +525,7 @@ public partial class PrintPreviewViewModel : ObservableObject
         {
             yield return new PrintSettingOption<PrintColorMode>(mode, mode switch
             {
-                PrintColorMode.Color => "Color",
+                PrintColorMode.Color => "Colour",
                 PrintColorMode.Monochrome => "Black & white",
                 _ => "Printer default",
             });

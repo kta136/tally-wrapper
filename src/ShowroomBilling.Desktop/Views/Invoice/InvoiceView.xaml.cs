@@ -4,6 +4,8 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -12,7 +14,8 @@ namespace ShowroomBilling.Desktop.Views.Invoice;
 public partial class InvoiceView : UserControl
 {
     private const string LineEntryGridName = "LineEntryGrid";
-    private static readonly int[] EditableLineColumns = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    // Item, Karat, Gross, Less, Net, Unit, Wastage (a diamond line has its flat rate here, over Labour too), Labour, Extra.
+    private static readonly int[] EditableLineColumns = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
     public InvoiceView()
     {
@@ -54,11 +57,11 @@ public partial class InvoiceView : UserControl
 
     private static TextBox? FindGrossWeightTextBox(DependencyObject root)
     {
-        // Body cell at Grid.Column=2 in the row template.
+        // Body cell at Grid.Column=3 in the row template.
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
             var child = VisualTreeHelper.GetChild(root, i);
-            if (child is Border b && Grid.GetColumn(b) == 2)
+            if (child is Border b && Grid.GetColumn(b) == 3)
                 return FindDescendant<TextBox>(b);
             var nested = FindGrossWeightTextBox(child);
             if (nested is not null) return nested;
@@ -245,6 +248,12 @@ public partial class InvoiceView : UserControl
 
     private void OnLinesPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key is Key.Up or Key.Down)
+        {
+            MoveBetweenRows(e);
+            return;
+        }
+
         if (e.Key != Key.Enter) return;
         if (e.OriginalSource is not UIElement source) return;
 
@@ -252,9 +261,44 @@ public partial class InvoiceView : UserControl
         var combo = FindAncestor<ComboBox>(source as DependencyObject);
         if (combo is { IsDropDownOpen: true }) return;
 
+        // A suggestion list that is open: Enter picks the highlighted entry and goes on to the next cell.
+        if (combo is not null)
+            TypeAhead.TryPick(combo);
+
         var reverse = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
         if (TryMoveLineFocus(source, reverse))
             e.Handled = true;
+    }
+
+    /// <summary>
+    /// Up and Down in a cell of the line table go to the same cell of the row above or below. They never
+    /// change what is in the cell: a combo box would otherwise step through its entries, so the item and
+    /// the unit would change under the keys. While a suggestion list or a drop-down is open the keys are
+    /// the list's.
+    /// </summary>
+    private void MoveBetweenRows(KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None || e.OriginalSource is not DependencyObject source) return;
+
+        var combo = FindAncestor<ComboBox>(source);
+        if (combo is { IsDropDownOpen: true } || (combo is not null && TypeAhead.GetIsOpen(combo))) return;
+
+        var cellBorder = FindLineCellBorder(source);
+        var rowContainer = FindAncestor<ListBoxItem>(source);
+        if (cellBorder is null || rowContainer is null) return;
+
+        e.Handled = true;
+        var rowIndex = LinesItems.ItemContainerGenerator.IndexFromContainer(rowContainer);
+        if (rowIndex < 0) return;
+
+        var target = GetLineContainer(e.Key == Key.Up ? rowIndex - 1 : rowIndex + 1);
+        if (target is null) return;
+
+        // A diamond row has no karat, wastage or labour cell, so fall back to the nearest cell to the left.
+        for (var column = Grid.GetColumn(cellBorder); column >= EditableLineColumns[0]; column--)
+        {
+            if (FocusLineCell(target, column)) return;
+        }
     }
 
     private bool TryMoveLineFocus(UIElement source, bool reverse)
@@ -397,8 +441,11 @@ public partial class InvoiceView : UserControl
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
             var child = VisualTreeHelper.GetChild(root, i);
+            // A diamond line collapses the karat, wastage and labour cells and shows one flat-rate
+            // cell in their place at the same column, so a collapsed cell is not a candidate.
             if (child is Border border
                 && Grid.GetColumn(border) == column
+                && border.Visibility == Visibility.Visible
                 && IsLineCellBorder(border))
             {
                 return border;
@@ -443,8 +490,13 @@ public partial class InvoiceView : UserControl
                 e.Handled = true;
                 break;
             case Key.F3:
-                QuickAddToggle.IsChecked = true;
-                QuickAddBox.Focus();
+                if (DataContext is InvoiceViewModel quickAddVm)
+                {
+                    quickAddVm.IsQuickAddOpen = true;
+                }
+
+                // The panel is collapsed until the binding opens it, and a collapsed box cannot take focus.
+                Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => QuickAddBox.Focus()));
                 e.Handled = true;
                 break;
             case Key.F4:

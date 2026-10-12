@@ -23,7 +23,16 @@ public partial class HealthClusterViewModel : ObservableObject
     private string databaseDot = "neutral";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DatabasePillText))]
     private string databaseLabel = "DB ?";
+
+    /// <summary>What the top bar's database pill says: the word, and a short state after it only when the state needs a look.</summary>
+    public string DatabasePillText => DatabaseLabel switch
+    {
+        "DB ?" => "Database ?",
+        "DB BEHIND" => "Database behind",
+        _ => "Database",
+    };
 
     [ObservableProperty]
     private string databaseTooltip = "Database identity has not been checked yet.";
@@ -107,21 +116,13 @@ public partial class HealthClusterViewModel : ObservableObject
             ? "DB ?"
             : $"DB {identity}";
 
-        // Before "idle": the cheap probe still carries the last count found,
-        // and a database that is behind is not idle, it is unusable.
+        // First: a database that is behind is unusable whatever else is true
+        // of it, and the count is still reported when it does not answer.
         if (runtime.PendingMigrationCount > 0)
         {
             DatabaseDot = "err";
             DatabaseLabel = "DB BEHIND";
             DatabaseTooltip = ShellHealthCoordinator.SchemaBehindBanner(runtime.PendingMigrationCount.Value);
-            return;
-        }
-
-        if (runtime.DatabaseHealthSkipped)
-        {
-            DatabaseDot = "neutral";
-            DatabaseLabel = "DB IDLE";
-            DatabaseTooltip = runtime.Message;
             return;
         }
 

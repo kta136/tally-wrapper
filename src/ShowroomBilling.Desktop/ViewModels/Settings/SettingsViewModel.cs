@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Contracts.Settings;
@@ -57,17 +59,27 @@ public partial class SettingsViewModel : ObservableObject,
         // Admin is added conditionally once AdminVm is wired and unlocked —
         // see SyncAdminSection. This keeps the sidebar from advertising admin
         // capabilities to an operator who doesn't have a session.
+        // In the order the sidebar groups them: what every counter shares, then what is this PC's own.
         Sections = new ObservableCollection<SettingsSectionKey>
         {
-            SettingsSectionKey.Server,
             SettingsSectionKey.Connection,
             SettingsSectionKey.Invoice,
             SettingsSectionKey.PrintLayout,
             SettingsSectionKey.Ledgers,
             SettingsSectionKey.Masters,
+            SettingsSectionKey.Server,
             SettingsSectionKey.Advanced,
         };
+        SectionGroups = new ListCollectionView(Sections);
+        SectionGroups.GroupDescriptions.Add(new PropertyGroupDescription(null, SettingsSectionGroupConverter.Instance));
         SelectedSection = SettingsSectionKey.Server;
+        PrintLayout.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PrintLayoutViewModel.UpdatedAtUtc))
+            {
+                RaiseSectionHeader();
+            }
+        };
 
         Preview = previewFactory is not null
             ? previewFactory(Draft, PrintLayout, this)
@@ -82,7 +94,7 @@ public partial class SettingsViewModel : ObservableObject,
         OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
         OpenInstallFolderCommand = new RelayCommand(OpenInstallFolder);
         OpenAppDataFolderCommand = new RelayCommand(OpenAppDataFolder);
-        DensityOptions = [UiDensityManager.Compact, UiDensityManager.Comfortable];
+        DensityOptions = UiDensityManager.All;
         UiDensity = UiDensityManager.CurrentDensity;
     }
 
@@ -141,6 +153,9 @@ public partial class SettingsViewModel : ObservableObject,
     private static void OpenAppDataFolder() => SettingsFolderLauncher.OpenAppDataFolder();
 
     public ObservableCollection<SettingsSectionKey> Sections { get; }
+
+    /// <summary>The sections under their group headings, for the sidebar.</summary>
+    public ICollectionView SectionGroups { get; }
     public ServerSettingsViewModel Server { get; }
     public MasterDataSettingsViewModel MasterData { get; }
     public SettingsDraft Draft { get; }
@@ -162,7 +177,7 @@ public partial class SettingsViewModel : ObservableObject,
     [ObservableProperty] private string summary = string.Empty;
     [ObservableProperty] private DateTimeOffset? updatedAtUtc;
     [ObservableProperty] private EffectiveCloudSettingsDto? settings;
-    [ObservableProperty] private string uiDensity = UiDensityManager.Compact;
+    [ObservableProperty] private string uiDensity = UiDensityManager.Standard;
 
     public IReadOnlyList<string> CloudOwnedCategories { get; private set; } = Array.Empty<string>();
     public IReadOnlyList<string> LocalOnlyCategories { get; private set; } = Array.Empty<string>();
@@ -182,7 +197,67 @@ public partial class SettingsViewModel : ObservableObject,
     public string ActiveCompanyName => Settings?.Connection.ActiveCompanyName ?? string.Empty;
 
     partial void OnSelectedSectionChanged(SettingsSectionKey value)
-        => _sectionCoordinator.OnSelectedSectionChanged();
+    {
+        _sectionCoordinator.OnSelectedSectionChanged();
+        RaiseSectionHeader();
+    }
+
+    // ---- The heading of the open section: its title, who it belongs to, and what can be done with it.
+
+    public string SelectedSectionTitle => SettingsSections.TitleOf(SelectedSection);
+
+    public SettingsSectionScope SelectedSectionScope => SettingsSections.ScopeOf(SelectedSection);
+
+    public string SelectedSectionChipText => IsDirtyDraftSection ? "Unsaved changes" : SettingsSections.ChipTextOf(SelectedSectionScope);
+
+    /// <summary>The chip turns amber with "Unsaved changes" while a draft section has edits not yet saved.</summary>
+    public bool IsDirtyDraftSection => IsDirty && SettingsSections.IsEditedAsDraft(SelectedSection);
+
+    /// <summary>The sections of the shared group have a band under the title, with the section's buttons in it.</summary>
+    public bool HasHeaderBand => SelectedSectionScope == SettingsSectionScope.Shared;
+
+    /// <summary>Refresh and Edit, then Discard and Save all: for the sections edited as one draft.</summary>
+    public bool ShowsDraftButtons => SettingsSections.IsEditedAsDraft(SelectedSection);
+
+    /// <summary>The band turns pale indigo while its section is being edited.</summary>
+    public bool IsEditingBand => IsEditing && ShowsDraftButtons;
+
+    public string SelectedSectionSubtitle
+    {
+        get
+        {
+            if (SelectedSection == SettingsSectionKey.PrintLayout)
+            {
+                return $"Used by the preview, printing and PDF export · Updated {FormatUpdated(PrintLayout.UpdatedAtUtc)}";
+            }
+
+            if (!ShowsDraftButtons)
+            {
+                return string.Empty;
+            }
+
+            var shared = IsDirtyDraftSection ? $"{SettingsSections.ChipTextOf(SettingsSectionScope.Shared)} · " : string.Empty;
+            var state = IsEditing ? "Editing" : $"Source: {SettingsSource}";
+            return $"{shared}{state} · Updated {FormatUpdated(UpdatedAtUtc)}";
+        }
+    }
+
+    private static string FormatUpdated(DateTimeOffset? at)
+        => at is { } value
+            ? value.ToLocalTime().ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture)
+            : "—";
+
+    private void RaiseSectionHeader()
+    {
+        OnPropertyChanged(nameof(SelectedSectionTitle));
+        OnPropertyChanged(nameof(SelectedSectionScope));
+        OnPropertyChanged(nameof(SelectedSectionChipText));
+        OnPropertyChanged(nameof(IsDirtyDraftSection));
+        OnPropertyChanged(nameof(HasHeaderBand));
+        OnPropertyChanged(nameof(ShowsDraftButtons));
+        OnPropertyChanged(nameof(IsEditingBand));
+        OnPropertyChanged(nameof(SelectedSectionSubtitle));
+    }
 
     partial void OnIsLoadingChanged(bool value) => NotifyCommandsChanged();
     partial void OnIsSavingChanged(bool value) => NotifyCommandsChanged();
@@ -190,8 +265,17 @@ public partial class SettingsViewModel : ObservableObject,
     {
         NotifyCommandsChanged();
         MasterData.NotifyShellStateChanged();
+        RaiseSectionHeader();
     }
-    partial void OnIsDirtyChanged(bool value) => SaveAllCommand.NotifyCanExecuteChanged();
+
+    partial void OnIsDirtyChanged(bool value)
+    {
+        SaveAllCommand.NotifyCanExecuteChanged();
+        RaiseSectionHeader();
+    }
+
+    partial void OnSettingsSourceChanged(string value) => RaiseSectionHeader();
+    partial void OnUpdatedAtUtcChanged(DateTimeOffset? value) => RaiseSectionHeader();
     partial void OnUiDensityChanged(string value) => UiDensityManager.ApplyDensity(value);
 
     partial void OnSettingsChanged(EffectiveCloudSettingsDto? value)

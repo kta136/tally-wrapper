@@ -1,3 +1,5 @@
+using ShowroomBilling.ServerTray.Ui;
+
 namespace ShowroomBilling.ServerTray;
 
 public sealed class TrayApplicationContext : ApplicationContext
@@ -18,7 +20,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             Icon = AppIconProvider.CreateIcon(),
             Text = ServerTrayOptions.ProductName,
             Visible = true,
-            ContextMenuStrip = BuildMenu()
+            ContextMenuStrip = BuildMenu(_actions, ShowStatus, StopServiceAndExitTray)
         };
         _notifyIcon.DoubleClick += (_, _) => ShowStatus();
 
@@ -28,21 +30,27 @@ public sealed class TrayApplicationContext : ApplicationContext
         RefreshTrayText();
     }
 
-    private ContextMenuStrip BuildMenu()
+    /// <summary>The tray icon's menu: the dashboard first, what stops the server last and in red.</summary>
+    internal static ContextMenuStrip BuildMenu(ServerTrayActions actions, Action openDashboard, Action stopServerAndExit)
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open Server Dashboard", null, (_, _) => ShowStatus());
-        menu.Items.Add("Install / Repair Server", null, (_, _) => _actions.InstallOrRepairServer());
+        // What a double-click on the icon does, so it is the one in bold.
+        var open = menu.Items.Add("Open dashboard", null, (_, _) => openDashboard());
+        open.Font = Theme.Font(TextRole.BodyStrong);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Start API Service", null, (_, _) => _actions.StartService());
-        menu.Items.Add("Stop API Service", null, (_, _) => _actions.StopService());
-        menu.Items.Add("Restart API Service", null, (_, _) => _actions.RestartService());
+        menu.Items.Add("Start service", null, (_, _) => actions.StartService());
+        menu.Items.Add("Stop service", null, (_, _) => actions.StopService());
+        menu.Items.Add("Restart service", null, (_, _) => actions.RestartService());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Open Logs", null, (_, _) => _actions.OpenLogs());
-        menu.Items.Add("Open Local Health", null, (_, _) => _actions.OpenLocalHealth());
-        menu.Items.Add("Copy Server URL", null, (_, _) => _actions.CopyServerUrl());
+        menu.Items.Add("Copy address for counters", null, (_, _) => actions.CopyServerUrl());
+        menu.Items.Add("Open logs", null, (_, _) => actions.OpenLogs());
+        menu.Items.Add("Open health page", null, (_, _) => actions.OpenLocalHealth());
+        menu.Items.Add("Repair installation…", null, (_, _) => actions.InstallOrRepairServer());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit Tray", null, (_, _) => StopServiceAndExitTray());
+        var exit = menu.Items.Add("Stop server and exit", null, (_, _) => stopServerAndExit());
+        exit.ForeColor = Theme.ErrText;
+
+        TrayMenuRenderer.Apply(menu);
         return menu;
     }
 
@@ -65,13 +73,14 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void StopServiceAndExitTray()
     {
-        var result = MessageBox.Show(
-            "Stop the API Windows Service and close the tray?\n\nBilling workstations will lose server access until the service is started again.",
-            ServerTrayOptions.ProductName,
-            MessageBoxButtons.YesNo,
-            MessageBoxIcon.Warning,
-            MessageBoxDefaultButton.Button2);
-        if (result != DialogResult.Yes)
+        var owner = _statusForm is { IsDisposed: false, Visible: true } ? _statusForm : null;
+        var confirmed = TrayDialog.Confirm(
+            owner,
+            title: "Stop the server and close?",
+            message: "This stops the Windows service and closes Tally Wrapper Server on this PC.",
+            note: "Counters cannot bill until the service is started again.",
+            confirmText: "Stop server");
+        if (!confirmed)
         {
             return;
         }

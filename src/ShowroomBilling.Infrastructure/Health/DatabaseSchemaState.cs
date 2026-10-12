@@ -9,9 +9,10 @@ namespace ShowroomBilling.Infrastructure.Health;
 /// <para>
 /// A build on a database that is behind answers every bill and numbering
 /// request with an error while PostgreSQL itself is perfectly reachable, so
-/// "reachable" alone is not health. The start-up migration and each full
-/// health check record what they find here, and the cheap health probe reports
-/// the last value without touching the database. In memory only.
+/// "reachable" alone is not health. The start-up migration and each health
+/// check record what they find here; it is what health reports while the
+/// database does not answer, and what the stuck-posting sweep looks at before
+/// it reads a bill. In memory only.
 /// </para>
 /// </summary>
 public sealed class DatabaseSchemaState

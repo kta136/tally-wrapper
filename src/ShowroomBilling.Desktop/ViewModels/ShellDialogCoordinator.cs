@@ -48,7 +48,8 @@ internal sealed class ShellDialogCoordinator(
         string? prefix,
         string? suffix,
         string fiscalYear,
-        int padding)
+        int padding,
+        string? context)
     {
         if (_changeNumberTcs is { Task.IsCompleted: false })
         {
@@ -57,7 +58,7 @@ internal sealed class ShellDialogCoordinator(
 
         var tcs = new TaskCompletionSource<(bool, string, string?)>(TaskCreationOptions.RunContinuationsAsynchronously);
         _changeNumberTcs = tcs;
-        changeNumberDialog.Configure(currentNumber, prefix, suffix, fiscalYear, padding);
+        changeNumberDialog.Configure(currentNumber, prefix, suffix, fiscalYear, padding, context);
         setActiveDialog(ShellDialogs.ChangeNumber);
         return tcs.Task;
     }
@@ -70,13 +71,13 @@ internal sealed class ShellDialogCoordinator(
         tcs?.TrySetResult(result);
     }
 
-    public Task<string?> PromptReasonAsync(string title, string message, CancellationToken cancellationToken)
+    public Task<string?> PromptReasonAsync(ReasonRequest request, CancellationToken cancellationToken)
     {
         if (_reasonPromptTcs is { Task.IsCompleted: false }) return Task.FromResult<string?>(null);
 
         var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _reasonPromptTcs = tcs;
-        reasonPromptDialog.Configure(title, message);
+        reasonPromptDialog.Configure(request);
         setActiveDialog(ShellDialogs.ReasonPrompt);
         return tcs.Task;
     }

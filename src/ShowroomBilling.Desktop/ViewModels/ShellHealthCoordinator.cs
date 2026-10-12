@@ -22,9 +22,9 @@ internal sealed class ShellHealthCoordinator(
     IMastersApiClient mastersApiClient,
     IShellHealthHost host)
 {
-    // The 15-second health poll only asks whether the API answers. The Tally
-    // company, database and master-freshness checks cost a round trip each, so
-    // each is repeated only this often unless the operator asks.
+    // Every 15-second health poll has the server check its database. The Tally
+    // company check talks to Tally and master freshness is for information
+    // only, so those two are repeated only this often unless the operator asks.
     private static readonly TimeSpan SlowCheckInterval = TimeSpan.FromMinutes(30);
 
     private const string CloudUnavailableBanner =
@@ -39,7 +39,7 @@ internal sealed class ShellHealthCoordinator(
         + "Bills cannot be loaded or saved until the administrator applies them.";
 
     private int _healthPollInFlight;
-    private DateTimeOffset? _lastDatabaseHealthCheckedAtUtc;
+    private bool _databaseAnsweredLastPoll;
     private DateTimeOffset? _lastMasterFreshnessCheckedAtUtc;
     private DateTimeOffset? _lastTallyHealthCheckedAtUtc;
 
@@ -48,7 +48,7 @@ internal sealed class ShellHealthCoordinator(
         host.Health.Apply(value);
         host.BannerText = value switch
         {
-            SystemState.Degraded => "Cloud reachable — Tally posting is manual. Click Push on a bill to send it to Tally.",
+            SystemState.Degraded => "Tally posting is manual. Click Push on a bill to send it to Tally.",
             SystemState.Limited => CloudUnavailableBanner,
             _ => string.Empty,
         };
@@ -85,18 +85,12 @@ internal sealed class ShellHealthCoordinator(
         {
             SystemHealthSnapshot snapshot;
             var checkTallyCompany = forceTallyCompany || IsDue(_lastTallyHealthCheckedAtUtc);
-            // While the database is behind, ask it again on every poll, so
-            // the banner goes within seconds of the migrations being applied.
-            var checkDatabase = forceTallyCompany
-                || IsDue(_lastDatabaseHealthCheckedAtUtc)
-                || host.LastHealthSnapshot?.Runtime?.PendingMigrationCount > 0;
             var checkMasterFreshness = forceTallyCompany || IsDue(_lastMasterFreshnessCheckedAtUtc);
             try
             {
                 snapshot = await healthApiClient.GetSnapshotAsync(
                     checkTallyCompany,
                     checkMasterFreshness,
-                    checkDatabase,
                     cancellationToken);
             }
             catch
@@ -122,14 +116,9 @@ internal sealed class ShellHealthCoordinator(
                 _lastTallyHealthCheckedAtUtc = DateTimeOffset.UtcNow;
             }
 
-            if (snapshot.Runtime is { DatabaseHealthSkipped: false })
-            {
-                _lastDatabaseHealthCheckedAtUtc = DateTimeOffset.UtcNow;
-            }
-
             host.LastHealthSnapshot = snapshot;
             host.LastHealthCheckedAtUtc = DateTimeOffset.UtcNow;
-            ApplyHealthSnapshot(snapshot);
+            ApplyHealthSnapshot(snapshot, operatorAsked: forceTallyCompany);
         }
         finally
         {
@@ -137,13 +126,17 @@ internal sealed class ShellHealthCoordinator(
         }
     }
 
-    private void ApplyHealthSnapshot(SystemHealthSnapshot snapshot)
+    private void ApplyHealthSnapshot(SystemHealthSnapshot snapshot, bool operatorAsked)
     {
+        // The database is across the internet from the server, so one poll it
+        // did not answer is not yet an outage. The database pill turns red
+        // straight away; the bill on screen is taken away only when the next
+        // poll agrees, or when the operator asked for this check.
+        var databaseDown = snapshot.Runtime?.DatabaseReachable == false;
+        var firstMiss = databaseDown && _databaseAnsweredLastPoll && !operatorAsked;
+        _databaseAnsweredLastPoll = snapshot.Runtime?.DatabaseReachable == true;
+
         host.Health.Apply(snapshot);
-        if (snapshot.Runtime is { DatabaseHealthSkipped: false } runtime)
-        {
-            host.StatusBar.ApplyDatabaseIdentity(runtime.DatabaseIdentity);
-        }
 
         if (!snapshot.ApiReachable)
         {
@@ -151,6 +144,16 @@ internal sealed class ShellHealthCoordinator(
             host.BannerText = CloudUnavailableBanner;
             host.StatusBar.StatusText = "CLOUD DOWN";
             return;
+        }
+
+        if (firstMiss)
+        {
+            return;
+        }
+
+        if (snapshot.Runtime is { } runtime)
+        {
+            host.StatusBar.ApplyDatabaseIdentity(runtime.DatabaseIdentity);
         }
 
         if (snapshot.Runtime?.PendingMigrationCount > 0)
@@ -169,15 +172,7 @@ internal sealed class ShellHealthCoordinator(
             return;
         }
 
-        if (snapshot.Runtime?.DatabaseHealthSkipped == true)
-        {
-            host.SystemState = SystemState.Healthy;
-            host.BannerText = string.Empty;
-            host.StatusBar.StatusText = "READY";
-            return;
-        }
-
-        if (snapshot.Runtime?.DatabaseReachable == false)
+        if (databaseDown)
         {
             host.SystemState = SystemState.Limited;
             host.BannerText = "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.";

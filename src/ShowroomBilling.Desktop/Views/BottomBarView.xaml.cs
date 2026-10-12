@@ -2,9 +2,9 @@ using System.Windows.Controls;
 
 namespace ShowroomBilling.Desktop.Views;
 
-public partial class FKeyStripView : UserControl
+public partial class BottomBarView : UserControl
 {
-    public FKeyStripView()
+    public BottomBarView()
     {
         InitializeComponent();
     }

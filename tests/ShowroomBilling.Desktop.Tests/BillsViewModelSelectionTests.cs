@@ -152,7 +152,7 @@ public sealed class BillsViewModelSelectionTests
         var promptCount = 0;
         var vm = new BillsViewModel(api, tokenStore)
         {
-            ReasonPromptHandler = (_, _, _) =>
+            ReasonPromptHandler = (_, _) =>
             {
                 promptCount++;
                 return Task.FromResult<string?>("operator correction");
@@ -190,7 +190,7 @@ public sealed class BillsViewModelSelectionTests
         };
         var vm = new BillsViewModel(api, tokenStore)
         {
-            ReasonPromptHandler = (_, _, _) => Task.FromResult<string?>("needs retry")
+            ReasonPromptHandler = (_, _) => Task.FromResult<string?>("needs retry")
         };
         await vm.LoadAsync();
         vm.Items[0].IsSelected = true;

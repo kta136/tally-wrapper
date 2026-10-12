@@ -13,13 +13,26 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 public partial class ChangeNumberDialogViewModel : ObservableObject
 {
     [ObservableProperty] private string currentNumberDisplay = "(none)";
+    [ObservableProperty] private string contextText = string.Empty;
     [ObservableProperty] private string newNumberRaw = string.Empty;
     [ObservableProperty] private string? reason;
-    [ObservableProperty] private string previewText = HelpText;
+
+    /// <summary>The number the bill would get, formatted; empty until valid digits are typed.</summary>
+    [ObservableProperty] private string previewNumber = string.Empty;
+
+    /// <summary>Something has been typed that the server would reject.</summary>
+    [ObservableProperty] private bool isInvalid;
 
     // The server accepts positive digits only and adds the prefix, fiscal year
     // and suffix itself (BillAdminWorkflow.ChangeInvoiceNumberAsync).
-    private const string HelpText = "Type the new number in digits (e.g. 42). The prefix, fiscal year and suffix are added automatically.";
+    public string HelpText => "Type it as digits, for example 42. The prefix, fiscal year and suffix are added for you.";
+
+    public string InvalidText => "Digits only, greater than zero. The prefix, fiscal year and suffix are added for you.";
+
+    public bool HasPreview => PreviewNumber.Length > 0;
+
+    /// <summary>The banner under the field, with <c>**bold**</c> round the number.</summary>
+    public string PreviewMarkup => $"The bill will become **{PreviewNumber}**.";
 
     private string? _prefix;
     private string? _suffix;
@@ -40,11 +53,13 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
 
     /// <summary>
     /// Reset state for a fresh open. Called by the shell before flipping
-    /// <c>ActiveDialog</c> to "changeNumber".
+    /// <c>ActiveDialog</c> to "changeNumber". <paramref name="context"/> is the line under the title:
+    /// whose bill it is.
     /// </summary>
-    public void Configure(string? currentNumber, string? prefix, string? suffix, string fiscalYear, int padding = InvoiceNumberFormatter.DefaultPadding)
+    public void Configure(string? currentNumber, string? prefix, string? suffix, string fiscalYear, int padding = InvoiceNumberFormatter.DefaultPadding, string? context = null)
     {
         CurrentNumberDisplay = string.IsNullOrWhiteSpace(currentNumber) ? "(none)" : currentNumber!;
+        ContextText = context ?? string.Empty;
         _prefix = prefix;
         _suffix = suffix;
         _fiscalYear = string.IsNullOrWhiteSpace(fiscalYear) ? "—" : fiscalYear;
@@ -64,16 +79,22 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(NewNumberRaw))
         {
-            PreviewText = HelpText;
+            PreviewNumber = string.Empty;
+            IsInvalid = false;
         }
         else if (TryReadCore(out var core))
         {
-            PreviewText = $"Will save as: {InvoiceNumberFormatter.Format(_prefix, _suffix, core, _fiscalYear, _padding)}";
+            PreviewNumber = InvoiceNumberFormatter.Format(_prefix, _suffix, core, _fiscalYear, _padding);
+            IsInvalid = false;
         }
         else
         {
-            PreviewText = "Digits only, greater than zero. The prefix, fiscal year and suffix are added automatically.";
+            PreviewNumber = string.Empty;
+            IsInvalid = true;
         }
+
+        OnPropertyChanged(nameof(HasPreview));
+        OnPropertyChanged(nameof(PreviewMarkup));
     }
 
     private bool TryReadCore(out long core)

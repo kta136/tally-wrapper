@@ -11,12 +11,13 @@ namespace ShowroomBilling.Desktop.Tests.Views;
 /// </summary>
 internal static class WpfTestHost
 {
-    // The same three dictionaries App.xaml merges, in the same order.
+    // The same dictionaries App.xaml merges, in the same order.
     private static readonly string[] AppDictionaries =
     [
         "Resources/DesignTokens.xaml",
         "Resources/Styles.xaml",
         "Resources/Converters.xaml",
+        "Resources/Controls.xaml",
     ];
 
     private static readonly Lazy<Dispatcher> AppDispatcher = new(Start);
@@ -37,6 +38,8 @@ internal static class WpfTestHost
                 // A plain Application, not the product's App: its constructor
                 // installs process-wide exception handlers that show a message box.
                 var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                // As the product's App does, so amounts group the way the showroom writes them.
+                Shell.UiCulture.Apply();
                 foreach (var dictionary in AppDictionaries)
                 {
                     app.Resources.MergedDictionaries.Add(new ResourceDictionary

@@ -2,61 +2,100 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
-    <!--  Accent (indigo-600 — matches design bundle thumbnail; visually equivalent to oklch(45% 0.14 258))  -->
+    <!--  Ledger Clear. The picture of every key is docs/design/redesign/Foundations-Tokens.png;
+          the reasoning is in docs/15_ui_design_reference.md.  -->
+
+    <!--  Accent (indigo-600). Used only for focus and action: the main button, the focus edge,
+          the active tab and the selected row. Never for decoration.  -->
     <Color x:Key="AccentColor">#FF4F46E5</Color>
     <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
     <SolidColorBrush x:Key="AccentHoverBrush" Color="#FF4338CA" />
     <SolidColorBrush x:Key="AccentPressedBrush" Color="#FF3730A3" />
+    <!--  Text and icons that sit on AccentSoft or on the window: 8.9:1.  -->
+    <SolidColorBrush x:Key="AccentInkBrush" Color="#FF3730A3" />
     <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFEEF2FF" />
-    <SolidColorBrush x:Key="AccentRingBrush" Color="#FF818CF8" Opacity="0.45" />
+    <!--  Pressed text-only button, and the "2 selected" chip.  -->
+    <SolidColorBrush x:Key="AccentSoftPressedBrush" Color="#FFE0E7FF" />
+    <!--  The 3 px halo around a focused control: indigo at 20 %.  -->
+    <SolidColorBrush x:Key="AccentRingBrush" Color="#334F46E5" />
 
-    <!--  Neutrals (cool slate)  -->
-    <SolidColorBrush x:Key="BgBrush" Color="#FFF8F9FB" />
+    <!--  Surfaces  -->
+    <SolidColorBrush x:Key="BgBrush" Color="#FFF4F5F8" />
     <SolidColorBrush x:Key="BgPanelBrush" Color="#FFFFFFFF" />
-    <SolidColorBrush x:Key="BgSunkenBrush" Color="#FFF2F4F7" />
+    <!--  The grey band behind column headings and dialog footers.  -->
+    <SolidColorBrush x:Key="BgSunkenBrush" Color="#FFF3F5F8" />
+    <!--  A column the operator cannot type in (rate, line total, net weight).  -->
+    <SolidColorBrush x:Key="ResultTintBrush" Color="#FFF6F7FA" />
     <SolidColorBrush x:Key="BgHoverBrush" Color="#FFEAEDF4" />
-    <SolidColorBrush x:Key="BgSelectedBrush" Color="#FFDFE3F4" />
+    <SolidColorBrush x:Key="BgSelectedBrush" Color="#FFE9EDFD" />
+    <!--  The row that holds keyboard focus, and its result columns, a shade deeper. The edge is a zone line inside that row.  -->
+    <SolidColorBrush x:Key="ResultTintActiveBrush" Color="#FFE6EAFB" />
+    <SolidColorBrush x:Key="AccentSoftEdgeBrush" Color="#FFD3DAF7" />
+    <!--  The strip under the table that says how the focused line was priced.  -->
+    <SolidColorBrush x:Key="FocusStripBrush" Color="#FFFAFBFE" />
 
-    <SolidColorBrush x:Key="BorderBrushTok" Color="#FFDADDE5" />
-    <SolidColorBrush x:Key="BorderStrongBrush" Color="#FFBCC0CD" />
-    <SolidColorBrush x:Key="BorderInputBrush" Color="#FFCACDD8" />
-    <SolidColorBrush x:Key="DividerBrush" Color="#FFE8EAEF" />
+    <!--  Lines. BorderInput is the edge of an input box and meets the 3:1 rule for it.  -->
+    <SolidColorBrush x:Key="BorderBrushTok" Color="#FFD5D9E2" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#FFC3C9D6" />
+    <SolidColorBrush x:Key="BorderInputBrush" Color="#FF8C93A4" />
+    <SolidColorBrush x:Key="BorderInputHoverBrush" Color="#FF464D5C" />
+    <SolidColorBrush x:Key="DividerBrush" Color="#FFE6E9EF" />
 
-    <SolidColorBrush x:Key="InkBrush" Color="#FF232731" />
-    <SolidColorBrush x:Key="InkMutedBrush" Color="#FF5F6573" />
-    <SolidColorBrush x:Key="InkSoftBrush" Color="#FF7F8491" />
-    <SolidColorBrush x:Key="InkDisabledBrush" Color="#FFB2B6C0" />
-    <SolidColorBrush x:Key="InkInverseBrush" Color="#FFFDFDFD" />
+    <!--  Text. InkSoft is the lightest text that may carry meaning (5.4:1 on white);
+          InkDisabled is for a disabled control, a dash or a placeholder mark only.  -->
+    <SolidColorBrush x:Key="InkBrush" Color="#FF1B1F2A" />
+    <SolidColorBrush x:Key="InkMutedBrush" Color="#FF464D5C" />
+    <SolidColorBrush x:Key="InkSoftBrush" Color="#FF626A7A" />
+    <SolidColorBrush x:Key="InkDisabledBrush" Color="#FF9AA1B0" />
+    <SolidColorBrush x:Key="InkInverseBrush" Color="#FFFFFFFF" />
     <Color x:Key="ShadowColor">#FF0F172A</Color>
 
-    <!--  Status (matched chroma)  -->
+    <!--  Status. A soft fill, dark ink and an icon or a word; never colour alone.  -->
     <SolidColorBrush x:Key="OkBrush" Color="#FF3E8E54" />
     <SolidColorBrush x:Key="OkSoftBrush" Color="#FFE3F1E7" />
-    <SolidColorBrush x:Key="OkInkBrush" Color="#FF255534" />
+    <SolidColorBrush x:Key="OkInkBrush" Color="#FF1F5130" />
+    <SolidColorBrush x:Key="OkBorderBrush" Color="#FFA9D3B5" />
+    <SolidColorBrush x:Key="OkSoftHoverBrush" Color="#FFD5EBDC" />
 
     <SolidColorBrush x:Key="WarnBrush" Color="#FFC07D2B" />
     <SolidColorBrush x:Key="WarnSoftBrush" Color="#FFFBEFDC" />
     <SolidColorBrush x:Key="WarnInkBrush" Color="#FF6E4213" />
+    <SolidColorBrush x:Key="WarnBorderBrush" Color="#FFE7C48F" />
 
     <SolidColorBrush x:Key="ErrBrush" Color="#FFC53333" />
     <SolidColorBrush x:Key="ErrSoftBrush" Color="#FFFBE3DF" />
-    <SolidColorBrush x:Key="ErrInkBrush" Color="#FF6E1616" />
+    <SolidColorBrush x:Key="ErrInkBrush" Color="#FF7A1616" />
+    <SolidColorBrush x:Key="ErrBorderBrush" Color="#FFE5A9A1" />
+    <!--  Error text and the edge of a field that needs attention: 6.55:1 on white.  -->
+    <SolidColorBrush x:Key="ErrTextBrush" Color="#FFB42323" />
+    <SolidColorBrush x:Key="ErrPressedBrush" Color="#FFF6CFC9" />
+    <!--  Wash behind a required input that is still empty.  -->
+    <SolidColorBrush x:Key="ErrWashBrush" Color="#FFFDF1EF" />
 
     <SolidColorBrush x:Key="InfoBrush" Color="#FF3A7AB5" />
     <SolidColorBrush x:Key="InfoSoftBrush" Color="#FFE0EBF5" />
     <SolidColorBrush x:Key="InfoInkBrush" Color="#FF1C4976" />
+    <SolidColorBrush x:Key="InfoBorderBrush" Color="#FFA9C6E0" />
 
+    <!--  Neutral chip: voided, "this PC only", counts. Ink is InkMuted (6.8:1).  -->
     <SolidColorBrush x:Key="NeutralChipBrush" Color="#FFE4E6EC" />
+    <SolidColorBrush x:Key="NeutralDotBrush" Color="#FF9AA1B0" />
+
+    <!--  Buttons that are switched off. Primary keeps a grey fill so it does not read as a link.  -->
+    <SolidColorBrush x:Key="BtnDisabledInkBrush" Color="#FF8A91A0" />
+    <SolidColorBrush x:Key="BtnPrimaryDisabledInkBrush" Color="#FF7A8191" />
 
     <!--  Dialog chrome: the scrim behind an overlay dialog, rgba(15,23,42,0.38), and the
           shadow under its panel. Dialogs take both through the DialogPanel style.  -->
     <SolidColorBrush x:Key="DialogScrimBrush" Color="#61152238" />
-    <DropShadowEffect x:Key="DialogShadow" BlurRadius="32" Opacity="0.22" ShadowDepth="6" Color="{StaticResource ShadowColor}" />
+    <DropShadowEffect x:Key="DialogShadow" BlurRadius="48" Opacity="0.34" ShadowDepth="14" Direction="270" Color="{StaticResource ShadowColor}" />
+    <!--  Menus, the item list and the date picker.  -->
+    <DropShadowEffect x:Key="PopupShadow" BlurRadius="26" Opacity="0.22" ShadowDepth="8" Direction="270" Color="{StaticResource ShadowColor}" />
 
     <!--  On a filled accent or danger surface: text, and the translucent chip that sits on it.  -->
     <SolidColorBrush x:Key="OnFilledInkBrush" Color="#FFFFFFFF" />
-    <SolidColorBrush x:Key="OnFilledChipBrush" Color="#26FFFFFF" />
-    <SolidColorBrush x:Key="OnFilledChipBorderBrush" Color="#40FFFFFF" />
+    <SolidColorBrush x:Key="OnFilledChipBrush" Color="#29FFFFFF" />
+    <SolidColorBrush x:Key="OnFilledChipBorderBrush" Color="#73FFFFFF" />
 
     <!--  Close button hover in the title bar (the Windows close red).  -->
     <SolidColorBrush x:Key="WindowCloseHoverBrush" Color="#FFE81123" />
@@ -64,33 +103,46 @@
     <!--  Bullet of a bill-timeline entry with no particular tone.  -->
     <SolidColorBrush x:Key="TimelineBulletBrush" Color="#FF6B7A8C" />
 
-    <!--  Wash behind a required input that is still empty.  -->
-    <SolidColorBrush x:Key="ErrWashBrush" Color="#1FE53935" />
+    <!--  Edit banner: reopening a previously posted bill. Same family as Warn, kept apart so
+          the banner can be tuned without touching the chips.  -->
+    <SolidColorBrush x:Key="EditBannerSoftBrush" Color="#FFFBEFDC" />
+    <SolidColorBrush x:Key="EditBannerBorderBrush" Color="#FFE7C48F" />
+    <SolidColorBrush x:Key="EditBannerInkBrush" Color="#FF6E4213" />
 
-    <!--  Edit banner — used on the Invoice screen when reopening a previously-posted bill.
-          Distinct from the WarnSoft palette so we can tune banner saturation independently
-          of inline status chips. Mirrors the design bundle's #FEF3C7 / #F0C674 / #7A4F01.  -->
-    <SolidColorBrush x:Key="EditBannerSoftBrush" Color="#FFFEF3C7" />
-    <SolidColorBrush x:Key="EditBannerBorderBrush" Color="#FFF0C674" />
-    <SolidColorBrush x:Key="EditBannerInkBrush" Color="#FF7A4F01" />
+    <!--  Density. These are the Standard values; UiDensityManager overrides every key below for
+          Compact and Comfortable, so read them with DynamicResource, never StaticResource.
+          UiDensityTests checks that the manager's Standard column matches this sheet.  -->
+    <sys:Double x:Key="RowHeight">38</sys:Double>
+    <!--  A row of a list that carries a chip (the Bills list): four pixels taller than a table row.  -->
+    <sys:Double x:Key="ListRowHeight">42</sys:Double>
+    <sys:Double x:Key="InputHeight">34</sys:Double>
+    <sys:Double x:Key="ButtonHeight">34</sys:Double>
+    <sys:Double x:Key="FontSizeUi">13.5</sys:Double>
+    <sys:Double x:Key="FontSizeLabel">12.5</sys:Double>
+    <sys:Double x:Key="FontSizeSm">12.5</sys:Double>
+    <sys:Double x:Key="FontSizeXs">11</sys:Double>
+    <sys:Double x:Key="FontSizeSectionTitle">12.5</sys:Double>
+    <sys:Double x:Key="FontSizeMono">12.5</sys:Double>
+    <sys:Double x:Key="CellPaddingX">10</sys:Double>
+    <Thickness x:Key="CellPadding">10,0,10,0</Thickness>
 
-    <!--  Density — compact defaults. UiDensityManager overrides these nine keys at
-          run time for Comfortable, so read them with DynamicResource, not StaticResource.  -->
-    <sys:Double x:Key="RowHeight">28</sys:Double>
-    <sys:Double x:Key="InputHeight">28</sys:Double>
-    <sys:Double x:Key="ButtonHeight">28</sys:Double>
-    <sys:Double x:Key="FontSizeUi">12.5</sys:Double>
-    <sys:Double x:Key="FontSizeLabel">11.5</sys:Double>
-    <sys:Double x:Key="FontSizeSm">11</sys:Double>
-    <sys:Double x:Key="FontSizeXs">10.5</sys:Double>
-    <sys:Double x:Key="FontSizeSectionTitle">10.5</sys:Double>
-    <sys:Double x:Key="FontSizeMono">12</sys:Double>
-    <CornerRadius x:Key="Radius">3</CornerRadius>
-    <CornerRadius x:Key="RadiusLg">5</CornerRadius>
+    <!--  Sizes that do not change with density.  -->
+    <sys:Double x:Key="FontSizeTotal">32</sys:Double>
+    <sys:Double x:Key="FontSizeTitle">22</sys:Double>
+    <sys:Double x:Key="FontSizeDialogTitle">17</sys:Double>
+    <sys:Double x:Key="FontSizeHeading">16</sys:Double>
+    <sys:Double x:Key="FontSizeLineTotal">14</sys:Double>
 
-    <!--  Typography — Windows-native stack (Segoe UI Variable + Cascadia Mono ship with Win 11).  -->
-    <!--  The design's Inter/JetBrains Mono aren't bundled on Windows, so earlier config fell through to these anyway; making it explicit.  -->
-    <FontFamily x:Key="UiFontFamily">Segoe UI Variable Display, Segoe UI Variable, Segoe UI</FontFamily>
+    <!--  Shape: 4 inputs and chips, 6 buttons, 8 cards and menus, 10 dialogs.  -->
+    <CornerRadius x:Key="Radius">4</CornerRadius>
+    <CornerRadius x:Key="RadiusBtn">6</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">8</CornerRadius>
+    <CornerRadius x:Key="RadiusDialog">10</CornerRadius>
+
+    <!--  Typography. Segoe UI Variable Text for everything read, with tabular figures (set
+          where a style needs them) so decimals line up; Cascadia Mono only for key chips and
+          numbers that are identifiers. Both ship with Windows 11.  -->
+    <FontFamily x:Key="UiFontFamily">Segoe UI Variable Text, Segoe UI Variable, Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFontFamily">Cascadia Mono, Consolas</FontFamily>
     <FontFamily x:Key="IconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 

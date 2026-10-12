@@ -1,0 +1,64 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.BottomBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             MinHeight="32">
+    <!--  The shortcuts of the open screen on the left, who and where on the right. One bar replaces
+          the old key strip and status bar; the rates and the saved-at time moved onto the Invoice screen.  -->
+    <UserControl.Resources>
+        <Style x:Key="BarText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeSm}" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{StaticResource BgPanelBrush}"
+            BorderBrush="{StaticResource BorderBrushTok}"
+            BorderThickness="0,1,0,0">
+        <Grid Margin="16,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <ItemsControl Grid.Column="0"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding FKeys.Items}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,0,18,0" Orientation="Horizontal">
+                            <ContentControl Content="{Binding Key}" Style="{StaticResource Kbd}" />
+                            <ContentControl x:Name="alt"
+                                            Margin="4,0,0,0"
+                                            Content="{Binding AltKey}"
+                                            Style="{StaticResource Kbd}" />
+                            <TextBlock Margin="7,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource FontSizeSm}"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="{Binding Label}" />
+                        </StackPanel>
+                        <DataTemplate.Triggers>
+                            <!--  Most shortcuts have one key; PgUp and PgDn share a label.  -->
+                            <DataTrigger Binding="{Binding AltKey}" Value="{x:Null}">
+                                <Setter TargetName="alt" Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+                <TextBlock Style="{StaticResource BarText}" Text="{Binding TitleBar.Company}" />
+                <TextBlock Margin="14,0,0,0" Style="{StaticResource BarText}" Text="{Binding StatusBar.FiscalYear}" />
+                <TextBlock Margin="14,0,0,0" Style="{StaticResource BarText}" Text="{Binding StatusBar.Workstation}" />
+                <TextBlock Margin="14,0,0,0" Style="{StaticResource BarText}" Text="{Binding StatusBar.Time}" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

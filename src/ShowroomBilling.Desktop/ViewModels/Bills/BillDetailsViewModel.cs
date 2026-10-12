@@ -21,6 +21,7 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         _billsApi = billsApi;
         _actions = new BillDetailsActionWorkflow(_billsApi, this);
         AuditTrail = new ObservableCollection<BillAuditTrailItemViewModel>();
+        AuditTrail.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Timeline));
 
         PushCommand = new AsyncRelayCommand(_actions.PushAsync, () => CanAct(BillStateCapabilities.CanPush));
         RetryCommand = new AsyncRelayCommand(_actions.RetryAsync, () => CanAct(BillStateCapabilities.CanRetry));
@@ -62,6 +63,8 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
 
     public string StateTone => BillStateDisplay.Tone(Bill?.State);
 
+    public string StateKind => BillStateDisplay.Kind(Bill?.State);
+
     public string InvoiceNumberDisplay => string.IsNullOrWhiteSpace(Bill?.InvoiceNumber) ? "Assigned on push" : Bill!.InvoiceNumber!;
     public string AuditEmptyMessage => IsLoading ? "Loading timeline…" : "No timeline events yet.";
 
@@ -96,6 +99,8 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         OnPropertyChanged(nameof(InvoiceNumberDisplay));
         OnPropertyChanged(nameof(StateChipLabel));
         OnPropertyChanged(nameof(StateTone));
+        OnPropertyChanged(nameof(StateKind));
+        NotifyDisplayChanged();
         NotifyActionsChanged();
     }
 

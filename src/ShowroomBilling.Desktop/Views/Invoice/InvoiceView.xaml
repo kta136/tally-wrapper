@@ -5,65 +5,93 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Invoice"
+             xmlns:vmSettings="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
              xmlns:conv="clr-namespace:ShowroomBilling.Desktop.Converters"
              mc:Ignorable="d"
              Background="{StaticResource BgPanelBrush}"
              d:DataContext="{d:DesignInstance Type=vm:InvoiceViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />
-        <Style x:Key="FieldPanel" TargetType="StackPanel">
-            <Setter Property="Margin" Value="0,0,14,0" />
+
+        <!--  The 13 columns of the line table, in four zones: the item, the weights, the pricing
+              inputs and the two results. Header, rows, totals and the tinted backdrop all use these
+              widths; the item column takes the rest. See docs/design/redesign/Estimate-Table.png.  -->
+        <GridLength x:Key="ColNumber">36</GridLength>
+        <GridLength x:Key="ColGross">76</GridLength>
+        <GridLength x:Key="ColLess">66</GridLength>
+        <GridLength x:Key="ColNet">76</GridLength>
+        <GridLength x:Key="ColUnit">48</GridLength>
+        <GridLength x:Key="ColKarat">60</GridLength>
+        <GridLength x:Key="ColWastage">84</GridLength>
+        <GridLength x:Key="ColLabour">86</GridLength>
+        <GridLength x:Key="ColExtra">68</GridLength>
+        <GridLength x:Key="ColRate">92</GridLength>
+        <GridLength x:Key="ColTotal">116</GridLength>
+        <GridLength x:Key="ColRemove">32</GridLength>
+
+        <!--  Column heading text: 12.5 px semibold on the grey band.  -->
+        <Style x:Key="HeadText" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="10,0" />
         </Style>
-        <!--  Row-cell text input: flat, fills cell  -->
-        <Style x:Key="CellTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="10,0" />
-            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
-            <Setter Property="VerticalAlignment" Value="Stretch" />
-        </Style>
-        <Style x:Key="CellNumBox" TargetType="TextBox" BasedOn="{StaticResource CellTextBox}">
+        <Style x:Key="HeadTextRight" BasedOn="{StaticResource HeadText}" TargetType="TextBlock">
             <Setter Property="TextAlignment" Value="Right" />
-            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
-            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="4,0,10,0" />
+        </Style>
+        <Style x:Key="HeadUnit" TargetType="Run">
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+        </Style>
+
+        <!--  Numbers in a cell: right-aligned so decimals line up down the column.  -->
+        <Style x:Key="CellNumBox" BasedOn="{StaticResource TableCellBox}" TargetType="TextBox">
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
             <EventSetter Event="PreviewMouseDoubleClick" Handler="OnNumericBoxDoubleClick" />
         </Style>
-        <Style x:Key="CellCombo" TargetType="ComboBox">
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
-            <Setter Property="Padding" Value="8,0" />
-            <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
+
+        <Style x:Key="ResultText" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="Margin" Value="10,0" />
+            <Style.Triggers>
+                <!--  A blank row has no rate or total yet.  -->
+                <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                    <Setter Property="Visibility" Value="Hidden" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
-        <Style x:Key="HeaderCell" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTok}" />
-            <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="Padding" Value="10,4" />
+
+        <!--  A result cell is tinted; on the row that holds focus the tint is a shade deeper.  -->
+        <Style x:Key="ResultCell" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource ResultTintBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=LineEntryGrid}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource ResultTintActiveBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
-        <Style x:Key="BodyCell" TargetType="Border">
+
+        <!--  The row: a hairline under it, and a pale indigo wash while focus is inside it.  -->
+        <Style x:Key="LineRowBorder" TargetType="Border">
             <Setter Property="BorderBrush" Value="{StaticResource DividerBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
-            <Setter Property="MinHeight" Value="{DynamicResource RowHeight}" />
-        </Style>
-        <Style x:Key="EntryRowGrid" TargetType="Grid">
+            <Setter Property="Height" Value="{DynamicResource RowHeight}" />
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource BgHoverBrush}" />
-                </Trigger>
                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
                     <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
+
         <Style x:Key="PickerListBoxItem" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="FocusVisualStyle" Value="{StaticResource DefaultFocusVisual}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -71,21 +99,30 @@
                                 Background="Transparent"
                                 BorderBrush="{StaticResource DividerBrush}"
                                 BorderThickness="0,0,0,1">
-                            <ContentPresenter />
+                            <Grid>
+                                <ContentPresenter />
+                                <Border x:Name="focusEdge"
+                                        BorderBrush="{StaticResource AccentBrush}"
+                                        BorderThickness="0"
+                                        IsHitTestVisible="False" />
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BgHoverBrush}" />
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BgSunkenBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentSoftBrush}" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource AccentSoftBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="focusEdge" Property="BorderThickness" Value="2" />
                             </Trigger>
                         </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
+
         <Style x:Key="LineRowItem" TargetType="ListBoxItem">
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
@@ -102,582 +139,1247 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!--  The item cell's drop-down lists each item with its unit, wastage and labour under the name.  -->
+        <DataTemplate x:Key="ItemPickerRow" DataType="{x:Type vmSettings:ItemMasterRowVm}">
+            <StackPanel Margin="6,5">
+                <TextBlock FontWeight="Medium" Text="{Binding Name}" />
+                <TextBlock Margin="0,1,0,0" Style="{StaticResource TxtHint}" Text="{Binding PickerSummary}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <Border x:Key="ItemPickerFooter"
+                x:Shared="False"
+                Padding="12,7"
+                Background="{StaticResource BgSunkenBrush}"
+                BorderBrush="{StaticResource DividerBrush}"
+                BorderThickness="0,1,0,0"
+                CornerRadius="0,0,8,8">
+            <StackPanel Orientation="Horizontal">
+                <ContentControl Content="↑" Style="{StaticResource Kbd}" />
+                <ContentControl Margin="3,0,0,0" Content="↓" Style="{StaticResource Kbd}" />
+                <TextBlock Margin="8,0,16,0" VerticalAlignment="Center" Style="{StaticResource TxtHint}" Text="Move" />
+                <ContentControl Content="Enter" Style="{StaticResource Kbd}" />
+                <TextBlock Margin="8,0,16,0" VerticalAlignment="Center" Style="{StaticResource TxtHint}" Text="Pick" />
+                <ContentControl Content="Esc" Style="{StaticResource Kbd}" />
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource TxtHint}" Text="Close" />
+            </StackPanel>
+        </Border>
     </UserControl.Resources>
 
-    <DockPanel LastChildFill="True">
-        <Border DockPanel.Dock="Top"
-                Padding="14,8"
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  Row 0: editing a posted bill  -->
+        <Border Grid.Row="0"
+                Padding="16,9"
                 Background="{StaticResource EditBannerSoftBrush}"
                 BorderBrush="{StaticResource EditBannerBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Visibility="{Binding IsEditingPosted, Converter={StaticResource BoolToVis}}">
-            <TextBlock FontSize="{DynamicResource FontSizeLabel}"
-                       Foreground="{StaticResource EditBannerInkBrush}"
-                       TextWrapping="Wrap"
-                       Text="Editing a previously-posted bill. Saving moves it back to pending and re-queues the new revision to Tally." />
+            <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center"
+                           FontFamily="{StaticResource IconFontFamily}"
+                           FontSize="16"
+                           Foreground="{StaticResource EditBannerInkBrush}"
+                           Text="&#xE70F;" />
+                <TextBlock Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           FontWeight="Medium"
+                           Foreground="{StaticResource EditBannerInkBrush}"
+                           Text="Editing a previously-posted bill. Saving moves it back to pending and re-queues the new revision to Tally."
+                           TextWrapping="Wrap" />
+            </StackPanel>
         </Border>
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
 
-        <!--  Main pane  -->
-        <Grid Grid.Column="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <!--  Row 1: bill details, five fields  -->
+        <Border Grid.Row="1"
+                Padding="16,12,16,14"
+                Background="{StaticResource BgPanelBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="206" />
+                    <ColumnDefinition Width="176" />
+                    <ColumnDefinition Width="166" />
+                    <ColumnDefinition Width="196" />
+                    <ColumnDefinition Width="*" MinWidth="240" />
+                </Grid.ColumnDefinitions>
 
-            <!--  Header fields  -->
-            <Border Grid.Row="0"
-                    Padding="14,10"
-                    Background="{StaticResource BgPanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushTok}"
-                    BorderThickness="0,0,0,1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.3*" MinWidth="170" />
-                        <ColumnDefinition Width="0.9*" MinWidth="120" />
-                        <ColumnDefinition Width="0.9*" MinWidth="130" />
-                        <ColumnDefinition Width="1*" MinWidth="120" />
-                        <ColumnDefinition Width="1.4*" MinWidth="210" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Grid.Column="0" Style="{StaticResource FieldPanel}">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                            <TextBlock Style="{StaticResource FieldLabel}" Margin="0" Text="INVOICE #" />
-                            <ContentControl Style="{StaticResource Kbd}" Margin="6,0,0,0" Content="auto" />
-                        </StackPanel>
-                        <TextBox IsReadOnly="True"
-                                 FontFamily="{StaticResource MonoFontFamily}"
-                                 Text="{Binding InvoiceNumber}" />
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <StackPanel Margin="0,0,0,5" Orientation="Horizontal">
+                        <TextBlock Margin="0" Style="{StaticResource FieldLabel}" Text="Invoice no." />
+                        <ContentControl Margin="6,0,0,0" Content="auto" Style="{StaticResource Kbd}" />
                     </StackPanel>
+                    <TextBox IsReadOnly="True" Text="{Binding InvoiceNumber, Mode=OneWay}">
+                        <TextBox.Style>
+                            <Style BasedOn="{StaticResource {x:Type TextBox}}" TargetType="TextBox">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsInvoiceNumberAssigned}" Value="False">
+                                        <Setter Property="FontStyle" Value="Italic" />
+                                        <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsInvoiceNumberAssigned}" Value="True">
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
+                </StackPanel>
 
-                    <StackPanel Grid.Column="1" Style="{StaticResource FieldPanel}">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="DATE" />
-                        <DatePicker SelectedDate="{Binding BillDateLocal, Mode=TwoWay}" />
-                    </StackPanel>
+                <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Date" />
+                    <DatePicker SelectedDate="{Binding BillDateLocal, Mode=TwoWay}" />
+                </StackPanel>
 
-                    <StackPanel Grid.Column="2" Style="{StaticResource FieldPanel}">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="PAYMENT" />
-                        <ComboBox ItemsSource="{Binding PaymentOptions}"
-                                  SelectedItem="{Binding Payment}" />
-                    </StackPanel>
+                <StackPanel Grid.Column="2" Margin="0,0,16,0">
+                    <TextBlock Style="{StaticResource FieldLabel}" Text="Payment" />
+                    <ComboBox ItemsSource="{Binding PaymentOptions}" SelectedItem="{Binding Payment}" />
+                </StackPanel>
 
-                    <StackPanel Grid.Column="3" Style="{StaticResource FieldPanel}">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                            <TextBlock Style="{StaticResource FieldLabel}" Margin="0" Text="24KT RATE (₹/G)" />
-                            <ContentControl Style="{StaticResource Kbd}" Margin="6,0,0,0" Content="F2" />
-                        </StackPanel>
-                        <TextBox x:Name="Rate24KtBox"
-                                 FontFamily="{StaticResource MonoFontFamily}"
-                                 PreviewMouseDoubleClick="OnNumericBoxDoubleClick"
-                                 PreviewKeyDown="OnRate24KtPreviewKeyDown"
-                                 Text="{Binding Rate24Kt, StringFormat=N0, TargetNullValue='', UpdateSourceTrigger=LostFocus}">
-                            <TextBox.Style>
-                                <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding RateMissing}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{StaticResource ErrBrush}" />
-                                            <Setter Property="BorderThickness" Value="2" />
-                                            <Setter Property="Background" Value="{StaticResource ErrWashBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBox.Style>
-                        </TextBox>
+                <StackPanel Grid.Column="3" Margin="0,0,16,0">
+                    <StackPanel Margin="0,0,0,5" Orientation="Horizontal">
+                        <TextBlock Margin="0" Style="{StaticResource FieldLabel}" Text="24K rate (₹/g)" />
+                        <ContentControl Margin="6,0,0,0" Content="F2" Style="{StaticResource Kbd}" />
                     </StackPanel>
-
-                    <StackPanel Grid.Column="4">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
-                            <TextBlock Style="{StaticResource FieldLabel}" Margin="0">
-                                <Run Text="PARTY " /><Run Text="*" Foreground="{StaticResource ErrBrush}" />
-                            </TextBlock>
-                            <ContentControl Style="{StaticResource Kbd}" Margin="6,0,0,0" Content="F4" />
-                        </StackPanel>
-                        <TextBox x:Name="PartyBox"
-                                 PreviewKeyDown="OnPartyBoxPreviewKeyDown"
-                                 Text="{Binding PartyName, UpdateSourceTrigger=PropertyChanged}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!--  Toolbar  -->
-            <Border Grid.Row="1"
-                    Padding="14,6"
-                    Background="{StaticResource BgSunkenBrush}"
-                    BorderBrush="{StaticResource BorderBrushTok}"
-                    BorderThickness="0,0,0,1">
-                <Grid>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="LINE ITEMS" Style="{StaticResource TxtSectionTitle}" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <CheckBox x:Name="QuickAddToggle"
-                                  Margin="0,0,8,0"
-                                  VerticalAlignment="Center"
-                                  IsChecked="True"
-                                  Content="Quick Add" />
-                        <Button Style="{StaticResource BtnSm}" Command="{Binding AddRowCommand}" Content="+ Add Row" shell:Kbd.Hint="Ctrl+N" />
-                        <Button Style="{StaticResource BtnSm}"
-                                Margin="6,0,0,0"
-                                Command="{Binding RemoveFocusedRowCommand}"
-                                Visibility="{Binding HasMultipleRows, Converter={StaticResource BoolToVis}}"
-                                Content="− Remove"
-                                shell:Kbd.Hint="Ctrl+Del" />
-                        <Rectangle Width="1"
-                                   Height="18"
-                                   Margin="10,0"
-                                   Fill="{StaticResource DividerBrush}" />
+                    <TextBox x:Name="Rate24KtBox"
+                             FontWeight="SemiBold"
+                             Padding="26,0,10,0"
+                             PreviewKeyDown="OnRate24KtPreviewKeyDown"
+                             PreviewMouseDoubleClick="OnNumericBoxDoubleClick"
+                             shell:FieldAdorn.Prefix="₹"
+                             Text="{Binding Rate24Kt, StringFormat=N0, TargetNullValue='', UpdateSourceTrigger=LostFocus}">
+                        <TextBox.Style>
+                            <Style BasedOn="{StaticResource {x:Type TextBox}}" TargetType="TextBox">
+                                <Style.Triggers>
+                                    <!--  Saving without a gold rate turns the box red; typing a rate clears it.  -->
+                                    <DataTrigger Binding="{Binding RateMissing}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource ErrTextBrush}" />
+                                        <Setter Property="BorderThickness" Value="2" />
+                                        <Setter Property="Background" Value="{StaticResource ErrWashBrush}" />
+                                        <Setter Property="Padding" Value="25,0,9,0" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
+                    <StackPanel Margin="0,6,0,0"
+                                Orientation="Horizontal"
+                                Visibility="{Binding RateMissing, Converter={StaticResource BoolToVis}}">
                         <TextBlock VerticalAlignment="Center"
-                                   FontSize="{DynamicResource FontSizeXs}"
-                                   Foreground="{StaticResource InkSoftBrush}"
-                                   Text="Tab or Enter next field · Shift+Enter back" />
+                                   FontFamily="{StaticResource IconFontFamily}"
+                                   FontSize="14"
+                                   Foreground="{StaticResource ErrTextBrush}"
+                                   Text="&#xE783;" />
+                        <TextBlock Margin="6,0,0,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="{DynamicResource FontSizeLabel}"
+                                   FontWeight="Medium"
+                                   Foreground="{StaticResource ErrTextBrush}"
+                                   Text="Enter today's rate" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="4">
+                    <StackPanel Margin="0,0,0,5" Orientation="Horizontal">
+                        <TextBlock Margin="0" Style="{StaticResource FieldLabel}" Text="Party" />
+                        <TextBlock Margin="3,0,0,0" Style="{StaticResource FieldLabel}" Foreground="{StaticResource ErrTextBrush}" Text="*" />
+                        <ContentControl Margin="6,0,0,0" Content="F4" Style="{StaticResource Kbd}" />
+                    </StackPanel>
+                    <TextBox x:Name="PartyBox"
+                             PreviewKeyDown="OnPartyBoxPreviewKeyDown"
+                             shell:FieldAdorn.Placeholder="Search or type a party name"
+                             Text="{Binding PartyName, UpdateSourceTrigger=PropertyChanged}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!--  Row 2: line items, and the Quick add panel beside them  -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Background="{StaticResource BgPanelBrush}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!--  Toolbar: title, count, today's rates, row buttons  -->
+                <Grid Grid.Row="0" Margin="16,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" Text="Line items" />
+                        <Border Margin="10,0,0,0"
+                                Height="20"
+                                MinWidth="20"
+                                Padding="7,0"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource NeutralChipBrush}"
+                                CornerRadius="10">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="{Binding ItemCount}" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               Margin="14,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource FontSizeLabel}"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Rates, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <Run Text="Rates today" />
+                        <Run Foreground="{StaticResource InkDisabledBrush}" Text=" · " />
+                        <Run Text="24K " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding Rates.Rate24Kt, Mode=OneWay}" />
+                        <Run Foreground="{StaticResource InkDisabledBrush}" Text=" · " />
+                        <Run Text="22K " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding Rates.Rate22Kt, Mode=OneWay}" />
+                        <Run Foreground="{StaticResource InkDisabledBrush}" Text=" · " />
+                        <Run Text="18K " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding Rates.Rate18Kt, Mode=OneWay}" />
+                        <Run Text=" per gram" />
+                    </TextBlock>
+                    <TextBlock Grid.Column="1"
+                               Margin="14,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource FontSizeLabel}"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="Rates today appear once the 24K rate is entered"
+                               TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Rates, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Command="{Binding AddRowCommand}" Style="{StaticResource BtnSm}" shell:Kbd.Hint="Ctrl+N">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock VerticalAlignment="Center"
+                                           FontFamily="{StaticResource IconFontFamily}"
+                                           FontSize="12"
+                                           Text="&#xE710;" />
+                                <TextBlock Margin="8,0,0,0" Text="Add row" />
+                            </StackPanel>
+                        </Button>
+                        <Button Margin="8,0,0,0"
+                                Command="{Binding RemoveFocusedRowCommand}"
+                                Content="Remove row"
+                                Style="{StaticResource BtnSm}"
+                                Visibility="{Binding HasMultipleRows, Converter={StaticResource BoolToVis}}"
+                                shell:Kbd.Hint="Ctrl+Del" />
                     </StackPanel>
                 </Grid>
-            </Border>
 
-            <!--  Line-item table  -->
-            <Border Grid.Row="2" Background="{StaticResource BgPanelBrush}">
-                <ScrollViewer VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto">
-                    <Grid MinWidth="1200">
+                <!--  Table: scrolls sideways below 1,014 px; the rows scroll up and down inside it.  -->
+                <ScrollViewer Grid.Row="1"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Disabled">
+                    <Grid MinWidth="1018">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <!--  Header row  -->
-                        <Grid Grid.Row="0">
+                        <!--  Column headings  -->
+                        <Border Grid.Row="0"
+                                Height="34"
+                                Background="{StaticResource BgSunkenBrush}"
+                                BorderBrush="{StaticResource BorderBrushTok}"
+                                BorderThickness="0,1,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{StaticResource ColNumber}" />
+                                    <ColumnDefinition Width="*" MinWidth="178" />
+                                    <ColumnDefinition Width="{StaticResource ColKarat}" />
+                                    <ColumnDefinition Width="{StaticResource ColGross}" />
+                                    <ColumnDefinition Width="{StaticResource ColLess}" />
+                                    <ColumnDefinition Width="{StaticResource ColNet}" />
+                                    <ColumnDefinition Width="{StaticResource ColUnit}" />
+                                    <ColumnDefinition Width="{StaticResource ColWastage}" />
+                                    <ColumnDefinition Width="{StaticResource ColLabour}" />
+                                    <ColumnDefinition Width="{StaticResource ColExtra}" />
+                                    <ColumnDefinition Width="{StaticResource ColRate}" />
+                                    <ColumnDefinition Width="{StaticResource ColTotal}" />
+                                    <ColumnDefinition Width="{StaticResource ColRemove}" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Margin="0,0,8,0" Style="{StaticResource HeadTextRight}" Text="#" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource HeadText}" Text="Item / stock name" />
+                                <Border Grid.Column="3" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
+                                    <TextBlock Style="{StaticResource HeadTextRight}" Text="Gross" ToolTip="Gross weight" />
+                                </Border>
+                                <TextBlock Grid.Column="4" Style="{StaticResource HeadTextRight}" Text="Less" ToolTip="Deduction. Net = Gross − Less; editing Net recalculates this value." />
+                                <TextBlock Grid.Column="5" Style="{StaticResource HeadTextRight}" Text="Net" ToolTip="Billed weight. Editing it recalculates Less as Gross − Net." />
+                                <TextBlock Grid.Column="6" Style="{StaticResource HeadText}" Text="Unit" />
+                                <Border Grid.Column="2" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
+                                    <TextBlock Style="{StaticResource HeadText}" Text="Karat" />
+                                </Border>
+                                <Border Grid.Column="7" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
+                                    <TextBlock Style="{StaticResource HeadTextRight}"><Run Text="Wastage" /><Run Style="{StaticResource HeadUnit}" Text=" %" /></TextBlock>
+                                </Border>
+                                <TextBlock Grid.Column="8" Style="{StaticResource HeadTextRight}"><Run Text="Labour" /><Run Style="{StaticResource HeadUnit}" Text=" ₹/g" /></TextBlock>
+                                <TextBlock Grid.Column="9" Style="{StaticResource HeadTextRight}"><Run Text="Extra" /><Run Style="{StaticResource HeadUnit}" Text=" ₹" /></TextBlock>
+                                <Border Grid.Column="10" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
+                                    <TextBlock Style="{StaticResource HeadTextRight}" Foreground="{StaticResource InkBrush}" ToolTip="Rate per unit, GST included. Calculated."><Run Text="Rate" /><Run Style="{StaticResource HeadUnit}" Text=" ₹" /></TextBlock>
+                                </Border>
+                                <TextBlock Grid.Column="11" Style="{StaticResource HeadTextRight}" Foreground="{StaticResource InkBrush}" ToolTip="Line total, GST included. Calculated."><Run Text="Line total" /><Run Style="{StaticResource HeadUnit}" Text=" ₹" /></TextBlock>
+                            </Grid>
+                        </Border>
+
+                        <!--  The tinted result columns and zone lines run to the foot of the table, under the rows.  -->
+                        <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="32" />
-                                <ColumnDefinition Width="*" MinWidth="190" />
-                                <ColumnDefinition Width="82" />
-                                <ColumnDefinition Width="78" />
-                                <ColumnDefinition Width="82" />
-                                <ColumnDefinition Width="62" />
-                                <ColumnDefinition Width="70" />
-                                <ColumnDefinition Width="82" />
-                                <ColumnDefinition Width="88" />
-                                <ColumnDefinition Width="104" />
-                                <ColumnDefinition Width="78" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="120" />
-                                <ColumnDefinition Width="32" />
+                                <ColumnDefinition Width="{StaticResource ColNumber}" />
+                                <ColumnDefinition Width="*" MinWidth="178" />
+                                <ColumnDefinition Width="{StaticResource ColKarat}" />
+                                <ColumnDefinition Width="{StaticResource ColGross}" />
+                                <ColumnDefinition Width="{StaticResource ColLess}" />
+                                <ColumnDefinition Width="{StaticResource ColNet}" />
+                                <ColumnDefinition Width="{StaticResource ColUnit}" />
+                                <ColumnDefinition Width="{StaticResource ColWastage}" />
+                                <ColumnDefinition Width="{StaticResource ColLabour}" />
+                                <ColumnDefinition Width="{StaticResource ColExtra}" />
+                                <ColumnDefinition Width="{StaticResource ColRate}" />
+                                <ColumnDefinition Width="{StaticResource ColTotal}" />
+                                <ColumnDefinition Width="{StaticResource ColRemove}" />
                             </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="#" /></Border>
-                            <Border Grid.Column="1" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="ITEM / STOCK NAME" /></Border>
-                            <Border Grid.Column="2" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="GROSS WT" TextAlignment="Right" ToolTip="Gross weight" /></Border>
-                            <Border Grid.Column="3" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="LESS WT" TextAlignment="Right" ToolTip="Editable. Net Wt = Gross Wt − Less Wt; editing Net Wt recalculates this value." /></Border>
-                            <Border Grid.Column="4" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="NET WT" TextAlignment="Right" ToolTip="Editable. Less Wt is recalculated as Gross Wt − Net Wt." /></Border>
-                            <Border Grid.Column="5" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="UNIT" /></Border>
-                            <Border Grid.Column="6" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="KARAT" /></Border>
-                            <Border Grid.Column="7" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="WASTAGE %" TextAlignment="Right" /></Border>
-                            <Border Grid.Column="8" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="LABOUR" TextAlignment="Right" /></Border>
-                            <Border Grid.Column="9" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="DIAMOND RATE" TextAlignment="Right" ToolTip="Flat rate for diamond-category items (GST-inclusive). Ignored for gold lines." /></Border>
-                            <Border Grid.Column="10" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="EXTRA" TextAlignment="Right" /></Border>
-                            <Border Grid.Column="11" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="EFF. RATE" TextAlignment="Right" ToolTip="GST-inclusive effective rate per V1 formula" /></Border>
-                            <Border Grid.Column="12" Style="{StaticResource HeaderCell}"><TextBlock Style="{StaticResource TableHeaderText}" Text="LINE TOTAL" TextAlignment="Right" ToolTip="GST-inclusive line total" /></Border>
-                            <Border Grid.Column="13" Style="{StaticResource HeaderCell}" />
+                            <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" />
+                            <Border Grid.Column="3" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" />
+                            <Border Grid.Column="7" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" />
+                            <Border Grid.Column="10"
+                                    Grid.ColumnSpan="2"
+                                    Background="{StaticResource ResultTintBrush}"
+                                    BorderBrush="{StaticResource DividerBrush}"
+                                    BorderThickness="1,0,0,0" />
                         </Grid>
 
-                        <!--  Body  -->
-                        <ListBox Grid.Row="1"
-                                 x:Name="LinesItems"
-                                 ItemsSource="{Binding Lines}"
-                                 BorderThickness="0"
+                        <!--  Rows. The grid always ends in one blank row; Tab from its last cell moves into it.  -->
+                        <ListBox x:Name="LinesItems"
+                                 Grid.Row="1"
+                                 Style="{StaticResource OverlayListBox}"
                                  Background="Transparent"
+                                 BorderThickness="0"
                                  Focusable="False"
                                  ItemContainerStyle="{StaticResource LineRowItem}"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ItemsSource="{Binding Lines}"
                                  ScrollViewer.CanContentScroll="True"
-                                 VirtualizingPanel.IsVirtualizing="True"
-                                 VirtualizingPanel.VirtualizationMode="Recycling"
-                                 VirtualizingPanel.ScrollUnit="Pixel"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  VirtualizingPanel.CacheLength="2"
-                                 VirtualizingPanel.CacheLengthUnit="Page">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid x:Name="LineEntryGrid" Style="{StaticResource EntryRowGrid}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="32" />
-                                            <ColumnDefinition Width="*" MinWidth="190" />
-                                            <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="78" />
-                                            <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="62" />
-                                            <ColumnDefinition Width="70" />
-                                            <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="88" />
-                                            <ColumnDefinition Width="104" />
-                                            <ColumnDefinition Width="78" />
-                                            <ColumnDefinition Width="100" />
-                                            <ColumnDefinition Width="120" />
-                                            <ColumnDefinition Width="32" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <Border Grid.Column="0" Style="{StaticResource BodyCell}">
-                                            <TextBlock Margin="10,0,0,0"
-                                                       VerticalAlignment="Center"
-                                                       FontFamily="{StaticResource MonoFontFamily}"
-                                                       Foreground="{StaticResource InkMutedBrush}"
-                                                       Text="{Binding RowNumber}" />
-                                        </Border>
-                                        <Border Grid.Column="1" Style="{StaticResource BodyCell}">
-                                            <ComboBox Style="{StaticResource CellCombo}"
-                                                      IsEditable="True"
-                                                      IsTextSearchEnabled="True"
-                                                      StaysOpenOnEdit="True"
-                                                      DisplayMemberPath="Name"
-                                                      TextSearch.TextPath="Name"
-                                                      ItemsSource="{Binding DataContext.ItemMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedItem="{Binding ItemMaster, Mode=TwoWay}"
-                                                      Text="{Binding ItemName, UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="2" Style="{StaticResource BodyCell}">
-                                            <TextBox Style="{StaticResource CellNumBox}"
-                                                     ToolTip="Gross weight"
-                                                     Text="{Binding GrossWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="3" Style="{StaticResource BodyCell}">
-                                            <TextBox IsEnabled="{Binding IsGoldLine}"
-                                                     ToolTip="Editable deduction. Net Wt updates automatically; editing Net Wt recalculates Less Wt."
-                                                     Text="{Binding LessWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=LostFocus}">
-                                                <TextBox.Style>
-                                                    <Style TargetType="TextBox" BasedOn="{StaticResource CellNumBox}">
-                                                        <Style.Triggers>
-                                                            <!--  Active deduction renders in amber (design's warn-colour cue).  -->
-                                                            <DataTrigger Binding="{Binding LessWeight, Converter={StaticResource DecimalIsPositive}}" Value="True">
-                                                                <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBox.Style>
-                                            </TextBox>
-                                        </Border>
-                                        <Border Grid.Column="4" Style="{StaticResource BodyCell}">
-                                            <TextBox Style="{StaticResource CellNumBox}"
-                                                     ToolTip="Editable net weight. Less Wt = Gross Wt − Net Wt."
-                                                     Text="{Binding NetWeight, Mode=TwoWay, StringFormat=N3, UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="5" Style="{StaticResource BodyCell}">
-                                            <ComboBox Style="{StaticResource CellCombo}"
-                                                      ItemsSource="{Binding DataContext.UnitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedItem="{Binding Unit}" />
-                                        </Border>
-                                        <Border Grid.Column="6" Style="{StaticResource BodyCell}">
-                                            <ComboBox Style="{StaticResource CellCombo}"
-                                                      IsEnabled="{Binding IsGoldLine}"
-                                                      IsEditable="True"
-                                                      IsTextSearchEnabled="True"
-                                                      DisplayMemberPath="Label"
-                                                      TextSearch.TextPath="Label"
-                                                      ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                      SelectedItem="{Binding KaratMaster, Mode=TwoWay}"
-                                                      Text="{Binding Karat, UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="7" Style="{StaticResource BodyCell}">
-                                            <TextBox Style="{StaticResource CellNumBox}"
-                                                     IsEnabled="{Binding IsGoldLine}"
-                                                     Text="{Binding WastagePercent, TargetNullValue='', UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="8" Style="{StaticResource BodyCell}">
-                                            <TextBox Style="{StaticResource CellNumBox}"
-                                                     IsEnabled="{Binding IsGoldLine}"
-                                                     Text="{Binding LabourPerUnit, TargetNullValue='', UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="9" Style="{StaticResource BodyCell}">
-                                            <TextBox IsEnabled="{Binding IsDiamond}"
-                                                     ToolTip="Flat diamond rate (GST-inclusive). Only used when item category is diamond."
-                                                     Text="{Binding DiamondRate, TargetNullValue='', StringFormat=N0, UpdateSourceTrigger=LostFocus}">
-                                                <TextBox.Style>
-                                                    <Style TargetType="TextBox" BasedOn="{StaticResource CellNumBox}">
-                                                        <Style.Triggers>
-                                                            <!--  Active diamond rate renders in indigo (design's accent-colour cue).  -->
-                                                            <DataTrigger Binding="{Binding DiamondRate, Converter={StaticResource DecimalIsPositive}}" Value="True">
-                                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBox.Style>
-                                            </TextBox>
-                                        </Border>
-                                        <Border Grid.Column="10" Style="{StaticResource BodyCell}">
-                                            <TextBox Style="{StaticResource CellNumBox}"
-                                                     Text="{Binding Extra, TargetNullValue='', UpdateSourceTrigger=LostFocus}" />
-                                        </Border>
-                                        <Border Grid.Column="11" Style="{StaticResource BodyCell}">
-                                            <TextBlock Margin="10,0"
-                                                       VerticalAlignment="Center"
-                                                       HorizontalAlignment="Right"
-                                                       TextAlignment="Right"
-                                                       FontFamily="{StaticResource MonoFontFamily}"
-                                                       Foreground="{StaticResource InkMutedBrush}"
-                                                       Text="{Binding EffectiveRate, StringFormat=N0, TargetNullValue=''}" />
-                                        </Border>
-                                        <Border Grid.Column="12" Style="{StaticResource BodyCell}">
-                                            <TextBlock Margin="10,0"
-                                                       VerticalAlignment="Center"
-                                                       HorizontalAlignment="Right"
-                                                       TextAlignment="Right"
-                                                       FontFamily="{StaticResource MonoFontFamily}"
-                                                       FontWeight="SemiBold"
-                                                       Text="{Binding LineTotal, StringFormat=N2, TargetNullValue=''}" />
-                                        </Border>
-                                        <Border Grid.Column="13" Style="{StaticResource BodyCell}">
-                                            <!--  Per-row remove (only on rows with content). Mirrors design's `×` ghost button.  -->
-                                            <Button Style="{StaticResource BtnGhost}"
-                                                    Width="22"
-                                                    Height="22"
-                                                    Padding="0"
-                                                    FontSize="14"
-                                                    HorizontalAlignment="Center"
-                                                    VerticalAlignment="Center"
-                                                    ToolTip="Remove row"
-                                                    Content="×"
-                                                    Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVis}}"
-                                                    Command="{Binding DataContext.RemoveLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}" />
-                                        </Border>
-                                    </Grid>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
+                                 VirtualizingPanel.CacheLengthUnit="Page"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.ScrollUnit="Pixel"
+                                 VirtualizingPanel.VirtualizationMode="Recycling">
                             <ListBox.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <VirtualizingStackPanel IsItemsHost="True" />
                                 </ItemsPanelTemplate>
                             </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource LineRowBorder}">
+                                        <Grid x:Name="LineEntryGrid">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="{StaticResource ColNumber}" />
+                                                <ColumnDefinition Width="*" MinWidth="178" />
+                                                <ColumnDefinition Width="{StaticResource ColKarat}" />
+                                                <ColumnDefinition Width="{StaticResource ColGross}" />
+                                                <ColumnDefinition Width="{StaticResource ColLess}" />
+                                                <ColumnDefinition Width="{StaticResource ColNet}" />
+                                                <ColumnDefinition Width="{StaticResource ColUnit}" />
+                                                <ColumnDefinition Width="{StaticResource ColWastage}" />
+                                                <ColumnDefinition Width="{StaticResource ColLabour}" />
+                                                <ColumnDefinition Width="{StaticResource ColExtra}" />
+                                                <ColumnDefinition Width="{StaticResource ColRate}" />
+                                                <ColumnDefinition Width="{StaticResource ColTotal}" />
+                                                <ColumnDefinition Width="{StaticResource ColRemove}" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <!--  0 · row number  -->
+                                            <Border Grid.Column="0">
+                                                <TextBlock Margin="0,0,8,0"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center"
+                                                           Text="{Binding RowNumber}">
+                                                    <TextBlock.Style>
+                                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=LineEntryGrid}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource AccentInkBrush}" />
+                                                                    <Setter Property="FontWeight" Value="Bold" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Border>
+
+                                            <!--  1 · item. Type to search the item master; the list shows unit, wastage and labour.  -->
+                                            <Border Grid.Column="1">
+                                                <shell:FillCell>
+                                                <Grid>
+                                                    <ComboBox x:Name="ItemCombo"
+                                                              FontWeight="Medium"
+                                                              IsEditable="True"
+                                                              IsTextSearchEnabled="False"
+                                                              ItemTemplate="{StaticResource ItemPickerRow}"
+                                                              ItemsSource="{Binding DataContext.ItemMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              SelectedItem="{Binding ItemMaster, Mode=TwoWay}"
+                                                              StaysOpenOnEdit="True"
+                                                              Text="{Binding ItemName, UpdateSourceTrigger=LostFocus}"
+                                                              TextSearch.TextPath="Name"
+                                                              shell:ComboExtras.DropDownFooter="{StaticResource ItemPickerFooter}"
+                                                              shell:ComboExtras.DropDownMinWidth="420"
+                                                              shell:TypeAhead.Footer="{StaticResource ItemPickerFooter}"
+                                                              shell:TypeAhead.IsEnabled="True"
+                                                              shell:TypeAhead.MinWidth="420"
+                                                              shell:TypeAhead.Path="Name">
+                                                        <ComboBox.Style>
+                                                            <Style BasedOn="{StaticResource TableCellCombo}" TargetType="ComboBox">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                        <Setter Property="Padding" Value="10,0,78,0" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </ComboBox.Style>
+                                                    </ComboBox>
+                                                    <TextBlock Margin="10,0,0,0"
+                                                               HorizontalAlignment="Left"
+                                                               VerticalAlignment="Center"
+                                                               FontStyle="Italic"
+                                                               Foreground="{StaticResource InkSoftBrush}"
+                                                               IsHitTestVisible="False"
+                                                               Text="Type an item name, or press F3…"
+                                                               TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.Style>
+                                                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding IsEmpty}" Value="True" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=ItemCombo}" Value="False" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <!--  A diamond item wears a small tag, because its row is priced differently.  -->
+                                                    <Border Margin="0,0,10,0"
+                                                            Height="20"
+                                                            Padding="7,0"
+                                                            HorizontalAlignment="Right"
+                                                            VerticalAlignment="Center"
+                                                            Background="{StaticResource AccentSoftBrush}"
+                                                            CornerRadius="4"
+                                                            IsHitTestVisible="False">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding IsDiamond}" Value="True" />
+                                                                            <Condition Binding="{Binding IsEmpty}" Value="False" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=ItemCombo}" Value="False" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock VerticalAlignment="Center"
+                                                                   FontSize="{DynamicResource FontSizeXs}"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{StaticResource AccentInkBrush}"
+                                                                   Text="Diamond" />
+                                                    </Border>
+                                                </Grid>
+                                                </shell:FillCell>
+                                            </Border>
+
+                                            <!--  3 · gross  -->
+                                            <Border Grid.Column="3" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
+                                                <TextBox Style="{StaticResource CellNumBox}"
+                                                         ToolTip="Gross weight"
+                                                         Text="{Binding GrossWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=LostFocus}" />
+                                            </Border>
+
+                                            <!--  4 · less. A deduction above zero reads amber; a diamond has none.  -->
+                                            <Border Grid.Column="4">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding LessWeight, Converter={StaticResource DecimalIsPositive}}" Value="True">
+                                                                <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                <Setter Property="Background" Value="{StaticResource BgSunkenBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <TextBox ToolTip="Deduction. Net updates automatically; editing Net recalculates Less."
+                                                             Text="{Binding LessWeight, TargetNullValue='', StringFormat=N3, UpdateSourceTrigger=LostFocus}">
+                                                        <TextBox.Style>
+                                                            <Style BasedOn="{StaticResource CellNumBox}" TargetType="TextBox">
+                                                                <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsEmpty}" Value="False">
+                                                                        <Setter Property="shell:FieldAdorn.Placeholder" Value="0.000" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding LessWeight, Converter={StaticResource DecimalIsPositive}}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBox.Style>
+                                                    </TextBox>
+                                                    <TextBlock HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{StaticResource InkDisabledBrush}"
+                                                               IsHitTestVisible="False"
+                                                               Text="—"
+                                                               ToolTip="Not used for diamond lines">
+                                                        <TextBlock.Style>
+                                                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
+                                            </Border>
+
+                                            <!--  5 · net  -->
+                                            <Border Grid.Column="5">
+                                                <TextBox ToolTip="Billed weight. Editing it recalculates Less as Gross − Net."
+                                                         Text="{Binding NetWeight, Mode=TwoWay, StringFormat=N3, UpdateSourceTrigger=LostFocus}">
+                                                    <TextBox.Style>
+                                                        <Style BasedOn="{StaticResource CellNumBox}" TargetType="TextBox">
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                            <Style.Triggers>
+                                                                <!--  A blank row has no weight yet; the 0.000 would only be noise.  -->
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsEmpty}" Value="True" />
+                                                                        <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=LineEntryGrid}" Value="False" />
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Foreground" Value="Transparent" />
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
+                                            </Border>
+
+                                            <!--  6 · unit  -->
+                                            <Border Grid.Column="6">
+                                                <ComboBox ItemsSource="{Binding DataContext.UnitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          SelectedItem="{Binding Unit}"
+                                                          Style="{StaticResource TableCellCombo}" />
+                                            </Border>
+
+                                            <!--  2 · karat, a gold line, next to the item. The cell turns red when the weights are in and the karat is not.  -->
+                                            <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <ComboBox x:Name="KaratCombo"
+                                                              DisplayMemberPath="Label"
+                                                              IsEditable="True"
+                                                              IsTextSearchEnabled="False"
+                                                              ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              SelectedItem="{Binding KaratMaster, Mode=TwoWay}"
+                                                              Style="{StaticResource TableCellCombo}"
+                                                              Text="{Binding Karat, UpdateSourceTrigger=LostFocus}"
+                                                              TextSearch.TextPath="Label"
+                                                              shell:TypeAhead.IsEnabled="True"
+                                                              shell:TypeAhead.Path="Label" />
+                                                    <Border Background="{StaticResource ErrWashBrush}"
+                                                            BorderBrush="{StaticResource ErrTextBrush}"
+                                                            BorderThickness="2"
+                                                            IsHitTestVisible="False">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <!--  It marks the empty cell; while the cell is being typed in, the typing must show.  -->
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding NeedsKarat}" Value="True" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=KaratCombo}" Value="False" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Margin="8,0,0,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource InkSoftBrush}"
+                                                                   Text="Karat" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!--  7 · wastage and 8 · labour, gold lines  -->
+                                            <Border Grid.Column="7">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBox Style="{StaticResource CellNumBox}"
+                                                         Text="{Binding WastagePercent, TargetNullValue='', UpdateSourceTrigger=LostFocus}" />
+                                            </Border>
+                                            <Border Grid.Column="8">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBox Style="{StaticResource CellNumBox}"
+                                                         Text="{Binding LabourPerUnit, TargetNullValue='', UpdateSourceTrigger=LostFocus}" />
+                                            </Border>
+
+                                            <!--  7 and 8 · a diamond line has one flat rate here instead of two blank cells  -->
+                                            <Border Grid.Column="7"
+                                                    Grid.ColumnSpan="2"
+                                                    BorderBrush="{StaticResource DividerBrush}"
+                                                    BorderThickness="1,0,0,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="80" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Margin="10,0,0,0"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="{DynamicResource FontSizeLabel}"
+                                                               Foreground="{StaticResource InkMutedBrush}"
+                                                               Text="{Binding Unit, StringFormat='Flat rate / {0}', Mode=OneWay}"
+                                                               ToolTip="Flat rate for a diamond item, GST included."
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBox Grid.Column="1"
+                                                             FontWeight="SemiBold"
+                                                             Foreground="{StaticResource AccentInkBrush}"
+                                                             Style="{StaticResource CellNumBox}"
+                                                             ToolTip="Flat rate for a diamond item, GST included."
+                                                             Text="{Binding DiamondRate, TargetNullValue='', StringFormat=N0, UpdateSourceTrigger=LostFocus}" />
+                                                </Grid>
+                                            </Border>
+
+                                            <!--  9 · extra  -->
+                                            <Border Grid.Column="9">
+                                                <TextBox Text="{Binding Extra, TargetNullValue='', UpdateSourceTrigger=LostFocus}">
+                                                    <TextBox.Style>
+                                                        <Style BasedOn="{StaticResource CellNumBox}" TargetType="TextBox">
+                                                            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsEmpty}" Value="False">
+                                                                    <Setter Property="shell:FieldAdorn.Placeholder" Value="0" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Extra, Converter={StaticResource DecimalIsPositive}}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
+                                            </Border>
+
+                                            <!--  10 · rate and 11 · line total: calculated, never a tab stop  -->
+                                            <Border Grid.Column="10"
+                                                    BorderBrush="{StaticResource DividerBrush}"
+                                                    BorderThickness="1,0,0,0"
+                                                    Style="{StaticResource ResultCell}">
+                                                <TextBlock Foreground="{StaticResource InkMutedBrush}"
+                                                           Style="{StaticResource ResultText}"
+                                                           Text="{Binding EffectiveRate, StringFormat=N2, TargetNullValue=''}" />
+                                            </Border>
+                                            <Border Grid.Column="11" Style="{StaticResource ResultCell}">
+                                                <TextBlock FontSize="{StaticResource FontSizeLineTotal}"
+                                                           FontWeight="SemiBold"
+                                                           Style="{StaticResource ResultText}"
+                                                           Text="{Binding LineTotal, StringFormat=N2, TargetNullValue=''}" />
+                                            </Border>
+
+                                            <!--  12 · remove, on the row that has focus or the pointer  -->
+                                            <Border Grid.Column="12">
+                                                <Button Width="24"
+                                                        Height="24"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center"
+                                                        Command="{Binding DataContext.RemoveLineCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="Remove row">
+                                                    <Button.Style>
+                                                        <Style BasedOn="{StaticResource BtnIcon}" TargetType="Button">
+                                                            <Setter Property="Width" Value="24" />
+                                                            <Setter Property="Height" Value="24" />
+                                                            <Setter Property="Visibility" Value="Hidden" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=LineEntryGrid}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsMouseOver, ElementName=LineEntryGrid}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Hidden" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                    <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="12" Text="&#xE711;" />
+                                                </Button>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
                         </ListBox>
+
+                        <!--  How the focused line was priced  -->
+                        <Border Grid.Row="2"
+                                MinHeight="46"
+                                Padding="16,8"
+                                Background="{StaticResource FocusStripBrush}"
+                                BorderBrush="{StaticResource BorderBrushTok}"
+                                BorderThickness="0,1,0,0">
+                            <Grid>
+                                <TextBlock VerticalAlignment="Center"
+                                           Foreground="{StaticResource InkSoftBrush}"
+                                           Text="Fill in a line to see how its rate and total are worked out.">
+                                    <TextBlock.Style>
+                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FocusExplanation, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <WrapPanel VerticalAlignment="Center">
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FocusExplanation, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Margin="0,2,22,2" FontWeight="SemiBold">
+                                        <Run Foreground="{StaticResource AccentInkBrush}" Text="{Binding FocusExplanation.RowLabel, Mode=OneWay}" />
+                                        <Run Text="  " /><Run Text="{Binding FocusExplanation.ItemName, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <Rectangle Width="1" Height="20" Margin="0,0,22,0" Fill="{StaticResource BorderBrushTok}" />
+                                    <TextBlock Margin="0,2,22,2" Foreground="{StaticResource ErrTextBrush}" FontWeight="Medium">
+                                        <TextBlock.Style>
+                                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding FocusExplanation.Problem, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                        <Run Text="{Binding FocusExplanation.Problem, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Margin="0,2,22,2" Foreground="{StaticResource InkMutedBrush}">
+                                        <Run Foreground="{StaticResource InkSoftBrush}" Text="Net " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding FocusExplanation.NetValue, Mode=OneWay}" /><Run Text="{Binding FocusExplanation.NetFormula, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Margin="0,2,22,2" Foreground="{StaticResource InkMutedBrush}">
+                                        <Run Foreground="{StaticResource InkSoftBrush}" Text="Rate " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding FocusExplanation.RateValue, Mode=OneWay}" /><Run Text="{Binding FocusExplanation.RateFormula, Mode=OneWay}" />
+                                    </TextBlock>
+                                    <TextBlock Margin="0,2,0,2" Foreground="{StaticResource InkMutedBrush}">
+                                        <Run Foreground="{StaticResource InkSoftBrush}" Text="Line " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding FocusExplanation.LineValue, Mode=OneWay}" /><Run Text="{Binding FocusExplanation.LineFormula, Mode=OneWay}" />
+                                    </TextBlock>
+                                </WrapPanel>
+                            </Grid>
+                        </Border>
+
+                        <!--  Column totals: grams and carats kept apart  -->
+                        <Border Grid.Row="3"
+                                Height="48"
+                                Background="{StaticResource BgSunkenBrush}"
+                                BorderBrush="{StaticResource BorderBrushTok}"
+                                BorderThickness="0,1,0,1">
+                            <Grid TextElement.FontWeight="SemiBold">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{StaticResource ColNumber}" />
+                                    <ColumnDefinition Width="*" MinWidth="178" />
+                                    <ColumnDefinition Width="{StaticResource ColKarat}" />
+                                    <ColumnDefinition Width="{StaticResource ColGross}" />
+                                    <ColumnDefinition Width="{StaticResource ColLess}" />
+                                    <ColumnDefinition Width="{StaticResource ColNet}" />
+                                    <ColumnDefinition Width="{StaticResource ColUnit}" />
+                                    <ColumnDefinition Width="{StaticResource ColWastage}" />
+                                    <ColumnDefinition Width="{StaticResource ColLabour}" />
+                                    <ColumnDefinition Width="{StaticResource ColExtra}" />
+                                    <ColumnDefinition Width="{StaticResource ColRate}" />
+                                    <ColumnDefinition Width="{StaticResource ColTotal}" />
+                                    <ColumnDefinition Width="{StaticResource ColRemove}" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="1"
+                                           Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource InkMutedBrush}">
+                                    <Run Text="Total" /><Run FontWeight="Medium" Foreground="{StaticResource InkSoftBrush}" Text=" · " /><Run FontWeight="Medium" Foreground="{StaticResource InkSoftBrush}" Text="{Binding ItemCount, Mode=OneWay}" /><Run FontWeight="Medium" Foreground="{StaticResource InkSoftBrush}" Text=" lines" />
+                                </TextBlock>
+                                <StackPanel Grid.Column="3" Margin="10,0" VerticalAlignment="Center">
+                                    <TextBlock HorizontalAlignment="Right" Text="{Binding WeightTotals.GramGross}" Visibility="{Binding WeightTotals.ShowGramLine, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource AccentInkBrush}" Text="{Binding WeightTotals.CaratGross}" Visibility="{Binding WeightTotals.ShowCaratLine, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="4" Margin="10,0" VerticalAlignment="Center">
+                                    <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource WarnInkBrush}" Text="{Binding WeightTotals.GramLess}" Visibility="{Binding WeightTotals.ShowGramLine, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource InkDisabledBrush}" Text="—" Visibility="{Binding WeightTotals.ShowCaratLine, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="5" Margin="10,0" VerticalAlignment="Center">
+                                    <TextBlock HorizontalAlignment="Right" Text="{Binding WeightTotals.GramNet}" Visibility="{Binding WeightTotals.ShowGramLine, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource AccentInkBrush}" Text="{Binding WeightTotals.CaratNet}" Visibility="{Binding WeightTotals.ShowCaratLine, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="6" Margin="10,0" VerticalAlignment="Center">
+                                    <TextBlock FontWeight="Medium" Foreground="{StaticResource InkSoftBrush}" Text="g" Visibility="{Binding WeightTotals.ShowGramLine, Converter={StaticResource BoolToVis}}" />
+                                    <TextBlock FontWeight="Medium" Foreground="{StaticResource AccentInkBrush}" Text="ct" Visibility="{Binding WeightTotals.ShowCaratLine, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="11"
+                                           Margin="10,0"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center"
+                                           FontSize="14.5"
+                                           Text="{Binding InclusiveTotal, StringFormat=N2}" />
+                            </Grid>
+                        </Border>
                     </Grid>
                 </ScrollViewer>
-            </Border>
+            </Grid>
 
-            <!--  Footer: narration + totals  -->
-            <Border Grid.Row="3"
-                    Background="{StaticResource BgPanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushTok}"
-                    BorderThickness="0,1,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="340" />
-                    </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0"
-                            Padding="14,10"
-                            BorderBrush="{StaticResource BorderBrushTok}"
-                            BorderThickness="0,0,1,0">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="NARRATION / NOTES" />
-                            <TextBox Height="62"
-                                     AcceptsReturn="True"
-                                     TextWrapping="Wrap"
-                                     VerticalContentAlignment="Top"
-                                     Padding="8,6"
-                                     Text="{Binding Narration, UpdateSourceTrigger=PropertyChanged}" />
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <TextBlock Foreground="{StaticResource InkMutedBrush}" FontSize="14" FontWeight="Medium">
-                                    <Run Text="Items: " /><Run FontFamily="{StaticResource MonoFontFamily}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding ItemCount}" />
-                                </TextBlock>
-                                <TextBlock Margin="20,0,0,0" Foreground="{StaticResource InkMutedBrush}" FontSize="14" FontWeight="Medium">
-                                    <Run Text="Total Wt: " /><Run FontFamily="{StaticResource MonoFontFamily}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding TotalWeight, StringFormat=N3}" /><Run Text="g" />
-                                </TextBlock>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    <Grid Grid.Column="1" Margin="14,10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Subtotal" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Margin="16,0,0,0" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right">
-                            <Run Text="₹" /><Run Text="{Binding Subtotal, StringFormat=N2, Mode=OneWay}" />
-                        </TextBlock>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,4,0,0" Text="CGST @ 1.5%" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Margin="16,4,0,0" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right">
-                            <Run Text="₹" /><Run Text="{Binding Cgst, StringFormat=N2, Mode=OneWay}" />
-                        </TextBlock>
-                        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,4,0,0" Text="SGST @ 1.5%" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="2" Grid.Column="1" Margin="16,4,0,0" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right">
-                            <Run Text="₹" /><Run Text="{Binding Sgst, StringFormat=N2, Mode=OneWay}" />
-                        </TextBlock>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,4,0,0" Text="Round Off" Foreground="{StaticResource InkMutedBrush}" TextAlignment="Right" />
-                        <TextBlock Grid.Row="3" Grid.Column="1" Margin="16,4,0,0" Foreground="{StaticResource InkMutedBrush}" FontFamily="{StaticResource MonoFontFamily}" TextAlignment="Right"
-                                   Text="{Binding RoundOff, StringFormat=N2, Mode=OneWay}" />
-                        <Rectangle Grid.Row="4" Grid.ColumnSpan="2" Height="1" Margin="0,8,0,8" Fill="{StaticResource DividerBrush}" />
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Grand Total" FontSize="18" FontWeight="Bold" TextAlignment="Right" />
-                        <TextBlock Grid.Row="5" Grid.Column="1"
-                                   Margin="16,0,0,0"
-                                   FontFamily="{StaticResource MonoFontFamily}"
-                                   FontSize="18"
-                                   FontWeight="Bold"
-                                   TextAlignment="Right">
-                            <Run Text="₹" /><Run Text="{Binding GrandTotal, StringFormat=N0, Mode=OneWay}" />
-                        </TextBlock>
-                    </Grid>
-                </Grid>
-            </Border>
-
-            <!--  Actions  -->
-            <Border Grid.Row="4"
-                    Padding="14,8"
+            <!--  Quick add: folded to a rail, or open as a panel beside the table  -->
+            <Border x:Name="QuickAddRail"
+                    Grid.Column="1"
+                    Width="38"
                     Background="{StaticResource BgSunkenBrush}"
                     BorderBrush="{StaticResource BorderBrushTok}"
-                    BorderThickness="0,1,0,0">
+                    BorderThickness="1,0,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsQuickAddOpen}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Margin="0,12,0,0" HorizontalAlignment="Center">
+                    <Button Width="26"
+                            Height="26"
+                            Padding="0"
+                            Command="{Binding OpenQuickAddCommand}"
+                            Style="{StaticResource BtnBase}"
+                            ToolTip="Open Quick add (F3)">
+                        <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="12" Text="&#xE76B;" />
+                    </Button>
+                    <TextBlock Margin="0,12,0,0"
+                               HorizontalAlignment="Center"
+                               FontSize="{DynamicResource FontSizeLabel}"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="Quick add">
+                        <TextBlock.LayoutTransform>
+                            <RotateTransform Angle="270" />
+                        </TextBlock.LayoutTransform>
+                    </TextBlock>
+                    <ContentControl Margin="0,12,0,0" HorizontalAlignment="Center" Content="F3" Style="{StaticResource Kbd}" />
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="QuickAddPanel"
+                    Grid.Column="1"
+                    Width="260"
+                    Background="{StaticResource BgPanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushTok}"
+                    BorderThickness="1,0,0,0"
+                    Visibility="{Binding IsQuickAddOpen, Converter={StaticResource BoolToVis}}">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <Button Style="{StaticResource BtnBase}"
-                                Command="{Binding DataContext.PrintEstimateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                Content="Print Estimate"
-                                shell:Kbd.Hint="F9" />
-                        <Button Style="{StaticResource BtnBase}" Margin="6,0,0,0" Command="{Binding ClearCommand}" Content="Clear / Cancel" shell:Kbd.Hint="Esc Esc" />
-                        <Border Margin="14,0,0,0" Width="1" Background="{StaticResource DividerBrush}" />
-                        <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-                            <CheckBox VerticalAlignment="Center"
-                                      IsChecked="{Binding DiscountEnabled}">
-                                <TextBlock Style="{StaticResource FieldLabel}" Margin="6,0,0,0" Text="DISC" />
-                            </CheckBox>
-                            <TextBlock Margin="8,0,6,0"
-                                       VerticalAlignment="Center"
-                                       FontFamily="{StaticResource MonoFontFamily}"
-                                       Foreground="{StaticResource InkMutedBrush}"
-                                       Text="=" />
-                            <TextBlock VerticalAlignment="Center"
-                                       Margin="0,0,2,0"
-                                       Foreground="{StaticResource ErrBrush}"
-                                       Text="− ₹" />
-                            <TextBox Width="80"
-                                     Padding="4,0"
-                                     Height="22"
-                                     VerticalContentAlignment="Center"
-                                     TextAlignment="Right"
-                                     FontFamily="{StaticResource MonoFontFamily}"
-                                     Foreground="{StaticResource ErrBrush}"
-                                     IsEnabled="{Binding DiscountEnabled}"
-                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Margin="8,0,0,0"
-                                       VerticalAlignment="Center"
-                                       FontSize="{DynamicResource FontSizeSm}"
-                                       Foreground="{StaticResource InkMutedBrush}"
-                                       Text="{Binding DiscountPercentHint}" />
-                            <Rectangle Width="1"
-                                       Height="18"
-                                       Margin="10,0"
-                                       Fill="{StaticResource DividerBrush}" />
-                            <TextBlock VerticalAlignment="Center"
-                                       Style="{StaticResource FieldLabel}"
-                                       Margin="0"
-                                       Text="FINAL" />
-                            <TextBlock Margin="8,0,2,0"
-                                       VerticalAlignment="Center"
-                                       Foreground="{StaticResource InkMutedBrush}"
-                                       Text="₹" />
-                            <TextBox Width="88"
-                                     Padding="4,0"
-                                     Height="22"
-                                     VerticalContentAlignment="Center"
-                                     TextAlignment="Right"
-                                     FontFamily="{StaticResource MonoFontFamily}"
-                                     Text="{Binding FinalAmount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <TextBlock Margin="14,0,0,0"
-                                   VerticalAlignment="Center"
-                                   FontSize="{DynamicResource FontSizeSm}"
-                                   TextTrimming="CharacterEllipsis"
-                                   Foreground="{StaticResource InkMutedBrush}"
-                                   Text="{Binding SaveStatus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center">
-                            <TextBlock Text="Grand " Foreground="{StaticResource InkMutedBrush}" />
-                            <TextBlock FontFamily="{StaticResource MonoFontFamily}"
-                                       FontSize="13"
-                                       Foreground="{StaticResource InkBrush}"
-                                       Text="{Binding GrandTotal, StringFormat=₹{0:N0}, Mode=OneWay}" />
-                        </StackPanel>
-                        <Button x:Name="SaveButton"
-                                Style="{StaticResource BtnPrimary}"
-                                MinWidth="160"
-                                Command="{Binding SaveDraftCommand}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Margin="14,12,14,10">
+                        <Grid>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Save" VerticalAlignment="Center" />
-                                <ContentControl Style="{StaticResource KbdOnPrimary}" Margin="8,0,0,0" Content="Ctrl+S" />
+                                <TextBlock VerticalAlignment="Center" FontSize="15" FontWeight="SemiBold" Text="Quick add" />
+                                <ContentControl Margin="8,0,0,0" Content="F3" Style="{StaticResource Kbd}" />
                             </StackPanel>
-                        </Button>
+                            <Button Width="26"
+                                    Height="26"
+                                    Padding="0"
+                                    HorizontalAlignment="Right"
+                                    Command="{Binding CloseQuickAddCommand}"
+                                    Style="{StaticResource BtnBase}"
+                                    ToolTip="Fold Quick add">
+                                <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="12" Text="&#xE76C;" />
+                            </Button>
+                        </Grid>
+                        <TextBox x:Name="QuickAddBox"
+                                 Margin="0,10,0,0"
+                                 Padding="30,0,10,0"
+                                 PreviewKeyDown="OnQuickAddBoxPreviewKeyDown"
+                                 shell:FieldAdorn.Placeholder="Search items"
+                                 Text="{Binding QuickAddQuery, UpdateSourceTrigger=PropertyChanged}">
+                            <shell:FieldAdorn.Prefix>
+                                <TextBlock FontFamily="{StaticResource IconFontFamily}" FontSize="13" Text="&#xE721;" />
+                            </shell:FieldAdorn.Prefix>
+                        </TextBox>
+                        <TextBlock Margin="2,8,0,0" Style="{StaticResource TxtHint}" Text="{Binding QuickAddCountText}" />
                     </StackPanel>
+                    <ListBox x:Name="QuickAddList"
+                             Grid.Row="1"
+                             Background="Transparent"
+                             BorderBrush="{StaticResource BorderBrushTok}"
+                             BorderThickness="0,1,0,0"
+                             ItemContainerStyle="{StaticResource PickerListBoxItem}"
+                             ItemsSource="{Binding QuickAddResults}"
+                             PreviewKeyDown="OnQuickAddListPreviewKeyDown"
+                             PreviewMouseLeftButtonUp="OnQuickAddListClick"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             SelectedItem="{Binding QuickAddSelection, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="14,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Margin="0,1,0,0" Style="{StaticResource TxtHint}" Text="{Binding QuickSummary}" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <Border Grid.Column="1"
+                                            Width="24"
+                                            Height="24"
+                                            Margin="8,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Background="{StaticResource AccentBrush}"
+                                            CornerRadius="12">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontFamily="{StaticResource IconFontFamily}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource OnFilledInkBrush}"
+                                                   Text="&#xE710;" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <Border Grid.Row="2"
+                            Padding="14,10"
+                            Background="{StaticResource BgSunkenBrush}"
+                            BorderBrush="{StaticResource BorderBrushTok}"
+                            BorderThickness="0,1,0,0">
+                        <TextBlock Style="{StaticResource TxtHint}" Text="Click an item to add it to the next empty row." />
+                    </Border>
                 </Grid>
             </Border>
         </Grid>
 
-        <!--  Quick Add pane: search the item masters and drop one onto the next empty line  -->
-        <Border Grid.Column="1"
-                Width="260"
+        <!--  Row 3: the bill's arithmetic on one line, ending in the grand total  -->
+        <Border Grid.Row="3"
+                Padding="16,12,16,14"
+                Background="{StaticResource BgPanelBrush}"
+                BorderBrush="{StaticResource BorderBrushTok}"
+                BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <StackPanel.Resources>
+                        <Style x:Key="SumLabel" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                            <Setter Property="HorizontalAlignment" Value="Right" />
+                            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
+                            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                        </Style>
+                        <Style x:Key="SumValue" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                            <Setter Property="HorizontalAlignment" Value="Right" />
+                            <Setter Property="Margin" Value="0,3,0,0" />
+                            <Setter Property="FontSize" Value="16" />
+                            <Setter Property="FontWeight" Value="Medium" />
+                        </Style>
+                        <Style x:Key="SumOperator" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                            <Setter Property="Margin" Value="14,0" />
+                            <Setter Property="VerticalAlignment" Value="Bottom" />
+                            <Setter Property="FontSize" Value="16" />
+                            <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+                        </Style>
+                    </StackPanel.Resources>
+                    <StackPanel VerticalAlignment="Bottom">
+                        <TextBlock Style="{StaticResource SumLabel}" Text="Subtotal, before GST" />
+                        <TextBlock Style="{StaticResource SumValue}" Text="{Binding Subtotal, StringFormat=N2, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource SumOperator}" Text="+" />
+                    <StackPanel VerticalAlignment="Bottom">
+                        <TextBlock Style="{StaticResource SumLabel}" Text="CGST 1.5%" />
+                        <TextBlock Style="{StaticResource SumValue}" Text="{Binding Cgst, StringFormat=N2, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource SumOperator}" Text="+" />
+                    <StackPanel VerticalAlignment="Bottom">
+                        <TextBlock Style="{StaticResource SumLabel}" Text="SGST 1.5%" />
+                        <TextBlock Style="{StaticResource SumValue}" Text="{Binding Sgst, StringFormat=N2, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource SumOperator}" Text="−" />
+
+                    <!--  Discount and the final amount drive each other: type either one.  -->
+                    <StackPanel VerticalAlignment="Bottom">
+                        <Grid Margin="0,0,0,5">
+                            <CheckBox VerticalAlignment="Center"
+                                      FontSize="{DynamicResource FontSizeLabel}"
+                                      Foreground="{StaticResource InkMutedBrush}"
+                                      IsChecked="{Binding DiscountEnabled}">
+                                <TextBlock FontSize="{DynamicResource FontSizeLabel}" Foreground="{StaticResource InkMutedBrush}" Text="Discount" />
+                            </CheckBox>
+                            <TextBlock Margin="70,0,0,0"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource SumLabel}"
+                                       Text="Final amount" />
+                        </Grid>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBox Width="112"
+                                     FontWeight="SemiBold"
+                                     IsEnabled="{Binding DiscountEnabled}"
+                                     Padding="32,0,10,0"
+                                     TextAlignment="Right"
+                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}">
+                                <shell:FieldAdorn.Prefix>
+                                    <TextBlock Foreground="{StaticResource ErrTextBrush}" Text="−₹" />
+                                </shell:FieldAdorn.Prefix>
+                            </TextBox>
+                            <TextBlock Width="40"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource FontSizeLabel}"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="{Binding DiscountPercentHint}" />
+                            <TextBlock Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       FontFamily="{StaticResource IconFontFamily}"
+                                       FontSize="14"
+                                       Foreground="{StaticResource InkSoftBrush}"
+                                       Text="&#xE8AB;" />
+                            <TextBox Width="128"
+                                     FontWeight="SemiBold"
+                                     Padding="26,0,10,0"
+                                     TextAlignment="Right"
+                                     shell:FieldAdorn.Prefix="₹"
+                                     Text="{Binding FinalAmount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}">
+                                <TextBox.Style>
+                                    <Style BasedOn="{StaticResource {x:Type TextBox}}" TargetType="TextBox">
+                                        <Style.Triggers>
+                                            <!--  With no line on the bill there is nothing to agree a final amount on.  -->
+                                            <DataTrigger Binding="{Binding ItemCount}" Value="0">
+                                                <Setter Property="IsEnabled" Value="False" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource SumOperator}" Text="+" />
+                    <StackPanel VerticalAlignment="Bottom">
+                        <TextBlock Style="{StaticResource SumLabel}" Text="Round off" />
+                        <TextBlock Foreground="{StaticResource InkMutedBrush}" Style="{StaticResource SumValue}" Text="{Binding RoundOff, StringFormat=N2, Mode=OneWay}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource SumOperator}" Text="=" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                    <TextBlock HorizontalAlignment="Right"
+                               FontSize="{DynamicResource FontSizeLabel}"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="Grand total" />
+                    <TextBlock HorizontalAlignment="Right"
+                               FontSize="{StaticResource FontSizeTotal}"
+                               FontWeight="Bold"
+                               Text="{Binding GrandTotal, StringFormat=₹{0:N0}, Mode=OneWay}">
+                        <TextBlock.Style>
+                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ItemCount}" Value="0">
+                                        <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!--  Row 4: actions, notes, status and Save  -->
+        <Border Grid.Row="4"
+                Padding="16,10"
                 Background="{StaticResource BgSunkenBrush}"
                 BorderBrush="{StaticResource BorderBrushTok}"
-                BorderThickness="1,0,0,0"
-                Visibility="{Binding IsChecked, ElementName=QuickAddToggle, Converter={StaticResource BoolToVis}}">
+                BorderThickness="0,1,0,0">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <StackPanel Grid.Row="0" Margin="10,8">
-                    <Grid>
-                        <TextBlock Text="QUICK ADD" Style="{StaticResource TxtSectionTitle}" />
-                        <ContentControl Style="{StaticResource Kbd}" HorizontalAlignment="Right" Content="F3" />
-                    </Grid>
-                    <TextBox x:Name="QuickAddBox"
-                             Margin="0,6,0,0"
-                             Text="{Binding QuickAddQuery, UpdateSourceTrigger=PropertyChanged}"
-                             PreviewKeyDown="OnQuickAddBoxPreviewKeyDown" />
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0"
+                        Command="{Binding DataContext.PrintEstimateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Style="{StaticResource BtnLg}"
+                        shell:Kbd.Hint="F9">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock VerticalAlignment="Center"
+                                   FontFamily="{StaticResource IconFontFamily}"
+                                   FontSize="15"
+                                   Text="&#xE749;" />
+                        <TextBlock Margin="9,0,0,0" Text="Print estimate" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="1"
+                        Margin="10,0,0,0"
+                        Command="{Binding ClearCommand}"
+                        Content="Clear"
+                        Style="{StaticResource BtnLg}"
+                        shell:Kbd.Hint="Esc Esc" />
+                <TextBox Grid.Column="2"
+                         Height="38"
+                         Margin="10,0,14,0"
+                         Padding="12,0"
+                         shell:FieldAdorn.Placeholder="Narration or notes for this bill (optional)"
+                         Text="{Binding Narration, UpdateSourceTrigger=PropertyChanged}" />
+                <StackPanel Grid.Column="3"
+                            Margin="0,0,14,0"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                    <Ellipse Width="8"
+                             Height="8"
+                             VerticalAlignment="Center"
+                             Fill="{Binding StatusTone, Converter={StaticResource DotToBrushConverter}}" />
+                    <TextBlock MaxWidth="260"
+                               Margin="7,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="{DynamicResource FontSizeLabel}"
+                               Foreground="{StaticResource InkMutedBrush}"
+                               Text="{Binding StatusText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding StatusText}" />
                 </StackPanel>
-                <ListBox x:Name="QuickAddList"
-                         Grid.Row="1"
-                         Margin="0,4,0,0"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         ItemContainerStyle="{StaticResource PickerListBoxItem}"
-                         ItemsSource="{Binding QuickAddResults}"
-                         SelectedItem="{Binding QuickAddSelection, Mode=TwoWay}"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         PreviewKeyDown="OnQuickAddListPreviewKeyDown"
-                         PreviewMouseLeftButtonUp="OnQuickAddListClick">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="10,6">
-                                <TextBlock Text="{Binding Name}"
-                                           FontSize="{DynamicResource FontSizeUi}"
-                                           FontWeight="Medium" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <Border Grid.Row="2"
-                        Padding="10,8"
-                        Background="{StaticResource BgPanelBrush}"
-                        BorderBrush="{StaticResource BorderBrushTok}"
-                        BorderThickness="0,1,0,0">
-                    <TextBlock Foreground="{StaticResource InkMutedBrush}" FontSize="{DynamicResource FontSizeXs}" Text="Click to add · F3 focus" />
-                </Border>
+                <Button x:Name="SaveButton"
+                        Grid.Column="4"
+                        MinWidth="176"
+                        Command="{Binding SaveDraftCommand}"
+                        Content="Save bill"
+                        Style="{StaticResource BtnPrimaryLg}"
+                        shell:Kbd.Hint="Ctrl+S" />
             </Grid>
         </Border>
     </Grid>
-    </DockPanel>
 </UserControl>

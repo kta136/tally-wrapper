@@ -3,48 +3,46 @@ using System.Text.Json;
 using ShowroomBilling.Contracts.Clients;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
+using ShowroomBilling.ServerTray.Ui;
 
 namespace ShowroomBilling.ServerTray;
 
+/// <summary>
+/// The server dashboard. It opens on one sentence, whether the counters can
+/// bill, and under it the three things that sentence depends on, each with
+/// the button that mends it. What it says is worked out in
+/// <see cref="DashboardState"/>; this class lays it out and draws it.
+/// </summary>
 public sealed class StatusForm : Form
 {
-    private static readonly Color PageBackground = Color.FromArgb(248, 250, 252);
-    private static readonly Color CardBackground = Color.White;
-    private static readonly Color BorderColor = Color.FromArgb(226, 232, 240);
-    private static readonly Color Ink = Color.FromArgb(15, 23, 42);
-    private static readonly Color Muted = Color.FromArgb(71, 85, 105);
-    private static readonly Color Good = Color.FromArgb(22, 101, 52);
-    private static readonly Color Warn = Color.FromArgb(146, 64, 14);
-    private static readonly Color Bad = Color.FromArgb(185, 28, 28);
-
     private readonly ServerTrayOptions _options;
     private readonly ServerTrayActions _actions;
     private readonly Action _stopServiceAndExitTray;
     private readonly HttpClient _httpClient;
     private readonly System.Windows.Forms.Timer _refreshTimer;
 
-    private readonly Label _serviceStatus = StatusLabel();
-    private readonly Label _apiStatus = StatusLabel();
-    private readonly Label _databaseStatus = StatusLabel();
-    private readonly Label _clientsStatus = StatusLabel();
-    private readonly Label _serverUrl = DetailValue();
-    private readonly Label _configRoot = DetailValue();
-    private readonly Label _apiPath = DetailValue();
-    private readonly TextBox _connectionString = new()
-    {
-        UseSystemPasswordChar = true,
-        Dock = DockStyle.Fill,
-        Margin = new Padding(0, 4, 0, 8)
-    };
-    private readonly ListBox _clients = new()
-    {
-        Dock = DockStyle.Fill,
-        IntegralHeight = false,
-        HorizontalScrollbar = true,
-        BorderStyle = BorderStyle.FixedSingle
-    };
+    private readonly StatusDot _verdictDot = new() { Anchor = AnchorStyles.Left, Margin = new Padding(0, 2, 12, 0) };
+    private readonly TextLabel _verdict = new(TextRole.Title, Theme.Ink);
+    private readonly TextLabel _detail = new(TextRole.Body, Theme.InkMuted, wrap: true) { Margin = new Padding(0, 4, 0, 0) };
+
+    private readonly FlatButton _install = new("Install", ButtonKind.Primary, small: true);
+    private readonly FlatButton _start = new("Start", ButtonKind.Primary, small: true);
+    private readonly FlatButton _restart = new("Restart", small: true);
+    private readonly FlatButton _stop = new("Stop", small: true);
+    private readonly HealthRow _service;
+    private readonly HealthRow _server = new("Server", hasActions: false);
+    private readonly HealthRow _database = new("Database", hasActions: false);
+
+    private readonly FieldBox _address = new(TextRole.Mono, readOnly: true);
+    private readonly FlatButton _copyAddress = new("Copy");
+    private readonly Chip _countersChip = new() { Anchor = AnchorStyles.Left, Margin = new Padding(10, 0, 0, 0) };
+    private readonly CounterTable _counters = new();
+    private readonly FieldBox _connection = new(TextRole.Mono);
+    private readonly FlatButton _testConnection = new("Test") { Enabled = false };
+    private readonly FlatButton _saveConnection = new("Save", ButtonKind.Primary) { Enabled = false };
 
     private bool _refreshInFlight;
+    private ServiceAction? _shownServiceAction;
 
     public StatusForm(
         ServerTrayOptions options,
@@ -55,18 +53,30 @@ public sealed class StatusForm : Form
         _actions = actions;
         _stopServiceAndExitTray = stopServiceAndExitTray;
         _httpClient = new HttpClient { BaseAddress = new Uri(options.ApiBaseUrl), Timeout = TimeSpan.FromSeconds(5) };
+        _service = new HealthRow("Windows service", hasActions: true);
+
+        // Every size below is written for 100 % scaling. The scale is declared
+        // last, with layout held back until then, so that the first layout
+        // scales the window and everything in it together. Declared first, it
+        // would scale an empty window and leave what is added afterwards as it is.
+        SuspendLayout();
+        Text = ServerTrayOptions.ProductName;
+        Icon = AppIconProvider.CreateIcon();
+        BackColor = Theme.Page;
+        StartPosition = FormStartPosition.CenterScreen;
+
+        // The foot is added last so that it is docked first and the page takes what is left.
+        Controls.Add(BuildPage());
+        Controls.Add(BuildFoot());
+        WireActions();
+        Render(DashboardState.Checking);
 
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = ServerTrayOptions.ProductName;
-        Icon = AppIconProvider.CreateIcon();
-        BackColor = PageBackground;
-        Width = 920;
-        Height = 720;
-        StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(760, 620);
-
-        Controls.Add(BuildContent());
+        ClientSize = new Size(780, 830);
+        MinimumSize = new Size(700, 480);
+        ResumeLayout(performLayout: false);
+        PerformLayout();
 
         _refreshTimer = new System.Windows.Forms.Timer { Interval = 15_000 };
         _refreshTimer.Tick += (_, _) => _ = RefreshAsync();
@@ -78,161 +88,232 @@ public sealed class StatusForm : Form
         };
     }
 
-    private Control BuildContent()
+    protected override void OnLoad(EventArgs e)
     {
-        var scroll = new Panel
+        base.OnLoad(e);
+
+        // A server PC often has a small screen: fit it, and let the page scroll.
+        var area = Screen.FromControl(this).WorkingArea;
+        if (Height > area.Height)
+        {
+            Height = area.Height;
+            CenterToScreen();
+        }
+    }
+
+    private Control BuildPage()
+    {
+        var page = new Panel
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
-            Padding = new Padding(18)
+            Padding = new Padding(24, 22, 24, 0),
+            BackColor = Theme.Page,
         };
 
-        var root = new TableLayoutPanel
+        var column = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            RowCount = 6
+            BackColor = Theme.Page,
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        scroll.Controls.Add(root);
-
-        root.Controls.Add(BuildHeader());
-        root.Controls.Add(BuildStatusCards());
-        root.Controls.Add(BuildServerActions());
-        root.Controls.Add(BuildDatabaseCard());
-        root.Controls.Add(BuildClientsCard());
-        root.Controls.Add(BuildTrayActions());
-
-        return scroll;
+        column.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        column.Controls.Add(BuildHeader());
+        column.Controls.Add(BuildHealthCard());
+        column.Controls.Add(BuildAddressCard());
+        column.Controls.Add(BuildCountersCard());
+        column.Controls.Add(BuildDatabaseCard());
+        page.Controls.Add(column);
+        return page;
     }
 
     private Control BuildHeader()
     {
-        var card = Card();
-        var layout = new TableLayoutPanel
+        var header = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
-            ColumnCount = 2
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 3,
+            Margin = new Padding(0, 0, 0, 18),
+            BackColor = Theme.Page,
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        card.Controls.Add(layout);
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        var text = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 1 };
-        text.Controls.Add(new Label
-        {
-            Text = ServerTrayOptions.ProductName,
-            AutoSize = true,
-            Font = new Font(UiFontFamily(), 18, FontStyle.Bold),
-            ForeColor = Ink
-        });
-        text.Controls.Add(new Label
-        {
-            Text = "Tally-host service control, diagnostics, database maintenance, and workstation connection details.",
-            AutoSize = true,
-            ForeColor = Muted,
-            Margin = new Padding(0, 4, 0, 0)
-        });
+        var check = new FlatButton("Check again") { Anchor = AnchorStyles.Top | AnchorStyles.Right, Margin = new Padding(12, 2, 0, 0) };
+        check.Click += async (_, _) => await RefreshAsync();
 
-        var refresh = PrimaryButton("Refresh", async (_, _) => await RefreshAsync());
-        layout.Controls.Add(text, 0, 0);
-        layout.Controls.Add(refresh, 1, 0);
+        header.Controls.Add(_verdictDot, 0, 0);
+        header.Controls.Add(_verdict, 1, 0);
+        header.Controls.Add(_detail, 1, 1);
+        header.Controls.Add(check, 2, 0);
+        header.SetRowSpan(check, 2);
+        return header;
+    }
 
+    private Control BuildHealthCard()
+    {
+        // The lines run edge to edge with a hairline between them; the padding
+        // above and below keeps them clear of the card's corners.
+        var card = new Card { Padding = new Padding(1, 6, 1, 6) };
+        card.Controls.Add(_service);
+        card.Controls.Add(Hairline());
+        card.Controls.Add(_server);
+        card.Controls.Add(Hairline());
+        card.Controls.Add(_database);
         return card;
     }
 
-    private Control BuildStatusCards()
+    private Control BuildAddressCard()
     {
-        var grid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            ColumnCount = 4,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        for (var i = 0; i < 4; i++)
-        {
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        }
+        var card = new Card { ColumnCount = 3 };
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        grid.Controls.Add(StatusCard("API service", _serviceStatus), 0, 0);
-        grid.Controls.Add(StatusCard("Local API", _apiStatus), 1, 0);
-        grid.Controls.Add(StatusCard("Database", _databaseStatus), 2, 0);
-        grid.Controls.Add(StatusCard("Workstations", _clientsStatus), 3, 0);
-        return grid;
+        var words = Stack(
+            new TextLabel(TextRole.BodyStrong, Theme.Ink, "Address for the counters"),
+            new TextLabel(TextRole.Small, Theme.InkSoft, "Enter it in Settings → Server on each counter.", wrap: true)
+            {
+                Margin = new Padding(0, 2, 0, 0),
+            });
+        words.Margin = new Padding(0, 0, 16, 0);
+
+        _address.Input.Text = _actions.GetWorkstationUrl();
+        card.Controls.Add(words, 0, 0);
+        card.Controls.Add(_address, 1, 0);
+        card.Controls.Add(_copyAddress, 2, 0);
+        _copyAddress.Anchor = AnchorStyles.Right;
+        return card;
     }
 
-    private Control BuildServerActions()
+    private Control BuildCountersCard()
     {
-        _serverUrl.Text = _actions.GetWorkstationUrl();
-        _configRoot.Text = _options.ConfigRoot;
-        _apiPath.Text = _options.ApiExecutablePath;
+        var card = new Card { Padding = new Padding(1, 14, 1, 6) };
 
-        var body = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1 };
-        body.Controls.Add(DetailRow("Workstation URL", _serverUrl));
-        body.Controls.Add(DetailRow("Config root", _configRoot));
-        body.Controls.Add(DetailRow("API executable", _apiPath));
-        body.Controls.Add(ButtonRow(
-            PrimaryButton("Install / Repair Server", (_, _) => _actions.InstallOrRepairServer(this)),
-            Button("Start API Service", (_, _) => _actions.StartService(this)),
-            Button("Stop API Service", (_, _) => _actions.StopService(this)),
-            Button("Restart API Service", (_, _) => _actions.RestartService(this)),
-            Button("Open Local Health", (_, _) => _actions.OpenLocalHealth()),
-            Button("Copy Server URL", (_, _) => _actions.CopyServerUrl())));
+        var heading = new TableLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 2,
+            Margin = new Padding(15, 0, 15, 12),
+            BackColor = Theme.Panel,
+        };
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        heading.Controls.Add(
+            new TextLabel(TextRole.BodyStrong, Theme.Ink, "Counters connected") { Anchor = AnchorStyles.Left },
+            0,
+            0);
+        heading.Controls.Add(_countersChip, 1, 0);
 
-        return Section("Server actions", "Everything from the tray menu is available here.", body);
+        card.Controls.Add(heading);
+        card.Controls.Add(_counters);
+        return card;
     }
 
     private Control BuildDatabaseCard()
     {
-        var body = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1 };
-        body.Controls.Add(new Label
-        {
-            Text = "Postgres connection string",
-            AutoSize = true,
-            ForeColor = Muted,
-            Font = new Font(UiFontFamily(), 8.5f, FontStyle.Bold)
-        });
-        body.Controls.Add(_connectionString);
-        body.Controls.Add(ButtonRow(
-            Button("Test DB", async (_, _) => await TestDatabaseAsync()),
-            PrimaryButton("Save DB", async (_, _) => await SaveDatabaseAsync()),
-            Button("Restart API Service", (_, _) => _actions.RestartService(this))));
+        var card = new Card { ColumnCount = 3 };
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        return Section("Database configuration", "Maintenance-token protected actions run against the local API.", body);
-    }
-
-    private Control BuildClientsCard()
-    {
-        var body = new TableLayoutPanel
+        var heading = new TextLabel(TextRole.BodyStrong, Theme.Ink, "Database connection");
+        var context = new TextLabel(
+            TextRole.Small,
+            Theme.InkSoft,
+            "It is kept on this PC and never shown. To change it, paste the new connection string, test it, then save. "
+            + "The server starts using a saved one when the Windows service restarts.",
+            wrap: true)
         {
-            Dock = DockStyle.Fill,
-            Height = 160,
-            ColumnCount = 1,
-            RowCount = 2
+            Margin = new Padding(0, 2, 0, 12),
         };
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.Controls.Add(_clients, 0, 0);
-        body.Controls.Add(ButtonRow(
-            Button("Refresh Clients", async (_, _) => await RefreshAsync()),
-            Button("Open Logs", (_, _) => _actions.OpenLogs()),
-            Button("Open Config Folder", (_, _) => _actions.OpenConfigRoot()),
-            Button("Open Install Log", (_, _) => _actions.OpenInstallLog())), 0, 1);
 
-        return Section("Connected clients", "Recently seen billing workstations from the API presence endpoint.", body);
+        _connection.Input.UseSystemPasswordChar = true;
+        _connection.Input.PlaceholderText = "Host=…;Port=…;Database=…;Username=…;Password=…";
+
+        card.Controls.Add(heading, 0, 0);
+        card.SetColumnSpan(heading, 3);
+        card.Controls.Add(context, 0, 1);
+        card.SetColumnSpan(context, 3);
+        card.Controls.Add(_connection, 0, 2);
+        card.Controls.Add(_testConnection, 1, 2);
+        card.Controls.Add(_saveConnection, 2, 2);
+        return card;
     }
 
-    private Control BuildTrayActions()
+    private Control BuildFoot()
     {
-        var body = ButtonRow(
-            DangerButton("Exit Tray", (_, _) => _stopServiceAndExitTray()));
-        return Section(
-            "Tray shutdown",
-            "Exiting the tray stops the API Windows Service first so the server shuts down cleanly.",
-            body);
+        // The words of the first link start where the cards do, and the red
+        // button ends where they end.
+        var foot = new FootBand { Padding = new Padding(14, 1, 24, 0) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Theme.Sunken };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var links = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = false,
+            Anchor = AnchorStyles.Left,
+            Margin = Padding.Empty,
+            BackColor = Theme.Sunken,
+        };
+        links.Controls.Add(Link("Logs", () => _actions.OpenLogs()));
+        links.Controls.Add(Link("Data folder", () => _actions.OpenConfigRoot()));
+        links.Controls.Add(Link("Install log", () => _actions.OpenInstallLog()));
+        links.Controls.Add(Link("Repair installation…", () => _actions.InstallOrRepairServer(this)));
+
+        var stop = new FlatButton("Stop server and exit", ButtonKind.Danger) { Anchor = AnchorStyles.Right, Margin = Padding.Empty };
+        stop.Click += (_, _) => _stopServiceAndExitTray();
+
+        layout.Controls.Add(links, 0, 0);
+        layout.Controls.Add(stop, 2, 0);
+        foot.Controls.Add(layout);
+        return foot;
+    }
+
+    private void WireActions()
+    {
+        _install.Click += (_, _) => _actions.InstallOrRepairServer(this);
+        _start.Click += (_, _) => WhileWaiting(() => _actions.StartService(this));
+        _restart.Click += (_, _) => WhileWaiting(() => _actions.RestartService(this));
+        _stop.Click += (_, _) => WhileWaiting(() => _actions.StopService(this));
+
+        _copyAddress.Click += (_, _) =>
+        {
+            _actions.CopyServerUrl();
+            _copyAddress.Text = "Copied";
+        };
+
+        _connection.Input.TextChanged += (_, _) =>
+        {
+            var something = !string.IsNullOrWhiteSpace(_connection.Input.Text);
+            _testConnection.Enabled = something;
+            _saveConnection.Enabled = something;
+        };
+        _testConnection.Click += async (_, _) => await TestDatabaseAsync();
+        _saveConnection.Click += async (_, _) => await SaveDatabaseAsync();
+    }
+
+    /// <summary>Starting or stopping a service takes seconds, and the window waits for it.</summary>
+    private void WhileWaiting(Action action)
+    {
+        UseWaitCursor = true;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
     }
 
     private async Task RefreshAsync()
@@ -245,9 +326,11 @@ public sealed class StatusForm : Form
         _refreshInFlight = true;
         try
         {
-            RefreshServiceStatus();
-            await RefreshApiStatusAsync();
-            await RefreshClientsAsync();
+            var state = await ReadStateAsync();
+            if (!IsDisposed)
+            {
+                Render(state);
+            }
         }
         finally
         {
@@ -255,88 +338,86 @@ public sealed class StatusForm : Form
         }
     }
 
-    private void RefreshServiceStatus()
+    private async Task<DashboardState> ReadStateAsync()
     {
-        var status = _actions.GetServiceStatus();
-        var color = status switch
-        {
-            System.ServiceProcess.ServiceControllerStatus.Running => Good,
-            System.ServiceProcess.ServiceControllerStatus.Stopped => Bad,
-            _ => Warn,
-        };
-        SetStatus(_serviceStatus, ServerTrayActions.Describe(status), color);
-    }
+        var service = _actions.GetServiceStatus();
+        string? serverProblem = null;
+        RuntimeHealthResponse? runtime = null;
+        IReadOnlyList<ClientPresenceResponse>? counters = null;
+        string? countersProblem = null;
 
-    private async Task RefreshApiStatusAsync()
-    {
         try
         {
             using var live = await _httpClient.GetAsync("/api/health/live");
-            SetStatus(
-                _apiStatus,
-                live.IsSuccessStatusCode ? "running" : $"HTTP {(int)live.StatusCode}",
-                live.IsSuccessStatusCode ? Good : Warn);
-
-            var runtime = await _httpClient.GetFromJsonAsync<RuntimeHealthResponse>("/api/runtime/health");
-            var (text, color) = DescribeDatabase(runtime);
-            SetStatus(_databaseStatus, text, color);
+            if (!live.IsSuccessStatusCode)
+            {
+                serverProblem = $"HTTP {(int)live.StatusCode}";
+            }
         }
         catch (Exception ex)
         {
-            SetStatus(_apiStatus, ShortError(ex.Message), Bad);
-            SetStatus(_databaseStatus, "unknown", Warn);
+            serverProblem = ShortError(ex.Message);
         }
+
+        if (serverProblem is null)
+        {
+            try
+            {
+                runtime = await _httpClient.GetFromJsonAsync<RuntimeHealthResponse>("/api/runtime/health");
+            }
+            catch (Exception)
+            {
+                // Left null: the dashboard says the database was not reported on.
+            }
+
+            try
+            {
+                var presence = await _httpClient.GetFromJsonAsync<ClientPresenceListResponse>("/api/clients/presence");
+                counters = presence?.Clients ?? [];
+            }
+            catch (Exception ex)
+            {
+                countersProblem = ShortError(ex.Message);
+            }
+        }
+
+        return DashboardState.From(service, serverProblem, runtime, counters, countersProblem, DateTimeOffset.Now);
     }
 
-    /// <summary>
-    /// The database line of the dashboard. A database that has not had this
-    /// build's migrations comes first: the service then runs and answers, and
-    /// "idle" or "ready" would hide that no bill can be read.
-    /// </summary>
-    internal static (string Text, Color Color) DescribeDatabase(RuntimeHealthResponse? runtime)
+    /// <summary>Draws a state. The checks call it every 15 seconds; a test calls it with states of its own.</summary>
+    internal void Render(DashboardState state)
     {
-        if (runtime is null)
-        {
-            return ("unknown", Warn);
-        }
-
-        if (runtime.PendingMigrationCount > 0)
-        {
-            return ($"upgrade needed: {runtime.PendingMigrationCount} migration(s) not applied", Bad);
-        }
-
-        if (runtime.DatabaseHealthSkipped)
-        {
-            return ("idle", Muted);
-        }
-
-        return runtime.DatabaseReachable ? ("ready", Good) : ("not ready", Bad);
-    }
-
-    private async Task RefreshClientsAsync()
-    {
-        _clients.Items.Clear();
+        var page = Controls[0];
+        page.SuspendLayout();
         try
         {
-            var presence = await _httpClient.GetFromJsonAsync<ClientPresenceListResponse>("/api/clients/presence");
-            var clients = presence?.Clients ?? [];
-            SetStatus(_clientsStatus, clients.Count.ToString(), clients.Count > 0 ? Good : Warn);
-            if (clients.Count == 0)
+            _verdictDot.Tone = state.Tone;
+            _verdict.Text = state.Verdict;
+            _detail.Text = state.Detail;
+
+            _service.Set(state.Service);
+            _server.Set(state.Server);
+            _database.Set(state.Database);
+            if (_shownServiceAction != state.ServiceAction)
             {
-                _clients.Items.Add("No active workstation clients.");
-                return;
+                _shownServiceAction = state.ServiceAction;
+                _service.SetActions(state.ServiceAction switch
+                {
+                    ServiceAction.Install => [_install],
+                    ServiceAction.Start => [_start],
+                    ServiceAction.RestartOrStop => [_restart, _stop],
+                    _ => [],
+                });
             }
 
-            foreach (var client in clients)
-            {
-                _clients.Items.Add(
-                    $"{client.CounterName} | {client.MachineName}\\{client.UserName} | {client.RemoteAddress} | {client.LastSeenAtUtc.LocalDateTime:HH:mm:ss}");
-            }
+            _countersChip.Tone = state.CountersTone;
+            _countersChip.Text = state.CountersChip;
+            _counters.SetRows(state.Counters, state.CountersEmptyText);
+            _copyAddress.Text = "Copy";
         }
-        catch (Exception ex)
+        finally
         {
-            SetStatus(_clientsStatus, "unavailable", Bad);
-            _clients.Items.Add(ShortError(ex.Message));
+            page.ResumeLayout(performLayout: true);
         }
     }
 
@@ -347,10 +428,10 @@ public sealed class StatusForm : Form
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/runtime/database/maintenance/test")
         {
-            Content = JsonContent.Create(new TestDatabaseConfigurationRequest(_connectionString.Text))
+            Content = JsonContent.Create(new TestDatabaseConfigurationRequest(_connection.Input.Text))
         };
         request.Headers.Add(MaintenanceTokenConstants.HeaderName, token);
-        await SendAndReportAsync(request, "Database test");
+        await SendAndReportAsync(request, "Connection test");
     }
 
     private async Task SaveDatabaseAsync()
@@ -360,33 +441,32 @@ public sealed class StatusForm : Form
 
         using var request = new HttpRequestMessage(HttpMethod.Put, "/api/runtime/database/maintenance")
         {
-            Content = JsonContent.Create(new UpdateDatabaseConfigurationRequest(_connectionString.Text))
+            Content = JsonContent.Create(new UpdateDatabaseConfigurationRequest(_connection.Input.Text))
         };
         request.Headers.Add(MaintenanceTokenConstants.HeaderName, token);
-        await SendAndReportAsync(request, "Database save");
+        if (await SendAndReportAsync(request, "Save"))
+        {
+            // It is stored now; nothing is gained by keeping a secret in the box.
+            _connection.Input.Clear();
+        }
     }
 
-    private async Task SendAndReportAsync(HttpRequestMessage request, string label)
+    /// <returns>Whether the server said it had done what was asked.</returns>
+    private async Task<bool> SendAndReportAsync(HttpRequestMessage request, string label)
     {
         try
         {
             using var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
             var report = BuildOperationReport(label, response, body);
-            CopyableMessageDialog.ShowMessage(
-                this,
-                ServerTrayOptions.ProductName,
-                report.Message,
-                report.Icon);
+            CopyableMessageDialog.ShowMessage(this, report.Message, report.Icon);
             await RefreshAsync();
+            return report.Icon != MessageBoxIcon.Error;
         }
         catch (Exception ex)
         {
-            CopyableMessageDialog.ShowMessage(
-                this,
-                ServerTrayOptions.ProductName,
-                $"{label} failed: {ex.Message}",
-                MessageBoxIcon.Error);
+            CopyableMessageDialog.ShowMessage(this, $"{label} failed.\n\n{ex.Message}", MessageBoxIcon.Error);
+            return false;
         }
     }
 
@@ -400,16 +480,16 @@ public sealed class StatusForm : Form
 
         CopyableMessageDialog.ShowMessage(
             this,
-            ServerTrayOptions.ProductName,
-            $"Maintenance token was not found at {path}. Run Install / Repair Server first.",
+            $"This PC's maintenance token is missing.\n\nIt was expected at {path}. Choose Repair installation to create it again.",
             MessageBoxIcon.Error);
         return null;
     }
 
     /// <summary>
     /// Turns an API answer into what the operator is shown. A maintenance call
-    /// answers with <c>{ success, message }</c>; a refusal answers with
-    /// ProblemDetails (<c>title</c> / <c>detail</c>). Anything else is shown as it came.
+    /// answers with <c>{ success, message }</c>; a saved connection answers
+    /// with what was stored; a refusal answers with ProblemDetails
+    /// (<c>title</c> / <c>detail</c>). Anything else is shown as it came.
     /// </summary>
     internal static OperationReport BuildOperationReport(
         string label,
@@ -430,6 +510,16 @@ public sealed class StatusForm : Form
             return success
                 ? new OperationReport($"{label} succeeded.\r\n\r\n{message}", MessageBoxIcon.Information)
                 : new OperationReport($"{label} failed.\r\n\r\n{message}", MessageBoxIcon.Error);
+        }
+
+        if (!string.IsNullOrWhiteSpace(parsed?.MaskedConnectionString))
+        {
+            var next = parsed.RequiresApiRestart == true
+                ? "\r\n\r\nThe server starts using it when the Windows service restarts."
+                : string.Empty;
+            return new OperationReport(
+                $"{label} succeeded.\r\n\r\nStored: {parsed.MaskedConnectionString}{next}",
+                MessageBoxIcon.Information);
         }
 
         return new OperationReport($"{label} succeeded.\r\n\r\n{body}", MessageBoxIcon.Information);
@@ -466,152 +556,48 @@ public sealed class StatusForm : Form
 
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
-    /// <summary>The fields of the two answer shapes the tray reads; each call sends only some of them.</summary>
-    private sealed record ResponseBody(bool? Success, string? Message, string? Title, string? Detail);
+    /// <summary>The fields of the answer shapes the tray reads; each call sends only some of them.</summary>
+    private sealed record ResponseBody(
+        bool? Success,
+        string? Message,
+        string? Title,
+        string? Detail,
+        string? MaskedConnectionString,
+        bool? RequiresApiRestart);
 
     internal sealed record OperationReport(string Message, MessageBoxIcon Icon);
 
     private void HandleActionStatusChanged(object? sender, EventArgs e) => _ = RefreshAsync();
 
-    private static Panel Card()
+    private static Panel Hairline() => new()
     {
-        return new Panel
-        {
-            BackColor = CardBackground,
-            BorderStyle = BorderStyle.FixedSingle,
-            Padding = new Padding(14),
-            Margin = new Padding(0, 0, 0, 12),
-            Dock = DockStyle.Top,
-            AutoSize = true
-        };
-    }
+        Height = 1,
+        Dock = DockStyle.Fill,
+        Margin = Padding.Empty,
+        BackColor = Theme.Divider,
+    };
 
-    private static Control StatusCard(string title, Label value)
+    /// <summary>Controls one under the other, as wide as the widest.</summary>
+    private static TableLayoutPanel Stack(params Control[] controls)
     {
-        var card = Card();
-        card.Margin = new Padding(0, 0, 10, 12);
-        card.Dock = DockStyle.Fill;
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1 };
-        layout.Controls.Add(new Label
-        {
-            Text = title.ToUpperInvariant(),
-            AutoSize = true,
-            ForeColor = Muted,
-            Font = new Font(UiFontFamily(), 8.5f, FontStyle.Bold)
-        });
-        layout.Controls.Add(value);
-        card.Controls.Add(layout);
-        return card;
-    }
-
-    private static Control Section(string title, string subtitle, Control body)
-    {
-        var card = Card();
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1 };
-        layout.Controls.Add(new Label
-        {
-            Text = title,
-            AutoSize = true,
-            ForeColor = Ink,
-            Font = new Font(UiFontFamily(), 12.5f, FontStyle.Bold)
-        });
-        layout.Controls.Add(new Label
-        {
-            Text = subtitle,
-            AutoSize = true,
-            ForeColor = Muted,
-            Margin = new Padding(0, 2, 0, 8)
-        });
-        layout.Controls.Add(body);
-        card.Controls.Add(layout);
-        return card;
-    }
-
-    private static Control DetailRow(string label, Label value)
-    {
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 6)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label { Text = label, AutoSize = true, ForeColor = Muted }, 0, 0);
-        layout.Controls.Add(value, 1, 0);
-        return layout;
-    }
-
-    private static FlowLayoutPanel ButtonRow(params Control[] controls)
-    {
-        var panel = new FlowLayoutPanel
+        var stack = new TableLayoutPanel
         {
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
             Dock = DockStyle.Fill,
-            WrapContents = true,
-            Margin = new Padding(0, 4, 0, 0)
+            BackColor = Theme.Panel,
         };
-        panel.Controls.AddRange(controls);
-        return panel;
+        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        stack.Controls.AddRange(controls);
+        return stack;
     }
 
-    private static Button PrimaryButton(string text, EventHandler onClick)
+    private static FlatButton Link(string text, Action onClick)
     {
-        var button = Button(text, onClick);
-        button.BackColor = Color.FromArgb(79, 70, 229);
-        button.ForeColor = Color.White;
-        return button;
-    }
-
-    private static Button DangerButton(string text, EventHandler onClick)
-    {
-        var button = Button(text, onClick);
-        button.BackColor = Color.FromArgb(220, 38, 38);
-        button.ForeColor = Color.White;
-        button.Width = 190;
-        return button;
-    }
-
-    private static Button Button(string text, EventHandler onClick)
-    {
-        var button = new Button
-        {
-            Text = text,
-            AutoSize = false,
-            Width = 150,
-            Height = 34,
-            Margin = new Padding(0, 6, 8, 2),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.White,
-            ForeColor = Ink
-        };
-        button.FlatAppearance.BorderColor = BorderColor;
-        button.Click += onClick;
-        return button;
-    }
-
-    private static Label StatusLabel() => new()
-    {
-        AutoSize = true,
-        Text = "checking",
-        ForeColor = Warn,
-        Font = new Font(UiFontFamily(), 14, FontStyle.Bold),
-        Margin = new Padding(0, 6, 0, 0)
-    };
-
-    private static Label DetailValue() => new()
-    {
-        AutoSize = true,
-        ForeColor = Ink,
-        Font = new Font("Consolas", 9),
-        MaximumSize = new Size(640, 0)
-    };
-
-    private static void SetStatus(Label label, string text, Color color)
-    {
-        label.Text = text;
-        label.ForeColor = color;
+        var link = new FlatButton(text, ButtonKind.Text, small: true) { Margin = new Padding(0, 0, 2, 0) };
+        link.Click += (_, _) => onClick();
+        return link;
     }
 
     private static string ShortError(string message)
@@ -619,9 +605,6 @@ public sealed class StatusForm : Form
         var singleLine = message.ReplaceLineEndings(" ").Trim();
         return singleLine.Length <= 80 ? singleLine : $"{singleLine[..77]}...";
     }
-
-    private static FontFamily UiFontFamily() =>
-        SystemFonts.MessageBoxFont?.FontFamily ?? FontFamily.GenericSansSerif;
 
     protected override void Dispose(bool disposing)
     {
@@ -633,5 +616,80 @@ public sealed class StatusForm : Form
         }
 
         base.Dispose(disposing);
+    }
+
+    /// <summary>
+    /// One line of the health card: a dot, what it is, a sentence about it,
+    /// the same in a chip, and the buttons that act on it, if it has any.
+    /// </summary>
+    private sealed class HealthRow : TableLayoutPanel
+    {
+        private readonly StatusDot _dot = new() { Margin = new Padding(0, 4, 12, 0) };
+        private readonly TextLabel _description = new(TextRole.Small, Theme.InkSoft, wrap: true) { Margin = new Padding(0, 2, 0, 0) };
+        private readonly Chip _chip = new() { Anchor = AnchorStyles.Right, Margin = new Padding(12, 0, 0, 0) };
+        private readonly FlowLayoutPanel? _actions;
+
+        public HealthRow(string title, bool hasActions)
+        {
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Dock = DockStyle.Fill;
+            Margin = Padding.Empty;
+            Padding = new Padding(15, 10, 15, 10);
+            BackColor = Theme.Panel;
+            ColumnCount = 4;
+            ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            Controls.Add(_dot, 0, 0);
+            Controls.Add(new TextLabel(TextRole.BodyStrong, Theme.Ink, title), 1, 0);
+            Controls.Add(_description, 1, 1);
+            Controls.Add(_chip, 2, 0);
+            SetRowSpan(_chip, 2);
+
+            if (hasActions)
+            {
+                _actions = new FlowLayoutPanel
+                {
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    WrapContents = false,
+                    Anchor = AnchorStyles.Right,
+                    // No margin of its own: with no button in it, it must take no room.
+                    Margin = Padding.Empty,
+                    BackColor = Theme.Panel,
+                };
+                Controls.Add(_actions, 3, 0);
+                SetRowSpan(_actions, 2);
+            }
+        }
+
+        /// <summary>
+        /// The buttons this line offers now. They are put in and taken out,
+        /// not shown and hidden: hiding a button in a window that is not on
+        /// screen leaves its space behind.
+        /// </summary>
+        public void SetActions(Control[] buttons)
+        {
+            if (_actions is null)
+            {
+                return;
+            }
+
+            _actions.SuspendLayout();
+            _actions.Controls.Clear();
+            _actions.Controls.AddRange(buttons);
+            _actions.ResumeLayout(performLayout: true);
+        }
+
+        public void Set(HealthLine line)
+        {
+            _dot.Tone = line.Tone;
+            _description.Text = line.Description;
+            _chip.Tone = line.Tone;
+            _chip.Text = line.Chip;
+        }
     }
 }

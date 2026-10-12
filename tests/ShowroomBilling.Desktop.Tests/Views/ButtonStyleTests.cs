@@ -17,10 +17,10 @@ namespace ShowroomBilling.Desktop.Tests.Views;
 public sealed class ButtonStyleTests
 {
     [Theory]
-    [InlineData("BtnBase", "BgPanelBrush", "BorderStrongBrush", "InkBrush")]
+    [InlineData("BtnBase", "BgPanelBrush", "BorderInputBrush", "InkBrush")]
     [InlineData("BtnPrimary", "AccentBrush", "AccentBrush", "InkInverseBrush")]
-    [InlineData("BtnGhost", null, null, "InkBrush")]
-    [InlineData("BtnDanger", "BgPanelBrush", "ErrBrush", "ErrBrush")]
+    [InlineData("BtnGhost", null, null, "AccentInkBrush")]
+    [InlineData("BtnDanger", "BgPanelBrush", "ErrTextBrush", "ErrTextBrush")]
     public void Idle_button_draws_its_own_brushes_and_its_text_takes_its_colour(
         string style, string? background, string? border, string foreground)
         => WpfTestHost.Run(() =>
@@ -48,7 +48,7 @@ public sealed class ButtonStyleTests
 
             button.IsEnabled = false;
             Layout(button);
-            Assert.All(Texts(button), text => AssertBrush("InkDisabledBrush", text.Foreground));
+            Assert.All(Texts(button), text => AssertBrush("BtnPrimaryDisabledInkBrush", text.Foreground));
             return true;
         });
 
@@ -69,12 +69,12 @@ public sealed class ButtonStyleTests
             // The chip greys out with the button.
             hinted.IsEnabled = false;
             Layout(hinted);
-            Assert.All(Texts(hinted), text => AssertBrush("InkDisabledBrush", text.Foreground));
+            Assert.All(Texts(hinted), text => AssertBrush("BtnDisabledInkBrush", text.Foreground));
             return true;
         });
 
     [Theory]
-    [InlineData("Kbd", "InkBrush", "BgSunkenBrush")]
+    [InlineData("Kbd", "InkMutedBrush", "ResultTintBrush")]
     [InlineData("KbdOnPrimary", "OnFilledInkBrush", "OnFilledChipBrush")]
     public void A_stand_alone_keyboard_chip_shows_its_key(string style, string foreground, string background)
         => WpfTestHost.Run(() =>
@@ -90,11 +90,13 @@ public sealed class ButtonStyleTests
         });
 
     [Theory]
-    [InlineData("BtnBase", "BgHoverBrush", "BorderStrongBrush", "BgSelectedBrush", "BorderStrongBrush")]
+    [InlineData("BtnBase", "BgSunkenBrush", "InkSoftBrush", "DividerBrush", "InkSoftBrush")]
     [InlineData("BtnPrimary", "AccentHoverBrush", "AccentHoverBrush", "AccentPressedBrush", "AccentPressedBrush")]
-    [InlineData("BtnSm", "BgHoverBrush", "BorderStrongBrush", "BgSelectedBrush", "BorderStrongBrush")]
+    [InlineData("BtnSm", "BgSunkenBrush", "InkSoftBrush", "DividerBrush", "InkSoftBrush")]
+    [InlineData("BtnDanger", "ErrSoftBrush", "ErrTextBrush", "ErrPressedBrush", "ErrInkBrush")]
+    [InlineData("BtnGhost", "AccentSoftBrush", null, "AccentSoftPressedBrush", null)]
     public void Hover_and_press_change_the_fill(
-        string style, string hoverBackground, string hoverBorder, string pressedBackground, string pressedBorder)
+        string style, string hoverBackground, string? hoverBorder, string pressedBackground, string? pressedBorder)
         => WpfTestHost.Run(() =>
         {
             var button = Build(style, "Save");
@@ -112,9 +114,10 @@ public sealed class ButtonStyleTests
         });
 
     [Theory]
-    [InlineData("BtnBase", "BgSunkenBrush", "BorderStrongBrush")]
-    [InlineData("BtnPrimary", "BgSunkenBrush", "BorderBrushTok")]
-    public void A_disabled_button_is_sunken_with_greyed_text(string style, string background, string border)
+    [InlineData("BtnBase", "BgSunkenBrush", "BorderBrushTok", "BtnDisabledInkBrush")]
+    [InlineData("BtnPrimary", "NeutralChipBrush", "NeutralChipBrush", "BtnPrimaryDisabledInkBrush")]
+    [InlineData("BtnDanger", "BgSunkenBrush", "BorderBrushTok", "BtnDisabledInkBrush")]
+    public void A_disabled_button_is_grey_with_greyed_text(string style, string background, string border, string foreground)
         => WpfTestHost.Run(() =>
         {
             var button = Build(style, "Save");
@@ -124,7 +127,7 @@ public sealed class ButtonStyleTests
             var chrome = Chrome(button);
             AssertBrush(background, chrome.Background);
             AssertBrush(border, chrome.BorderBrush);
-            AssertBrush("InkDisabledBrush", Label(button).Foreground);
+            AssertBrush(foreground, Label(button).Foreground);
             return true;
         });
 
@@ -139,7 +142,7 @@ public sealed class ButtonStyleTests
             button.IsEnabled = false;
             Layout(button);
 
-            AssertBrush("InkDisabledBrush", Texts(chip).Single().Foreground);
+            AssertBrush("BtnPrimaryDisabledInkBrush", Texts(chip).Single().Foreground);
             return true;
         });
 

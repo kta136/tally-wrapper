@@ -1,5 +1,6 @@
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Shell;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
@@ -16,22 +17,25 @@ internal sealed class BillsAdminActionWorkflow(
         string Title,
         string Blocked,
         string Effect,
+        string Check,
         Func<BillListRowViewModel, bool> Allowed,
         Func<IBillsApiClient, Guid, MarkBillStateRequest, string, CancellationToken, Task> Call);
 
     private static readonly MarkAction MarkPosted = new(
         "pushed",
-        "Mark as Pushed",
+        "Mark as pushed",
         "Mark pushed blocked: every selected bill must be pending, draft, or failed.",
-        "will be marked posted locally without calling Tally.",
+        "as posted **without contacting Tally**.",
+        "Do it only after you have checked that the voucher is already in Tally.",
         row => row.CanMarkPosted,
         (api, id, request, token, ct) => api.MarkPostedAsync(id, request, token, ct));
 
     private static readonly MarkAction MarkPending = new(
         "pending",
-        "Mark as Pending",
+        "Mark as pending",
         "Mark pending blocked: every selected bill must be posted or failed.",
-        "will be marked pending locally without changing Tally.",
+        "as pending **without changing Tally**.",
+        "Do it only after you have checked what Tally holds for it.",
         row => row.CanMarkPending,
         (api, id, request, token, ct) => api.MarkPendingAsync(id, request, token, ct));
 
@@ -98,7 +102,13 @@ internal sealed class BillsAdminActionWorkflow(
         }
 
         var subject = rows.Count == 1 ? rows[0].InvoiceNumberDisplay : $"{rows.Count} selected bills";
-        var reason = await host.ReasonPromptHandler(mark.Title, $"{subject} {mark.Effect}", cancellationToken);
+        var total = UiCulture.Rupees(rows.Sum(row => row.GrandTotal));
+        var context = rows.Count == 1
+            ? $"{subject} · {rows[0].PartyName} · ₹{total}"
+            : $"{subject} · ₹{total}";
+        var reason = await host.ReasonPromptHandler(
+            new ReasonRequest(mark.Title, context, $"This marks {subject} {mark.Effect} {mark.Check}", mark.Title),
+            cancellationToken);
         if (reason is null) return;
 
         await runner.ForEachRowAsync(
@@ -136,9 +146,10 @@ internal sealed class BillsAdminActionWorkflow(
         }
 
         var question = dry.TallyDiverges
-            ? $"{row.InvoiceNumberDisplay} was posted to Tally ({row.State}). Deleting locally will NOT remove it from Tally — reconcile there manually. Continue?"
-            : $"Permanently delete {row.InvoiceNumberDisplay}? This cannot be undone.";
-        if (!await runner.ConfirmAsync(new ConfirmRequest("Confirm Delete", question, "Delete", IsWarning: true))) return;
+            ? $"{row.InvoiceNumberDisplay} was posted to Tally ({row.State}). Deleting it here does not remove it from Tally; reconcile it there by hand."
+            : "This removes the bill from this database and frees its number if it was the latest. Its history stays in the audit log. Nothing is deleted in Tally.";
+        if (!await runner.ConfirmAsync(new ConfirmRequest(
+                $"Delete {row.InvoiceNumberDisplay}?", question, "Delete bill", IsDestructive: true, Note: "This cannot be undone."))) return;
 
         await runner.RunAsync(
             $"Deleting {row.InvoiceNumberDisplay}…",
@@ -161,9 +172,10 @@ internal sealed class BillsAdminActionWorkflow(
         if (token is null) return;
 
         var question = rows.Any(row => BillStateCapabilities.TallyDivergesIfDeleted(row.State))
-            ? $"Permanently delete {rows.Count} bill(s)? Some were posted to Tally and will NOT be removed there — reconcile manually."
-            : $"Permanently delete {rows.Count} bill(s)? This cannot be undone.";
-        if (!await runner.ConfirmAsync(new ConfirmRequest("Confirm Delete", question, "Delete", IsWarning: true))) return;
+            ? "Some of these bills were posted to Tally. Deleting them here does not remove them from Tally; reconcile those there by hand."
+            : "This removes the bills from this database and frees their numbers where it can. Their history stays in the audit log. Nothing is deleted in Tally.";
+        if (!await runner.ConfirmAsync(new ConfirmRequest(
+                $"Delete {rows.Count} bill(s)?", question, "Delete bills", IsDestructive: true, Note: "This cannot be undone."))) return;
 
         await runner.RunAsync(
             $"Deleting {rows.Count} bill(s)…",

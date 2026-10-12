@@ -29,6 +29,13 @@ public static class BillCalculator
 
     public readonly record struct LineResult(decimal EffectiveRate, decimal LineTotalInclusive);
 
+    /// <summary>
+    /// What a line's rate per unit is made of. <c>Gold</c> is the rest once wastage and labour
+    /// are taken off, so the three parts always add up to <c>Total</c>, the rate that is billed.
+    /// A diamond line is all <c>Gold</c>: its flat rate has no parts.
+    /// </summary>
+    public readonly record struct RateBreakdown(decimal Gold, decimal Wastage, decimal Labour, decimal Total);
+
     public readonly record struct BillTotals(
         decimal SubtotalBase,
         decimal Cgst,
@@ -54,6 +61,21 @@ public static class BillCalculator
 
         return Math.Round(purityComponent + wastageComponent + labourComponent,
             2, MidpointRounding.AwayFromZero);
+    }
+
+    public static RateBreakdown ComputeRateBreakdown(LineInputs line)
+    {
+        var total = ComputeEffectiveRate(line);
+        if (line.IsDiamond)
+            return new RateBreakdown(total, 0m, 0m, total);
+
+        var wastage = line.PricingMode == PricingModes.Labour
+            ? 0m
+            : Math.Round(line.Rate24Kt * line.WastagePercent / 100m, 2, MidpointRounding.AwayFromZero);
+        var labour = line.PricingMode == PricingModes.Labour || line.PricingMode == PricingModes.Both
+            ? Math.Round(line.LabourPerUnit, 2, MidpointRounding.AwayFromZero)
+            : 0m;
+        return new RateBreakdown(total - wastage - labour, wastage, labour, total);
     }
 
     public static LineResult ComputeLine(LineInputs line)

@@ -2,66 +2,73 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell">
-    <Grid Background="{StaticResource DialogScrimBrush}">
-        <Border Style="{StaticResource DialogPanel}"
-                Width="420"
-                MaxHeight="360"
-                DataContext="{Binding ReasonPromptDialog}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+    <!--  An admin action that needs a reason for the audit log: what it does, then the reason.
+          Enter confirms once the reason is long enough; Esc cancels.  -->
+    <shell:DialogFrame CloseCommand="{Binding CancelCommand}"
+                       DataContext="{Binding ReasonPromptDialog}"
+                       HeaderChips="{StaticResource AdminOnlyChip}"
+                       PanelWidth="520"
+                       Subtitle="{Binding ContextText}"
+                       Title="{Binding TitleText}">
+        <shell:DialogFrame.Footer>
+            <StackPanel Orientation="Horizontal">
+                <Button Command="{Binding CancelCommand}"
+                        Content="Cancel"
+                        shell:Kbd.Hint="Esc" />
+                <Button Margin="10,0,0,0"
+                        Command="{Binding OkCommand}"
+                        Content="{Binding ConfirmText}"
+                        IsDefault="True"
+                        shell:Kbd.Hint="Enter"
+                        Style="{StaticResource BtnPrimary}" />
+            </StackPanel>
+        </shell:DialogFrame.Footer>
 
-                <Border Grid.Row="0"
-                        Padding="16,12"
-                        BorderBrush="{StaticResource DividerBrush}"
-                        BorderThickness="0,0,0,1">
-                    <TextBlock Text="{Binding TitleText}"
+        <StackPanel>
+            <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerWarn}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Margin="0,1,10,0"
+                               VerticalAlignment="Top"
+                               FontFamily="{StaticResource IconFontFamily}"
                                FontSize="14"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource InkBrush}" />
-                </Border>
+                               Foreground="{StaticResource WarnInkBrush}"
+                               Text="&#xE7BA;" />
+                    <TextBlock Grid.Column="1"
+                               Foreground="{StaticResource WarnInkBrush}"
+                               shell:RichText.Markup="{Binding WarningText}"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </Border>
 
-                <Border Grid.Row="1" Padding="16,14">
-                    <StackPanel>
-                        <TextBlock Text="{Binding MessageText}"
-                                   FontSize="{DynamicResource FontSizeUi}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{StaticResource InkBrush}" />
-                        <TextBox shell:FocusOnShown.IsEnabled="True"
-                                 Text="{Binding ReasonText, UpdateSourceTrigger=PropertyChanged}"
-                                 Margin="0,10,0,0"
-                                 MinHeight="58"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 VerticalContentAlignment="Top"
-                                 Padding="8,6" />
-                        <TextBlock Margin="0,6,0,0"
-                                   FontSize="{DynamicResource FontSizeXs}"
-                                   Foreground="{StaticResource InkSoftBrush}"
-                                   Text="{Binding HintText, Mode=OneWay}" />
-                    </StackPanel>
-                </Border>
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Reason, for the audit log" />
+            <TextBox Height="Auto"
+                     MinHeight="84"
+                     Padding="12,9"
+                     VerticalContentAlignment="Stretch"
+                     shell:FocusOnShown.IsEnabled="True"
+                     Text="{Binding ReasonText, UpdateSourceTrigger=PropertyChanged}"
+                     TextWrapping="Wrap" />
 
-                <Border Grid.Row="2"
-                        Background="{StaticResource BgSunkenBrush}"
-                        BorderBrush="{StaticResource DividerBrush}"
-                        BorderThickness="0,1,0,0"
-                        Padding="14,10">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Cancel"
-                                Style="{StaticResource BtnBase}"
-                                Margin="0,0,8,0"
-                                Command="{Binding CancelCommand}" />
-                        <Button Content="OK"
-                                Style="{StaticResource BtnPrimary}"
-                                IsDefault="True"
-                                Command="{Binding OkCommand}" />
-                    </StackPanel>
-                </Border>
+            <Grid Margin="0,8,0,0">
+                <TextBlock Style="{StaticResource TxtHint}" Text="{Binding HintText, Mode=OneWay}" />
+                <TextBlock HorizontalAlignment="Right"
+                           FontWeight="SemiBold"
+                           Text="{Binding CountText, Mode=OneWay}">
+                    <TextBlock.Style>
+                        <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource TxtHint}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLongEnough}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
             </Grid>
-        </Border>
-    </Grid>
+        </StackPanel>
+    </shell:DialogFrame>
 </UserControl>

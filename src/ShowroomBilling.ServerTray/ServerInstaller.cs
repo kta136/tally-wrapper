@@ -76,10 +76,9 @@ public static class ServerInstaller
         EnsureTrayStartup(options);
         if (exitCode != 0 && File.Exists(options.InstallLogPath))
         {
-            MessageBox.Show(
-                $"Server setup failed. Install log:\n{options.InstallLogPath}\n\n{Tail(options.InstallLogPath, 3000)}",
-                ServerTrayOptions.ProductName,
-                MessageBoxButtons.OK,
+            CopyableMessageDialog.ShowMessage(
+                null,
+                $"Setup failed.\n\nThe end of the install log, {options.InstallLogPath}:\n\n{Tail(options.InstallLogPath, 3000)}",
                 MessageBoxIcon.Error);
         }
 
@@ -385,69 +384,22 @@ public static class ServerInstaller
 
     private static string? PromptForLanCidr(string defaultValue)
     {
-        using var form = new Form
-        {
-            Text = "Tally Wrapper Server Setup",
-            Width = 430,
-            Height = 155,
-            StartPosition = FormStartPosition.CenterScreen,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false
-        };
-
-        var label = new Label
-        {
-            Text = "Trusted LAN range for billing workstations:",
-            Left = 12,
-            Top = 14,
-            Width = 380
-        };
-        var input = new TextBox
-        {
-            Text = defaultValue,
-            Left = 12,
-            Top = 42,
-            Width = 386
-        };
-        var ok = new Button
-        {
-            Text = "Install",
-            DialogResult = DialogResult.OK,
-            Left = 242,
-            Width = 75,
-            Top = 78
-        };
-        var cancel = new Button
-        {
-            Text = "Cancel",
-            DialogResult = DialogResult.Cancel,
-            Left = 323,
-            Width = 75,
-            Top = 78
-        };
-
-        form.Controls.AddRange([label, input, ok, cancel]);
-        form.AcceptButton = ok;
-        form.CancelButton = cancel;
-
-        while (form.ShowDialog() == DialogResult.OK)
-        {
-            if (TryNormalizeLanCidr(input.Text, out var normalized))
-            {
-                return normalized;
-            }
-
-            MessageBox.Show(
-                form,
-                $"'{input.Text.Trim()}' is not a network range. Enter one such as {DefaultLanCidr}.",
-                form.Text,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-        }
-
-        return null;
+        var entered = Ui.TrayDialog.Prompt(
+            owner: null,
+            title: "Which PCs may use this server?",
+            message: "Counters whose address is inside this network range can save bills. Any other PC is refused.",
+            value: defaultValue,
+            hint: $"For a network where every address starts with 192.168.1, that is {DefaultLanCidr}.",
+            actionText: "Install",
+            problemWith: LanCidrProblem);
+        return entered is not null && TryNormalizeLanCidr(entered, out var normalized) ? normalized : null;
     }
+
+    /// <summary>What is wrong with a range the operator typed, or null when it is one.</summary>
+    internal static string? LanCidrProblem(string text) =>
+        TryNormalizeLanCidr(text, out _)
+            ? null
+            : $"'{text.Trim()}' is not a network range. Enter one such as {DefaultLanCidr}.";
 
     private static string QuoteArgument(string value) => $"\"{value.Replace("\"", "\\\"")}\"";
 

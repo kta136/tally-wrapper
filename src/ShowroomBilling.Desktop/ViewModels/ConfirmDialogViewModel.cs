@@ -5,14 +5,18 @@ namespace ShowroomBilling.Desktop.ViewModels;
 
 /// <summary>
 /// A yes/no question for the operator. <see cref="IsWarning"/> marks an action
-/// that is hard to undo: the dialog then shows the warning banner and puts
-/// keyboard focus on Cancel, so a stray Enter does not go ahead.
+/// that is hard to undo: the dialog then puts keyboard focus on Cancel, so a stray
+/// Enter does not go ahead. <see cref="Note"/> is the one sentence to read twice, shown
+/// in a banner under the question; <see cref="IsDestructive"/> turns the confirm
+/// button red, for an action that deletes something.
 /// </summary>
 public sealed record ConfirmRequest(
     string Title,
     string Message,
     string ConfirmText = "OK",
-    bool IsWarning = false);
+    bool IsWarning = false,
+    string? Note = null,
+    bool IsDestructive = false);
 
 /// <summary>
 /// The shared confirmation overlay. It sits above every other dialog, so a
@@ -29,6 +33,8 @@ public partial class ConfirmDialogViewModel : ObservableObject
     [ObservableProperty] private string messageText = string.Empty;
     [ObservableProperty] private string confirmText = "OK";
     [ObservableProperty] private bool isWarning;
+    [ObservableProperty] private bool isDestructive;
+    [ObservableProperty] private string noteText = string.Empty;
 
     public ConfirmDialogViewModel()
     {
@@ -38,6 +44,8 @@ public partial class ConfirmDialogViewModel : ObservableObject
 
     public IRelayCommand ConfirmCommand { get; }
     public IRelayCommand CancelCommand { get; }
+
+    public bool HasNote => !string.IsNullOrWhiteSpace(NoteText);
 
     /// <summary>
     /// Asks the question and completes with the answer. A question asked while
@@ -54,13 +62,17 @@ public partial class ConfirmDialogViewModel : ObservableObject
         TitleText = request.Title;
         MessageText = request.Message;
         ConfirmText = request.ConfirmText;
-        IsWarning = request.IsWarning;
+        IsWarning = request.IsWarning || request.IsDestructive;
+        IsDestructive = request.IsDestructive;
+        NoteText = request.Note ?? string.Empty;
         IsOpen = true;
         return _pending.Task;
     }
 
     /// <summary>Esc: the same as pressing Cancel.</summary>
     public void Cancel() => Close(false);
+
+    partial void OnNoteTextChanged(string value) => OnPropertyChanged(nameof(HasNote));
 
     private void Close(bool confirmed)
     {

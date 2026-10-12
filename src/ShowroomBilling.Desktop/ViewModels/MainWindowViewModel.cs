@@ -107,6 +107,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         ApplySystemState(SystemState.Degraded);
 
         SwitchTabCommand = new RelayCommand<NavTab>(SwitchTab);
+        DismissBannerCommand = new RelayCommand(() =>
+        {
+            _dismissedBannerText = BannerText;
+            RaiseBannerChanged();
+        });
         OpenShortcutsCommand = new RelayCommand(() => ActiveDialog = ShellDialogs.Shortcuts);
         OpenAdminUnlockCommand = new RelayCommand(() =>
         {
@@ -139,7 +144,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         RemoveInvoiceRowCommand = new RelayCommand(
             () => Invoice.RemoveFocusedRowCommand.Execute(null),
             () => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null));
-        PrintEstimateCommand = new RelayCommand(PrintEstimate);
+        PrintEstimateCommand = new RelayCommand(PrintEstimate, () => Invoice.ItemCount > 0);
         OpenServerSettingsCommand = new RelayCommand(OpenServerSettings);
         RefreshHealthCommand = new AsyncRelayCommand(ct => RefreshHealthAsync(forceTallyCompany: true, ct));
         RefreshAllMastersCommand = new AsyncRelayCommand(RefreshAllMastersAsync);
@@ -185,10 +190,13 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 OpenFinalPrintPreviewCommand.NotifyCanExecuteChanged();
         };
         Invoice.SaveCompletedReadyForPrint += OnInvoiceSaveCompletedReadyForPrint;
-        Invoice.PropertyChanged += OnInvoicePropertyChangedForStatusBar;
-        StatusBar.ApplyRate24Kt(Invoice.Rate24Kt, Invoice.KaratMasters);
-        StatusBar.ApplyLineCount(Invoice.ItemCount);
-        StatusBar.ApplyLastSaved(Invoice.LastSavedAtUtc);
+        Invoice.RefreshRates();
+        Invoice.PropertyChanged += (_, e) =>
+        {
+            // Printing an estimate needs at least one line on it.
+            if (e.PropertyName == nameof(InvoiceViewModel.ItemCount))
+                PrintEstimateCommand.NotifyCanExecuteChanged();
+        };
         Settings.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SettingsViewModel.Settings) && Settings.Settings is { } saved)
@@ -196,9 +204,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 _printCoordinator.ApplyPrintSettings(saved.Print, saved.Masters);
                 if (!_suppressSettingsRefresh)
                     _ = _printCoordinator.RefreshPrintLayoutAsync();
-                // Karat-master purity rows may have shifted — re-derive the
-                // 22/18kt status-bar displays against the live 24kt rate.
-                StatusBar.ApplyRate24Kt(Invoice.Rate24Kt, Invoice.KaratMasters);
+                // Karat-master purity rows may have shifted: re-derive the
+                // 22K and 18K rates shown beside the line items.
+                Invoice.RefreshRates();
             }
         };
         Settings.PrintLayout.PropertyChanged += (_, e) =>
@@ -260,7 +268,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             numbering?.InvoicePrefix,
             numbering?.InvoiceSuffix,
             fiscalYear,
-            numbering?.InvoicePadding ?? Contracts.Numbering.InvoiceNumberFormatter.DefaultPadding);
+            numbering?.InvoicePadding ?? Contracts.Numbering.InvoiceNumberFormatter.DefaultPadding,
+            $"{row.PartyName} · ₹{Shell.UiCulture.Rupees(row.GrandTotal)} · {row.StateChipLabel}");
         if (!result.Confirmed) return (false, string.Empty, null);
 
         // Dry-run to surface warnings before the real commit.
@@ -274,7 +283,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             if (!string.IsNullOrWhiteSpace(dry.WarningSummary))
             {
                 var goAhead = await ConfirmDialog.ShowAsync(new ConfirmRequest(
-                    "Invoice-number change warnings",
+                    "Change the number anyway?",
                     dry.WarningSummary,
                     "Change number",
                     IsWarning: true));
@@ -291,9 +300,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     }
 
     private Task<(bool Confirmed, string NewNumber, string? Reason)> ShowChangeNumberDialogAsync(
-        string? currentNumber, string? prefix, string? suffix, string fiscalYear, int padding)
+        string? currentNumber, string? prefix, string? suffix, string fiscalYear, int padding, string? context)
     {
-        return _dialogCoordinator.ShowChangeNumberDialogAsync(currentNumber, prefix, suffix, fiscalYear, padding);
+        return _dialogCoordinator.ShowChangeNumberDialogAsync(currentNumber, prefix, suffix, fiscalYear, padding, context);
     }
 
     private void OnChangeNumberDialogClosed((bool Confirmed, string NewNumber, string? Reason) result)
@@ -301,9 +310,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         _dialogCoordinator.OnChangeNumberDialogClosed(result);
     }
 
-    private Task<string?> PromptReasonAsync(string title, string message, CancellationToken cancellationToken)
+    private Task<string?> PromptReasonAsync(ReasonRequest request, CancellationToken cancellationToken)
     {
-        return _dialogCoordinator.PromptReasonAsync(title, message, cancellationToken);
+        return _dialogCoordinator.PromptReasonAsync(request, cancellationToken);
     }
 
     private void OnReasonPromptDialogClosed(string? result)
@@ -320,22 +329,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         catch (Exception ex)
         {
             Invoice.SaveStatus = $"Bill saved, but print preparation failed: {ex.Message}";
-        }
-    }
-
-    private void OnInvoicePropertyChangedForStatusBar(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        switch (e.PropertyName)
-        {
-            case nameof(InvoiceViewModel.Rate24Kt):
-                StatusBar.ApplyRate24Kt(Invoice.Rate24Kt, Invoice.KaratMasters);
-                break;
-            case nameof(InvoiceViewModel.ItemCount):
-                StatusBar.ApplyLineCount(Invoice.ItemCount);
-                break;
-            case nameof(InvoiceViewModel.LastSavedAtUtc):
-                StatusBar.ApplyLastSaved(Invoice.LastSavedAtUtc);
-                break;
         }
     }
 
@@ -414,20 +407,53 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     partial void OnLastHealthCheckedAtUtcChanged(DateTimeOffset? value) =>
         OnPropertyChanged(nameof(LastHealthCheckedDisplay));
 
-    partial void OnLastHealthSnapshotChanged(SystemHealthSnapshot? value) =>
+    partial void OnLastHealthSnapshotChanged(SystemHealthSnapshot? value)
+    {
         Bills.ApplyTallyHealthSnapshot(value);
+        RaiseBannerChanged();
+    }
+
+    partial void OnBannerTextChanged(string value) => RaiseBannerChanged();
+
+    private void RaiseBannerChanged()
+    {
+        OnPropertyChanged(nameof(BannerTone));
+        OnPropertyChanged(nameof(IsBannerVisible));
+        OnPropertyChanged(nameof(IsBannerDismissible));
+    }
 
     public bool IsInvoiceVisible => ActiveTab == NavTab.Invoice && SystemState != SystemState.Limited;
     public bool IsBillsVisible => ActiveTab == NavTab.Bills && SystemState != SystemState.Limited;
     public bool IsSettingsVisible => ActiveTab == NavTab.Settings;
     public bool IsLimitedVisible => SystemState == SystemState.Limited && ActiveTab != NavTab.Settings;
 
-    public bool IsDegradedBannerVisible => SystemState == SystemState.Degraded;
-    public bool IsLimitedBannerVisible => SystemState == SystemState.Limited;
+    /// <summary>
+    /// How the banner under the top bar reads: "info" for a note the operator may dismiss,
+    /// "warn" for something to check, "err" when bills cannot be saved. Empty when there is none.
+    /// </summary>
+    public string BannerTone => SystemState switch
+    {
+        SystemState.Limited => "err",
+        SystemState.Degraded when LastHealthSnapshot?.Runtime?.DatabaseIdentityMatches == false => "warn",
+        SystemState.Degraded => "info",
+        _ => string.Empty,
+    };
+
+    public bool IsBannerVisible =>
+        !string.IsNullOrWhiteSpace(BannerText)
+        && BannerTone.Length > 0
+        && !(BannerTone == "info" && BannerText == _dismissedBannerText);
+
+    public bool IsBannerDismissible => BannerTone == "info";
+
+    /// <summary>Hides the information banner until its text changes.</summary>
+    public IRelayCommand DismissBannerCommand { get; }
+
+    private string? _dismissedBannerText;
 
     partial void OnActiveTabChanged(NavTab value)
     {
-        FKeys.SetTab(value);
+        FKeys.SetScreen(value, SystemState == SystemState.Limited);
         AddInvoiceRowCommand.NotifyCanExecuteChanged();
         RemoveInvoiceRowCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(IsInvoiceVisible));
@@ -454,12 +480,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     private void ApplySystemState(SystemState value)
     {
         _healthCoordinator.ApplySystemState(value);
+        FKeys.SetScreen(ActiveTab, value == SystemState.Limited);
         OnPropertyChanged(nameof(IsInvoiceVisible));
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
         OnPropertyChanged(nameof(IsLimitedVisible));
-        OnPropertyChanged(nameof(IsDegradedBannerVisible));
-        OnPropertyChanged(nameof(IsLimitedBannerVisible));
+        RaiseBannerChanged();
     }
 
     public void SwitchTab(NavTab tab) => ActiveTab = tab;
@@ -530,8 +556,22 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             && await SetupWizard.PrepareForStartupAsync(settingsResponse))
         {
             ActiveDialog = ShellDialogs.SetupWizard;
+            _ = LoadSetupChoicesAsync();
         }
         StartHealthPolling();
+    }
+
+    /// <summary>Fills the companies, ledgers and voucher types the setup form offers from the server's stored Tally snapshots. The form still takes typing when there are none.</summary>
+    private async Task LoadSetupChoicesAsync()
+    {
+        try
+        {
+            await Settings.MasterData.LoadMissingSnapshotsAsync(CancellationToken.None);
+        }
+        catch
+        {
+            // Best effort: the operator can type the names.
+        }
     }
 
     private async Task<EffectiveSettingsResponse?> ApplySettingsAsync()

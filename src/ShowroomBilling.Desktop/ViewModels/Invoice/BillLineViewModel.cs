@@ -75,6 +75,9 @@ public partial class BillLineViewModel : ObservableObject
     }
 
     public bool IsEmpty => string.IsNullOrWhiteSpace(ItemName);
+
+    /// <summary>A gold line whose weight is in but whose karat is not: it cannot be priced, and the karat cell turns red.</summary>
+    public bool NeedsKarat => !IsEmpty && IsGoldLine && string.IsNullOrWhiteSpace(Karat) && (GrossWeight ?? 0m) > 0m;
     public string ResolvedItemCategory => !string.IsNullOrWhiteSpace(ItemCategory)
         ? ItemCategory
         : ItemMaster?.ItemCategory ?? ItemCategories.GoldBased;
@@ -233,6 +236,7 @@ public partial class BillLineViewModel : ObservableObject
     private void Raise()
     {
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(NeedsKarat));
         MutationOccurred?.Invoke(this, EventArgs.Empty);
     }
 

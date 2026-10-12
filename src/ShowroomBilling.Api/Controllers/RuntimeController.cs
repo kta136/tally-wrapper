@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Npgsql;
 using ShowroomBilling.Api.Clients;
@@ -8,7 +7,6 @@ using ShowroomBilling.Api.Security;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Infrastructure.Health;
-using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Api.Controllers;
 
@@ -16,13 +14,13 @@ namespace ShowroomBilling.Api.Controllers;
 [Route("api/runtime")]
 public sealed class RuntimeController(
     IConfiguration configuration,
-    ShowroomBillingDbContext dbContext,
-    HealthCheckService healthCheckService,
     IDatabaseConnectionVerifier databaseConnectionVerifier,
     IHostEnvironment hostEnvironment,
     MaintenanceTokenStore maintenanceTokenStore,
     ClientPresenceRegistry clientPresenceRegistry,
-    DatabaseSchemaState schemaState) : ControllerBase
+    DatabaseHealthProbe databaseHealthProbe,
+    DatabaseHealthCache databaseHealthCache,
+    ILogger<RuntimeController> logger) : ControllerBase
 {
     [HttpPost("database/maintenance/test")]
     public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(
@@ -68,73 +66,65 @@ public sealed class RuntimeController(
     }
 
     [HttpGet("health")]
-    public async Task<ActionResult<RuntimeHealthResponse>> GetHealth(
-        [FromQuery] bool forceDatabase = false,
-        CancellationToken cancellationToken = default)
+    public async Task<ActionResult<RuntimeHealthResponse>> GetHealth(CancellationToken cancellationToken = default)
     {
-        var activeClientCount = clientPresenceRegistry.ActiveCount;
-        var databaseConfigured = !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Postgres"));
-        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
-        if (!forceDatabase)
+        if (!databaseHealthCache.TryGet(out var database))
         {
-            const string reason = "PostgreSQL health check skipped for cheap background health probe.";
-            return Ok(new RuntimeHealthResponse(
-                Status: "Skipped",
-                ApiAvailable: true,
-                DatabaseConfigured: databaseConfigured,
-                DatabaseReachable: false,
-                SettingsLoadedFromApi: false,
-                Message: activeClientCount == 0
-                    ? $"{reason} No active billing clients are registered."
-                    : $"{reason} Active clients: {activeClientCount}.",
-                DatabaseIdentity: null,
-                ExpectedDatabaseIdentity: expectedDatabaseIdentity,
-                DatabaseIdentityMatches: null,
-                DatabaseHealthSkipped: true,
-                DatabaseHealthSkipReason: reason,
-                ActiveClientCount: activeClientCount,
-                PendingMigrationCount: schemaState.PendingMigrationCount));
+            (database, var check) = await databaseHealthProbe.CheckAsync(cancellationToken);
+            // A caller that gave up mid-check makes the check itself fail,
+            // which says nothing about the database: do not hand that on.
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                LogIfChanged(databaseHealthCache.Set(database), database, check);
+            }
         }
 
-        var healthReport = await healthCheckService.CheckHealthAsync(_ => true, cancellationToken);
-        var postgresReachable = healthReport.Entries.TryGetValue("postgres", out var databaseEntry)
-            && databaseEntry.Status == HealthStatus.Healthy;
-        var databaseIdentity = postgresReachable
-            ? await TryGetDatabaseIdentityAsync(cancellationToken)
+        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
+        bool? databaseIdentityMatches = database.Reachable
+            ? DatabaseConnectionVerifier.DatabaseIdentityMatches(database.Identity, expectedDatabaseIdentity)
             : null;
-        bool? databaseIdentityMatches = postgresReachable
-            ? DatabaseConnectionVerifier.DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity)
-            : null;
-        var databaseReachable = postgresReachable;
-        var pendingMigrations = postgresReachable
-            ? await TryCountPendingMigrationsAsync(cancellationToken)
-            : schemaState.PendingMigrationCount;
-        var schemaBehind = pendingMigrations > 0;
+        var schemaBehind = database.PendingMigrationCount > 0;
 
         var message = databaseIdentityMatches == false
-            ? $"Database identity mismatch: PostgreSQL is reachable, but database identity is {databaseIdentity ?? "unavailable"}; expected {expectedDatabaseIdentity} for {hostEnvironment.EnvironmentName}."
+            ? $"Database identity mismatch: PostgreSQL is reachable, but database identity is {database.Identity ?? "unavailable"}; expected {expectedDatabaseIdentity} for {hostEnvironment.EnvironmentName}."
             : schemaBehind
-                ? $"Database upgrade needed: PostgreSQL is reachable ({databaseIdentity}), but {pendingMigrations} schema migration(s) this version needs have not been applied. Bills and invoice numbers cannot be read or saved until the database owner applies them."
-                : databaseReachable
-                    ? $"API is online and PostgreSQL is reachable ({databaseIdentity})."
+                ? $"Database upgrade needed: PostgreSQL is reachable ({database.Identity}), but {database.PendingMigrationCount} schema migration(s) this version needs have not been applied. Bills and invoice numbers cannot be read or saved until the database owner applies them."
+                : database.Reachable
+                    ? $"API is online and PostgreSQL is reachable ({database.Identity})."
                     : "API is online. PostgreSQL must be configured and reachable for readiness.";
 
         var response = new RuntimeHealthResponse(
-            schemaBehind ? HealthStatus.Unhealthy.ToString() : healthReport.Status.ToString(),
+            (schemaBehind || !database.Reachable ? HealthStatus.Unhealthy : HealthStatus.Healthy).ToString(),
             ApiAvailable: true,
-            DatabaseConfigured: databaseConfigured,
-            DatabaseReachable: databaseReachable,
+            DatabaseConfigured: !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Postgres")),
+            DatabaseReachable: database.Reachable,
             SettingsLoadedFromApi: true,
             Message: message,
-            DatabaseIdentity: databaseIdentity,
+            DatabaseIdentity: database.Identity,
             ExpectedDatabaseIdentity: expectedDatabaseIdentity,
             DatabaseIdentityMatches: databaseIdentityMatches,
-            DatabaseHealthSkipped: false,
-            DatabaseHealthSkipReason: null,
-            ActiveClientCount: activeClientCount,
-            PendingMigrationCount: pendingMigrations);
+            ActiveClientCount: clientPresenceRegistry.ActiveCount,
+            PendingMigrationCount: database.PendingMigrationCount);
 
         return Ok(response);
+    }
+
+    /// <summary>One line when the database stops answering and one when it answers again.</summary>
+    private void LogIfChanged(DatabaseHealthReading? before, DatabaseHealthReading now, HealthCheckResult check)
+    {
+        if (before?.Reachable == now.Reachable)
+        {
+            return;
+        }
+
+        if (!now.Reachable)
+        {
+            logger.LogWarning(check.Exception, "The database is not answering. {Description}", check.Description);
+        }
+        else if (before is not null)
+        {
+            logger.LogWarning("The database is answering again.");
+        }
     }
 
     private DatabaseConfigurationResponse BuildDatabaseConfigurationResponse(
@@ -238,35 +228,6 @@ public sealed class RuntimeController(
         catch
         {
             return "<invalid connection string>";
-        }
-    }
-
-    /// <summary>The last known count if the database cannot be asked right now.</summary>
-    private async Task<int?> TryCountPendingMigrationsAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await DatabaseSchemaState.CheckAsync(dbContext, schemaState, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            return schemaState.PendingMigrationCount;
-        }
-    }
-
-    private async Task<string?> TryGetDatabaseIdentityAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await dbContext.DatabaseIdentity
-                .AsNoTracking()
-                .Where(x => x.Key == "environment")
-                .Select(x => x.Value)
-                .SingleOrDefaultAsync(cancellationToken);
-        }
-        catch
-        {
-            return null;
         }
     }
 
