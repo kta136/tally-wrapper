@@ -30,13 +30,41 @@ public partial class InvoiceView : UserControl
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (e.OldValue is InvoiceViewModel oldVm)
+        {
             oldVm.QuickAddCommitted -= OnQuickAddCommitted;
+            oldVm.NewBillStarted -= OnNewBillStarted;
+        }
         if (e.NewValue is InvoiceViewModel newVm)
+        {
             newVm.QuickAddCommitted += OnQuickAddCommitted;
+            newVm.NewBillStarted += OnNewBillStarted;
+        }
     }
 
     private void OnQuickAddCommitted(object? sender, BillLineViewModel target)
         => FocusGrossWeightForLine(target);
+
+    /// <summary>
+    /// The 24K rate is the day's and stays on a new bill, so the cursor goes to the party;
+    /// to the rate only while it is still empty.
+    /// </summary>
+    private void OnNewBillStarted(object? sender, EventArgs e)
+    {
+        if (sender is not InvoiceViewModel vm) return;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            if (vm.Rate24Kt is > 0m)
+            {
+                PartyBox.Focus();
+                PartyBox.SelectAll();
+            }
+            else
+            {
+                FocusRate24Kt();
+            }
+        }));
+    }
 
     private void FocusGrossWeightForLine(BillLineViewModel target)
     {
@@ -80,16 +108,18 @@ public partial class InvoiceView : UserControl
     }
 
     /// <summary>
-    /// Ctrl+S and F9 are window key bindings, so focus never leaves the cell
-    /// being typed in and its LostFocus binding is never flushed: the bill
-    /// would be saved or previewed with the cell's previous value. Flush it
+    /// Ctrl+S, F9 and Ctrl+Shift+N are window key bindings, so focus never
+    /// leaves the cell being typed in and its LostFocus binding is never
+    /// flushed: the bill would be saved or previewed with the cell's previous
+    /// value, and New bill would not know the cell was changed. Flush it
     /// here, before the window's key binding runs on the bubbling KeyDown.
     /// </summary>
     private void OnViewPreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var isSave = key == Key.S && Keyboard.Modifiers == ModifierKeys.Control;
-        if (isSave || key == Key.F9)
+        var isNewBill = key == Key.N && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift);
+        if (isSave || isNewBill || key == Key.F9)
         {
             CommitFocusedEdit();
         }

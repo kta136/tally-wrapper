@@ -36,6 +36,7 @@ public static class ShortcutCatalog
         Row("Remove row", "Ctrl+Del"),
         Row("Print estimate", "F9"),
         Row("Save bill", "Ctrl+S"),
+        Row("New bill", "Ctrl+Shift+N"),
     ];
 
     public static IReadOnlyList<ShortcutRow> Bills { get; } =

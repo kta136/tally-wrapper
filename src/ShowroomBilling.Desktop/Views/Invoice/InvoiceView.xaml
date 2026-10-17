@@ -1345,10 +1345,10 @@
                 </Button>
                 <Button Grid.Column="1"
                         Margin="10,0,0,0"
-                        Command="{Binding ClearCommand}"
-                        Content="Clear"
+                        Command="{Binding NewBillCommand}"
+                        Content="{Binding NewBillLabel}"
                         Style="{StaticResource BtnLg}"
-                        shell:Kbd.Hint="Esc Esc" />
+                        shell:Kbd.Hint="Ctrl+Shift+N" />
                 <TextBox Grid.Column="2"
                          Height="38"
                          Margin="10,0,14,0"

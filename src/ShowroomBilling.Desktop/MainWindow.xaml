@@ -55,6 +55,7 @@
         <KeyBinding Key="OemTilde" Command="{Binding OpenAdminUnlockKeyCommand}" />
         <KeyBinding Key="Escape" Command="{Binding CloseDialogCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddInvoiceRowCommand}" />
+        <KeyBinding Key="N" Modifiers="Ctrl+Shift" Command="{Binding NewInvoiceBillCommand}" />
         <KeyBinding Key="Delete" Modifiers="Ctrl" Command="{Binding RemoveInvoiceRowCommand}" />
         <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveActiveCommand}" />
         <KeyBinding Key="F9" Command="{Binding PrintEstimateCommand}" />

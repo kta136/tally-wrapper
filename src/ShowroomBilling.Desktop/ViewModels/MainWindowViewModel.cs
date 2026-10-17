@@ -145,6 +145,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             () => Invoice.RemoveFocusedRowCommand.Execute(null),
             () => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null));
         PrintEstimateCommand = new RelayCommand(PrintEstimate, () => Invoice.ItemCount > 0);
+        NewInvoiceBillCommand = new AsyncRelayCommand(NewInvoiceBillAsync);
         OpenServerSettingsCommand = new RelayCommand(OpenServerSettings);
         RefreshHealthCommand = new AsyncRelayCommand(ct => RefreshHealthAsync(forceTallyCompany: true, ct));
         RefreshAllMastersCommand = new AsyncRelayCommand(RefreshAllMastersAsync);
@@ -229,6 +230,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Bills.OpenDetailsCommand = OpenBillDetailsCommand;
         Bills.PrintSelectedCommand = OpenSelectedBillsPrintPreviewCommand;
         BillDetails.ConfirmHandler = ConfirmDialog.ShowAsync;
+        Invoice.ConfirmHandler = ConfirmDialog.ShowAsync;
         Settings.Server.ConfirmHandler = ConfirmDialog.ShowAsync;
         Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
     }
@@ -370,6 +372,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public IRelayCommand AddInvoiceRowCommand { get; }
     public IRelayCommand RemoveInvoiceRowCommand { get; }
     public IRelayCommand PrintEstimateCommand { get; }
+
+    /// <summary>Ctrl+Shift+N: the Invoice tab's New bill. Ctrl+N is New row.</summary>
+    public IAsyncRelayCommand NewInvoiceBillCommand { get; }
     public IRelayCommand CloseDialogCommand { get; }
     public IRelayCommand OpenBillDetailsCommand { get; }
     public IAsyncRelayCommand OpenSelectedBillsPrintPreviewCommand { get; }
@@ -513,6 +518,16 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         {
             _printCoordinator.OpenInvoicePreview();
         }
+    }
+
+    private async Task NewInvoiceBillAsync()
+    {
+        if (IsAnyDialogOpen || !IsInvoiceVisible || !Invoice.NewBillCommand.CanExecute(null))
+        {
+            return;
+        }
+
+        await Invoice.NewBillCommand.ExecuteAsync(null);
     }
 
     private void OpenSelectedBillDetails()

@@ -74,6 +74,7 @@ public partial class InvoiceViewModel : ObservableObject
         RemoveLineCommand = new RelayCommand<BillLineViewModel?>(RemoveLine, line => line is not null && Lines.Count > 1);
         SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, CanSaveDraft);
         ClearCommand = new RelayCommand(ClearInvoice, HasAnythingToClear);
+        NewBillCommand = new AsyncRelayCommand(StartNewBillAsync, () => !IsSaving && HasAnythingToClear());
         _lineCollectionObserver = new InvoiceLineCollectionObserver(
             Lines,
             OnLineMutated,
@@ -97,6 +98,12 @@ public partial class InvoiceViewModel : ObservableObject
     public IRelayCommand<BillLineViewModel?> RemoveLineCommand { get; }
     public IAsyncRelayCommand SaveDraftCommand { get; }
     public IRelayCommand ClearCommand { get; }
+
+    /// <summary>
+    /// The New bill button and Ctrl+Shift+N: leaves the bill on the form and starts an
+    /// empty one, asking first when that would throw away something not saved.
+    /// </summary>
+    public IAsyncRelayCommand NewBillCommand { get; }
     public IRelayCommand<ItemMasterRowVm?> QuickAddCommitCommand { get; }
     public IRelayCommand OpenQuickAddCommand { get; }
     public IRelayCommand CloseQuickAddCommand { get; }
@@ -127,8 +134,17 @@ public partial class InvoiceViewModel : ObservableObject
         set => _adminTokenGate.AdminUnlockHandler = value;
     }
 
+    /// <summary>
+    /// Asks the operator a yes/no question; the shell wires it to the confirm overlay.
+    /// With none wired the answer is "no".
+    /// </summary>
+    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
+
     public event EventHandler<Guid>? SaveCompletedReadyForPrint;
     public event EventHandler<BillLineViewModel>? QuickAddCommitted;
+
+    /// <summary>Raised when <see cref="NewBillCommand"/> has emptied the form, so the view can put the cursor back at the top.</summary>
+    public event EventHandler? NewBillStarted;
 
     public ObservableCollection<ItemMasterRowVm>? ItemMasters => _settings?.Draft.ItemMasterRows;
     public ObservableCollection<KaratMasterRowVm>? KaratMasters => _settings?.Draft.KaratRows;
@@ -201,27 +217,34 @@ public partial class InvoiceViewModel : ObservableObject
     partial void OnPartyNameChanged(string value)
     {
         MarkChanged();
-        ClearCommand.NotifyCanExecuteChanged();
+        RaiseCanClearChanged();
     }
 
     partial void OnNarrationChanged(string value)
     {
         MarkChanged();
-        ClearCommand.NotifyCanExecuteChanged();
+        RaiseCanClearChanged();
     }
 
     partial void OnPaymentChanged(string value) => MarkChanged();
     partial void OnCurrentBillStateChanged(string? value)
     {
         UpdateStatus();
-        ClearCommand.NotifyCanExecuteChanged();
+        RaiseCanClearChanged();
+        OnPropertyChanged(nameof(NewBillLabel));
     }
 
     partial void OnItemCountChanged(int value)
     {
         UpdateStatus();
-        ClearCommand.NotifyCanExecuteChanged();
+        RaiseCanClearChanged();
     }
+
+    /// <summary>
+    /// What the button beside Print estimate says: "Clear" while the form holds a bill not
+    /// saved yet, "New bill" while it holds a saved one, which the button leaves as it is.
+    /// </summary>
+    public string NewBillLabel => CurrentBillState is null ? "Clear" : "New bill";
 
     /// <summary>Clear has nothing to do on an untouched bill, so the button is greyed.</summary>
     private bool HasAnythingToClear()
@@ -229,6 +252,12 @@ public partial class InvoiceViewModel : ObservableObject
            || _draftBillId is not null
            || !string.IsNullOrWhiteSpace(PartyName)
            || !string.IsNullOrWhiteSpace(Narration);
+
+    private void RaiseCanClearChanged()
+    {
+        ClearCommand.NotifyCanExecuteChanged();
+        NewBillCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnRate24KtChanged(decimal? value)
     {
@@ -615,6 +644,9 @@ public partial class InvoiceViewModel : ObservableObject
     partial void OnIsSavingChanged(bool value)
     {
         SaveDraftCommand.NotifyCanExecuteChanged();
+        // Emptying the form while a save or a load is in flight would let its
+        // answer land on the new bill.
+        NewBillCommand.NotifyCanExecuteChanged();
         UpdateStatus();
     }
 
@@ -744,6 +776,32 @@ public partial class InvoiceViewModel : ObservableObject
         target.ItemMaster = master;
         QuickAddQuery = string.Empty;
         QuickAddCommitted?.Invoke(this, target);
+    }
+
+    private async Task StartNewBillAsync()
+    {
+        if (_hasUnsavedChanges && !await ConfirmDiscardAsync()) return;
+
+        ClearInvoice();
+        NewBillStarted?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (ConfirmHandler is null) return false;
+
+        var question = _draftBillId is null
+            ? new ConfirmRequest(
+                "Discard this bill?",
+                "It has not been saved, so its lines, party and notes are lost.",
+                "Discard bill",
+                IsWarning: true)
+            : new ConfirmRequest(
+                $"Discard your changes to {InvoiceNumber}?",
+                "The bill stays as it was last saved, and the form starts a new bill.",
+                "Discard changes",
+                IsWarning: true);
+        return await ConfirmHandler(question);
     }
 
     private void ClearInvoice()

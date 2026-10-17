@@ -92,6 +92,7 @@ Each screen has a picture; compare against it, not against the prototype.
 
 - **Estimate table.** The row that holds keyboard focus is `ResultTintActive` with an indigo zone line; the strip under the table says how that line was priced (`LineExplainer`) and which rate it used (`RateLadder`). A gold line with no karat says so in its karat cell.
 - **Totals.** Subtotal before GST, CGST, SGST, discount (with its percentage of the total), round off and the grand total at 32 px; discount and final amount are linked inputs.
+- **New bill.** The button beside Print estimate reads **Clear** while the form holds a bill not saved yet and **New bill** while it holds a saved one (opened with Edit from Bills); either way it empties the form for a new bill and leaves any saved bill as it is. Its key is `Ctrl+Shift+N`, not the picture's `Esc Esc` (`Esc` already closes dialogs and suggestion lists, and `Ctrl+N` is New row). It asks first, with Cancel focused, when the form has changes not saved.
 - **Bills.** Counts of each state across the top, a chip per row (shape plus word), a note per row, and a footer that names what the selection can do. Admin-only actions stay hidden while locked (see [CLAUDE.md](../CLAUDE.md)).
 - **Settings.** Each section says whether it is shared by every counter or this PC only. A section is read-only until **Edit**; then a band offers **Discard** and **Save all**. A ledger field says whether Tally has that ledger.
 - **First-launch setup.** A rail of three steps (done, current, to come), three sections with a chip each, and a foot that says what is missing. **Finish setup** stays off until all three are done.
@@ -126,6 +127,7 @@ Global (registered in the app shell):
 - `` ` `` open the admin unlock
 - `Esc` close the top-most dialog
 - `F9` print estimate (Invoice screen active)
+- `Ctrl+Shift+N` new bill (Invoice screen active; in the shortcuts list and on its button, not in the bottom bar)
 - `Ctrl+S` saves the active screen: Save Bill on Invoice, Save in Settings.
 
 The bottom bar lists the keys of the open screen:
