@@ -29,6 +29,24 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         return row is null ? null : BillSerialization.MapResponse(row.bill, row.rev);
     }
 
+    /// <summary>
+    /// The bill whose create carried <paramref name="operationId"/> as its
+    /// <c>ClientOperationId</c>, with its current revision, or null.
+    /// </summary>
+    internal async Task<BillResponse?> GetByOperationIdAsync(Guid operationId, CancellationToken cancellationToken = default)
+    {
+        var row = await (
+            from bill in dbContext.Bills.AsNoTracking()
+            join rev in dbContext.BillRevisions.AsNoTracking()
+                on bill.CurrentRevisionId equals rev.Id into revs
+            from rev in revs.DefaultIfEmpty()
+            where bill.CreateOperationId == operationId
+            select new { bill, rev })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return row is null ? null : BillSerialization.MapResponse(row.bill, row.rev);
+    }
+
     internal async Task<BillBatchGetResponse> GetManyAsync(
         BillBatchGetRequest request,
         CancellationToken cancellationToken = default)

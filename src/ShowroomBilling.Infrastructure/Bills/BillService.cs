@@ -71,6 +71,10 @@ public sealed class BillService
     public Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
         => _read.GetAsync(billId, cancellationToken);
 
+    /// <summary>The bill a create with this <c>ClientOperationId</c> made, or null.</summary>
+    public Task<BillResponse?> GetByOperationIdAsync(Guid operationId, CancellationToken cancellationToken = default)
+        => _read.GetByOperationIdAsync(operationId, cancellationToken);
+
     public Task<BillBatchGetResponse> GetManyAsync(
         BillBatchGetRequest request,
         CancellationToken cancellationToken = default)

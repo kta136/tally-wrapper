@@ -59,6 +59,14 @@ public sealed class BillsController(
         return response is null ? NotFound() : Ok(response);
     }
 
+    /// <summary>The bill whose create carried this <c>ClientOperationId</c>, at its current revision.</summary>
+    [HttpGet("by-operation/{operationId:guid}")]
+    public async Task<ActionResult<BillResponse>> GetByOperation(Guid operationId, CancellationToken cancellationToken)
+    {
+        var response = await billService.GetByOperationIdAsync(operationId, cancellationToken);
+        return response is null ? NotFound() : Ok(response);
+    }
+
     [HttpPost("batch")]
     public async Task<ActionResult<BillBatchGetResponse>> GetMany(
         [FromBody] BillBatchGetRequest request,
