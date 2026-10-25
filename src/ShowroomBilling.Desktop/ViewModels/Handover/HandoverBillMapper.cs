@@ -29,7 +29,8 @@ internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Proble
 /// the paisa. The inputs are chosen so that the Invoice tab's recompute gives that same total when
 /// the bill is opened for edit, and none of them is below zero:
 /// <list type="number">
-/// <item>Quantity: the net weight for an item counted in grams, the pieces for any other unit.</item>
+/// <item>Quantity: the net weight, as the Invoice tab takes it whatever the item's unit, which only labels it.
+/// A hand-over's weights are grams, so a line of an item counted in carats fails the bill.</item>
 /// <item>A gold line is priced on the bill's 24K rate and its karat's purity. That gold part is
 /// fixed, so it comes first; if a line's total is less than its gold at the bill's rate, the bill's
 /// rate is lowered (to whole rupees) until every gold line fits.</item>
@@ -85,17 +86,20 @@ internal static class HandoverBillMapper
                 purity = ParsePercent(karat.PurityPercent);
             }
 
-            var byWeight = string.IsNullOrWhiteSpace(item.Unit)
-                || string.Equals(item.Unit.Trim(), ItemUnits.Gram, StringComparison.OrdinalIgnoreCase);
-            var quantity = byWeight ? line.NetWeight : line.Pieces;
-            if (quantity <= 0m)
+            // The Invoice tab's quantity is the net weight, whatever the item's unit says. The hand-over's
+            // weights are grams, so an item counted in carats cannot take them.
+            if (string.Equals(item.Unit?.Trim(), ItemUnits.Carat, StringComparison.OrdinalIgnoreCase))
             {
-                return HandoverMapResult.Refused(byWeight
-                    ? $"A line of “{item.Name.Trim()}” has no net weight."
-                    : $"A line of “{item.Name.Trim()}” has no pieces.");
+                return HandoverMapResult.Refused($"“{item.Name.Trim()}” is counted in carats, and a handed-over line is weighed in grams.");
             }
 
-            resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity, byWeight));
+            var quantity = line.NetWeight;
+            if (quantity <= 0m)
+            {
+                return HandoverMapResult.Refused($"A line of “{item.Name.Trim()}” has no net weight.");
+            }
+
+            resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity));
         }
 
         var rate24Kt = ChooseRate(resolved);
@@ -205,17 +209,9 @@ internal static class HandoverBillMapper
         // pricing mode, then the karat, then what was weighed and charged.
         var row = new BillLineViewModel { ItemMaster = line.Item };
         row.KaratMaster = line.Karat;
-        if (line.ByWeight)
-        {
-            var gross = Math.Max(line.Source.GrossWeight, line.Quantity);
-            row.GrossWeight = gross;
-            row.LessWeight = gross > line.Quantity ? gross - line.Quantity : null;
-        }
-        else
-        {
-            row.GrossWeight = line.Quantity;
-            row.LessWeight = null;
-        }
+        var gross = Math.Max(line.Source.GrossWeight, line.Quantity);
+        row.GrossWeight = gross;
+        row.LessWeight = gross > line.Quantity ? gross - line.Quantity : null;
 
         row.WastagePercent = wastagePercent;
         row.LabourPerUnit = labourPerUnit;
@@ -306,6 +302,5 @@ internal static class HandoverBillMapper
         KaratMasterRowVm? Karat,
         bool IsDiamond,
         decimal Purity,
-        decimal Quantity,
-        bool ByWeight);
+        decimal Quantity);
 }

@@ -108,6 +108,8 @@ internal static class HandoverTestMasters
         new("Gold Coin", ItemUnits.Gram, 0m, ItemCategories.GoldBased, PricingModes.Labour, 150m, "Coin 24K"),
         new("Diamond Ring", ItemUnits.Carat, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, "Diamond Ring"),
         new("Diamond Pendant", ItemUnits.Gram, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, "Diamond Pendant"),
+        // Saved with a unit the Settings list does not offer (it shows as blank there): still weighed in grams.
+        new("Gold Bangle", "g", 7m, ItemCategories.GoldBased, PricingModes.Wastage, 0m, "Gold 18K"),
     ];
 
     public static readonly KaratMasterEntry[] Karats =

@@ -93,7 +93,7 @@ public sealed class HandoverBillMapperTests
         var handedOver = Map(
             Line(),
             Line(item: "Gold Chain", karat: "22 k", gross: 5.25m, less: 0m, net: 5.25m, wastage: 6m, labour: 500m, stones: 0m, hallmark: 45m, lineTotal: 39_999.99m),
-            Line(item: "Diamond Ring", karat: null, pieces: 2, gross: 3m, less: 0m, net: 3m, wastage: 0m, rate: null, labour: 0m, stones: 80_000m, hallmark: 0m, lineTotal: 1_00_001.01m));
+            Line(item: "Diamond Pendant", karat: null, pieces: 2, gross: 3m, less: 0m, net: 3m, wastage: 0m, rate: null, labour: 0m, stones: 80_000m, hallmark: 0m, lineTotal: 1_00_001.01m));
 
         var typed = await TypeIntoInvoiceTabAsync(handedOver);
 
@@ -190,21 +190,25 @@ public sealed class HandoverBillMapperTests
     }
 
     [Fact]
-    public void A_diamond_item_counted_in_carats_is_priced_by_the_piece_with_its_paise_in_extra()
+    public void A_line_of_an_item_counted_in_carats_fails_the_bill()
     {
-        var line = Assert.Single(Map(Line(item: "Diamond Ring", karat: "18K", pieces: 3, gross: 4m, less: 0.5m, net: 3.5m, rate: null, lineTotal: 1_00_000.01m)).Lines);
+        var result = HandoverBillMapper.Map(Bill(Line(item: "Diamond Ring", karat: "18K", pieces: 3, gross: 4m, less: 0.5m, net: 3.5m, rate: null, lineTotal: 1_00_000.01m)), HandoverTestMasters.Masters);
 
-        Assert.Equal(3m, line.Quantity);
-        Assert.Equal(3m, line.GrossWeight);
-        Assert.Equal(0m, line.LessWeight);
-        Assert.Equal(33_333.33m, line.DiamondRate);
-        Assert.Equal(33_333.33m, line.Rate);
-        Assert.Equal(0.02m, line.Extra);
-        Assert.Equal(1_00_000.01m, line.LineTotal);
-        Assert.Equal(string.Empty, line.Karat);
-        Assert.Equal(ItemCategories.Diamond, line.ItemCategory);
-        Assert.Equal(ItemUnits.Carat, line.Unit);
-        Assert.Equal("Diamond Ring", line.StockName);
+        Assert.Null(result.Payload);
+        Assert.Equal("“Diamond Ring” is counted in carats, and a handed-over line is weighed in grams.", result.Problem);
+    }
+
+    [Fact]
+    public void A_line_is_weighed_by_its_net_weight_whatever_the_items_unit_says()
+    {
+        // One piece of 1.930 g: the quantity is the weight, never the piece count (as a 1 g line once was).
+        var line = Assert.Single(Map(Line(item: "Gold Bangle", karat: "18K", pieces: 1, gross: 1.93m, less: 0m, net: 1.93m, wastage: 3m, rate: 7_650m, labour: 0m, stones: 0m, hallmark: 0m, lineTotal: 11_521.97m)).Lines);
+
+        Assert.Equal(1.93m, line.Quantity);
+        Assert.Equal(1.93m, line.GrossWeight);
+        Assert.Equal(11_521.97m, line.LineTotal);
+        Assert.Equal("g", line.Unit);
+        AssertNoNegativeInput(line);
     }
 
     [Fact]
@@ -255,10 +259,10 @@ public sealed class HandoverBillMapperTests
     public void A_line_without_a_quantity_fails_the_bill()
     {
         var weightless = HandoverBillMapper.Map(Bill(Line(gross: 0m, less: 0m, net: 0m)), HandoverTestMasters.Masters);
-        var pieceless = HandoverBillMapper.Map(Bill(Line(item: "Diamond Ring", pieces: 0)), HandoverTestMasters.Masters);
+        var diamondWeightless = HandoverBillMapper.Map(Bill(Line(item: "Diamond Pendant", pieces: 2, gross: 0m, less: 0m, net: 0m)), HandoverTestMasters.Masters);
 
         Assert.Equal("A line of “Gold Ornaments” has no net weight.", weightless.Problem);
-        Assert.Equal("A line of “Diamond Ring” has no pieces.", pieceless.Problem);
+        Assert.Equal("A line of “Diamond Pendant” has no net weight.", diamondWeightless.Problem);
     }
 
     [Fact]
@@ -274,7 +278,7 @@ public sealed class HandoverBillMapperTests
     public void Any_line_keeps_its_total_to_the_paisa_with_no_input_below_zero()
     {
         var random = new Random(20261025);
-        string[] items = ["Gold Ornaments", "Gold Chain", "Gold Coin", "Diamond Ring", "Diamond Pendant"];
+        string[] items = ["Gold Ornaments", "Gold Chain", "Gold Coin", "Gold Bangle", "Diamond Pendant"];
         string?[] karats = ["22K", "18K", "24K", null];
         for (var bill = 0; bill < 300; bill++)
         {

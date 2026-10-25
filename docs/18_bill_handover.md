@@ -98,7 +98,7 @@ A line fails its bill, with the reason on its row, when its item is not in the i
 
 **The line rule.** The Invoice tab prices a gold line as `quantity × round(24K rate × purity % + wastage + labour) + extra`, with one 24K rate for the whole bill and the purity of the line's karat; a diamond line as `quantity × flat rate + extra`. The hand-over gives a line total that must stay exact, so the inputs are chosen to give it back:
 
-1. **Quantity** is the net weight for an item whose unit is grams, and the pieces for any other unit (carats; there is no pieces unit).
+1. **Quantity** is the net weight, as the Invoice tab takes it whatever the item's unit (the unit only labels the line; an item saved with a unit Settings does not offer still counts by weight). The hand-over's weights are grams, so a line of an item counted in carats fails its bill: "“X” is counted in carats, and a handed-over line is weighed in grams." Pieces are never a quantity: a one-piece line of 1.930 g once went as 1 g because of that.
 2. **The bill's 24K rate** is the rate its gold lines share, else the first gold line's that has one; none when no gold line has one. The gold part of a gold line (`rate × purity`) is fixed by it, so it comes first. If a line's total is less than its gold at that rate (an item sold well under its purity, a large discount, a line priced by the piece), the bill's rate is lowered, to whole rupees, until every gold line fits; every line still keeps its total.
 3. **Wastage**: the hand-over's wastage %, for an item priced with wastage; a wastage below zero counts as none.
 4. **Labour**: the hand-over's labour amount as rupees a gram, for an item priced with labour.
