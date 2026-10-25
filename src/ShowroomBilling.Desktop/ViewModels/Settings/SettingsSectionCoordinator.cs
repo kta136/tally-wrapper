@@ -23,6 +23,7 @@ internal sealed class SettingsSectionCoordinator(ISettingsSectionHost host)
     public bool IsLedgersVisible => host.SelectedSection == SettingsSectionKey.Ledgers;
     public bool IsMastersVisible => host.SelectedSection == SettingsSectionKey.Masters;
     public bool IsAdvancedVisible => host.SelectedSection == SettingsSectionKey.Advanced;
+    public bool IsHandoverVisible => host.SelectedSection == SettingsSectionKey.Handover;
     public bool IsAdminVisible => host.SelectedSection == SettingsSectionKey.Admin;
     public bool IsPreviewVisible => IsInvoiceVisible || IsPrintLayoutVisible;
 

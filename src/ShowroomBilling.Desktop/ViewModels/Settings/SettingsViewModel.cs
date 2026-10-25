@@ -40,9 +40,11 @@ public partial class SettingsViewModel : ObservableObject,
         IPrintPreferencesStore? printPreferences = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
-        Func<SettingsDraft, PrintLayoutViewModel, SettingsViewModel, SettingsPreviewViewModel>? previewFactory = null)
+        Func<SettingsDraft, PrintLayoutViewModel, SettingsViewModel, SettingsPreviewViewModel>? previewFactory = null,
+        HandoverKeyStore? handoverKeys = null)
     {
         _settingsApi = settingsApi;
+        Handover = new HandoverSettingsViewModel(handoverKeys ?? new HandoverKeyStore());
         Draft = new SettingsDraft();
         Draft.PropertyChanged += OnDraftPropertyChanged;
 
@@ -68,6 +70,7 @@ public partial class SettingsViewModel : ObservableObject,
             SettingsSectionKey.Ledgers,
             SettingsSectionKey.Masters,
             SettingsSectionKey.Server,
+            SettingsSectionKey.Handover,
             SettingsSectionKey.Advanced,
         };
         SectionGroups = new ListCollectionView(Sections);
@@ -157,6 +160,9 @@ public partial class SettingsViewModel : ObservableObject,
     /// <summary>The sections under their group headings, for the sidebar.</summary>
     public ICollectionView SectionGroups { get; }
     public ServerSettingsViewModel Server { get; }
+
+    /// <summary>Settings → Hand-over: this PC's hand-over key.</summary>
+    public HandoverSettingsViewModel Handover { get; }
     public MasterDataSettingsViewModel MasterData { get; }
     public SettingsDraft Draft { get; }
     public PrintLayoutViewModel PrintLayout { get; }
@@ -189,6 +195,7 @@ public partial class SettingsViewModel : ObservableObject,
     public bool IsLedgersVisible => _sectionCoordinator.IsLedgersVisible;
     public bool IsMastersVisible => _sectionCoordinator.IsMastersVisible;
     public bool IsAdvancedVisible => _sectionCoordinator.IsAdvancedVisible;
+    public bool IsHandoverVisible => _sectionCoordinator.IsHandoverVisible;
     public bool IsAdminVisible => _sectionCoordinator.IsAdminVisible;
 
     /// <summary>Show the live preview pane only for Invoice and Print Layout sections.</summary>
@@ -302,6 +309,7 @@ public partial class SettingsViewModel : ObservableObject,
         OnPropertyChanged(nameof(IsLedgersVisible));
         OnPropertyChanged(nameof(IsMastersVisible));
         OnPropertyChanged(nameof(IsAdvancedVisible));
+        OnPropertyChanged(nameof(IsHandoverVisible));
         OnPropertyChanged(nameof(IsAdminVisible));
         OnPropertyChanged(nameof(IsPreviewVisible));
     }
@@ -405,5 +413,6 @@ public enum SettingsSectionKey
     Ledgers,
     Masters,
     Advanced,
+    Handover,
     Admin,
 }

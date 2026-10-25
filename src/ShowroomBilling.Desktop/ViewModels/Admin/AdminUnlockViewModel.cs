@@ -73,6 +73,21 @@ public partial class AdminUnlockViewModel : ObservableObject
     [ObservableProperty]
     private bool isBusy;
 
+    /// <summary>
+    /// Set while a hand-over asks for the passcode to update a bill already in Tally: the sentence
+    /// shown over the passcode, which also turns Unlock into "Unlock and update" and Close into
+    /// "Skip this bill". Null for an ordinary unlock.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHandoverContext), nameof(UnlockButtonText), nameof(CloseButtonText))]
+    private string? handoverContext;
+
+    public bool HasHandoverContext => !string.IsNullOrEmpty(HandoverContext);
+
+    public string UnlockButtonText => HasHandoverContext ? "Unlock and update" : "Unlock";
+
+    public string CloseButtonText => HasHandoverContext ? "Skip this bill" : "Close";
+
     public bool IsUnlocked => _tokenStore.IsUnlocked;
 
     public bool IsLocked => !_tokenStore.IsUnlocked;

@@ -1147,7 +1147,8 @@
                                                 VerticalAlignment="Center"
                                                 Background="{StaticResource AccentSoftBrush}"
                                                 CornerRadius="8">
-                                            <TextBlock HorizontalAlignment="Center"
+                                            <TextBlock x:Name="iconGlyph"
+                                                       HorizontalAlignment="Center"
                                                        VerticalAlignment="Center"
                                                        FontFamily="{StaticResource IconFontFamily}"
                                                        FontSize="16"
@@ -1233,6 +1234,10 @@
                         </Trigger>
                         <Trigger Property="HeaderGlyph" Value="">
                             <Setter TargetName="iconTile" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="HeaderTone" Value="warn">
+                            <Setter TargetName="iconTile" Property="Background" Value="{StaticResource WarnSoftBrush}" />
+                            <Setter TargetName="iconGlyph" Property="Foreground" Value="{StaticResource WarnInkBrush}" />
                         </Trigger>
                         <Trigger Property="Subtitle" Value="{x:Null}">
                             <Setter TargetName="subtitle" Property="Visibility" Value="Collapsed" />

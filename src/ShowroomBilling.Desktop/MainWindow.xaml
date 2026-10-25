@@ -10,6 +10,7 @@
         xmlns:setupViews="clr-namespace:ShowroomBilling.Desktop.Views.Setup"
         xmlns:adminViews="clr-namespace:ShowroomBilling.Desktop.Views.Admin"
         xmlns:syntheticViews="clr-namespace:ShowroomBilling.Desktop.Views.SyntheticBatch"
+        xmlns:handoverViews="clr-namespace:ShowroomBilling.Desktop.Views.Handover"
         Title="Tally Wrapper"
         Height="720"
         Width="1280"
@@ -131,6 +132,12 @@
         <shell:LazyViewHost Style="{StaticResource DialogHost}"
                             ViewType="{x:Type billsViews:ReasonPromptDialog}"
                             Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.ReasonPrompt}}" />
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
+                            ViewType="{x:Type handoverViews:HandoverResultDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.HandoverResult}}" />
+        <shell:LazyViewHost Style="{StaticResource DialogHost}"
+                            ViewType="{x:Type handoverViews:HandoverKeyDialog}"
+                            Visibility="{Binding ActiveDialog, Converter={StaticResource DialogVisConverter}, ConverterParameter={x:Static shell:ShellDialogs.HandoverKey}}" />
         <!--  Confirm sits above the other dialogs: a question asked from inside one must not replace it.  -->
         <shell:LazyViewHost Grid.RowSpan="4"
                             Panel.ZIndex="200"

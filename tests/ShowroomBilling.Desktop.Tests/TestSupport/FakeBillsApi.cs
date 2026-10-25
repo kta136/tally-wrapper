@@ -21,10 +21,17 @@ internal sealed class FakeBillsApi : IBillsApiClient
     public BillResponse? GetResponse { get; set; }
     public BillAuditResponse? Audit { get; set; }
 
+    /// <summary>What <see cref="GetByOperationAsync"/> finds, by the operation id the bill was created with.</summary>
+    public Dictionary<Guid, BillResponse> ByOperation { get; } = [];
+
+    /// <summary>When set, every look-up by operation id fails with it.</summary>
+    public Exception? ByOperationFailure { get; set; }
+
     // Drafts
     public List<CreateBillDraftRequest> Creates { get; } = [];
     public CreateBillDraftRequest? LastCreate => Creates.LastOrDefault();
     public int FailNextCreates { get; set; }
+    public List<(Guid BillId, UpdateBillDraftRequest Request, string? AdminToken)> Updates { get; } = [];
 
     // Admin actions
     public List<Guid> MarkPostedIds { get; } = [];
@@ -78,6 +85,17 @@ internal sealed class FakeBillsApi : IBillsApiClient
         return Task.FromResult(GetResponse);
     }
 
+    public Task<BillResponse?> GetByOperationAsync(Guid operationId, CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"by-operation:{operationId}");
+        if (ByOperationFailure is { } failure)
+        {
+            return Task.FromException<BillResponse?>(failure);
+        }
+
+        return Task.FromResult(ByOperation.TryGetValue(operationId, out var bill) ? bill : null);
+    }
+
     public Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default)
         => Task.FromResult(new BillBatchGetResponse(GetResponse is null ? [] : [GetResponse]));
 
@@ -102,6 +120,7 @@ internal sealed class FakeBillsApi : IBillsApiClient
     public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, string? adminToken = null, CancellationToken cancellationToken = default)
     {
         if (adminToken is not null) AdminTokens.Add(adminToken);
+        Updates.Add((billId, request, adminToken));
         return Write($"update:{billId}", () => Bill(billId, BillStates.Pending, request.Payload));
     }
 

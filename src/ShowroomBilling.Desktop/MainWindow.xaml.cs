@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         _endpointResolver = endpointResolver;
         _apiReadiness = apiReadiness;
         DataContext = _viewModel;
+        _viewModel.Handover.BringToFront = () => WindowActivation.BringToFront(this);
         Loaded += OnLoaded;
     }
 
@@ -113,6 +114,8 @@ public partial class MainWindow : Window
         {
             // Unblocks consumers waiting to attempt their own bounded API call.
             _apiReadiness.MarkReady();
+            // A hand-over link that started the app is taken from here on, settings or not.
+            _viewModel.Handover.MarkStarted();
         }
     }
 

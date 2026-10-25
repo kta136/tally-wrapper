@@ -6,6 +6,7 @@ using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Desktop.Views;
 using ShowroomBilling.Desktop.Views.Bills;
+using ShowroomBilling.Desktop.Views.Handover;
 using ShowroomBilling.Desktop.Views.Invoice;
 using ShowroomBilling.Desktop.Views.Settings;
 
@@ -169,12 +170,14 @@ public sealed class ViewSmokeTests
             .OrderBy(type => type.FullName, StringComparer.Ordinal);
 
     // Mirrors the data contexts MainWindow.xaml hands out; any other view
-    // inherits the shell view model from the window, as the dialogs do.
+    // inherits the shell view model from the window, as the dialogs do. The
+    // hand-over toast lives in a window of its own, with its own view model.
     private static object? DataContextFor(Type viewType, MainWindowViewModel shell)
     {
         if (viewType == typeof(InvoiceView)) return shell.Invoice;
         if (viewType == typeof(BillsView)) return shell.Bills;
         if (viewType == typeof(SettingsView)) return shell.Settings;
+        if (viewType == typeof(HandoverToastView)) return HandoverSamples.Toast(HandoverSamples.ToastKind.Two);
         return null;
     }
 }

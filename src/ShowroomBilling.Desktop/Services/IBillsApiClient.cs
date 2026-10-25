@@ -12,6 +12,8 @@ public interface IBillsApiClient
     Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default);
     Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default);
     Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default);
+    /// <summary>The bill a create with this <c>ClientOperationId</c> made, or null when there is none.</summary>
+    Task<BillResponse?> GetByOperationAsync(Guid operationId, CancellationToken cancellationToken = default);
     Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default);
     Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default);
     Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default);

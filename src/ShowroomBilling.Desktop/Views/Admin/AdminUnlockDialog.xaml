@@ -40,11 +40,28 @@
         </shell:DialogFrame.HeaderChips>
         <shell:DialogFrame.Footer>
             <Button Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                    Content="Close"
+                    Content="{Binding CloseButtonText}"
                     shell:Kbd.Hint="Esc" />
         </shell:DialogFrame.Footer>
 
         <StackPanel>
+            <!--  A hand-over asks to update a bill already in Tally: which bill, and why the passcode  -->
+            <Border Style="{StaticResource AdminBannerInfo}" Visibility="{Binding HasHandoverContext, Converter={StaticResource BoolToVis}}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               FontFamily="{StaticResource IconFontFamily}"
+                               FontSize="14"
+                               Foreground="{StaticResource InfoBrush}"
+                               Text="&#xE946;" />
+                    <TextBlock VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource InfoInkBrush}"
+                               Text="{Binding HandoverContext}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
             <!--  A wrong passcode, or a failed call  -->
             <Border Style="{StaticResource AdminBannerErr}" Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal">
@@ -89,7 +106,7 @@
                 <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
                     <Button MinWidth="92"
                             Command="{Binding UnlockCommand}"
-                            Content="Unlock"
+                            Content="{Binding UnlockButtonText}"
                             shell:Kbd.Hint="Enter"
                             Style="{StaticResource BtnPrimary}" />
                     <TextBlock Margin="12,0,0,0"

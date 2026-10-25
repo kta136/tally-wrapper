@@ -25,7 +25,7 @@ public static class SettingsSections
 {
     public static SettingsSectionScope ScopeOf(SettingsSectionKey section) => section switch
     {
-        SettingsSectionKey.Server or SettingsSectionKey.Advanced => SettingsSectionScope.ThisPc,
+        SettingsSectionKey.Server or SettingsSectionKey.Handover or SettingsSectionKey.Advanced => SettingsSectionScope.ThisPc,
         SettingsSectionKey.Admin => SettingsSectionScope.AdminOnly,
         _ => SettingsSectionScope.Shared,
     };
@@ -33,6 +33,7 @@ public static class SettingsSections
     public static string TitleOf(SettingsSectionKey section) => section switch
     {
         SettingsSectionKey.PrintLayout => "Print layout",
+        SettingsSectionKey.Handover => "Hand-over",
         _ => section.ToString(),
     };
 

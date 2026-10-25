@@ -24,6 +24,7 @@ Windows desktop billing app for a jewellery showroom. Each counter runs the Desk
 | Deployment topology, server install, recovery | [docs/11_deployment_and_ops.md](docs/11_deployment_and_ops.md) |
 | Settings storage contract (cloud-owned vs local-only) | [docs/14_settings_storage_contract.md](docs/14_settings_storage_contract.md) |
 | **UI design reference + token → WPF mapping** | [docs/15_ui_design_reference.md](docs/15_ui_design_reference.md) |
+| Bill hand-over (a signed `tallywrapper:` link from another program on the counter PC) | [docs/18_bill_handover.md](docs/18_bill_handover.md) |
 | Design bundle (HTML/CSS/React mockup) | [docs/design/](docs/design/) |
 
 If you're about to write a paragraph that duplicates one of these, link instead.
@@ -123,7 +124,7 @@ A button that will fail auth gives the operator no feedback, so admin-only contr
 - `BillsViewModel.IsAdminUnlocked` (raised on `AdminTokenStore.Changed`) hides Delete Selected, Change Bill Number and the admin-only context menu items (Change Bill Number, Mark as Pushed, Mark as Pending, Delete Local).
 - Settings → Admin is added to and removed from the sidebar by `SettingsSectionCoordinator.SyncAdminSection`; the Batch Data Scheduler group binds `AdminVm.IsUnlocked`.
 - **Edit is the exception**, because it needs admin only for a posted bill. It stays visible; on a posted row it asks for unlock before the bill opens (`BillsRowActionWorkflow.EditRowAsync`), and the Invoice tab asks again at Save if the session has expired since.
-- **A secret follows the same rule.** The Desktop holds none today (the database connection lives on the server and is edited from its tray). If one is ever shown, fill it in only while admin is unlocked, clear it on lock, and never replace text the operator is typing.
+- **A secret follows the same rule.** The Desktop holds one, the bill hand-over key (Settings → Hand-over, DPAPI-protected in `%LOCALAPPDATA%`), and never shows it: the section draws dots and offers only Change… and Remove. The database connection lives on the server and is edited from its tray. If a secret is ever shown, fill it in only while admin is unlocked, clear it on lock, and never replace text the operator is typing.
 - **Context menus are popups, a separate visual tree**, so `RelativeSource AncestorType=UserControl` from a `<MenuItem>` finds nothing. The Bills row `Border` sets `Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=UserControl}}"` to hand `BillsViewModel` down, and menu items bind `{Binding PlacementTarget.Tag.IsAdminUnlocked, RelativeSource={RelativeSource AncestorType=ContextMenu}}`. Every item on that menu binds its command this way, including Open Details and Print, whose commands the shell hands to `BillsViewModel` (`OpenDetailsCommand`, `PrintSelectedCommand`); do not add `Click` handlers. `ViewSmokeTests` connects each context menu to its owner and fails on an item whose command binding found nothing.
 - The "Admin unlocked" pill in [TopBarView.xaml](src/ShowroomBilling.Desktop/Views/TopBarView.xaml) shows only while unlocked and invokes `LockCommand` on click.
 
@@ -136,6 +137,14 @@ A button that will fail auth gives the operator no feedback, so admin-only contr
 A hosted service must never block or fail the API boot, and must never let an exception out afterwards (an unhandled one in a `BackgroundService` stops the host): bound the work with a timeout and log failures at warning. `DatabaseInitializationHostedService` is the one start-up task. `StuckPostingRecoveryHostedService` is the one recurring service: it waits for `StartupStatus.WaitForDatabaseReadyAsync` so that a fresh database is migrated first, then sweeps every 5 minutes whether or not that wait faulted (a database that was unreachable at boot may answer later), holding off only while `DatabaseSchemaState` says migrations are pending. The wait faults with `DatabaseNotReadyException`; only that type means "database not ready", and any other exception from a sweep is logged as a failure and followed by the next sweep.
 
 `StartupStatus` is in-process only. What the Desktop's CLOUD pill shows comes from `/api/health/ready` and `/api/runtime/health`, which report whether the database answers now. **Every health poll is a real check of the database** (`DatabaseHealthProbe`), kept for 5 seconds in `DatabaseHealthCache` so that the counters and the tray share it. Do not bring back a mode that skips the database: that was a habit from a provider that billed for the time the database was awake, and it let a counter show `READY` for half an hour after the database had gone. Two things keep a check that runs all day out of the log: the probe's queries use a context with no logger (EF writes every command it runs at Information), and `RuntimeController` logs a change once ("The database is not answering" / "is answering again") instead of an error per failed check. `RuntimeHealthContractTests` holds both. Because the database is across the internet, `ShellHealthCoordinator` takes the bill off the screen for "database down" only when two polls in a row say so (at once at start-up or on an operator's Refresh); the pill turns red on the first.
+
+## Bill hand-over
+
+How it works: [docs/18](docs/18_bill_handover.md).
+
+- **A handed-over bill is an ordinary bill.** It is created and updated through the same calls as the Invoice tab, with the hand-over's save ID as `ClientOperationId`. Do not add a column, flag, note, audit event or payload field that marks it, and nothing may count handed-over bills.
+- **The line mapping goes through the Invoice tab's own classes** (`BillLineViewModel`, `BillCalculator`, `InvoicePayloadMapper`, `InvoiceEditMapper`). A change to how the Invoice tab prices or saves a line changes the hand-over too; `HandoverBillMapperTests` checks that each line keeps its total, reopens to it, never has an input below zero, and is what the Invoice tab would save.
+- **Only the published app registers the `tallywrapper:` scheme** (Release, Production, no `SHOWROOM_BILLING_*APPDATA` override, single-file exe; `HandoverUrlScheme.ShouldRegister`). Keep that guard, or a test or a scratch run takes the links from the real app on the counter. A test that needs the registry writes under a scratch key, never `HKCU\Software\Classes`.
 
 ## Audit rows
 

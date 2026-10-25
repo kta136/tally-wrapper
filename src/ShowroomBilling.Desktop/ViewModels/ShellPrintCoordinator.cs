@@ -122,6 +122,50 @@ internal sealed class ShellPrintCoordinator(
         OpenPreview([content], layout);
     }
 
+    /// <summary>
+    /// Prints a saved bill straight to the printer, as a direct print after save does: the
+    /// remembered printer, else the Windows default, with the copy defaults of the settings.
+    /// False when there is no printer or the print failed; the caller then opens the preview.
+    /// </summary>
+    public async Task<bool> PrintSavedBillAsync(BillResponse bill)
+    {
+        var content = BillDetailsViewModel.CreatePrintContent(
+            bill,
+            companyProfileProvider.Current,
+            companyProfileProvider.KaratMappings);
+        var printer = printPreferences.LastPrinterName ?? printDispatcher.DefaultPrinter();
+        if (content is null || string.IsNullOrWhiteSpace(printer))
+        {
+            return false;
+        }
+
+        var options = PrintDocumentOptions.ForInvoice(content, BuildCopiesFromDefaults(), printLayoutOptionsProvider.Current);
+        try
+        {
+            return await Task.Run(() => printDispatcher.PrintToPrinter(options, printer, printPreferences.PrintJobSettings));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Opens Print preview with saved bills, merged, for the operator to print by hand.</summary>
+    public void OpenSavedBillsPreview(IReadOnlyList<BillResponse> bills)
+    {
+        var contents = bills
+            .Select(bill => BillDetailsViewModel.CreatePrintContent(
+                bill,
+                companyProfileProvider.Current,
+                companyProfileProvider.KaratMappings))
+            .OfType<BillPrintContent>()
+            .ToList();
+        if (contents.Count > 0)
+        {
+            OpenPreview(contents, printLayoutOptionsProvider.Current);
+        }
+    }
+
     public void OpenInvoicePreview()
     {
         var content = host.Invoice.BuildPrintContent(companyProfileProvider.Current);

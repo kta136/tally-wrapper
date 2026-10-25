@@ -15,6 +15,7 @@ using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Bills;
+using ShowroomBilling.Desktop.ViewModels.Handover;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
@@ -24,7 +25,7 @@ using ShowroomBilling.Desktop.Views.Bills;
 
 namespace ShowroomBilling.Desktop.ViewModels;
 
-public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, IShellPrintHost
+public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, IShellPrintHost, IHandoverHost
 {
     private static readonly TimeSpan HealthPollInterval = TimeSpan.FromSeconds(15);
 
@@ -164,6 +165,13 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             if (ActiveDialog == ShellDialogs.ChangeNumber) OnChangeNumberDialogClosed((false, string.Empty, null));
             else if (ActiveDialog == ShellDialogs.ReasonPrompt) OnReasonPromptDialogClosed(null);
 
+            // The key dialog forgets what was pasted into it when it closes.
+            if (ActiveDialog == ShellDialogs.HandoverKey)
+            {
+                Settings.Handover.CancelKeyCommand.Execute(null);
+                return;
+            }
+
             if (ActiveDialog is not null)
             {
                 ActiveDialog = null;
@@ -233,7 +241,26 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Invoice.ConfirmHandler = ConfirmDialog.ShowAsync;
         Settings.Server.ConfirmHandler = ConfirmDialog.ShowAsync;
         Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
+
+        Handover = new HandoverCoordinator(_billsApiClient, this);
+        Settings.Handover.ShowKeyDialog = () => ActiveDialog = ShellDialogs.HandoverKey;
+        Settings.Handover.HideKeyDialog = () =>
+        {
+            if (ActiveDialog == ShellDialogs.HandoverKey) ActiveDialog = null;
+        };
+        Settings.Handover.ConfirmHandler = ConfirmDialog.ShowAsync;
     }
+
+    /// <summary>Takes the bill hand-overs this app receives; see docs/18_bill_handover.md.</summary>
+    public HandoverCoordinator Handover { get; }
+
+    AdminTokenStore IHandoverHost.AdminTokens => _adminTokenStore;
+
+    Task IHandoverHost.RequestAdminUnlockAsync(CancellationToken cancellationToken) => RequestAdminUnlockAsync(cancellationToken);
+
+    Task<bool> IHandoverHost.PrintSavedBillAsync(BillResponse bill) => _printCoordinator.PrintSavedBillAsync(bill);
+
+    void IHandoverHost.OpenSavedBillsPreview(IReadOnlyList<BillResponse> bills) => _printCoordinator.OpenSavedBillsPreview(bills);
 
     private Task RequestAdminUnlockAsync(CancellationToken cancellationToken)
     {
@@ -478,6 +505,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     {
         _dialogCoordinator.OnActiveDialogChanged(value);
         _printCoordinator.OnActiveDialogChanged(value);
+        Handover?.OnActiveDialogChanged(value);
     }
 
     partial void OnSystemStateChanged(SystemState value) => ApplySystemState(value);

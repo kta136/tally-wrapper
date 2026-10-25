@@ -161,6 +161,10 @@
                                 <Setter TargetName="SectionIcon" Property="Text" Value="&#xE71D;" />
                                 <Setter TargetName="SectionLabel" Property="Text" Value="Masters" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Handover}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE8D7;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Hand-over" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Advanced}">
                                 <Setter TargetName="SectionIcon" Property="Text" Value="&#xE713;" />
                                 <Setter TargetName="SectionLabel" Property="Text" Value="Advanced" />
@@ -279,6 +283,8 @@
                                                               Visibility="{Binding DataContext.IsMastersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:ServerSettingsSectionView DataContext="{Binding Server}"
                                                              Visibility="{Binding DataContext.IsServerVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                    <settingsViews:HandoverSettingsSectionView DataContext="{Binding Handover}"
+                                                               Visibility="{Binding DataContext.IsHandoverVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdvancedSettingsSectionView Visibility="{Binding IsAdvancedVisible, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdminSettingsSectionView Visibility="{Binding IsAdminVisible, Converter={StaticResource BoolToVis}}" />
                 </Grid>

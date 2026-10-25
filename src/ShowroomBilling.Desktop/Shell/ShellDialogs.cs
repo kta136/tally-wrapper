@@ -17,4 +17,6 @@ public static class ShellDialogs
     public const string SyntheticBatch = "syntheticBatch";
     public const string ChangeNumber = "changeNumber";
     public const string ReasonPrompt = "reasonPrompt";
+    public const string HandoverResult = "handoverResult";
+    public const string HandoverKey = "handoverKey";
 }

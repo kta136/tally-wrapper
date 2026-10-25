@@ -1,0 +1,311 @@
+using System.Globalization;
+using ShowroomBilling.Application.Bills;
+using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Settings;
+using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.ViewModels.Invoice;
+using ShowroomBilling.Desktop.ViewModels.Settings;
+
+namespace ShowroomBilling.Desktop.ViewModels.Handover;
+
+/// <summary>The item and karat masters a hand-over is matched against: the ones in the saved settings.</summary>
+internal sealed record HandoverMasters(IReadOnlyList<ItemMasterRowVm> Items, IReadOnlyList<KaratMasterRowVm> Karats)
+{
+    public static HandoverMasters From(MasterDataSettingsDto? masters) => new(
+        MasterDataJson.ParseItemsOrEmpty(masters?.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry).ToList(),
+        MasterDataJson.ParseKaratsOrEmpty(masters?.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry).ToList());
+}
+
+/// <summary>A handed-over bill as the payload the Invoice tab would have saved, or why it cannot be one.</summary>
+internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Problem)
+{
+    public static HandoverMapResult Refused(string problem) => new(null, problem);
+}
+
+/// <summary>
+/// Turns a handed-over bill into the <see cref="BillPayloadDto"/> the Invoice tab would build for
+/// the same lines, through the Invoice tab's own line view model, calculator and payload mapper, so
+/// the saved bill is an ordinary bill in every field. Each line keeps the hand-over's line total to
+/// the paisa. The inputs are chosen so that the Invoice tab's recompute gives that same total when
+/// the bill is opened for edit, and none of them is below zero:
+/// <list type="number">
+/// <item>Quantity: the net weight for an item counted in grams, the pieces for any other unit.</item>
+/// <item>A gold line is priced on the bill's 24K rate and its karat's purity. That gold part is
+/// fixed, so it comes first; if a line's total is less than its gold at the bill's rate, the bill's
+/// rate is lowered (to whole rupees) until every gold line fits.</item>
+/// <item>Then the hand-over's wastage % (if the item is priced with wastage; a wastage below zero
+/// counts as none), then its labour as rupees a gram (if the item is priced with labour), each cut
+/// down to what still fits.</item>
+/// <item>Whatever is left (stones, hallmarking, GST, the difference between the two programs'
+/// purities, the discount, the paise) is the line's Extra.</item>
+/// <item>A diamond line is one flat rate a unit, rounded down to the paisa, and the paise left go to Extra.</item>
+/// </list>
+/// The result is checked by opening it the way Bills → Edit does and recomputing every line.
+/// </summary>
+internal static class HandoverBillMapper
+{
+    public static HandoverMapResult Map(HandoverBill bill, HandoverMasters masters)
+    {
+        ArgumentNullException.ThrowIfNull(bill);
+        ArgumentNullException.ThrowIfNull(masters);
+
+        var resolved = new List<ResolvedLine>(bill.Lines.Count);
+        foreach (var line in bill.Lines)
+        {
+            var itemName = line.ItemName.Trim();
+            var item = masters.Items.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name?.Trim(), itemName, StringComparison.OrdinalIgnoreCase));
+            if (item is null)
+            {
+                return HandoverMapResult.Refused($"No item named “{itemName}” in Tally Wrapper’s items.");
+            }
+
+            var isDiamond = string.Equals(item.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase);
+            KaratMasterRowVm? karat = null;
+            var purity = 0m;
+            if (!isDiamond)
+            {
+                if (line.Karat is { } label)
+                {
+                    karat = masters.Karats.FirstOrDefault(candidate => SameKarat(candidate.Label, label));
+                    if (karat is null)
+                    {
+                        return HandoverMapResult.Refused($"No karat “{label.Trim()}” in Tally Wrapper’s karats.");
+                    }
+                }
+                else
+                {
+                    karat = DefaultKaratOf(item, masters.Karats);
+                    if (karat is null)
+                    {
+                        return HandoverMapResult.Refused($"“{item.Name.Trim()}” has no karat on the bill, and Tally Wrapper has no karat for that item.");
+                    }
+                }
+
+                purity = ParsePercent(karat.PurityPercent);
+            }
+
+            var byWeight = string.IsNullOrWhiteSpace(item.Unit)
+                || string.Equals(item.Unit.Trim(), ItemUnits.Gram, StringComparison.OrdinalIgnoreCase);
+            var quantity = byWeight ? line.NetWeight : line.Pieces;
+            if (quantity <= 0m)
+            {
+                return HandoverMapResult.Refused(byWeight
+                    ? $"A line of “{item.Name.Trim()}” has no net weight."
+                    : $"A line of “{item.Name.Trim()}” has no pieces.");
+            }
+
+            resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity, byWeight));
+        }
+
+        var rate24Kt = ChooseRate(resolved);
+        var rows = new List<BillLineViewModel>(resolved.Count);
+        foreach (var line in resolved)
+        {
+            var row = line.IsDiamond ? DiamondRow(line) : GoldRow(line, rate24Kt ?? 0m);
+            Price(row, line.Source.LineTotal, rate24Kt, masters.Karats);
+            if (row.LineTotal != line.Source.LineTotal)
+            {
+                return HandoverMapResult.Refused($"A line of “{line.Item.Name.Trim()}” could not be priced to its total.");
+            }
+
+            rows.Add(row);
+        }
+
+        var totals = BillCalculator.BuildTotals(rows.Select(row => row.LineTotal), discount: 0m);
+        var payload = InvoicePayloadMapper.BuildPayload(
+            rows,
+            DateTimeOffset.Now,
+            bill.PartyName,
+            narration: string.Empty,
+            bill.Payment,
+            rate24Kt,
+            totals.SubtotalBase,
+            totals.Discount,
+            totals.Cgst,
+            totals.Sgst,
+            totals.RoundOff,
+            totals.GrandTotal) with
+        {
+            BillDate = bill.BillDate,
+        };
+
+        if (!ReopensToSameTotals(payload, masters))
+        {
+            return HandoverMapResult.Refused("This bill could not be priced so that it reopens with the same totals.");
+        }
+
+        try
+        {
+            BillValidator.Validate(payload);
+        }
+        catch (BillValidationException ex)
+        {
+            return HandoverMapResult.Refused(ex.Errors.FirstOrDefault() ?? ex.Message);
+        }
+
+        return new HandoverMapResult(payload, null);
+    }
+
+    /// <summary>
+    /// The bill's 24K rate: the rate its gold lines share, else the first one's that has one; then
+    /// lowered, if need be, until no gold line's gold part is more than its total.
+    /// </summary>
+    private static decimal? ChooseRate(IReadOnlyList<ResolvedLine> lines)
+    {
+        var gold = lines.Where(line => !line.IsDiamond).ToList();
+        var rate = gold.Select(line => line.Source.Rate).FirstOrDefault(value => value is > 0m);
+        if (rate is not { } chosen)
+        {
+            return null;
+        }
+
+        chosen = Math.Round(chosen, 2, MidpointRounding.AwayFromZero);
+        foreach (var line in gold)
+        {
+            if (line.Purity <= 0m)
+            {
+                continue;
+            }
+
+            var ceiling = MaxRatePerUnit(line);
+            if (Paise(chosen * line.Purity / 100m) > ceiling)
+            {
+                chosen = Math.Floor(ceiling * 100m / line.Purity);
+            }
+        }
+
+        return chosen;
+    }
+
+    private static BillLineViewModel GoldRow(ResolvedLine line, decimal rate24Kt)
+    {
+        var mode = string.IsNullOrWhiteSpace(line.Item.PricingMode) ? PricingModes.Wastage : line.Item.PricingMode;
+        var ceiling = MaxRatePerUnit(line);
+        var gold = rate24Kt * line.Purity / 100m;
+
+        var wastagePercent = 0m;
+        if (mode != PricingModes.Labour && rate24Kt > 0m)
+        {
+            var wanted = Math.Max(0m, Paise(line.Source.WastagePercent));
+            var fits = Math.Floor((ceiling - gold) * 100m / rate24Kt * 100m) / 100m;
+            wastagePercent = Math.Clamp(wanted, 0m, Math.Max(0m, fits));
+        }
+
+        var wastage = rate24Kt * wastagePercent / 100m;
+        var labourPerUnit = 0m;
+        if (mode is PricingModes.Labour or PricingModes.Both)
+        {
+            var wanted = Paise(line.Source.LabourAmount / line.Quantity);
+            var fits = Math.Floor((ceiling - gold - wastage) * 100m) / 100m;
+            labourPerUnit = Math.Clamp(wanted, 0m, Math.Max(0m, fits));
+        }
+
+        // As the Invoice tab does it: the item first, which fills its name, unit, category and
+        // pricing mode, then the karat, then what was weighed and charged.
+        var row = new BillLineViewModel { ItemMaster = line.Item };
+        row.KaratMaster = line.Karat;
+        if (line.ByWeight)
+        {
+            var gross = Math.Max(line.Source.GrossWeight, line.Quantity);
+            row.GrossWeight = gross;
+            row.LessWeight = gross > line.Quantity ? gross - line.Quantity : null;
+        }
+        else
+        {
+            row.GrossWeight = line.Quantity;
+            row.LessWeight = null;
+        }
+
+        row.WastagePercent = wastagePercent;
+        row.LabourPerUnit = labourPerUnit;
+        row.DiamondRate = null;
+        return row;
+    }
+
+    private static BillLineViewModel DiamondRow(ResolvedLine line)
+    {
+        var row = new BillLineViewModel { ItemMaster = line.Item };
+        row.GrossWeight = line.Quantity;
+        row.DiamondRate = MaxRatePerUnit(line);
+        return row;
+    }
+
+    /// <summary>Works the line out as the Invoice tab does, then puts what is left of the hand-over's total in Extra.</summary>
+    private static void Price(BillLineViewModel row, decimal target, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
+    {
+        row.Extra = null;
+        var purity = InvoicePayloadMapper.ResolvePurityPercent(row, karats);
+        var withoutExtra = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(row, rate24Kt ?? 0m, purity));
+        var extra = target - withoutExtra.LineTotalInclusive;
+        row.Extra = extra > 0m ? extra : null;
+
+        var result = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(row, rate24Kt ?? 0m, purity));
+        row.EffectiveRate = result.EffectiveRate;
+        row.LineTotal = result.LineTotalInclusive;
+    }
+
+    /// <summary>Opens the payload the way Bills → Edit does and recomputes each line with the Invoice tab's calculator.</summary>
+    internal static bool ReopensToSameTotals(BillPayloadDto payload, HandoverMasters masters)
+    {
+        var rows = InvoiceEditMapper.CreateRows(payload, masters.Items, masters.Karats);
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            var result = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(
+                row,
+                payload.Rate24Kt ?? 0m,
+                InvoicePayloadMapper.ResolvePurityPercent(row, masters.Karats)));
+            if (result.LineTotalInclusive != payload.Lines[index].LineTotal
+                || result.EffectiveRate != payload.Lines[index].Rate)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The highest rate a unit the line can carry without its total going over the hand-over's.</summary>
+    private static decimal MaxRatePerUnit(ResolvedLine line)
+        => Math.Floor(line.Source.LineTotal / line.Quantity * 100m) / 100m;
+
+    /// <summary>
+    /// A line with no stamp takes the item's own karat. Tally Wrapper's items have no karat field,
+    /// so the item's karat is the one karat whose Tally stock item is the item's Tally stock item.
+    /// </summary>
+    private static KaratMasterRowVm? DefaultKaratOf(ItemMasterRowVm item, IReadOnlyList<KaratMasterRowVm> karats)
+    {
+        var stock = item.DefaultStockMappingLabel?.Trim();
+        if (string.IsNullOrEmpty(stock))
+        {
+            return null;
+        }
+
+        var matches = karats
+            .Where(karat => string.Equals(karat.TallyItem?.Trim(), stock, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return matches.Count == 1 ? matches[0] : null;
+    }
+
+    /// <summary>Karat labels match ignoring case and spaces, so "22 K" finds "22K".</summary>
+    private static bool SameKarat(string? master, string handedOver)
+        => string.Equals(WithoutSpaces(master), WithoutSpaces(handedOver), StringComparison.OrdinalIgnoreCase);
+
+    private static string WithoutSpaces(string? value)
+        => string.Concat((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
+
+    private static decimal ParsePercent(string? value)
+        => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0m;
+
+    private static decimal Paise(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
+
+    private sealed record ResolvedLine(
+        HandoverLine Source,
+        ItemMasterRowVm Item,
+        KaratMasterRowVm? Karat,
+        bool IsDiamond,
+        decimal Purity,
+        decimal Quantity,
+        bool ByWeight);
+}

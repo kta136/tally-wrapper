@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Win32;
 using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
@@ -15,18 +16,24 @@ using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Bills;
+using ShowroomBilling.Desktop.ViewModels.Handover;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Desktop.ViewModels.Setup;
+using ShowroomBilling.Desktop.Views.Handover;
 using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop;
 
 public partial class App : System.Windows.Application
 {
+    private static readonly TimeSpan HandoverForwardTimeout = TimeSpan.FromMilliseconds(800);
+
     private IHost? _host;
     private ILogger<App>? _logger;
+    private HandoverPipe.Server? _handoverPipe;
+    private ToastWindow? _handoverToast;
 
     public App()
     {
@@ -39,10 +46,20 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Started by a hand-over link while a copy of the app is already running: give it the
+        // link and stop. A plain start is not affected; with no copy running this one takes it.
+        var handoverLink = e.Args.FirstOrDefault(HandoverLinkReader.IsHandoverArgument);
+        if (handoverLink is not null && HandoverPipe.TrySend(HandoverPipe.NameFor(EnvironmentName), handoverLink, HandoverForwardTimeout))
+        {
+            Shutdown(0);
+            return;
+        }
+
         UiDensityManager.ApplyStoredDensity();
         try
         {
-            await StartAsync();
+            await StartAsync(handoverLink);
         }
         catch (Exception ex)
         {
@@ -50,7 +67,10 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private async Task StartAsync()
+    private static string EnvironmentName
+        => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? Environments.Production;
+
+    private async Task StartAsync(string? handoverLink)
     {
 
         // Phase timings are emitted at Information level. Run a `dotnet-trace`
@@ -64,7 +84,7 @@ public partial class App : System.Windows.Application
         {
             ApplicationName = typeof(App).Assembly.GetName().Name,
             ContentRootPath = AppContext.BaseDirectory,
-            EnvironmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? Environments.Production
+            EnvironmentName = EnvironmentName
         });
 
         // appsettings.json is embedded into the Desktop assembly (see csproj
@@ -160,6 +180,7 @@ public partial class App : System.Windows.Application
         var window = _host.Services.GetRequiredService<MainWindow>();
         var resolveWindowMs = phaseTimer.ElapsedMilliseconds;
         phaseTimer.Restart();
+        StartHandover(_host.Services.GetRequiredService<MainWindowViewModel>(), handoverLink);
         window.Show();
         var showWindowMs = phaseTimer.ElapsedMilliseconds;
         var windowVisibleMs = totalTimer.ElapsedMilliseconds;
@@ -172,6 +193,63 @@ public partial class App : System.Windows.Application
             resolveWindowMs,
             showWindowMs,
             windowVisibleMs);
+    }
+
+    /// <summary>
+    /// Bill hand-over (docs/18_bill_handover.md): registers the link scheme when this is the
+    /// published app, listens for links from later starts, and queues the link this start was given.
+    /// </summary>
+    private void StartHandover(MainWindowViewModel shell, string? handoverLink)
+    {
+        var loggerFactory = _host!.Services.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("Handover");
+        shell.Handover.Logger = logger;
+        shell.Handover.ShowToast = ShowHandoverToast;
+
+        if (HandoverUrlScheme.ShouldRegisterThisProcess(EnvironmentName) && Environment.ProcessPath is { } exe)
+        {
+            try
+            {
+                using var classes = Registry.CurrentUser.CreateSubKey(HandoverUrlScheme.ClassesKey);
+                if (HandoverUrlScheme.Register(classes, exe))
+                {
+                    logger.LogInformation("Registered the hand-over link scheme for this Windows user.");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "The hand-over link scheme could not be registered.");
+            }
+        }
+
+        _handoverPipe = new HandoverPipe.Server(
+            HandoverPipe.NameFor(EnvironmentName),
+            link => Dispatcher.BeginInvoke(() => shell.Handover.Receive(link)),
+            logger);
+        _handoverPipe.Start();
+
+        if (handoverLink is not null)
+        {
+            shell.Handover.Receive(handoverLink);
+        }
+    }
+
+    private void ShowHandoverToast(HandoverToastViewModel toast)
+    {
+        _handoverToast?.Close();
+        var window = new ToastWindow(new HandoverToastView { DataContext = toast });
+        window.Clicked = () => toast.OpenBillsCommand.Execute(null);
+        toast.OpenBillsRequested += (_, _) => window.Close();
+        toast.CloseRequested += (_, _) => window.FadeOut();
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_handoverToast, window))
+            {
+                _handoverToast = null;
+            }
+        };
+        _handoverToast = window;
+        window.Show();
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -207,6 +285,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _handoverPipe?.Dispose();
         if (_host is not null)
         {
             // Synchronously, so WPF doesn't tear down the process before the

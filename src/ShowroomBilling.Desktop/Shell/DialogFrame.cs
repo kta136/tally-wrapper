@@ -34,6 +34,10 @@ public sealed class DialogFrame : ContentControl
     public static readonly DependencyProperty HeaderGlyphProperty = DependencyProperty.Register(
         nameof(HeaderGlyph), typeof(string), typeof(DialogFrame), new PropertyMetadata(string.Empty));
 
+    /// <summary>"warn" draws the icon tile amber, for a dialog that reports something gone wrong; anything else is the soft indigo tile.</summary>
+    public static readonly DependencyProperty HeaderToneProperty = DependencyProperty.Register(
+        nameof(HeaderTone), typeof(string), typeof(DialogFrame), new PropertyMetadata(string.Empty));
+
     /// <summary>The buttons, at the right of the foot.</summary>
     public static readonly DependencyProperty FooterProperty = DependencyProperty.Register(
         nameof(Footer), typeof(object), typeof(DialogFrame), new PropertyMetadata(null));
@@ -98,6 +102,12 @@ public sealed class DialogFrame : ContentControl
     {
         get => (string)GetValue(HeaderGlyphProperty);
         set => SetValue(HeaderGlyphProperty, value);
+    }
+
+    public string HeaderTone
+    {
+        get => (string)GetValue(HeaderToneProperty);
+        set => SetValue(HeaderToneProperty, value);
     }
 
     public object? Footer

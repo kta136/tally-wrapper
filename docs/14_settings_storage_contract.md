@@ -10,6 +10,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 - the admin unlock token, held in memory only (TTL-bounded)
 - logs
 - truly workstation-local UX preferences such as printer choice or last PDF directory
+- `%LOCALAPPDATA%\ShowroomBilling\handover-key.dat`: this PC's bill hand-over key (Settings → Hand-over), protected with Windows DPAPI for the signed-in Windows user. It is local because it is a secret this PC shares with the other program on this PC that hands bills over: another counter has no use for it, and a copy of it anywhere else could forge hand-overs. It is never in the cloud settings, the database or a log. See [18](18_bill_handover.md)
 
 ## Cloud/backend owns the source of truth for
 

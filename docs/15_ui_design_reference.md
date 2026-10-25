@@ -85,8 +85,9 @@ Each screen has a picture; compare against it, not against the prototype.
 | Invoice: header, line-item table, focus strip under it, totals, actions bar | [Main.png](design/redesign/Main.png), [Estimate-New.png](design/redesign/Estimate-New.png), [Estimate-Search.png](design/redesign/Estimate-Search.png), [Estimate-Table.png](design/redesign/Estimate-Table.png) |
 | Bills | [Bills.png](design/redesign/Bills.png), [Bills-Actions.png](design/redesign/Bills-Actions.png) |
 | Limited mode | [Limited-Mode.png](design/redesign/Limited-Mode.png) |
-| Settings: Connection, Invoice, Print layout, Ledgers, Masters, Server, Advanced, Admin | `Settings-*.png` |
+| Settings: Connection, Invoice, Print layout, Ledgers, Masters, Server, Hand-over, Advanced, Admin | `Settings-*.png` (Hand-over has no picture here; see the next row) |
 | Dialogs: Confirm, Reason, Change number, Admin unlock, Shortcuts, System health, Bill details, Print preview, First-launch setup, Batch data scheduler | `Dialog-*.png` |
+| Bill hand-over: the toast, the result dialog in each case, the admin unlock for a bill in Tally, the key dialog, Settings → Hand-over | no picture in this folder; `HandoverViewSnapshotTests` saves each as `Handover-*.png`. What they say: [18 §6, §8](18_bill_handover.md) |
 
 ### 5.1 Behaviour the pictures add to the prototype
 
@@ -114,6 +115,8 @@ A dialog is a `UserControl` overlay hosted once in `MainWindow.xaml`; it is neve
 - **Keys.** `Esc` cancels and `Enter` confirms; the buttons carry `shell:Kbd.Hint="Esc"` / `"Enter"`. A warning question focuses Cancel.
 - **Sizes.** `PanelWidth` (and, for Print preview, `PanelHeight` with `PanelMinWidth`/`PanelMinHeight`, and `Overlay` for the resize grip). The panel never grows past the window less 24 px a side.
 - **`DataContext` is set on the frame**, so a command for the shell (`CloseDialogCommand`) is reached with `RelativeSource AncestorType=UserControl`, which reads the dialog's own `DataContext`, the shell.
+- **A tone for the icon tile.** `HeaderTone="warn"` draws the head's tile amber, for a dialog that reports something gone wrong (the hand-over result); the default is the soft indigo tile.
+- **The one window that is not a dialog** is the hand-over's toast (`Shell/ToastWindow`): a card at the bottom right of the screen that must show while the main window is behind another program, so it is a top-most window that never takes the focus (`WS_EX_NOACTIVATE`) and fades by itself. Its content is a `UserControl` (`HandoverToastView`) like any view. Anything the operator must answer stays an overlay in the main window, brought to the front.
 - **Yes/no questions** go through `ConfirmDialogViewModel`: a `ConfirmRequest` has a title (the question), a message, an optional `Note` (the line to read twice, in a banner) and flags `IsWarning` and `IsDestructive` (a red confirm button and a trash icon). Questions two screens share are worded once in `BillConfirmations`.
 - **Reason and change-number prompts** take a `ReasonRequest` (title, context line, warning with `**bold**`, confirm text) and the change-number configuration, and complete a `TaskCompletionSource` held by the shell.
 - **Shortcuts** are listed from `ShortcutCatalog`; change it with the key bindings.
