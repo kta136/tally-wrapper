@@ -73,6 +73,7 @@ tallywrapper:handover?d=<D>&s=<S>
 | `rate` | Rupees a gram of fine (a 24K rate): the line's metal rupees divided by the sender's fine weight. Null for a line priced by the piece or with no fine weight. |
 | `labourAmount`, `stoneValue`, `hallmarkAmount`, `discountAmount` | Rupees for the whole line. |
 | `lineTotal` | Rupees, what the line comes to: GST inside, discount already off. Whole paise. Tally Wrapper keeps it exactly. |
+| `diamondCarats`, `diamondValue` | Optional, 0 when left out: the line's diamonds, in carats (at most 3 decimals) and what they are worth without setting them (whole paise, at most `lineTotal`). The value is also in `stoneValue` and `lineTotal`. A gold line's diamonds are billed as a line of their own (§4). |
 | `notSent` | Save IDs of bills an earlier hand-over of the same source made that this one no longer has (a buyer removed), at most 100. Each one Tally Wrapper still holds, not voided, is reported "Not in this hand-over". Nothing is changed. |
 
 The contract's test vector (key = the bytes 0 to 31, its `D` and `S`) is in `HandoverTestLinks` in the Desktop tests; both sides test their signer or verifier against it.
@@ -102,8 +103,9 @@ A line fails its bill, with the reason on its row, when its item is not in the i
 2. **The bill's 24K rate** is the rate its gold lines share, else the first gold line's that has one; none when no gold line has one. The gold part of a gold line (`rate × purity`) is fixed by it, so it comes first. If a line's total is less than its gold at that rate (an item sold well under its purity, a large discount, a line priced by the piece), the bill's rate is lowered, to whole rupees, until every gold line fits; every line still keeps its total.
 3. **Wastage**: the hand-over's wastage %, for an item priced with wastage; a wastage below zero counts as none.
 4. **Labour**: the hand-over's labour amount as rupees a gram, for an item priced with labour.
-5. Wastage and then labour are cut down to what still fits under the line's total. Everything left over (stones, hallmarking, the GST the sender added, the difference between the sender's purity and the karat master's, the discount, and the paise the rounding leaves) is the line's **Extra**.
+5. Wastage and then labour are cut down to what still fits under the line's total. Everything left over (stones other than diamonds, setting, hallmarking, the GST the sender added, the difference between the sender's purity and the karat master's, the discount, and the paise the rounding leaves) is the line's **Extra**.
 6. A **diamond** line is one flat rate a unit, the total divided by the quantity and rounded down to the paisa; the paise left go to Extra.
+7. A gold line with **diamonds** (`diamondValue` above 0) is two lines: the gold line, priced as above to `lineTotal − diamondValue`, then right after it a diamond line of `diamondCarats` on the Diamond item, priced as in 6 to `diamondValue`. Setting, other stones and hallmarking stay in the gold line's Extra. The Diamond item is the one item in the Diamond category counted in ct, or of several, the one named Diamond; with none, the bill fails ("A line has diamonds. Tally Wrapper bills them on its Diamond item: …"), and so it does when the diamonds have no carats ("The diamonds on a line of “X” have no carats."). The bill's GST is worked out on its total, so the split does not change it. A line that is already of a Diamond item is not split.
 
 No input is ever below zero (`BillValidator` refuses them), and the printed line reads as gold at the day's rate, the wastage and labour the sender charged, and the rest as Extra. Before the bill is saved it is opened as Bills → Edit opens a bill (`InvoiceEditMapper`) and every line recomputed; a bill that would not reopen to the same totals is not saved. `BillValidator` then runs on it as the server will.
 
@@ -147,7 +149,7 @@ The key is kept in `%LOCALAPPDATA%\ShowroomBilling\handover-key.dat` (`AppPaths.
 ## 9. Testing
 
 - `HandoverLinkReaderTests`: the contract's vector verifies; a changed byte, another key, an old or future `issuedAt`, a `v` other than 1, bad shapes and over-limit counts are refused.
-- `HandoverBillMapperTests`: the line total is exact and the Invoice tab's recompute reproduces it, for gold, piece-priced and diamond items, with odd paise and wastage below zero; no input below zero; unknown item and karat; typing the same inputs into the Invoice tab gives the same payload.
+- `HandoverBillMapperTests`: the line total is exact and the Invoice tab's recompute reproduces it, for gold, piece-priced and diamond items and gold lines with diamonds, with odd paise and wastage below zero; no input below zero; unknown item and karat; typing the same inputs into the Invoice tab gives the same payload.
 - `HandoverSaveWorkflowTests`, `HandoverCoordinatorTests`, `HandoverReportTests`: create, unchanged, update, posted with the admin passcode skipped and given, voided, revised, not settled, `notSent`, an unreachable server and Try again.
 - `HandoverStartupTests`: the registration guard, the registry keys (written under a scratch key), the pipe.
 - `BillByOperationContractTests`: the API read, found and not found.

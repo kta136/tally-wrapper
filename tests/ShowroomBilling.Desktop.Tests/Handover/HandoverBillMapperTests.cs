@@ -5,6 +5,7 @@ using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Handover;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
+using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests.Handover;
 
@@ -25,7 +26,9 @@ public sealed class HandoverBillMapperTests
         decimal stones = 1500m,
         decimal hallmark = 45m,
         decimal discount = 0m,
-        decimal lineTotal = 72569.3m) => new()
+        decimal lineTotal = 72569.3m,
+        decimal diamondCarats = 0m,
+        decimal diamondValue = 0m) => new()
         {
             ItemName = item,
             Karat = karat,
@@ -40,6 +43,8 @@ public sealed class HandoverBillMapperTests
             HallmarkAmount = hallmark,
             DiscountAmount = discount,
             LineTotal = lineTotal,
+            DiamondCarats = diamondCarats,
+            DiamondValue = diamondValue,
         };
 
     private static HandoverBill Bill(params HandoverLine[] lines) => new()
@@ -223,6 +228,56 @@ public sealed class HandoverBillMapperTests
         Assert.Equal(0.02m, line.Extra);
     }
 
+    /// <summary>The vector line with 0.45 ct of diamonds at 60,000 a carat on it.</summary>
+    private static HandoverLine Studded(string item = "Gold Ornaments")
+        => Line(item: item, stones: 28_500m, lineTotal: 99_569.3m, diamondCarats: 0.45m, diamondValue: 27_000m);
+
+    [Fact]
+    public async Task A_gold_lines_diamonds_are_a_Diamond_line_right_after_it()
+    {
+        var payload = Map(Studded(), Line(item: "Gold Chain", lineTotal: 72_569.31m));
+
+        Assert.Equal(["Gold Ornaments", "Diamond", "Gold Chain"], payload.Lines.Select(line => line.ItemName));
+        var (gold, diamond) = (payload.Lines[0], payload.Lines[1]);
+        // The gold line is the vector line again: its other stones, setting and hallmarking stay in its Extra.
+        Assert.Equal((72_569.3m, 6887m, 72_569.30m - 70_936.10m, 300m), (gold.LineTotal, gold.Rate, gold.Extra!.Value, gold.LabourPerUnit!.Value));
+        Assert.Equal((0.45m, ItemUnits.Carat, 60_000m, 27_000m), (diamond.Quantity, diamond.Unit, diamond.DiamondRate!.Value, diamond.LineTotal));
+        Assert.Null(diamond.Extra);
+        Assert.True(string.IsNullOrEmpty(diamond.Karat));
+        // GST is worked out on the bill's total, so the bill comes to what it would as one line.
+        Assert.Equal(BillCalculator.BuildTotals([99_569.3m, 72_569.31m], discount: 0m).GrandTotal, payload.Totals.GrandTotal);
+        Assert.True(HandoverBillMapper.ReopensToSameTotals(payload, HandoverTestMasters.Masters));
+        var typed = await TypeIntoInvoiceTabAsync(payload);
+        Assert.True(HandoverPayloads.SameContent(typed, payload), $"typed: {Describe(typed)}{Environment.NewLine}handed over: {Describe(payload)}");
+    }
+
+    [Fact]
+    public void A_line_of_a_Diamond_item_is_not_split_again()
+    {
+        var line = Assert.Single(Map(Line(item: "Diamond Pendant", karat: null, gross: 4.5m, less: 1m, net: 3.5m, rate: null, lineTotal: 45_678.91m, diamondCarats: 0.5m, diamondValue: 30_000m)).Lines);
+
+        Assert.Equal(("Diamond Pendant", 45_678.91m), (line.ItemName, line.LineTotal));
+    }
+
+    [Fact]
+    public void Diamonds_with_no_carats_or_no_Diamond_item_fail_the_bill_and_say_why()
+    {
+        var noCarats = HandoverBillMapper.Map(Bill(Line(stones: 28_500m, lineTotal: 99_569.3m, diamondValue: 27_000m)), HandoverTestMasters.Masters);
+        var rows = HandoverTestMasters.Masters.Items;
+        var karats = HandoverTestMasters.Masters.Karats;
+        var none = HandoverBillMapper.Map(Bill(Studded()), new HandoverMasters(rows.Where(item => item.Unit != ItemUnits.Carat).ToList(), karats));
+        var twoOthers = HandoverBillMapper.Map(Bill(Studded()), new HandoverMasters(rows.Where(item => item.Name != "Diamond").Append(Solitaire()).ToList(), karats));
+        var oneOther = HandoverBillMapper.Map(Bill(Studded()), new HandoverMasters(rows.Where(item => item.Name != "Diamond").ToList(), karats));
+
+        Assert.Equal("The diamonds on a line of “Gold Ornaments” have no carats.", noCarats.Problem);
+        Assert.Equal("A line has diamonds. Tally Wrapper bills them on its Diamond item: one item in the Diamond category counted in ct, or of several, the one named Diamond.", none.Problem);
+        Assert.Equal(none.Problem, twoOthers.Problem);
+        // The one Diamond item counted in ct, whatever its name.
+        Assert.Equal("Diamond Ring", oneOther.Payload!.Lines[1].ItemName);
+
+        static ItemMasterRowVm Solitaire() => ItemMasterRowVm.FromEntry(new("Solitaire", ItemUnits.Carat, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, "Solitaire"));
+    }
+
     [Fact]
     public void An_unknown_item_or_karat_fails_the_bill_and_says_which()
     {
@@ -289,7 +344,11 @@ public sealed class HandoverBillMapperTests
                 var gold = (rate ?? 7_000m) * net * 0.9m;
                 // From far below the gold value (an item sold under its purity) to well above it.
                 var total = Math.Round(gold * (decimal)(random.NextDouble() * 1.6 + 0.05), 2);
+                // A third of the lines have diamonds: up to 0.9 of the line's total, on 0.001 to 3 ct.
+                var diamonds = random.Next(3) == 0 ? Math.Round(total * (decimal)(random.NextDouble() * 0.9), 2) : 0m;
                 return Line(
+                    diamondCarats: diamonds > 0m ? Math.Round((decimal)(random.NextDouble() * 3 + 0.001), 3) : 0m,
+                    diamondValue: diamonds,
                     item: items[random.Next(items.Length)],
                     karat: karats[random.Next(karats.Length)] is { } k ? k : "22K",
                     pieces: random.Next(1, 6),
@@ -304,7 +363,11 @@ public sealed class HandoverBillMapperTests
 
             var payload = Map(lines);
 
-            Assert.Equal(lines.Select(line => line.LineTotal), payload.Lines.Select(line => line.LineTotal));
+            // A gold line with diamonds is two: the gold, then its diamonds.
+            var expected = lines.SelectMany(line => line.DiamondValue > 0m && line.ItemName != "Diamond Pendant"
+                ? new[] { line.LineTotal - line.DiamondValue, line.DiamondValue }
+                : [line.LineTotal]);
+            Assert.Equal(expected, payload.Lines.Select(line => line.LineTotal));
             Assert.All(payload.Lines, AssertNoNegativeInput);
             Assert.True(payload.Rate24Kt is null or >= 0m);
             Assert.True(HandoverBillMapper.ReopensToSameTotals(payload, HandoverTestMasters.Masters));

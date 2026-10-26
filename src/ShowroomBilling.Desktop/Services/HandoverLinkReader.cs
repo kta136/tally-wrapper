@@ -320,7 +320,11 @@ public static class HandoverLinkReader
            && IsMoney(line.DiscountAmount)
            && IsMoney(line.LineTotal)
            // Kept exactly, so it must be whole paise.
-           && decimal.Round(line.LineTotal, 2) == line.LineTotal;
+           && decimal.Round(line.LineTotal, 2) == line.LineTotal
+           && IsWeight(line.DiamondCarats)
+           && IsMoney(line.DiamondValue)
+           && decimal.Round(line.DiamondValue, 2) == line.DiamondValue
+           && line.DiamondValue <= line.LineTotal;
 
     private static bool IsWeight(decimal value) => value is >= 0m and <= MaxWeight && decimal.Round(value, 3) == value;
 

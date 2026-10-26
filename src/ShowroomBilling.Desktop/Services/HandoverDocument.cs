@@ -69,4 +69,13 @@ public sealed record HandoverLine
     [JsonPropertyName("discountAmount")] public required decimal DiscountAmount { get; init; }
 
     [JsonPropertyName("lineTotal")] public required decimal LineTotal { get; init; }
+
+    /// <summary>Carats of the line's diamonds; 0, or left out, for a line with none.</summary>
+    [JsonPropertyName("diamondCarats")] public decimal DiamondCarats { get; init; }
+
+    /// <summary>
+    /// What the line's diamonds are worth, without setting them; 0, or left out, for none. It is part
+    /// of <see cref="StoneValue"/> and <see cref="LineTotal"/>, and is billed as a line of its own.
+    /// </summary>
+    [JsonPropertyName("diamondValue")] public decimal DiamondValue { get; init; }
 }

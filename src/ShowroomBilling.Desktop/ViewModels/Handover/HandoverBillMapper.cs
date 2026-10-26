@@ -37,9 +37,11 @@ internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Proble
 /// <item>Then the hand-over's wastage % (if the item is priced with wastage; a wastage below zero
 /// counts as none), then its labour as rupees a gram (if the item is priced with labour), each cut
 /// down to what still fits.</item>
-/// <item>Whatever is left (stones, hallmarking, GST, the difference between the two programs'
+/// <item>Whatever is left (other stones, setting, hallmarking, GST, the difference between the two programs'
 /// purities, the discount, the paise) is the line's Extra.</item>
 /// <item>A diamond line is one flat rate a unit, rounded down to the paisa, and the paise left go to Extra.</item>
+/// <item>A gold line's diamonds (their carats and value, if the hand-over gives them) become a diamond
+/// line of their own on the Diamond item, right after it, and the gold line is priced to what is left.</item>
 /// </list>
 /// The result is checked by opening it the way Bills → Edit does and recomputing every line.
 /// </summary>
@@ -99,7 +101,26 @@ internal static class HandoverBillMapper
                 return HandoverMapResult.Refused($"A line of “{item.Name.Trim()}” has no net weight.");
             }
 
-            resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity));
+            // A gold line's diamonds are a line of their own, on the diamond item, right after it.
+            if (isDiamond || line.DiamondValue <= 0m)
+            {
+                resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity, line.LineTotal));
+                continue;
+            }
+
+            if (line.DiamondCarats <= 0m)
+            {
+                return HandoverMapResult.Refused($"The diamonds on a line of “{item.Name.Trim()}” have no carats.");
+            }
+
+            var diamondItem = DiamondItemOf(masters.Items);
+            if (diamondItem is null)
+            {
+                return HandoverMapResult.Refused("A line has diamonds. Tally Wrapper bills them on its Diamond item: one item in the Diamond category counted in ct, or of several, the one named Diamond.");
+            }
+
+            resolved.Add(new ResolvedLine(line, item, karat, false, purity, quantity, line.LineTotal - line.DiamondValue));
+            resolved.Add(new ResolvedLine(line, diamondItem, null, true, 0m, line.DiamondCarats, line.DiamondValue));
         }
 
         var rate24Kt = ChooseRate(resolved);
@@ -107,8 +128,8 @@ internal static class HandoverBillMapper
         foreach (var line in resolved)
         {
             var row = line.IsDiamond ? DiamondRow(line) : GoldRow(line, rate24Kt ?? 0m);
-            Price(row, line.Source.LineTotal, rate24Kt, masters.Karats);
-            if (row.LineTotal != line.Source.LineTotal)
+            Price(row, line.Total, rate24Kt, masters.Karats);
+            if (row.LineTotal != line.Total)
             {
                 return HandoverMapResult.Refused($"A line of “{line.Item.Name.Trim()}” could not be priced to its total.");
             }
@@ -264,7 +285,26 @@ internal static class HandoverBillMapper
 
     /// <summary>The highest rate a unit the line can carry without its total going over the hand-over's.</summary>
     private static decimal MaxRatePerUnit(ResolvedLine line)
-        => Math.Floor(line.Source.LineTotal / line.Quantity * 100m) / 100m;
+        => Math.Floor(line.Total / line.Quantity * 100m) / 100m;
+
+    /// <summary>
+    /// The item a gold line's diamonds are billed on: the one Diamond item counted in carats, or of
+    /// several, the one named Diamond.
+    /// </summary>
+    private static ItemMasterRowVm? DiamondItemOf(IReadOnlyList<ItemMasterRowVm> items)
+    {
+        var diamonds = items
+            .Where(item => string.Equals(item.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase)
+                           && string.Equals(item.Unit?.Trim(), ItemUnits.Carat, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (diamonds.Count == 1)
+        {
+            return diamonds[0];
+        }
+
+        var named = diamonds.Where(item => string.Equals(item.Name?.Trim(), "Diamond", StringComparison.OrdinalIgnoreCase)).ToList();
+        return named.Count == 1 ? named[0] : null;
+    }
 
     /// <summary>
     /// A line with no stamp takes the item's own karat. Tally Wrapper's items have no karat field,
@@ -296,11 +336,13 @@ internal static class HandoverBillMapper
 
     private static decimal Paise(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
+    /// <summary>A bill row to make: a hand-over line, or the gold or the diamond part of one, priced to <paramref name="Total"/>.</summary>
     private sealed record ResolvedLine(
         HandoverLine Source,
         ItemMasterRowVm Item,
         KaratMasterRowVm? Karat,
         bool IsDiamond,
         decimal Purity,
-        decimal Quantity);
+        decimal Quantity,
+        decimal Total);
 }
