@@ -25,9 +25,15 @@ internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Proble
 /// <summary>
 /// Turns a handed-over bill into the <see cref="BillPayloadDto"/> the Invoice tab would build for
 /// the same lines, through the Invoice tab's own line view model, calculator and payload mapper, so
-/// the saved bill is an ordinary bill in every field. Each line keeps the hand-over's line total to
-/// the paisa. The inputs are chosen so that the Invoice tab's recompute gives that same total when
-/// the bill is opened for edit, and none of them is below zero:
+/// the saved bill is an ordinary bill in every field.
+/// <para>A line with a rounding allowance and no discount is first priced as the counter would type
+/// it: the hand-over's wastage and labour as they are, and as Extra only the other stones, setting
+/// and hallmarking (and the labour of an item priced without labour); a diamond line at its total's
+/// rate a unit, to the paisa. That stands when it comes within the allowance (and this program's own
+/// paise) of the line's total, and the line then has the Invoice tab's total.</para>
+/// <para>Any other line keeps the hand-over's line total to the paisa. The inputs are chosen so that
+/// the Invoice tab's recompute gives that same total when the bill is opened for edit, and none of
+/// them is below zero:</para>
 /// <list type="number">
 /// <item>Quantity: the net weight, as the Invoice tab takes it whatever the item's unit, which only labels it.
 /// A hand-over's weights are grams, so a line of an item counted in carats fails the bill.</item>
@@ -123,11 +129,17 @@ internal static class HandoverBillMapper
             resolved.Add(new ResolvedLine(line, diamondItem, null, true, 0m, line.DiamondCarats, line.DiamondValue));
         }
 
-        var rate24Kt = ChooseRate(resolved);
+        var rate24Kt = ChooseRate(resolved, masters.Karats);
         var rows = new List<BillLineViewModel>(resolved.Count);
         foreach (var line in resolved)
         {
-            var row = line.IsDiamond ? DiamondRow(line) : GoldRow(line, rate24Kt ?? 0m);
+            if (AsTyped(line, rate24Kt, masters.Karats) is { } typed)
+            {
+                rows.Add(typed);
+                continue;
+            }
+
+            var row = line.IsDiamond ? DiamondRow(line, MaxRatePerUnit(line)) : GoldRow(line, rate24Kt ?? 0m, cutToFit: true);
             Price(row, line.Total, rate24Kt, masters.Karats);
             if (row.LineTotal != line.Total)
             {
@@ -174,9 +186,11 @@ internal static class HandoverBillMapper
 
     /// <summary>
     /// The bill's 24K rate: the rate its gold lines share, else the first one's that has one; then
-    /// lowered, if need be, until no gold line's gold part is more than its total.
+    /// lowered, if need be, until every gold line either is billed as typed at it or has a gold part
+    /// no more than its total. Lowering it can take a line out of its rounding allowance, so the lines
+    /// are gone through again until none lowers it.
     /// </summary>
-    private static decimal? ChooseRate(IReadOnlyList<ResolvedLine> lines)
+    private static decimal? ChooseRate(IReadOnlyList<ResolvedLine> lines, IReadOnlyList<KaratMasterRowVm> karats)
     {
         var gold = lines.Where(line => !line.IsDiamond).ToList();
         var rate = gold.Select(line => line.Source.Rate).FirstOrDefault(value => value is > 0m);
@@ -186,26 +200,73 @@ internal static class HandoverBillMapper
         }
 
         chosen = Math.Round(chosen, 2, MidpointRounding.AwayFromZero);
-        foreach (var line in gold)
+        for (var lowered = true; lowered;)
         {
-            if (line.Purity <= 0m)
+            lowered = false;
+            foreach (var line in gold)
             {
-                continue;
-            }
+                if (line.Purity <= 0m || AsTyped(line, chosen, karats) is not null)
+                {
+                    continue;
+                }
 
-            var ceiling = MaxRatePerUnit(line);
-            if (Paise(chosen * line.Purity / 100m) > ceiling)
-            {
-                chosen = Math.Floor(ceiling * 100m / line.Purity);
+                var ceiling = MaxRatePerUnit(line);
+                if (Paise(chosen * line.Purity / 100m) > ceiling)
+                {
+                    chosen = Math.Floor(ceiling * 100m / line.Purity);
+                    lowered = true;
+                }
             }
         }
 
         return chosen;
     }
 
-    private static BillLineViewModel GoldRow(ResolvedLine line, decimal rate24Kt)
+    /// <summary>
+    /// The line as the counter would type it (see the class summary), or null when the hand-over gives
+    /// it no rounding allowance, it has a discount, or it does not come within the allowance of its total.
+    /// </summary>
+    private static BillLineViewModel? AsTyped(ResolvedLine line, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
     {
-        var mode = string.IsNullOrWhiteSpace(line.Item.PricingMode) ? PricingModes.Wastage : line.Item.PricingMode;
+        var source = line.Source;
+        if (source.RoundingAllowance <= 0m || source.DiscountAmount > 0m)
+        {
+            return null;
+        }
+
+        BillLineViewModel row;
+        var extra = 0m;
+        if (line.IsDiamond)
+        {
+            row = DiamondRow(line, Paise(line.Total / line.Quantity));
+        }
+        else
+        {
+            row = GoldRow(line, rate24Kt ?? 0m, cutToFit: false);
+            extra = Math.Max(0m, source.StoneValue - source.DiamondValue) + source.HallmarkAmount
+                    + (TakesLabour(PricingModeOf(line.Item)) ? 0m : source.LabourAmount);
+        }
+
+        row.Extra = extra > 0m ? Paise(extra) : null;
+        var result = Compute(row, rate24Kt, karats);
+        // The Invoice tab's own rounding: the rate a unit and the labour a unit to the paisa, then the line.
+        if (Math.Abs(result.LineTotalInclusive - line.Total) > source.RoundingAllowance + 0.01m * line.Quantity + 0.01m)
+        {
+            return null;
+        }
+
+        row.EffectiveRate = result.EffectiveRate;
+        row.LineTotal = result.LineTotalInclusive;
+        return row;
+    }
+
+    /// <summary>
+    /// A gold line's row: the hand-over's wastage % and its labour as rupees a unit, each cut down to
+    /// what still fits under the line's total when <paramref name="cutToFit"/>.
+    /// </summary>
+    private static BillLineViewModel GoldRow(ResolvedLine line, decimal rate24Kt, bool cutToFit)
+    {
+        var mode = PricingModeOf(line.Item);
         var ceiling = MaxRatePerUnit(line);
         var gold = rate24Kt * line.Purity / 100m;
 
@@ -214,16 +275,16 @@ internal static class HandoverBillMapper
         {
             var wanted = Math.Max(0m, Paise(line.Source.WastagePercent));
             var fits = Math.Floor((ceiling - gold) * 100m / rate24Kt * 100m) / 100m;
-            wastagePercent = Math.Clamp(wanted, 0m, Math.Max(0m, fits));
+            wastagePercent = cutToFit ? Math.Clamp(wanted, 0m, Math.Max(0m, fits)) : wanted;
         }
 
         var wastage = rate24Kt * wastagePercent / 100m;
         var labourPerUnit = 0m;
-        if (mode is PricingModes.Labour or PricingModes.Both)
+        if (TakesLabour(mode))
         {
             var wanted = Paise(line.Source.LabourAmount / line.Quantity);
             var fits = Math.Floor((ceiling - gold - wastage) * 100m) / 100m;
-            labourPerUnit = Math.Clamp(wanted, 0m, Math.Max(0m, fits));
+            labourPerUnit = cutToFit ? Math.Clamp(wanted, 0m, Math.Max(0m, fits)) : wanted;
         }
 
         // As the Invoice tab does it: the item first, which fills its name, unit, category and
@@ -240,11 +301,11 @@ internal static class HandoverBillMapper
         return row;
     }
 
-    private static BillLineViewModel DiamondRow(ResolvedLine line)
+    private static BillLineViewModel DiamondRow(ResolvedLine line, decimal rate)
     {
         var row = new BillLineViewModel { ItemMaster = line.Item };
         row.GrossWeight = line.Quantity;
-        row.DiamondRate = MaxRatePerUnit(line);
+        row.DiamondRate = rate;
         return row;
     }
 
@@ -252,15 +313,25 @@ internal static class HandoverBillMapper
     private static void Price(BillLineViewModel row, decimal target, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
     {
         row.Extra = null;
-        var purity = InvoicePayloadMapper.ResolvePurityPercent(row, karats);
-        var withoutExtra = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(row, rate24Kt ?? 0m, purity));
+        var withoutExtra = Compute(row, rate24Kt, karats);
         var extra = target - withoutExtra.LineTotalInclusive;
         row.Extra = extra > 0m ? extra : null;
 
-        var result = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(row, rate24Kt ?? 0m, purity));
+        var result = Compute(row, rate24Kt, karats);
         row.EffectiveRate = result.EffectiveRate;
         row.LineTotal = result.LineTotalInclusive;
     }
+
+    private static BillCalculator.LineResult Compute(BillLineViewModel row, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
+        => BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(
+            row,
+            rate24Kt ?? 0m,
+            InvoicePayloadMapper.ResolvePurityPercent(row, karats)));
+
+    private static string PricingModeOf(ItemMasterRowVm item)
+        => string.IsNullOrWhiteSpace(item.PricingMode) ? PricingModes.Wastage : item.PricingMode;
+
+    private static bool TakesLabour(string mode) => mode is PricingModes.Labour or PricingModes.Both;
 
     /// <summary>Opens the payload the way Bills → Edit does and recomputes each line with the Invoice tab's calculator.</summary>
     internal static bool ReopensToSameTotals(BillPayloadDto payload, HandoverMasters masters)

@@ -28,7 +28,8 @@ public sealed class HandoverBillMapperTests
         decimal discount = 0m,
         decimal lineTotal = 72569.3m,
         decimal diamondCarats = 0m,
-        decimal diamondValue = 0m) => new()
+        decimal diamondValue = 0m,
+        decimal roundingAllowance = 0m) => new()
         {
             ItemName = item,
             Karat = karat,
@@ -45,6 +46,7 @@ public sealed class HandoverBillMapperTests
             LineTotal = lineTotal,
             DiamondCarats = diamondCarats,
             DiamondValue = diamondValue,
+            RoundingAllowance = roundingAllowance,
         };
 
     private static HandoverBill Bill(params HandoverLine[] lines) => new()
@@ -276,6 +278,118 @@ public sealed class HandoverBillMapperTests
         Assert.Equal("Diamond Ring", oneOther.Payload!.Lines[1].ItemName);
 
         static ItemMasterRowVm Solitaire() => ItemMasterRowVm.FromEntry(new("Solitaire", ItemUnits.Carat, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, "Solitaire"));
+    }
+
+    /// <summary>
+    /// 1.85 g of 18K with 8 % wastage at 7,650: a sender that rounds the fine to the milligram (1.5355 g to 1.536 g) and the line
+    /// to the rupee says 11,750, give or take its 4.33 of rounding; the Invoice tab makes it 1.85 × 6,349.50 = 11,746.58.
+    /// </summary>
+    private static HandoverLine Rounded(decimal roundingAllowance = 4.33m)
+        => Line(item: "Gold Bangle", karat: "18K", gross: 1.85m, less: 0m, net: 1.85m, wastage: 8m, rate: 7_650m, labour: 0m, stones: 0m, hallmark: 0m,
+            lineTotal: 11_750m, roundingAllowance: roundingAllowance);
+
+    [Fact]
+    public async Task A_line_within_its_rounding_allowance_is_billed_as_typed_with_no_extra()
+    {
+        var payload = Map(Rounded());
+
+        var line = Assert.Single(payload.Lines);
+        Assert.Equal((7_650m, 6_349.50m, 8m, 11_746.58m), (payload.Rate24Kt!.Value, line.Rate, line.WastagePercent!.Value, line.LineTotal));
+        Assert.Null(line.Extra);
+        Assert.Equal(BillCalculator.BuildTotals([11_746.58m], discount: 0m).GrandTotal, payload.Totals.GrandTotal);
+        var typed = await TypeIntoInvoiceTabAsync(payload);
+        Assert.True(HandoverPayloads.SameContent(typed, payload), $"typed: {Describe(typed)}{Environment.NewLine}handed over: {Describe(payload)}");
+        // With no allowance the line keeps the sender's total, the gap in Extra.
+        var exact = Assert.Single(Map(Rounded(roundingAllowance: 0m)).Lines);
+        Assert.Equal((11_750m, 3.42m), (exact.LineTotal, exact.Extra!.Value));
+    }
+
+    [Fact]
+    public void A_line_further_off_than_its_allowance_or_with_a_discount_keeps_its_total()
+    {
+        // The vector line comes to 72,481.10 as typed, 88.20 under its total.
+        var further = Assert.Single(Map(Line(roundingAllowance: 5.33m)).Lines);
+        var discounted = Assert.Single(Map(Line(discount: 100m, lineTotal: 72_484m, roundingAllowance: 5.33m)).Lines);
+
+        Assert.Equal(Assert.Single(Map(Line()).Lines), further);
+        Assert.Equal(72_484m, discounted.LineTotal);
+    }
+
+    [Fact]
+    public void As_typed_the_extra_is_the_stones_and_hallmarking_and_the_labour_of_an_item_priced_without_it()
+    {
+        // 10.3 g at 7,000 of 22K with 2.5 % wastage, labour 3,090, stones 1,500, hallmarking 45; typed it comes to 72,481.10.
+        var both = Assert.Single(Map(Line(lineTotal: 72_484m, roundingAllowance: 5.33m)).Lines);
+        var wastageOnly = Assert.Single(Map(Line(item: "Gold Chain", lineTotal: 72_484m, roundingAllowance: 5.33m)).Lines);
+
+        Assert.Equal((72_481.10m, 6_887m, 300m, 1_545m), (both.LineTotal, both.Rate, both.LabourPerUnit!.Value, both.Extra!.Value));
+        Assert.Equal((72_481.10m, 6_587m, 0m, 4_635m), (wastageOnly.LineTotal, wastageOnly.Rate, wastageOnly.LabourPerUnit!.Value, wastageOnly.Extra!.Value));
+        Assert.Equal(2.5m, wastageOnly.WastagePercent);
+    }
+
+    [Fact]
+    public void A_typed_line_whose_gold_is_above_its_total_leaves_the_bill_rate_as_it_is()
+    {
+        // 1.851 g of 18K at 7,650: the sender's fine rounds down (1.38825 g to 1.388 g), so it says 10,618 for 10,620.11.
+        var line = Line(item: "Gold Bangle", karat: "18K", gross: 1.851m, less: 0m, net: 1.851m, wastage: 0m, rate: 7_650m, labour: 0m, stones: 0m, hallmark: 0m,
+            lineTotal: 10_618m, roundingAllowance: 4.33m);
+
+        var typed = Map(line);
+        var exact = Map(line with { RoundingAllowance = 0m });
+
+        Assert.Equal((7_650m, 10_620.11m), (typed.Rate24Kt!.Value, Assert.Single(typed.Lines).LineTotal));
+        Assert.Null(typed.Lines[0].Extra);
+        Assert.Equal((7_648m, 10_618m), (exact.Rate24Kt!.Value, Assert.Single(exact.Lines).LineTotal));
+    }
+
+    [Fact]
+    public void As_typed_a_diamond_line_takes_its_rate_to_the_nearest_paisa_and_no_extra()
+    {
+        var pendant = Assert.Single(Map(Line(item: "Diamond Pendant", karat: null, gross: 4.5m, less: 1m, net: 3.5m, rate: null, lineTotal: 45_678.91m, roundingAllowance: 0.5m)).Lines);
+        // A studded line, its gold 2.90 over the typed 72,406.10 (its other stones and setting are 1,425).
+        var studded = Map(Line(stones: 28_425m, lineTotal: 99_409m, diamondCarats: 0.45m, diamondValue: 27_000m, roundingAllowance: 5.33m));
+
+        // 45,678.91 / 3.5 = 13,051.117: 3.5 × 13,051.12 = 45,678.92.
+        Assert.Equal((13_051.12m, 45_678.92m), (pendant.DiamondRate!.Value, pendant.LineTotal));
+        Assert.Null(pendant.Extra);
+        Assert.Equal([72_406.10m, 27_000m], studded.Lines.Select(line => line.LineTotal));
+        Assert.Equal(new decimal?[] { 1_470m, null }, studded.Lines.Select(line => line.Extra));
+        Assert.Equal(60_000m, studded.Lines[1].DiamondRate);
+    }
+
+    [Fact]
+    public void Lines_a_little_off_their_typed_price_are_billed_at_it()
+    {
+        var random = new Random(20261026);
+        (string Item, string Karat, decimal Purity)[] golds = [("Gold Chain", "22K", 91.6m), ("Gold Bangle", "18K", 75m), ("Gold Chain", "24K", 100m)];
+        for (var bill = 0; bill < 300; bill++)
+        {
+            // One rate for the bill, as a counter types it.
+            var rate = (decimal)random.Next(5_000, 9_000);
+            var typedTotals = new List<decimal>();
+            var lines = Enumerable.Range(0, random.Next(1, 5)).Select(_ =>
+            {
+                var (item, karat, purity) = golds[random.Next(golds.Length)];
+                var net = Math.Round((decimal)(random.NextDouble() * 60 + 0.5), 3);
+                var wastage = Math.Round((decimal)(random.NextDouble() * 20), 2);
+                var labour = (decimal)random.Next(0, 5_000);
+                var hallmark = random.Next(2) == 0 ? 0m : 45m;
+                var allowance = Math.Round((decimal)(random.NextDouble() * 10 + 0.01), 2);
+                var typed = BillCalculator.ComputeLine(new BillCalculator.LineInputs(rate, purity, wastage, 0m, net, labour + hallmark, PricingModes.Wastage, false, 0m)).LineTotalInclusive;
+                typedTotals.Add(typed);
+                var gap = Math.Round((decimal)(random.NextDouble() * 2 - 1) * allowance, 2);
+                return Line(item: item, karat: karat, gross: net, less: 0m, net: net, wastage: wastage, rate: rate, labour: labour, stones: 0m, hallmark: hallmark,
+                    lineTotal: typed + gap, roundingAllowance: allowance);
+            }).ToArray();
+
+            var payload = Map(lines);
+
+            Assert.Equal(rate, payload.Rate24Kt);
+            Assert.Equal(typedTotals, payload.Lines.Select(line => line.LineTotal));
+            Assert.Equal(lines.Select(line => line.WastagePercent), payload.Lines.Select(line => line.WastagePercent ?? 0m));
+            Assert.All(payload.Lines, AssertNoNegativeInput);
+            Assert.True(HandoverBillMapper.ReopensToSameTotals(payload, HandoverTestMasters.Masters));
+        }
     }
 
     [Fact]

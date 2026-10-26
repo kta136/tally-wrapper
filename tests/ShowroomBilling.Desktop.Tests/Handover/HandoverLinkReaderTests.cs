@@ -164,6 +164,9 @@ public sealed class HandoverLinkReaderTests
         "diamonds worth more than the line",
         "a diamond value in tenths of paise",
         "negative diamond carats",
+        "a negative rounding allowance",
+        "a rounding allowance in tenths of paise",
+        "a rounding allowance above the line",
         "a not-sent id that is also a bill",
         "a property twice",
         "not JSON",
@@ -218,22 +221,25 @@ public sealed class HandoverLinkReaderTests
         Assert.Null(read.Document.Bills[0].Lines[0].Karat);
         Assert.Null(read.Document.Bills[0].Lines[0].Rate);
         Assert.Equal(-100m, read.Document.Bills[0].Lines[0].WastagePercent);
-        // A sender that does not give a line's diamonds sends none.
+        // A sender that does not give a line's diamonds sends none, and one that gives no rounding allowance keeps its totals.
         Assert.Equal((0m, 0m), (read.Document.Bills[0].Lines[0].DiamondCarats, read.Document.Bills[0].Lines[0].DiamondValue));
+        Assert.Equal(0m, read.Document.Bills[0].Lines[0].RoundingAllowance);
     }
 
     [Fact]
-    public void A_lines_diamonds_are_read()
+    public void A_lines_diamonds_and_rounding_allowance_are_read()
     {
         var document = HandoverTestLinks.VectorDocument(Now);
         var line = document["bills"]![0]!["lines"]![0]!.AsObject();
         line["diamondCarats"] = 0.45m;
         line["diamondValue"] = 1000m;
+        line["roundingAllowance"] = 4.33m;
 
         var read = HandoverLinkReader.Read(HandoverTestLinks.Signed(document), Key, Now);
 
         Assert.Null(read.Problem);
         Assert.Equal((0.45m, 1000m), (read.Document!.Bills[0].Lines[0].DiamondCarats, read.Document.Bills[0].Lines[0].DiamondValue));
+        Assert.Equal(4.33m, read.Document.Bills[0].Lines[0].RoundingAllowance);
     }
 
     [Fact]
@@ -276,6 +282,9 @@ public sealed class HandoverLinkReaderTests
             case "diamonds worth more than the line": line["diamondCarats"] = 0.5m; line["diamondValue"] = 72569.31m; break;
             case "a diamond value in tenths of paise": line["diamondCarats"] = 0.5m; line["diamondValue"] = 1000.005m; break;
             case "negative diamond carats": line["diamondCarats"] = -0.5m; line["diamondValue"] = 1000m; break;
+            case "a negative rounding allowance": line["roundingAllowance"] = -1m; break;
+            case "a rounding allowance in tenths of paise": line["roundingAllowance"] = 4.335m; break;
+            case "a rounding allowance above the line": line["roundingAllowance"] = 72569.31m; break;
             case "a not-sent id that is also a bill": document["notSent"] = new JsonArray((JsonNode)bill["saveId"]!.GetValue<string>()); break;
             case "a property twice": return document.ToJsonString().Replace("\"payment\":\"Cash\"", "\"payment\":\"Cash\",\"payment\":\"Cash\"", StringComparison.Ordinal);
             case "not JSON": return "{v:1";

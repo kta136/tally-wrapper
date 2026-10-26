@@ -78,4 +78,10 @@ public sealed record HandoverLine
     /// of <see cref="StoneValue"/> and <see cref="LineTotal"/>, and is billed as a line of its own.
     /// </summary>
     [JsonPropertyName("diamondValue")] public decimal DiamondValue { get; init; }
+
+    /// <summary>
+    /// How far the sender's own rounding can have moved <see cref="LineTotal"/>, in rupees; 0, or left
+    /// out, keeps the line total exactly. Within it, the line is billed as if typed.
+    /// </summary>
+    [JsonPropertyName("roundingAllowance")] public decimal RoundingAllowance { get; init; }
 }

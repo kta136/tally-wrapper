@@ -324,7 +324,10 @@ public static class HandoverLinkReader
            && IsWeight(line.DiamondCarats)
            && IsMoney(line.DiamondValue)
            && decimal.Round(line.DiamondValue, 2) == line.DiamondValue
-           && line.DiamondValue <= line.LineTotal;
+           && line.DiamondValue <= line.LineTotal
+           && IsMoney(line.RoundingAllowance)
+           && decimal.Round(line.RoundingAllowance, 2) == line.RoundingAllowance
+           && line.RoundingAllowance <= line.LineTotal;
 
     private static bool IsWeight(decimal value) => value is >= 0m and <= MaxWeight && decimal.Round(value, 3) == value;
 
