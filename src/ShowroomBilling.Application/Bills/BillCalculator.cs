@@ -102,4 +102,19 @@ public static class BillCalculator
 
         return new BillTotals(subBase, cgst, sgst, discount, roundOff, grand);
     }
+
+    /// <summary>
+    /// The discount that brings a bill to <paramref name="finalAmount"/> (whole rupees), as the Invoice
+    /// tab's Final amount box works it out: what the bill comes to with GST, less the final amount, to
+    /// the paisa. None when the bill already comes to the final amount or less.
+    /// </summary>
+    public static decimal FinalAmountDiscount(decimal lineInclusiveTotal, decimal finalAmount)
+    {
+        var undiscounted = BuildTotals(lineInclusiveTotal, 0m);
+        if (finalAmount >= undiscounted.GrandTotal)
+            return 0m;
+
+        var preDiscountTotal = undiscounted.SubtotalBase + undiscounted.Cgst + undiscounted.Sgst;
+        return Math.Round(Math.Max(0m, preDiscountTotal - finalAmount), 2, MidpointRounding.AwayFromZero);
+    }
 }

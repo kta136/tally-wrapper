@@ -23,7 +23,8 @@ public sealed record HandoverReadResult(HandoverDocument? Document, string? Prob
 public static class HandoverLinkReader
 {
     public const string Scheme = "tallywrapper";
-    public const int Version = 1;
+    /// <summary>The newest version read. Version 1 is still read; version 2 adds a bill's final amount.</summary>
+    public const int Version = 2;
     public const int MaxBills = 20;
     public const int MaxLines = 100;
     public const int MaxNotSent = 100;
@@ -93,7 +94,7 @@ public static class HandoverLinkReader
                     return HandoverReadResult.Refused(Unreadable);
                 }
 
-                if (version != Version)
+                if (version is < 1 or > Version)
                 {
                     return HandoverReadResult.Refused(version > Version ? NewerVersion : Unreadable);
                 }
@@ -270,6 +271,13 @@ public static class HandoverLinkReader
                 || bill.PartyPhone?.Length > 64
                 || bill.PartyAddress?.Length > 1_000
                 || bill.Payment is not (PaymentMode.Cash or PaymentMode.CreditDebit))
+            {
+                return Unreadable;
+            }
+
+            // A final amount is version 2's: a version-1 sender cannot have meant one.
+            if (bill.FinalAmount is { } final
+                && (document.V < 2 || final <= 0m || final > MaxMoney || decimal.Round(final) != final))
             {
                 return Unreadable;
             }

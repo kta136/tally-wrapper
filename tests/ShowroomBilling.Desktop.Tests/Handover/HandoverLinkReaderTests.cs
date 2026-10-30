@@ -128,9 +128,9 @@ public sealed class HandoverLinkReaderTests
     }
 
     [Theory]
-    [InlineData(2, HandoverLinkReader.NewerVersion)]
+    [InlineData(3, HandoverLinkReader.NewerVersion)]
     [InlineData(0, HandoverLinkReader.Unreadable)]
-    public void A_version_other_than_1_is_refused(int version, string problem)
+    public void A_version_other_than_1_or_2_is_refused(int version, string problem)
     {
         var document = HandoverTestLinks.VectorDocument(Now);
         document["v"] = version;
@@ -240,6 +240,37 @@ public sealed class HandoverLinkReaderTests
         Assert.Null(read.Problem);
         Assert.Equal((0.45m, 1000m), (read.Document!.Bills[0].Lines[0].DiamondCarats, read.Document.Bills[0].Lines[0].DiamondValue));
         Assert.Equal(4.33m, read.Document.Bills[0].Lines[0].RoundingAllowance);
+    }
+
+    [Fact]
+    public void Version_2_reads_a_bills_final_amount_and_a_bill_may_leave_it_out()
+    {
+        var document = HandoverTestLinks.VectorDocument(Now);
+        document["v"] = 2;
+        document["bills"]![0]!["finalAmount"] = 72_000m;
+        document["bills"]!.AsArray().Add(HandoverTestLinks.Bill(Guid.NewGuid(), "Buyer B", HandoverTestLinks.Line()));
+
+        var read = HandoverLinkReader.Read(HandoverTestLinks.Signed(document), Key, Now);
+
+        Assert.Null(read.Problem);
+        Assert.Equal([72_000m, null], read.Document!.Bills.Select(bill => bill.FinalAmount));
+        // Version 1 has none.
+        Assert.Null(HandoverLinkReader.Read(HandoverTestLinks.Link(HandoverTestLinks.VectorData, HandoverTestLinks.VectorSignature), Key, HandoverTestLinks.VectorIssuedAt).Document!.Bills[0].FinalAmount);
+    }
+
+    [Theory]
+    [InlineData(1, 72_000)]
+    [InlineData(2, 0)]
+    [InlineData(2, -1)]
+    [InlineData(2, 72_000.5)]
+    [InlineData(2, 100_000_001)]
+    public void A_final_amount_in_version_1_or_not_whole_rupees_above_0_is_refused(int version, double final)
+    {
+        var document = HandoverTestLinks.VectorDocument(Now);
+        document["v"] = version;
+        document["bills"]![0]!["finalAmount"] = (decimal)final;
+
+        Assert.Equal(HandoverLinkReader.Unreadable, HandoverLinkReader.Read(HandoverTestLinks.Signed(document), Key, Now).Problem);
     }
 
     [Fact]

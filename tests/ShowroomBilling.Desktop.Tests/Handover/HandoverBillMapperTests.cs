@@ -444,6 +444,49 @@ public sealed class HandoverBillMapperTests
     }
 
     [Fact]
+    public async Task A_final_amount_is_the_bills_total_with_the_rest_off_as_its_discount_as_the_Invoice_tab_takes_it()
+    {
+        var bill = Bill(Line(), Line(lineTotal: 10_000.01m)) with { FinalAmount = 80_000m };
+
+        var payload = HandoverBillMapper.Map(bill, HandoverTestMasters.Masters).Payload!;
+
+        // The lines are priced as they would be without it.
+        Assert.Equal([72_569.3m, 10_000.01m], payload.Lines.Select(line => line.LineTotal));
+        var undiscounted = BillCalculator.BuildTotals([72_569.3m, 10_000.01m], discount: 0m);
+        var discount = undiscounted.SubtotalBase + undiscounted.Cgst + undiscounted.Sgst - 80_000m;
+        Assert.Equal(new BillTotalsDto(undiscounted.SubtotalBase, discount, undiscounted.Cgst + undiscounted.Sgst, 0m, 80_000m), payload.Totals);
+        // Typed into the Invoice tab with the same final amount, it is the same bill; opened for edit, it keeps it.
+        var typed = await TypeIntoInvoiceTabAsync(payload, finalAmount: 80_000m);
+        Assert.True(HandoverPayloads.SameContent(typed, payload), $"typed: {Describe(typed)}{Environment.NewLine}handed over: {Describe(payload)}");
+        var invoice = await OpenForEditAsync(payload);
+        Assert.Equal((discount, 80_000m), (invoice.Discount, invoice.GrandTotal));
+    }
+
+    [Fact]
+    public void A_final_amount_at_or_above_the_bills_total_takes_nothing_off()
+    {
+        var total = BillCalculator.BuildTotals([72_569.3m], discount: 0m).GrandTotal;
+
+        foreach (var final in new[] { total, total + 3m })
+        {
+            var payload = HandoverBillMapper.Map(Bill(Line()) with { FinalAmount = final }, HandoverTestMasters.Masters).Payload!;
+
+            Assert.Equal((0m, total), (payload.Totals.DiscountTotal, payload.Totals.GrandTotal));
+        }
+    }
+
+    [Fact]
+    public void A_line_billed_as_typed_stays_so_under_a_final_amount()
+    {
+        var payload = HandoverBillMapper.Map(Bill(Rounded()) with { FinalAmount = 11_000m }, HandoverTestMasters.Masters).Payload!;
+
+        var line = Assert.Single(payload.Lines);
+        Assert.Equal((11_746.58m, (decimal?)null), (line.LineTotal, line.Extra));
+        Assert.Equal(11_000m, payload.Totals.GrandTotal);
+        Assert.Equal(BillCalculator.FinalAmountDiscount(11_746.58m, 11_000m), payload.Totals.DiscountTotal);
+    }
+
+    [Fact]
     public void Any_line_keeps_its_total_to_the_paisa_with_no_input_below_zero()
     {
         var random = new Random(20261025);
@@ -500,8 +543,11 @@ public sealed class HandoverBillMapperTests
         Assert.True(line.Extra is null or >= 0m);
     }
 
-    /// <summary>Types the handed-over lines into the Invoice tab, as an operator would, and returns what its Save sends.</summary>
-    private static async Task<BillPayloadDto> TypeIntoInvoiceTabAsync(BillPayloadDto handedOver)
+    /// <summary>
+    /// Types the handed-over lines into the Invoice tab, as an operator would, then the final amount if
+    /// there is one, and returns what its Save sends.
+    /// </summary>
+    private static async Task<BillPayloadDto> TypeIntoInvoiceTabAsync(BillPayloadDto handedOver, decimal? finalAmount = null)
     {
         var api = new FakeBillsApi();
         var settings = HandoverTestMasters.Settings();
@@ -528,6 +574,11 @@ public sealed class HandoverBillMapperTests
             line.LabourPerUnit = typed.LabourPerUnit;
             line.DiamondRate = typed.DiamondRate;
             line.Extra = typed.Extra;
+        }
+
+        if (finalAmount is { } final)
+        {
+            invoice.FinalAmount = final;
         }
 
         await invoice.SaveDraftCommand.ExecuteAsync(null);

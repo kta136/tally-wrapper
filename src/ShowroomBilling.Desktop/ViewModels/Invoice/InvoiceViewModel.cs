@@ -602,11 +602,7 @@ public partial class InvoiceViewModel : ObservableObject
             return;
         }
 
-        var preDiscountTotal = undiscounted.SubtotalBase + undiscounted.Cgst + undiscounted.Sgst;
-        var computedDiscount = Math.Round(
-            Math.Max(0m, preDiscountTotal - targetGrand),
-            2,
-            MidpointRounding.AwayFromZero);
+        var computedDiscount = BillCalculator.FinalAmountDiscount(inclusiveTotal, targetGrand);
 
         if (!DiscountEnabled)
             SetFromLinkedTotals(() => DiscountEnabled = true);

@@ -3,9 +3,9 @@ using System.Text.Json.Serialization;
 namespace ShowroomBilling.Desktop.Services;
 
 /// <summary>
-/// The JSON a hand-over link carries, version 1 (docs/18_bill_handover.md). The property names are
-/// the contract's. A <c>required</c> property must be in the JSON; <see cref="HandoverLinkReader"/>
-/// reads it and checks every limit before anything is saved.
+/// The JSON a hand-over link carries, version 1 or 2 (docs/18_bill_handover.md); version 2 adds a
+/// bill's final amount. The property names are the contract's. A <c>required</c> property must be in
+/// the JSON; <see cref="HandoverLinkReader"/> reads it and checks every limit before anything is saved.
 /// </summary>
 public sealed record HandoverDocument
 {
@@ -36,6 +36,12 @@ public sealed record HandoverBill
     [JsonPropertyName("payment")] public required string Payment { get; init; }
 
     [JsonPropertyName("lines")] public required IReadOnlyList<HandoverLine> Lines { get; init; }
+
+    /// <summary>
+    /// Version 2: what the bill is to come to, in whole rupees, or null for the bill as its lines come.
+    /// The rest comes off as the bill's discount, as the Invoice tab's Final amount box takes it off.
+    /// </summary>
+    [JsonPropertyName("finalAmount")] public decimal? FinalAmount { get; init; }
 }
 
 /// <summary>A sale line. Weights are grams; money is rupees for the whole line; <see cref="LineTotal"/> has GST in it and the discount off.</summary>

@@ -276,7 +276,7 @@ internal sealed class HandoverSaveWorkflow(
         bill.SaveId,
         null,
         bill.PartyName.Trim(),
-        payload?.Totals.GrandTotal ?? BillCalculator.BuildTotals(bill.Lines.Select(line => line.LineTotal), discount: 0m).GrandTotal,
+        payload?.Totals.GrandTotal ?? HandoverBillMapper.TotalsOf(bill.Lines.Select(line => line.LineTotal).ToList(), bill.FinalAmount).GrandTotal,
         bill.Payment,
         HandoverBillResult.NotSaved,
         Reason: reason,

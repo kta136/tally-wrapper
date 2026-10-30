@@ -149,7 +149,7 @@ internal static class HandoverBillMapper
             rows.Add(row);
         }
 
-        var totals = BillCalculator.BuildTotals(rows.Select(row => row.LineTotal), discount: 0m);
+        var totals = TotalsOf(rows.Select(row => row.LineTotal).ToList(), bill.FinalAmount);
         var payload = InvoicePayloadMapper.BuildPayload(
             rows,
             DateTimeOffset.Now,
@@ -183,6 +183,13 @@ internal static class HandoverBillMapper
 
         return new HandoverMapResult(payload, null);
     }
+
+    /// <summary>
+    /// The bill's totals. With a final amount, the bill comes to it, the rest off as its discount, as
+    /// the Invoice tab's Final amount box does; a bill that already comes to it or less has none.
+    /// </summary>
+    internal static BillCalculator.BillTotals TotalsOf(IReadOnlyCollection<decimal> lineTotals, decimal? finalAmount)
+        => BillCalculator.BuildTotals(lineTotals, finalAmount is { } final ? BillCalculator.FinalAmountDiscount(lineTotals.Sum(), final) : 0m);
 
     /// <summary>
     /// The bill's 24K rate: the rate its gold lines share, else the first one's that has one; then

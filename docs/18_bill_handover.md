@@ -17,7 +17,9 @@ tallywrapper:handover?d=<D>&s=<S>
 - The hand-over key: 32 random bytes, written as base64url without padding (43 characters). The same string is set on the sender's server and in Tally Wrapper (Settings → Hand-over), which decodes it to the 32 bytes before use.
 - Accepted forms: `tallywrapper:handover?…`, `tallywrapper://handover?…` and `tallywrapper:handover/?…`, the scheme and `handover` in any case, with exactly the two parameters `d` and `s`. Anything else is refused.
 
-## 2. The JSON, version 1
+## 2. The JSON, versions 1 and 2
+
+Version 2 is version 1 with one more field, a bill's `finalAmount`. A sender uses version 2 only when a bill has a final amount, so that a Tally Wrapper which cannot take one refuses the hand-over (§3) instead of billing it in full. Both versions are read.
 
 ```json
 {
@@ -56,7 +58,7 @@ tallywrapper:handover?d=<D>&s=<S>
 
 | Field | Meaning and limits |
 |---|---|
-| `v` | 1. Anything else is refused. |
+| `v` | 1, or 2 for a hand-over with a final amount. Anything else is refused. |
 | `issuedAt` | UTC, when the sender's server signed it. Refused when more than 10 minutes old or more than 5 minutes ahead of this PC's clock. |
 | `bills` | 1 to 20 bills, each saved as one ordinary sale bill. |
 | `saveId` | A GUID that stays the same each time the same bill is handed over again. Saved as the bill's `ClientOperationId` (`bills.CreateOperationId`). It is a random-looking version-4 GUID, like the save ID of a bill typed on a counter. Unique within the hand-over. |
@@ -65,6 +67,7 @@ tallywrapper:handover?d=<D>&s=<S>
 | `billDate` | `yyyy-MM-dd`. |
 | `payment` | Exactly `Cash` or `Credit and debit`. |
 | `lines` | 1 to 100 sale lines. |
+| `finalAmount` | Version 2 only; optional, none when left out or null. What the bill is to come to: whole rupees, above 0. The bill takes off the rest as its discount, as the Invoice tab's Final amount box does (§4). In version 1 the hand-over is refused. |
 | `itemName` | An item of Tally Wrapper's item master, matched ignoring case and surrounding spaces. |
 | `karat` | A label of the karat master, matched ignoring case and spaces (`22 K` finds `22K`), or null for a line with no stamp. |
 | `pieces` | Whole pieces. |
@@ -86,7 +89,7 @@ In this order; the first that fails refuses the whole hand-over, nothing in it i
 1. The link's shape (§1): "This isn't a hand-over link Tally Wrapper can read."
 2. This PC has a key: "This PC has no hand-over key. Set it in Settings → Hand-over."
 3. The signature, compared in constant time: "This hand-over isn't signed with this PC's key."
-4. The JSON's version, read first so that a newer sender's hand-over says so instead of failing the version-1 shape: "This hand-over is from a newer version. Update Tally Wrapper."
+4. The JSON's version, read first so that a newer sender's hand-over says so instead of failing the shape: "This hand-over is from a newer version. Update Tally Wrapper." A Tally Wrapper that reads only version 1 says so of a version-2 hand-over.
 5. The JSON's shape and limits (§2): "This hand-over can't be read.", or "This hand-over has more than 20 bills." / "A bill in this hand-over has more than 100 lines."
 6. Its age: "This hand-over is too old. Send it again." / "This hand-over is dated ahead of this PC's clock. Check the clock, then send it again."
 
@@ -95,6 +98,8 @@ The age is checked when the link arrives. Try again (§6) does not check it agai
 ## 4. Building each bill
 
 `HandoverBillMapper` builds the bill through the Invoice tab's own line view model (`BillLineViewModel`), calculator (`BillCalculator`) and payload mapper (`InvoicePayloadMapper.BuildPayload`), so the saved bill is the bill the Invoice tab would save for the same lines: `ItemName`, `Unit`, `ItemCategory`, `PricingMode` and the Tally stock name come from the item (and the karat), `HsnCode` is the jewellery HSN, `RawJson`, `Notes`, `PartyGstin`, `PartyPhone` and `PartyAddress` are empty as on a typed bill, and the totals are `BillCalculator.BuildTotals(lineTotals, discount: 0)`. Typing the same inputs into the Invoice tab gives the same payload; `HandoverBillMapperTests` holds this.
+
+**A final amount** (version 2) changes only the totals: the lines are priced as below, then the bill's discount is what typing the final amount into the Invoice tab's Final amount box gives (`BillCalculator.FinalAmountDiscount`): the bill's total with GST less the final amount, to the paisa, so the bill comes to the final amount exactly. A bill that already comes to the final amount or less gets no discount. The discount is the bill's, as typed on the Invoice tab, not a line's, so lines are still billed as typed (§4) under it.
 
 A line fails its bill, with the reason on its row, when its item is not in the item master ("No item named “X” in Tally Wrapper’s items."), its karat is not in the karat master ("No karat “X” in Tally Wrapper’s karats."), or it has no quantity. A line with no stamp takes the item's own karat. Tally Wrapper's items have no karat field, so that is the one karat whose Tally stock item is the item's Tally stock item; with none (or more than one), the bill fails.
 
@@ -153,8 +158,8 @@ The key is kept in `%LOCALAPPDATA%\ShowroomBilling\handover-key.dat` (`AppPaths.
 
 ## 9. Testing
 
-- `HandoverLinkReaderTests`: the contract's vector verifies; a changed byte, another key, an old or future `issuedAt`, a `v` other than 1, bad shapes and over-limit counts are refused.
-- `HandoverBillMapperTests`: the line total is exact and the Invoice tab's recompute reproduces it, for gold, piece-priced and diamond items and gold lines with diamonds, with odd paise and wastage below zero; no input below zero; unknown item and karat; typing the same inputs into the Invoice tab gives the same payload. With a rounding allowance: a line a little off its typed price is billed at it with no Extra (and leaves the bill's rate alone), one further off or with a discount keeps its total, and what goes in Extra as typed.
+- `HandoverLinkReaderTests`: the contract's vector verifies; version 2 reads a bill's final amount; a changed byte, another key, an old or future `issuedAt`, a `v` other than 1 or 2, a final amount in version 1 or not whole rupees above 0, bad shapes and over-limit counts are refused.
+- `HandoverBillMapperTests`: the line total is exact and the Invoice tab's recompute reproduces it, for gold, piece-priced and diamond items and gold lines with diamonds, with odd paise and wastage below zero; no input below zero; unknown item and karat; typing the same inputs into the Invoice tab gives the same payload. With a rounding allowance: a line a little off its typed price is billed at it with no Extra (and leaves the bill's rate alone), one further off or with a discount keeps its total, and what goes in Extra as typed. With a final amount: the bill comes to it with the rest as its discount, the same as typing it into the Invoice tab and as it reopens for edit; none at or above the bill's total; a line billed as typed stays so.
 - `HandoverSaveWorkflowTests`, `HandoverCoordinatorTests`, `HandoverReportTests`: create, unchanged, update, posted with the admin passcode skipped and given, voided, revised, not settled, `notSent`, an unreachable server and Try again.
 - `HandoverStartupTests`: the registration guard, the registry keys (written under a scratch key), the pipe.
 - `BillByOperationContractTests`: the API read, found and not found.

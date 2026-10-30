@@ -204,7 +204,7 @@ public sealed class HandoverCoordinator
                     bill.SaveId,
                     null,
                     bill.PartyName.Trim(),
-                    BillCalculator.BuildTotals(bill.Lines.Select(line => line.LineTotal), discount: 0m).GrandTotal,
+                    HandoverBillMapper.TotalsOf(bill.Lines.Select(line => line.LineTotal).ToList(), bill.FinalAmount).GrandTotal,
                     bill.Payment,
                     HandoverBillResult.NotSaved,
                     Reason: HandoverSaveWorkflow.ServerUnreachableReason,
