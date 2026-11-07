@@ -305,14 +305,57 @@ public sealed class HandoverBillMapperTests
     }
 
     [Fact]
-    public void A_line_further_off_than_its_allowance_or_with_a_discount_keeps_its_total()
+    public void A_line_further_off_than_its_allowance_keeps_its_total()
     {
         // The vector line comes to 72,481.10 as typed, 88.20 under its total.
         var further = Assert.Single(Map(Line(roundingAllowance: 5.33m)).Lines);
-        var discounted = Assert.Single(Map(Line(discount: 100m, lineTotal: 72_484m, roundingAllowance: 5.33m)).Lines);
 
         Assert.Equal(Assert.Single(Map(Line()).Lines), further);
-        Assert.Equal(72_484m, discounted.LineTotal);
+    }
+
+    [Fact]
+    public async Task A_lines_discount_is_the_bills_discount_and_its_wastage_and_labour_stay_in_full()
+    {
+        // The vector line less 3,000: 69,569.30 is under its gold, wastage and labour (70,936.10), which once cut its labour.
+        var payload = Map(Line(discount: 3_000m, lineTotal: 69_569.3m), Line(item: "Gold Chain", discount: 0.5m, lineTotal: 72_568.81m));
+
+        Assert.Equal(Map(Line(), Line(item: "Gold Chain", lineTotal: 72_569.31m)).Lines, payload.Lines);
+        Assert.Equal((2.5m, 300m, 72_569.3m), (payload.Lines[0].WastagePercent!.Value, payload.Lines[0].LabourPerUnit!.Value, payload.Lines[0].LineTotal));
+        var expected = BillCalculator.BuildTotals([72_569.3m, 72_569.31m], discount: 3_000.5m);
+        Assert.Equal(new BillTotalsDto(expected.SubtotalBase, 3_000.5m, expected.Cgst + expected.Sgst, expected.RoundOff, expected.GrandTotal), payload.Totals);
+        // Typed into the Invoice tab with the same discount, it is the same bill; opened for edit, it keeps it.
+        var typed = await TypeIntoInvoiceTabAsync(payload, discount: 3_000.5m);
+        Assert.True(HandoverPayloads.SameContent(typed, payload), $"typed: {Describe(typed)}{Environment.NewLine}handed over: {Describe(payload)}");
+        var invoice = await OpenForEditAsync(payload);
+        Assert.Equal((3_000.5m, payload.Totals.GrandTotal), (invoice.Discount, invoice.GrandTotal));
+    }
+
+    [Fact]
+    public void A_discounted_line_within_its_allowance_is_billed_as_typed()
+    {
+        var payload = Map(Rounded() with { DiscountAmount = 500m, LineTotal = 11_250m });
+
+        var line = Assert.Single(payload.Lines);
+        Assert.Equal((8m, 11_746.58m, (decimal?)null), (line.WastagePercent!.Value, line.LineTotal, line.Extra));
+        Assert.Equal((500m, BillCalculator.BuildTotals([11_746.58m], discount: 500m).GrandTotal), (payload.Totals.DiscountTotal, payload.Totals.GrandTotal));
+    }
+
+    [Fact]
+    public void A_studded_lines_discount_leaves_its_gold_line_and_its_diamonds_as_without_one()
+    {
+        var payload = Map(Studded() with { DiscountAmount = 2_000m, LineTotal = 97_569.3m });
+
+        Assert.Equal(Map(Studded()).Lines, payload.Lines);
+        Assert.Equal(2_000m, payload.Totals.DiscountTotal);
+    }
+
+    [Fact]
+    public void A_final_amount_takes_the_lines_discounts_into_the_bills_discount()
+    {
+        var payload = HandoverBillMapper.Map(Bill(Line(discount: 3_000m, lineTotal: 69_569.3m)) with { FinalAmount = 69_000m }, HandoverTestMasters.Masters).Payload!;
+
+        Assert.Equal(72_569.3m, Assert.Single(payload.Lines).LineTotal);
+        Assert.Equal((BillCalculator.FinalAmountDiscount(72_569.3m, 69_000m), 69_000m), (payload.Totals.DiscountTotal, payload.Totals.GrandTotal));
     }
 
     [Fact]
@@ -503,7 +546,11 @@ public sealed class HandoverBillMapperTests
                 var total = Math.Round(gold * (decimal)(random.NextDouble() * 1.6 + 0.05), 2);
                 // A third of the lines have diamonds: up to 0.9 of the line's total, on 0.001 to 3 ct.
                 var diamonds = random.Next(3) == 0 ? Math.Round(total * (decimal)(random.NextDouble() * 0.9), 2) : 0m;
+                // A quarter have a discount, up to a fifth of what the line comes to before it.
+                var discount = random.Next(4) == 0 ? Math.Round(total * (decimal)(random.NextDouble() * 0.2), 2) : 0m;
                 return Line(
+                    discount: discount,
+                    lineTotal: total - discount,
                     diamondCarats: diamonds > 0m ? Math.Round((decimal)(random.NextDouble() * 3 + 0.001), 3) : 0m,
                     diamondValue: diamonds,
                     item: items[random.Next(items.Length)],
@@ -514,17 +561,17 @@ public sealed class HandoverBillMapperTests
                     net: net,
                     wastage: Math.Round((decimal)(random.NextDouble() * 40 - 20), 2),
                     rate: rate,
-                    labour: random.Next(0, 5_000),
-                    lineTotal: total);
+                    labour: random.Next(0, 5_000));
             }).ToArray();
 
             var payload = Map(lines);
 
-            // A gold line with diamonds is two: the gold, then its diamonds.
+            // Each line before its discount, which is the bill's; a gold line with diamonds is two: the gold, then its diamonds.
             var expected = lines.SelectMany(line => line.DiamondValue > 0m && line.ItemName != "Diamond Pendant"
-                ? new[] { line.LineTotal - line.DiamondValue, line.DiamondValue }
-                : [line.LineTotal]);
+                ? new[] { line.LineTotal + line.DiscountAmount - line.DiamondValue, line.DiamondValue }
+                : [line.LineTotal + line.DiscountAmount]);
             Assert.Equal(expected, payload.Lines.Select(line => line.LineTotal));
+            Assert.Equal(lines.Sum(line => line.DiscountAmount), payload.Totals.DiscountTotal);
             Assert.All(payload.Lines, AssertNoNegativeInput);
             Assert.True(payload.Rate24Kt is null or >= 0m);
             Assert.True(HandoverBillMapper.ReopensToSameTotals(payload, HandoverTestMasters.Masters));
@@ -544,10 +591,10 @@ public sealed class HandoverBillMapperTests
     }
 
     /// <summary>
-    /// Types the handed-over lines into the Invoice tab, as an operator would, then the final amount if
-    /// there is one, and returns what its Save sends.
+    /// Types the handed-over lines into the Invoice tab, as an operator would, then the discount or the
+    /// final amount if there is one, and returns what its Save sends.
     /// </summary>
-    private static async Task<BillPayloadDto> TypeIntoInvoiceTabAsync(BillPayloadDto handedOver, decimal? finalAmount = null)
+    private static async Task<BillPayloadDto> TypeIntoInvoiceTabAsync(BillPayloadDto handedOver, decimal? finalAmount = null, decimal discount = 0m)
     {
         var api = new FakeBillsApi();
         var settings = HandoverTestMasters.Settings();
@@ -574,6 +621,11 @@ public sealed class HandoverBillMapperTests
             line.LabourPerUnit = typed.LabourPerUnit;
             line.DiamondRate = typed.DiamondRate;
             line.Extra = typed.Extra;
+        }
+
+        if (discount > 0m)
+        {
+            invoice.Discount = discount;
         }
 
         if (finalAmount is { } final)

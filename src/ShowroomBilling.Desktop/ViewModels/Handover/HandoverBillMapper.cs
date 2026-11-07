@@ -26,14 +26,17 @@ internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Proble
 /// Turns a handed-over bill into the <see cref="BillPayloadDto"/> the Invoice tab would build for
 /// the same lines, through the Invoice tab's own line view model, calculator and payload mapper, so
 /// the saved bill is an ordinary bill in every field.
-/// <para>A line with a rounding allowance and no discount is first priced as the counter would type
-/// it: the hand-over's wastage and labour as they are, and as Extra only the other stones, setting
-/// and hallmarking (and the labour of an item priced without labour); a diamond line at its total's
-/// rate a unit, to the paisa. That stands when it comes within the allowance (and this program's own
+/// <para>A line's discount goes in the bill's Discount box, as the counter types one there, so the
+/// line is priced at what it comes to before the discount (its total with the discount added back),
+/// with its wastage and labour in full. A final amount's discount takes the lines' discounts in.</para>
+/// <para>A line with a rounding allowance is first priced as the counter would type it: the
+/// hand-over's wastage and labour as they are, and as Extra only the other stones, setting and
+/// hallmarking (and the labour of an item priced without labour); a diamond line at its total's rate
+/// a unit, to the paisa. That stands when it comes within the allowance (and this program's own
 /// paise) of the line's total, and the line then has the Invoice tab's total.</para>
-/// <para>Any other line keeps the hand-over's line total to the paisa. The inputs are chosen so that
-/// the Invoice tab's recompute gives that same total when the bill is opened for edit, and none of
-/// them is below zero:</para>
+/// <para>Any other line keeps the hand-over's line total (before its discount) to the paisa. The
+/// inputs are chosen so that the Invoice tab's recompute gives that same total when the bill is
+/// opened for edit, and none of them is below zero:</para>
 /// <list type="number">
 /// <item>Quantity: the net weight, as the Invoice tab takes it whatever the item's unit, which only labels it.
 /// A hand-over's weights are grams, so a line of an item counted in carats fails the bill.</item>
@@ -44,7 +47,7 @@ internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Proble
 /// counts as none), then its labour as rupees a gram (if the item is priced with labour), each cut
 /// down to what still fits.</item>
 /// <item>Whatever is left (other stones, setting, hallmarking, GST, the difference between the two programs'
-/// purities, the discount, the paise) is the line's Extra.</item>
+/// purities, the paise) is the line's Extra.</item>
 /// <item>A diamond line is one flat rate a unit, rounded down to the paisa, and the paise left go to Extra.</item>
 /// <item>A gold line's diamonds (their carats and value, if the hand-over gives them) become a diamond
 /// line of their own on the Diamond item, right after it, and the gold line is priced to what is left.</item>
@@ -107,10 +110,13 @@ internal static class HandoverBillMapper
                 return HandoverMapResult.Refused($"A line of “{item.Name.Trim()}” has no net weight.");
             }
 
+            // Before its discount, which is the bill's.
+            var total = line.LineTotal + line.DiscountAmount;
+
             // A gold line's diamonds are a line of their own, on the diamond item, right after it.
             if (isDiamond || line.DiamondValue <= 0m)
             {
-                resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity, line.LineTotal));
+                resolved.Add(new ResolvedLine(line, item, karat, isDiamond, purity, quantity, total));
                 continue;
             }
 
@@ -125,7 +131,7 @@ internal static class HandoverBillMapper
                 return HandoverMapResult.Refused("A line has diamonds. Tally Wrapper bills them on its Diamond item: one item in the Diamond category counted in ct, or of several, the one named Diamond.");
             }
 
-            resolved.Add(new ResolvedLine(line, item, karat, false, purity, quantity, line.LineTotal - line.DiamondValue));
+            resolved.Add(new ResolvedLine(line, item, karat, false, purity, quantity, total - line.DiamondValue));
             resolved.Add(new ResolvedLine(line, diamondItem, null, true, 0m, line.DiamondCarats, line.DiamondValue));
         }
 
@@ -149,7 +155,7 @@ internal static class HandoverBillMapper
             rows.Add(row);
         }
 
-        var totals = TotalsOf(rows.Select(row => row.LineTotal).ToList(), bill.FinalAmount);
+        var totals = TotalsOf(rows.Select(row => row.LineTotal).ToList(), bill.FinalAmount, bill.Lines.Sum(line => line.DiscountAmount));
         var payload = InvoicePayloadMapper.BuildPayload(
             rows,
             DateTimeOffset.Now,
@@ -185,11 +191,12 @@ internal static class HandoverBillMapper
     }
 
     /// <summary>
-    /// The bill's totals. With a final amount, the bill comes to it, the rest off as its discount, as
-    /// the Invoice tab's Final amount box does; a bill that already comes to it or less has none.
+    /// The bill's totals, with the lines' discounts as its discount. With a final amount, the bill
+    /// comes to it, the rest off as its discount, as the Invoice tab's Final amount box does; a bill
+    /// that already comes to it or less has none.
     /// </summary>
-    internal static BillCalculator.BillTotals TotalsOf(IReadOnlyCollection<decimal> lineTotals, decimal? finalAmount)
-        => BillCalculator.BuildTotals(lineTotals, finalAmount is { } final ? BillCalculator.FinalAmountDiscount(lineTotals.Sum(), final) : 0m);
+    internal static BillCalculator.BillTotals TotalsOf(IReadOnlyCollection<decimal> lineTotals, decimal? finalAmount, decimal lineDiscounts = 0m)
+        => BillCalculator.BuildTotals(lineTotals, finalAmount is { } final ? BillCalculator.FinalAmountDiscount(lineTotals.Sum(), final) : lineDiscounts);
 
     /// <summary>
     /// The bill's 24K rate: the rate its gold lines share, else the first one's that has one; then
@@ -231,12 +238,12 @@ internal static class HandoverBillMapper
 
     /// <summary>
     /// The line as the counter would type it (see the class summary), or null when the hand-over gives
-    /// it no rounding allowance, it has a discount, or it does not come within the allowance of its total.
+    /// it no rounding allowance or it does not come within the allowance of its total.
     /// </summary>
     private static BillLineViewModel? AsTyped(ResolvedLine line, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
     {
         var source = line.Source;
-        if (source.RoundingAllowance <= 0m || source.DiscountAmount > 0m)
+        if (source.RoundingAllowance <= 0m)
         {
             return null;
         }
