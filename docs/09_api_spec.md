@@ -34,7 +34,7 @@ Style:
 |---|---|---|---|
 | `GET` | `/api/runtime/health` | Desktop and server-tray health summary | API availability, database reachability and identity, pending migrations (see §4) |
 | `POST` | `/api/runtime/database/maintenance/test` | Server tray: test a candidate connection string | `{ success, message }` |
-| `PUT` | `/api/runtime/database/maintenance` | Server tray: verify and save the connection string | `{ provider, maskedConnectionString, configPath, isLocalOverridePresent, requiresApiRestart, environmentName, isEnvironmentOverridePresent, storageProtection }`; never the connection string itself |
+| `PUT` | `/api/runtime/database/maintenance` | Server tray: verify and save the connection string | `{ provider, maskedConnectionString, configPath, isLocalOverridePresent, requiresApiRestart, environmentName }`; never the connection string itself |
 
 The two database endpoints serve the tray only: the caller must be on the server PC (loopback) and send `X-Maintenance-Token`. No endpoint lets a workstation read or change the server's database connection. The saved connection is written, DPAPI-protected, to `database.<Environment>.local.json` in the server's data folder and takes effect when the service restarts.
 
@@ -54,7 +54,7 @@ Both accept only the Npgsql keyword form (`Host=...;Port=...;Database=...;Userna
 | `POST` | `/api/bills/push-pending` | Loop over currently pending bills, pushing each synchronously | `{ matched, succeeded, failed, stoppedOnFailure, failedBillId, failureMessage, items[] }` |
 | `POST` | `/api/bills/push-selected` | Sync-push a specific set of bills | same batch response shape |
 | `POST` | `/api/bills/{billId}/void` | Void eligible bill | new state `voided` |
-| `POST` | `/api/bills/{billId}/retry` | Re-post a failed bill (same sync path) | posting status: `{ billId, billState, lastErrorCode, lastErrorMessage, lastRemoteId }` |
+| `POST` | `/api/bills/{billId}/retry` | Re-post a failed bill (same sync path) | posting status: `{ billId, billState, lastErrorCode, lastErrorMessage }` |
 | `POST` | `/api/bills/{billId}/repost` | Repost a posted or failed bill (same sync path) | posting status, same shape |
 | `POST` | `/api/bills/{billId}/revise` | Create new pending bill superseding prior pending bill | the new bill |
 | `GET` | `/api/bills/{billId}/audit` | Load audit/event trail | ordered events |
@@ -74,7 +74,7 @@ Both accept only the Npgsql keyword form (`Host=...;Port=...;Database=...;Userna
 - `POST /api/bills/{billId}/push` body: `{ reason? }`. Synchronous: first runs a Tally company preflight. If Tally is unreachable or the configured active company is not open, returns `503 Tally unavailable` and leaves the bill unchanged. Otherwise it transitions the bill to `posting`, stamps the revision's `SubmittedAtUtc` (first push only) and `FinalizedAtUtc`, and makes one voucher HTTP attempt. A definite Tally response settles in `posted` or `failed`; a timeout, transport error, or unreadable response settles in `reconciliation_required` with `tally.outcome.unknown`. First pushes create Tally vouchers. Bills reopened after a prior successful push (`EditedAfterPush=true`) alter the original Tally voucher by `MASTER ID`; if that target cannot be resolved, the push fails with `TALLY_ALTER_TARGET_MISSING` without calling Tally. No queue or background posting.
 - `POST /api/bills/push-pending` body: `{ reason?, maxBills? }`. Iterates oldest pending bills in created-at order, calls the sync push path for each, and returns aggregate counts. Only `posted` counts as success; the batch stops on the first failure, ambiguous outcome, or concurrent/ineligible state.
 - `POST /api/bills/push-selected` body: `{ billIds, reason? }`. Same mechanics as push-pending but for an explicit set.
-- `POST /api/bills/{billId}/retry` body: `{ reason? }`. Requires state `failed`. Runs the same sync push path. Retry and repost answer with the posting status `{ billId, billState, lastErrorCode, lastErrorMessage, lastRemoteId }`, not the bill; there is no separate endpoint that reads it.
+- `POST /api/bills/{billId}/retry` body: `{ reason? }`. Requires state `failed`. Runs the same sync push path. Retry and repost answer with the posting status `{ billId, billState, lastErrorCode, lastErrorMessage }`, not the bill; there is no separate endpoint that reads it.
 - `POST /api/bills/{billId}/repost` body: `{ idempotencyKey, reason? }`. Requires state `posted` or `failed`. The key is required, capped at 128 characters, and is passed through as the create/import Tally `REMOTEID`; posted bills transition directly to `posting` without a persisted intermediate `pending` state. Plain unedited reposts keep create/import semantics; edited-after-push bills alter the old Tally voucher. 409 on any other state.
 - `POST /api/bills/{billId}/revise` body `{ initialPayload? }`. Requires state `pending` or `draft`. Creates a new `pending` bill with its own invoice number and revision number 1, whose revision's `SupersedesRevisionId` points to the prior current revision; the prior bill moves to state `revised` and records `SupersededByBillId`.
 - `POST /api/bills/{billId}/void` transitions to `voided` from `pending`, `draft`, or `failed`. It is `409` while Tally holds the bill's voucher.
@@ -111,7 +111,7 @@ The flip is deliberately **not** wrapped in a transaction with the Tally call �
 |---|---|---|---|
 | `GET` | `/api/numbering/preview` | Show next visible number without reservation | preview number, scope metadata |
 
-`GET /api/numbering/preview` accepts optional `documentType` (default `sales_invoice`) and `fiscalYear` (default = current Indian fiscal year `YYYY-YY`). Returns `{ showroomId, fiscalYear, documentType, previewValue, formattedNumber, prefix, suffix }`.
+`GET /api/numbering/preview` accepts optional `documentType` (default `sales_invoice`) and `fiscalYear` (default = current Indian fiscal year `YYYY-YY`). Returns `{ fiscalYear, documentType, previewValue, formattedNumber, prefix, suffix }`.
 
 There is no endpoint that reserves a number by itself. A number is taken by `CreateDraftAsync` (and by revise, for the new bill) when a bill is created, not by push, in the same transaction as the bill. Format: `{prefix}{fiscalYear}/{value}{suffix}`, the value zero-padded to the configured width (default 4). See [`04_numbering_and_idempotency.md`](04_numbering_and_idempotency.md).
 
@@ -125,13 +125,13 @@ There is no endpoint that reserves a number by itself. A number is taken by `Cre
 | `GET` | `/api/masters/voucher-types` | Load voucher type snapshot | voucher types, freshness metadata |
 | `POST` | `/api/masters/refresh` | **Synchronously** fetch fresh master data from Tally and write the snapshot | one or more `TallyMasterRefreshResult` rows |
 
-The four reads take no query parameters. A ledger and a voucher type are `{ name }`; a company adds `isActive`, a stock item `alias`, `baseUnit`, `hsnCode` and `karat`. Each returns the whole current snapshot of that master type, in name order, with `{ masterType, batchId, fetchedAtUtc, itemCount, freshness }` as metadata.
+The four reads take no query parameters. A ledger and a voucher type are `{ name }`; a company adds `isActive`, a stock item `baseUnit` and `hsnCode`. Each returns the whole current list of that master type, in name order, with `{ masterType, fetchedAtUtc, itemCount, freshness }` as metadata.
 
 A refresh stores the new snapshot and deletes the previous one of that master type in the same transaction, so a failed refresh leaves the old snapshot in place and no earlier snapshot is kept.
 
-`POST /api/masters/refresh` body: `{ masterType?, requestedByActor? }`. `masterType` accepts `companies`, `ledgers`, `stock-items`, `voucher-types`, or null (all four). Any other value is rejected with `400`; the names are the constants in `Contracts.Masters.MasterTypes`. The API calls `ITallyMasterRefresher` synchronously — which uses `ITallyXmlClient` to query Tally, parses the response via `TallyXmlMasterSource`, and writes the snapshot via `IMasterSnapshotService`. The call blocks until Tally answers. There is no background polling, no timer, no scheduled refresh. **The only way master data updates is via this endpoint triggered by a UI click.**
+`POST /api/masters/refresh` body: `{ masterType? }`. `masterType` accepts `companies`, `ledgers`, `stock-items`, `voucher-types`, or null (all four). Any other value is rejected with `400`; the names are the constants in `Contracts.Masters.MasterTypes`. The API calls `ITallyMasterRefresher` synchronously — which uses `ITallyXmlClient` to query Tally, parses the response via `TallyXmlMasterSource`, and writes the snapshot via `IMasterSnapshotService`. The call blocks until Tally answers. There is no background polling, no timer, no scheduled refresh. **The only way master data updates is via this endpoint triggered by a UI click.**
 
-Response per master type: `{ masterType, succeeded, itemCount, batchId?, errorMessage? }`.
+Response per master type: `{ masterType, succeeded, itemCount, errorMessage? }`.
 
 ### 2.5 Settings
 
@@ -253,9 +253,9 @@ Safe Tally XML reads sit behind a short Polly pipeline: 2 retry attempts with ~2
 
 ### Retry / Repost
 
-Retry requires `failed` state; Repost requires `posted` or `failed` and a non-blank `idempotencyKey`. Both run the same synchronous push path as Push, but answer with the posting status `{ billId, billState, lastErrorCode, lastErrorMessage, lastRemoteId }` instead of the bill.
+Retry requires `failed` state; Repost requires `posted` or `failed` and a non-blank `idempotencyKey`. Both run the same synchronous push path as Push, but answer with the posting status `{ billId, billState, lastErrorCode, lastErrorMessage }` instead of the bill.
 
 ### Refresh masters
 
-Request body: `{ masterType?, requestedByActor? }`.
+Request body: `{ masterType? }`.
 Response: `TallyMasterRefreshResult[]` — one row per master type actually refreshed. The call blocks on the Tally XML queries; typical duration 2–30 seconds for all-four refresh depending on catalog size.

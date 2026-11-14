@@ -177,6 +177,7 @@ How reservation, forward-skip and roll-back behave: [docs/04 §2.4–2.7](docs/0
 - Each button names the masters it wants (`SettingsMasterSnapshotWorkflow.RefreshAsync`): the Ledgers button sends `ledgers` and then `voucher-types`. A request with no master type refreshes all four, which is what System Health's "Refresh all" is for.
 - **`POST /api/masters/refresh` returns one `TallyMasterRefreshResult` per master fetched.** Don't deserialize it as a single accept-shape record; that once swallowed real failures. `SettingsRefreshSummaryFormatter.Summarize` renders per-master counts, or the first failing master.
 - **`TallyMasterRefresher.RefreshAllAsync` runs the four masters sequentially**, each in its own DI scope. Tally's local XML endpoint times out under concurrent reads.
+- **Each list is one row of `tally_masters`**, the whole list as JSON in the shape of its item record (`Contracts/Masters/MasterSnapshotItems.cs`); a refresh replaces the row. Do not bring back a row per ledger: nothing looks inside a list. A property renamed on an item record no longer matches the stored lists until they are refreshed from Tally, and a new one stays empty until then.
 
 ## Tests
 

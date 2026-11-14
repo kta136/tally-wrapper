@@ -385,10 +385,11 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 
 `DropInvoiceNumberReservations` (the release after 11 October 2026) is a narrower case. The table it drops was last written by the build of 10 October; the build of 11 October (`627ef1f`) still maps it but never touches it. So the migration can be applied while a server from 11 October is running, and the new server started afterwards. A server exe from 10 October or earlier cannot save a bill against the migrated database; to go back that far, run the migration's `Down` first, which restores the table and its rows.
 
-The release after 14 November 2026 carries two migrations:
+The release after 14 November 2026 carries three migrations:
 
 - `UniqueInvoiceCore` only changes an index (the number core becomes unique per fiscal year), so it does not tie the server to the database. On a database that already holds two bills of one year on one core it keeps the plain index and raises a `WARNING`; [10_database_schema.md §1.1](10_database_schema.md) has the query that finds them and the two statements that make the index unique afterwards.
 - `DropUnreadColumns` drops eleven columns, so **the server and the database change together**: stop the server service, take the dump below, apply the migrations as the owner role, install the new `TallyWrapper.Server.exe`, start the service. A server exe older than this release still maps those columns and cannot read or save a bill on the migrated database; to go back to one, run the migration's `Down` first, which restores the columns and their values from the `dropped_20261114_*` tables. The counters are not tied to it: a Desktop reads none of the removed fields, so counters can be updated before or after the server.
+- `MasterSnapshotsInOneTable` replaces the five tables of Tally lists with one, and is tied to the server in the same way and in the same step: an older server exe finds no lists and cannot refresh them on the migrated database. The lists are carried across, so nothing has to be refreshed from Tally afterwards. Its `Down` puts the five tables back from the `dropped_20261114_*_rows` copies. Run the `Down`s newest first when going back.
 
 **Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 

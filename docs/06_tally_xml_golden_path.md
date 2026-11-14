@@ -99,7 +99,7 @@ Findings from live validation:
 |---|---|---|
 | Companies | `Company` | `Name, IsInactive` |
 | Ledgers | `Ledger` | `Name` |
-| Stock items | `Stock Item` | `Name, AliasName, BaseUnits, GSTHSNCode` |
+| Stock items | `Stock Item` | `Name, BaseUnits, GSTHSNCode` |
 | Voucher types | `Voucher Type` | `Name` |
 
 Tally may silently drop requested fields from the response (e.g. the `dummy` company returned ledgers without `<PRIMARYGROUP>` even though we asked for it, and returned companies without `<ISINACTIVE>`). Parsers must treat every field except `Name` as optional.

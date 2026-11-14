@@ -120,29 +120,20 @@ Posting outcomes live here and nowhere else: `tally.posted`, `tally.failed` and 
 
 Rows that older builds wrote and current code does not: `numbering.sales_invoice.reserved` (one per number issued) and entity type `draft_lease`. They stay.
 
-### 1.6 Tally master snapshots
+### 1.6 Tally master lists
 
-`tally_master_snapshot_batches` is the header of one pull of one master type:
+`tally_masters` holds the four lists last read from Tally, one row per list:
 
 | Column | Type | Notes |
 |---|---|---|
-| `Id` | uuid PK | |
-| `ShowroomId` | uuid | |
-| `MasterType` | text | `companies`, `ledgers`, `stock_items`, `voucher_types` |
-| `FetchedAtUtc` | timestamptz | |
-| `Status` | text | check `IN ('active', 'superseded')`; new batches are `active` |
-| `ItemCount` | integer | Row count at ingestion time |
+| `MasterType` | text PK | `companies`, `ledgers`, `stock_items`, `voucher_types` |
+| `FetchedAtUtc` | timestamptz | When the list was read from Tally |
+| `ItemCount` | integer | How many entries the list holds, so the freshness report need not read the lists |
+| `ItemsJson` | jsonb | The whole list, in name order: `[{ "name": … }]`, with `isActive` for a company and `baseUnit`, `hsnCode` for a stock item |
 
-Indexes: `("ShowroomId", "MasterType", "FetchedAtUtc")`, `("ShowroomId", "MasterType", "Status")`.
+A refresh replaces the row (an upsert) and writes a `masters.<type>.ingested` audit row in the same transaction. A read returns the whole list. Nothing looks inside a list, so there are no item rows and no index beside the key.
 
-The rows are in four tables, each with `Id`, `BatchId` (FK → the batch, `ON DELETE CASCADE`), `ShowroomId`, `Name` and one index, `("BatchId", "Name")`:
-
-- `tally_company_snapshots` — `IsActive`
-- `tally_ledger_snapshots` — the name only
-- `tally_stock_item_snapshots` — `Alias`, `BaseUnit`, `HsnCode`, `Karat`
-- `tally_voucher_type_snapshots` — the name only
-
-A refresh inserts the new batch and deletes every earlier batch of that master type in the same transaction; their rows go by cascade. Nothing is written as `superseded`. A `superseded` batch left by an older build is deleted by the next refresh of its master type.
+Until 14 November 2026 this was five tables: `tally_master_snapshot_batches` and a row table per master. The `MasterSnapshotsInOneTable` migration carries each master's current list across and drops them (§1.10).
 
 ### 1.7 `cloud_settings` and `database_identity`
 
@@ -225,6 +216,17 @@ DROP TABLE IF EXISTS
     public.dropped_20261114_tally_voucher_type_snapshots;
 ```
 
+The `MasterSnapshotsInOneTable` migration (14 November 2026) replaced the five master snapshot tables with `tally_masters` (§1.6). Each master's current list is written into the new table, and every one of the five old tables that held rows is first copied whole to `dropped_20261114_<table>_rows`, in the same transaction. Rolling back recreates the old tables with their indexes and puts those rows back; on a database that was created on the new table it rebuilds the rows from the lists. When the release has settled:
+
+```sql
+DROP TABLE IF EXISTS
+    public.dropped_20261114_tally_company_snapshots_rows,
+    public.dropped_20261114_tally_ledger_snapshots_rows,
+    public.dropped_20261114_tally_stock_item_snapshots_rows,
+    public.dropped_20261114_tally_voucher_type_snapshots_rows,
+    public.dropped_20261114_tally_master_snapshot_batches_rows;
+```
+
 These side tables are removed by hand and not by a migration on purpose: a migration that deleted them would also delete the copies a restored older database makes on its way up.
 
 ---
@@ -234,7 +236,6 @@ These side tables are removed by hand and not by a migration on purpose: a migra
 ### 2.1 Relations and deletes
 
 - `bills."CurrentRevisionId"` names a `bill_revisions` row; `bill_revisions."BillId"` → `bills."Id"` with `ON DELETE CASCADE`
-- `tally_*_snapshots."BatchId"` → `tally_master_snapshot_batches."Id"` with `ON DELETE CASCADE`
 - `print_assets` rows are referenced from `cloud_settings."PrintLayoutJson"`
 - deleting a bill (admin only) removes its revisions, clears `"SupersededByBillId"` on bills that pointed at it, and keeps its audit rows
 
