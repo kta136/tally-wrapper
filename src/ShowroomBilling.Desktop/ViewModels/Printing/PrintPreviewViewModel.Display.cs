@@ -43,8 +43,6 @@ public partial class PrintPreviewViewModel
     /// <summary>The foot of the dialog says what is happening now; when nothing is, what Print will do.</summary>
     public string FooterText => string.IsNullOrWhiteSpace(StatusMessage) || StatusMessage == ReadyMessage ? PrintSummary : StatusMessage;
 
-    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(FooterText));
-
     private void NotifyDisplayChanged()
     {
         OnPropertyChanged(nameof(SubtitleText));

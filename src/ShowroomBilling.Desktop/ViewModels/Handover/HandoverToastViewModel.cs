@@ -11,12 +11,6 @@ namespace ShowroomBilling.Desktop.ViewModels.Handover;
 /// </summary>
 public sealed partial class HandoverToastViewModel : ObservableObject
 {
-    public HandoverToastViewModel()
-    {
-        OpenBillsCommand = new RelayCommand(() => OpenBillsRequested?.Invoke(this, EventArgs.Empty));
-        CloseCommand = new RelayCommand(() => CloseRequested?.Invoke(this, EventArgs.Empty));
-    }
-
     [ObservableProperty] private string title = string.Empty;
 
     /// <summary>"Pending in Bills" when the hand-over saved something; empty when every bill was unchanged.</summary>
@@ -24,13 +18,15 @@ public sealed partial class HandoverToastViewModel : ObservableObject
 
     public ObservableCollection<HandoverRowViewModel> Rows { get; } = [];
 
-    public IRelayCommand OpenBillsCommand { get; }
-
-    public IRelayCommand CloseCommand { get; }
-
     public event EventHandler? OpenBillsRequested;
 
     public event EventHandler? CloseRequested;
+
+    [RelayCommand]
+    private void OpenBills() => OpenBillsRequested?.Invoke(this, EventArgs.Empty);
+
+    [RelayCommand]
+    private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);
 
     internal void Show(HandoverReport report)
     {

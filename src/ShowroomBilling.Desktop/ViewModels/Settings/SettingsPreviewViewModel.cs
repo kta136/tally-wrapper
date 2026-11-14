@@ -66,23 +66,6 @@ public partial class SettingsPreviewViewModel : ObservableObject
         _assetCache = new SettingsPreviewAssetCache(_assets, _printLayout, EnqueueRefresh);
 
         PreviewPages = new ObservableCollection<BitmapSource>();
-        RefreshCommand = new RelayCommand(RefreshNow);
-        FitWidthCommand = new RelayCommand(FitWidth, () => HasPreviewPages);
-        ZoomOutCommand = new RelayCommand(() =>
-        {
-            IsFitToWidth = false;
-            PreviewZoomPercent -= ZoomStepPercent;
-        }, () => PreviewZoomPercent > MinZoomPercent);
-        ResetZoomCommand = new RelayCommand(() =>
-        {
-            IsFitToWidth = false;
-            PreviewZoomPercent = 100;
-        }, () => Math.Abs(PreviewZoomPercent - 100) > 0.01);
-        ZoomInCommand = new RelayCommand(() =>
-        {
-            IsFitToWidth = false;
-            PreviewZoomPercent += ZoomStepPercent;
-        }, () => PreviewZoomPercent < MaxZoomPercent);
 
         if (_preferences is not null)
         {
@@ -96,19 +79,23 @@ public partial class SettingsPreviewViewModel : ObservableObject
     }
 
     public ObservableCollection<BitmapSource> PreviewPages { get; }
-    public IRelayCommand RefreshCommand { get; }
-    public IRelayCommand FitWidthCommand { get; }
-    public IRelayCommand ZoomOutCommand { get; }
-    public IRelayCommand ResetZoomCommand { get; }
-    public IRelayCommand ZoomInCommand { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    private string statusMessage = string.Empty;
 
-    [ObservableProperty] private string statusMessage = string.Empty;
-    [ObservableProperty] private bool isBusy;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyState))]
+    private bool isBusy;
+
     [ObservableProperty] private bool isActive;
     [ObservableProperty] private double paneWidth = 420;
     [ObservableProperty] private double previewZoomPercent = 100;
     [ObservableProperty] private bool isFitToWidth = true;
-    [ObservableProperty] private int pageCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPreviewPages), nameof(ShowEmptyState), nameof(PreviewSummary))]
+    [NotifyCanExecuteChangedFor(nameof(FitWidthCommand))]
+    private int pageCount;
 
     public double PreviewScale => PreviewZoomPercent / 100.0;
     public string PreviewZoomDisplay => $"{PreviewZoomPercent:0}%";
@@ -127,10 +114,6 @@ public partial class SettingsPreviewViewModel : ObservableObject
         || (_settings?.IsSaving ?? false)
         || (_printLayout?.IsBusy ?? false);
 
-    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
-
-    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(ShowEmptyState));
-
     partial void OnPaneWidthChanged(double value)
     {
         if (IsFitToWidth)
@@ -146,14 +129,6 @@ public partial class SettingsPreviewViewModel : ObservableObject
         {
             ApplyFitWidth(persist: false);
         }
-    }
-
-    partial void OnPageCountChanged(int value)
-    {
-        OnPropertyChanged(nameof(HasPreviewPages));
-        OnPropertyChanged(nameof(ShowEmptyState));
-        OnPropertyChanged(nameof(PreviewSummary));
-        FitWidthCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnPreviewZoomPercentChanged(double value)
@@ -264,6 +239,36 @@ public partial class SettingsPreviewViewModel : ObservableObject
         _debounce.Change(_debounceInterval, Timeout.InfiniteTimeSpan);
     }
 
+    [RelayCommand]
+    private void Refresh() => RefreshNow();
+
+    private bool CanZoomOut => PreviewZoomPercent > MinZoomPercent;
+
+    private bool CanResetZoom => Math.Abs(PreviewZoomPercent - 100) > 0.01;
+
+    private bool CanZoomIn => PreviewZoomPercent < MaxZoomPercent;
+
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
+    private void ZoomOut()
+    {
+        IsFitToWidth = false;
+        PreviewZoomPercent -= ZoomStepPercent;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanResetZoom))]
+    private void ResetZoom()
+    {
+        IsFitToWidth = false;
+        PreviewZoomPercent = 100;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanZoomIn))]
+    private void ZoomIn()
+    {
+        IsFitToWidth = false;
+        PreviewZoomPercent += ZoomStepPercent;
+    }
+
     private void RefreshNow()
     {
         if (!IsActive || IsBulkUpdating) return;
@@ -271,6 +276,7 @@ public partial class SettingsPreviewViewModel : ObservableObject
         _ = RefreshAsync();
     }
 
+    [RelayCommand(CanExecute = nameof(HasPreviewPages))]
     private void FitWidth()
     {
         IsFitToWidth = true;

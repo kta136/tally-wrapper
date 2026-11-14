@@ -127,14 +127,8 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             BillStates.Voided,
         ];
 
-        RefreshCommand = new AsyncRelayCommand(LoadAsync, () => CanAct);
-        NextPageCommand = new AsyncRelayCommand(NextPageAsync, () => HasNext && !IsLoading && !IsActing);
-        PrevPageCommand = new AsyncRelayCommand(PrevPageAsync, () => Skip > 0 && !IsLoading && !IsActing);
-        ApplyFiltersCommand = new AsyncRelayCommand(ApplyFiltersAsync, () => CanAct);
-        ClearFiltersCommand = new AsyncRelayCommand(ClearFiltersAsync);
-        ShowPostedDaysCommand = new RelayCommand(() => HideFullyPostedDays = false, () => HideFullyPostedDays);
-        ClearSelectionCommand = new RelayCommand(ClearSelection, () => HasSelection);
-
+        // These run a workflow's method. The commands this class implements itself are the
+        // [RelayCommand] methods further down.
         PushSelectedCommand = new AsyncRelayCommand(batch.PushSelectedAsync, () => CanActOnSelection(x => x.IsPendingLike, needsTally: true));
         PushAllPendingCommand = new AsyncRelayCommand(batch.PushAllPendingAsync, () => CanAct && IsTallyPushAllowed);
         RetrySelectedCommand = new AsyncRelayCommand(batch.RetrySelectedAsync, () => CanActOnSelection(x => x.IsRetryable, needsTally: true));
@@ -165,20 +159,12 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public IReadOnlyList<string> StateFilterOptions { get; }
 
-    public IAsyncRelayCommand RefreshCommand { get; }
-    public IAsyncRelayCommand NextPageCommand { get; }
-    public IAsyncRelayCommand PrevPageCommand { get; }
-    public IAsyncRelayCommand ApplyFiltersCommand { get; }
-
-    public IAsyncRelayCommand ClearFiltersCommand { get; }
-    public IRelayCommand ShowPostedDaysCommand { get; }
     public IAsyncRelayCommand PushSelectedCommand { get; }
     public IAsyncRelayCommand PushAllPendingCommand { get; }
 
     public bool IsAdminUnlocked => _adminTokens?.IsUnlocked == true;
     public IAsyncRelayCommand RetrySelectedCommand { get; }
     public IAsyncRelayCommand RepostSelectedCommand { get; }
-    public IRelayCommand ClearSelectionCommand { get; }
 
     public IAsyncRelayCommand<BillListRowViewModel?> PushRowCommand { get; }
     public IAsyncRelayCommand<BillListRowViewModel?> RetryRowCommand { get; }
@@ -397,6 +383,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         RefreshSelectionState();
     }
 
+    [RelayCommand(CanExecute = nameof(HasSelection))]
     public void ClearSelection()
     {
         SelectInBulk(_ => false);
@@ -632,6 +619,17 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         bool needsTally = false)
         => new(action, row => row is not null && allowed(row) && !IsLoading && !IsActing && (!needsTally || IsTallyPushAllowed));
 
+    private bool CanGoToNextPage => HasNext && CanAct;
+
+    private bool CanGoToPrevPage => Skip > 0 && CanAct;
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private Task RefreshAsync(CancellationToken cancellationToken) => LoadAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(HideFullyPostedDays))]
+    private void ShowPostedDays() => HideFullyPostedDays = false;
+
+    [RelayCommand(CanExecute = nameof(CanGoToNextPage))]
     private Task NextPageAsync(CancellationToken cancellationToken)
     {
         if (!HasNext)
@@ -643,6 +641,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         return LoadAsync(cancellationToken);
     }
 
+    [RelayCommand(CanExecute = nameof(CanGoToPrevPage))]
     private Task PrevPageAsync(CancellationToken cancellationToken)
     {
         Skip = Math.Max(0, Skip - PageSize);
@@ -651,12 +650,14 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     // A changed filter starts again from the first page; otherwise the old
     // offset gives empty "Showing 101-100" pages.
+    [RelayCommand(CanExecute = nameof(CanAct))]
     private Task ApplyFiltersAsync(CancellationToken cancellationToken)
     {
         Skip = 0;
         return LoadAsync(cancellationToken);
     }
 
+    [RelayCommand]
     private Task ClearFiltersAsync(CancellationToken cancellationToken)
     {
         StateFilter = "All";

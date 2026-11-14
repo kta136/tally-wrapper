@@ -20,26 +20,27 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         _actions = new BillDetailsActionWorkflow(_billsApi, this);
         AuditTrail = new ObservableCollection<BillAuditTrailItemViewModel>();
         AuditTrail.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Timeline));
-
-        PushCommand = new AsyncRelayCommand(_actions.PushAsync, () => CanAct(BillStateCapabilities.CanPush));
-        RetryCommand = new AsyncRelayCommand(_actions.RetryAsync, () => CanAct(BillStateCapabilities.CanRetry));
-        RepostCommand = new AsyncRelayCommand(_actions.RepostAsync, () => CanAct(BillStateCapabilities.CanRepost));
-        VoidCommand = new AsyncRelayCommand(_actions.VoidAsync, () => CanAct(BillStateCapabilities.CanVoid));
-        ReviseCommand = new AsyncRelayCommand(_actions.ReviseAsync, () => CanAct(BillStateCapabilities.CanRevise));
     }
 
     public ObservableCollection<BillAuditTrailItemViewModel> AuditTrail { get; }
 
-    [ObservableProperty] private bool isLoading;
-    [ObservableProperty] private bool isActing;
-    [ObservableProperty] private string statusMessage = string.Empty;
-    [ObservableProperty] private BillResponse? bill;
+    // The five actions depend on the bill's state and on nothing being in flight.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AuditEmptyMessage))]
+    [NotifyCanExecuteChangedFor(nameof(PushCommand), nameof(RetryCommand), nameof(RepostCommand), nameof(VoidCommand), nameof(ReviseCommand))]
+    private bool isLoading;
 
-    public IAsyncRelayCommand PushCommand { get; }
-    public IAsyncRelayCommand RetryCommand { get; }
-    public IAsyncRelayCommand RepostCommand { get; }
-    public IAsyncRelayCommand VoidCommand { get; }
-    public IAsyncRelayCommand ReviseCommand { get; }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PushCommand), nameof(RetryCommand), nameof(RepostCommand), nameof(VoidCommand), nameof(ReviseCommand))]
+    private bool isActing;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FooterText))]
+    private string statusMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PushCommand), nameof(RetryCommand), nameof(RepostCommand), nameof(VoidCommand), nameof(ReviseCommand))]
+    private BillResponse? bill;
 
     public Action? BillMutated { get; set; }
 
@@ -99,22 +100,35 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         OnPropertyChanged(nameof(StateTone));
         OnPropertyChanged(nameof(StateKind));
         NotifyDisplayChanged();
-        NotifyActionsChanged();
-    }
-
-    partial void OnIsActingChanged(bool value) => NotifyActionsChanged();
-
-    private void NotifyActionsChanged()
-    {
-        PushCommand.NotifyCanExecuteChanged();
-        RetryCommand.NotifyCanExecuteChanged();
-        RepostCommand.NotifyCanExecuteChanged();
-        VoidCommand.NotifyCanExecuteChanged();
-        ReviseCommand.NotifyCanExecuteChanged();
     }
 
     private bool CanAct(Func<string?, bool> allowedInState)
         => Bill is not null && !IsActing && !IsLoading && allowedInState(Bill.State);
+
+    private bool CanPush => CanAct(BillStateCapabilities.CanPush);
+
+    private bool CanRetry => CanAct(BillStateCapabilities.CanRetry);
+
+    private bool CanRepost => CanAct(BillStateCapabilities.CanRepost);
+
+    private bool CanVoid => CanAct(BillStateCapabilities.CanVoid);
+
+    private bool CanRevise => CanAct(BillStateCapabilities.CanRevise);
+
+    [RelayCommand(CanExecute = nameof(CanPush))]
+    private Task PushAsync(CancellationToken cancellationToken) => _actions.PushAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanRetry))]
+    private Task RetryAsync(CancellationToken cancellationToken) => _actions.RetryAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanRepost))]
+    private Task RepostAsync(CancellationToken cancellationToken) => _actions.RepostAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanVoid))]
+    private Task VoidAsync(CancellationToken cancellationToken) => _actions.VoidAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanRevise))]
+    private Task ReviseAsync(CancellationToken cancellationToken) => _actions.ReviseAsync(cancellationToken);
 
     public async Task LoadAsync(Guid billId, CancellationToken cancellationToken = default)
     {
@@ -123,7 +137,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         Bill = null;
         AuditTrail.Clear();
         OnPropertyChanged(nameof(HasAuditTrail));
-        OnPropertyChanged(nameof(AuditEmptyMessage));
 
         try
         {
@@ -149,8 +162,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
         finally
         {
             IsLoading = false;
-            OnPropertyChanged(nameof(AuditEmptyMessage));
-            NotifyActionsChanged();
         }
     }
 

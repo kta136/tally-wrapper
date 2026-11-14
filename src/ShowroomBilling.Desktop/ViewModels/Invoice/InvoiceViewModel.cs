@@ -58,20 +58,11 @@ public partial class InvoiceViewModel : ObservableObject
         Lines = new ObservableCollection<BillLineViewModel>();
         AddTrailingBlankRow();
 
-        AddRowCommand = new RelayCommand(() => AddTrailingBlankRow(deferCollectionRecompute: true));
-        RemoveFocusedRowCommand = new RelayCommand(RemoveFocusedRow, () => Lines.Count > 1);
-        RemoveLineCommand = new RelayCommand<BillLineViewModel?>(RemoveLine, line => line is not null && Lines.Count > 1);
-        SaveDraftCommand = new AsyncRelayCommand(SaveDraftAsync, CanSaveDraft);
-        ClearCommand = new RelayCommand(ClearInvoice, HasAnythingToClear);
-        NewBillCommand = new AsyncRelayCommand(StartNewBillAsync, () => !IsSaving && HasAnythingToClear());
         _lineCollectionObserver = new InvoiceLineCollectionObserver(
             Lines,
             OnLineMutated,
             OnLineCollectionChanged);
         QuickAddResults = new ObservableCollection<ItemMasterRowVm>();
-        QuickAddCommitCommand = new RelayCommand<ItemMasterRowVm?>(CommitQuickAdd);
-        OpenQuickAddCommand = new RelayCommand(() => IsQuickAddOpen = true);
-        CloseQuickAddCommand = new RelayCommand(() => IsQuickAddOpen = false);
         AttachItemMasterObservers();
         RefreshQuickAddResults();
 
@@ -82,20 +73,6 @@ public partial class InvoiceViewModel : ObservableObject
 
     public bool HasMultipleRows => Lines.Count > 1;
 
-    public IRelayCommand AddRowCommand { get; }
-    public IRelayCommand RemoveFocusedRowCommand { get; }
-    public IRelayCommand<BillLineViewModel?> RemoveLineCommand { get; }
-    public IAsyncRelayCommand SaveDraftCommand { get; }
-    public IRelayCommand ClearCommand { get; }
-
-    /// <summary>
-    /// The New bill button and Ctrl+Shift+N: leaves the bill on the form and starts an
-    /// empty one, asking first when that would throw away something not saved.
-    /// </summary>
-    public IAsyncRelayCommand NewBillCommand { get; }
-    public IRelayCommand<ItemMasterRowVm?> QuickAddCommitCommand { get; }
-    public IRelayCommand OpenQuickAddCommand { get; }
-    public IRelayCommand CloseQuickAddCommand { get; }
     public ObservableCollection<ItemMasterRowVm> QuickAddResults { get; }
 
     [ObservableProperty] private string quickAddQuery = string.Empty;
@@ -108,7 +85,11 @@ public partial class InvoiceViewModel : ObservableObject
 
     [ObservableProperty] private string saveStatus = string.Empty;
     [ObservableProperty] private DateTimeOffset? lastSavedAtUtc;
-    [ObservableProperty] private bool isSaving;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveDraftCommand), nameof(NewBillCommand))]
+    private bool isSaving;
+
     [ObservableProperty] private string? currentBillState;
     [ObservableProperty] private bool rateMissing;
     [ObservableProperty] private bool isEditingPosted;
@@ -140,8 +121,14 @@ public partial class InvoiceViewModel : ObservableObject
     public IReadOnlyList<string> UnitOptions { get; } = ItemUnits.All;
     public IReadOnlyList<string> PaymentOptions { get; } = [PaymentMode.CreditDebit, PaymentMode.Cash];
 
-    [ObservableProperty] private string invoiceNumber = InvoiceNumberPlaceholder;
-    [ObservableProperty] private DateTimeOffset billDate = DateTimeOffset.Now;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInvoiceNumberAssigned))]
+    private string invoiceNumber = InvoiceNumberPlaceholder;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BillDateLocal))]
+    private DateTimeOffset billDate = DateTimeOffset.Now;
+
     [ObservableProperty] private string partyName = string.Empty;
 
     public DateTime BillDateLocal
@@ -154,7 +141,6 @@ public partial class InvoiceViewModel : ObservableObject
         }
     }
 
-    partial void OnBillDateChanged(DateTimeOffset value) => OnPropertyChanged(nameof(BillDateLocal));
     [ObservableProperty] private string payment = PaymentMode.Cash;
     [ObservableProperty] private decimal? rate24Kt;
     [ObservableProperty] private decimal discount;
@@ -201,7 +187,6 @@ public partial class InvoiceViewModel : ObservableObject
     /// <summary>False while the box still shows the "Assigned on save" hint, so it can be drawn as one.</summary>
     public bool IsInvoiceNumberAssigned => InvoiceNumber != InvoiceNumberPlaceholder;
 
-    partial void OnInvoiceNumberChanged(string value) => OnPropertyChanged(nameof(IsInvoiceNumberAssigned));
     // The colour that came with the status text (ShowStatus). Null when the
     // text was set on its own and the colour is worked out from its wording.
     private string? _saveStatusTone;
@@ -268,6 +253,11 @@ public partial class InvoiceViewModel : ObservableObject
            || _draftBillId is not null
            || !string.IsNullOrWhiteSpace(PartyName)
            || !string.IsNullOrWhiteSpace(Narration);
+
+    private bool CanStartNewBill => !IsSaving && HasAnythingToClear();
+
+    [RelayCommand(CanExecute = nameof(HasAnythingToClear))]
+    private void Clear() => ClearInvoice();
 
     private void RaiseCanClearChanged()
     {
@@ -513,12 +503,19 @@ public partial class InvoiceViewModel : ObservableObject
         return "err";
     }
 
+    [RelayCommand]
+    private void AddRow() => AddTrailingBlankRow(deferCollectionRecompute: true);
+
+    [RelayCommand(CanExecute = nameof(HasMultipleRows))]
     private void RemoveFocusedRow()
     {
         if (Lines.Count <= 1) return;
         RemoveRowAt(Math.Clamp(FocusedRowIndex, 0, Lines.Count - 1));
     }
 
+    private bool CanRemoveLine(BillLineViewModel? line) => line is not null && Lines.Count > 1;
+
+    [RelayCommand(CanExecute = nameof(CanRemoveLine))]
     private void RemoveLine(BillLineViewModel? line)
     {
         if (line is null || Lines.Count <= 1) return;
@@ -651,15 +648,11 @@ public partial class InvoiceViewModel : ObservableObject
     private bool CanSaveDraft()
         => !IsSaving && Lines.Any(l => !l.IsEmpty);
 
-    partial void OnIsSavingChanged(bool value)
-    {
-        SaveDraftCommand.NotifyCanExecuteChanged();
-        // Emptying the form while a save or a load is in flight would let its
-        // answer land on the new bill.
-        NewBillCommand.NotifyCanExecuteChanged();
-        UpdateStatus();
-    }
+    // Emptying the form while a save or a load is in flight would let its answer land on
+    // the new bill, so New bill is off while saving, as Save is.
+    partial void OnIsSavingChanged(bool value) => UpdateStatus();
 
+    [RelayCommand(CanExecute = nameof(CanSaveDraft))]
     private async Task SaveDraftAsync(CancellationToken cancellationToken)
     {
         var validationError = ValidateForSave();
@@ -801,7 +794,14 @@ public partial class InvoiceViewModel : ObservableObject
     }
 
     /// <summary>Puts the picked item on the first empty line, adding one if every line is in use.</summary>
-    private void CommitQuickAdd(ItemMasterRowVm? master)
+    [RelayCommand]
+    private void OpenQuickAdd() => IsQuickAddOpen = true;
+
+    [RelayCommand]
+    private void CloseQuickAdd() => IsQuickAddOpen = false;
+
+    [RelayCommand]
+    private void QuickAddCommit(ItemMasterRowVm? master)
     {
         master ??= QuickAddSelection ?? QuickAddResults.FirstOrDefault();
         if (master is null) return;
@@ -818,7 +818,12 @@ public partial class InvoiceViewModel : ObservableObject
         QuickAddCommitted?.Invoke(this, target);
     }
 
-    private async Task StartNewBillAsync()
+    /// <summary>
+    /// The New bill button and Ctrl+Shift+N: leaves the bill on the form and starts an
+    /// empty one, asking first when that would throw away something not saved.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStartNewBill))]
+    private async Task NewBillAsync()
     {
         if (_hasUnsavedChanges && !await ConfirmDiscardAsync()) return;
 

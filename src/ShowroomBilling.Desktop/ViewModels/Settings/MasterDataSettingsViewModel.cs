@@ -43,22 +43,6 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
         VoucherTypeOptions = new ObservableCollection<VoucherTypeSnapshotItem>();
         StockItems = new ObservableCollection<StockItemSnapshotItem>();
 
-        RequestCompanyRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestCompanyRefreshAsync,
-            () => !IsFetchingCompanies && !IsSettingActiveCompany);
-        SetActiveCompanyCommand = new AsyncRelayCommand(_masterWorkflow.SetActiveCompanyAsync,
-            () => SelectedCompany is not null
-                && !IsSettingActiveCompany
-                && !IsFetchingCompanies
-                && !string.Equals(SelectedCompany.Name, ActiveCompanyName, StringComparison.Ordinal));
-        RequestLedgerRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestLedgerRefreshAsync,
-            () => !IsFetchingLedgers);
-        RequestStockItemRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestStockItemRefreshAsync,
-            () => !IsFetchingStockItems);
-
-        AddItemMasterRowCommand = new RelayCommand(AddItemMasterRow, () => IsEditing);
-        RemoveItemMasterRowCommand = new RelayCommand<ItemMasterRowVm>(RemoveItemMasterRow, _ => IsEditing);
-        AddKaratRowCommand = new RelayCommand(AddKaratRow, () => IsEditing);
-        RemoveKaratRowCommand = new RelayCommand<KaratMasterRowVm>(RemoveKaratRow, _ => IsEditing);
     }
 
     public SettingsDraft Draft => _shell.Draft;
@@ -94,15 +78,6 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
         set => _shell.UpdatedAtUtc = value;
     }
 
-    public IAsyncRelayCommand RequestCompanyRefreshCommand { get; }
-    public IAsyncRelayCommand SetActiveCompanyCommand { get; }
-    public IAsyncRelayCommand RequestLedgerRefreshCommand { get; }
-    public IAsyncRelayCommand RequestStockItemRefreshCommand { get; }
-    public IRelayCommand AddItemMasterRowCommand { get; }
-    public IRelayCommand<ItemMasterRowVm> RemoveItemMasterRowCommand { get; }
-    public IRelayCommand AddKaratRowCommand { get; }
-    public IRelayCommand<KaratMasterRowVm> RemoveKaratRowCommand { get; }
-
     public ObservableCollection<CompanySnapshotItem> Companies { get; }
     public ObservableCollection<LedgerSnapshotItem> LedgerOptions { get; }
     public ObservableCollection<VoucherTypeSnapshotItem> VoucherTypeOptions { get; }
@@ -112,30 +87,66 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
     public IReadOnlyList<string> ItemCategoryOptions { get; } = ItemCategories.All;
     public IReadOnlyList<string> PricingModeOptions { get; } = PricingModes.All;
 
-    [ObservableProperty] private CompanySnapshotItem? selectedCompany;
-    [ObservableProperty] private bool isFetchingCompanies;
-    [ObservableProperty] private bool isSettingActiveCompany;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SetActiveCompanyCommand))]
+    private CompanySnapshotItem? selectedCompany;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RequestCompanyRefreshCommand), nameof(SetActiveCompanyCommand))]
+    private bool isFetchingCompanies;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RequestCompanyRefreshCommand), nameof(SetActiveCompanyCommand))]
+    private bool isSettingActiveCompany;
+
     [ObservableProperty] private string companiesFreshness = "—";
     [ObservableProperty] private DateTimeOffset? companiesFetchedAtUtc;
     [ObservableProperty] private int companiesCount;
 
-    [ObservableProperty] private bool isFetchingLedgers;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RequestLedgerRefreshCommand))]
+    private bool isFetchingLedgers;
+
     [ObservableProperty] private string ledgersFreshness = "—";
     [ObservableProperty] private DateTimeOffset? ledgersFetchedAtUtc;
     [ObservableProperty] private int ledgersCount;
     [ObservableProperty] private int voucherTypesCount;
 
-    [ObservableProperty] private bool isFetchingStockItems;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RequestStockItemRefreshCommand))]
+    private bool isFetchingStockItems;
+
     [ObservableProperty] private string stockItemsFreshness = "—";
     [ObservableProperty] private DateTimeOffset? stockItemsFetchedAtUtc;
     [ObservableProperty] private int stockItemsCount;
 
-    partial void OnIsFetchingCompaniesChanged(bool value) => NotifyCompanyCommandsChanged();
-    partial void OnIsSettingActiveCompanyChanged(bool value) => NotifyCompanyCommandsChanged();
-    partial void OnSelectedCompanyChanged(CompanySnapshotItem? value) => SetActiveCompanyCommand.NotifyCanExecuteChanged();
+    private bool CanRequestCompanyRefresh => !IsFetchingCompanies && !IsSettingActiveCompany;
 
-    partial void OnIsFetchingLedgersChanged(bool value) => RequestLedgerRefreshCommand.NotifyCanExecuteChanged();
-    partial void OnIsFetchingStockItemsChanged(bool value) => RequestStockItemRefreshCommand.NotifyCanExecuteChanged();
+    private bool CanSetActiveCompany =>
+        SelectedCompany is not null
+        && !IsSettingActiveCompany
+        && !IsFetchingCompanies
+        && !string.Equals(SelectedCompany.Name, ActiveCompanyName, StringComparison.Ordinal);
+
+    private bool CanRequestLedgerRefresh => !IsFetchingLedgers;
+
+    private bool CanRequestStockItemRefresh => !IsFetchingStockItems;
+
+    [RelayCommand(CanExecute = nameof(CanRequestCompanyRefresh))]
+    private Task RequestCompanyRefreshAsync(CancellationToken cancellationToken)
+        => _masterWorkflow.RequestCompanyRefreshAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanSetActiveCompany))]
+    private Task SetActiveCompanyAsync(CancellationToken cancellationToken)
+        => _masterWorkflow.SetActiveCompanyAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanRequestLedgerRefresh))]
+    private Task RequestLedgerRefreshAsync(CancellationToken cancellationToken)
+        => _masterWorkflow.RequestLedgerRefreshAsync(cancellationToken);
+
+    [RelayCommand(CanExecute = nameof(CanRequestStockItemRefresh))]
+    private Task RequestStockItemRefreshAsync(CancellationToken cancellationToken)
+        => _masterWorkflow.RequestStockItemRefreshAsync(cancellationToken);
 
     public async Task LoadMissingSnapshotsAsync(CancellationToken cancellationToken)
     {
@@ -174,15 +185,19 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
         RemoveKaratRowCommand.NotifyCanExecuteChanged();
     }
 
+    [RelayCommand(CanExecute = nameof(IsEditing))]
     private void AddItemMasterRow() => Draft.ItemMasterRows.Add(new ItemMasterRowVm());
 
+    [RelayCommand(CanExecute = nameof(IsEditing))]
     private void RemoveItemMasterRow(ItemMasterRowVm? row)
     {
         if (row is not null) Draft.ItemMasterRows.Remove(row);
     }
 
+    [RelayCommand(CanExecute = nameof(IsEditing))]
     private void AddKaratRow() => Draft.KaratRows.Add(new KaratMasterRowVm());
 
+    [RelayCommand(CanExecute = nameof(IsEditing))]
     private void RemoveKaratRow(KaratMasterRowVm? row)
     {
         if (row is not null) Draft.KaratRows.Remove(row);

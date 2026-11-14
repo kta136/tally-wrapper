@@ -89,21 +89,10 @@ public partial class SettingsViewModel : ObservableObject,
             : new SettingsPreviewViewModel(Draft, PrintLayout, this, printDispatcher, printAssetApi, printPreferences);
         _sectionCoordinator.UpdatePreviewActivation();
 
-        RefreshCommand = new AsyncRelayCommand(() => LoadAsync(CancellationToken.None), () => !IsLoading && !IsEditing);
-        BeginEditCommand = new RelayCommand(BeginEdit, () => !IsEditing && !IsLoading && Settings is not null);
-        DiscardChangesCommand = new RelayCommand(DiscardChanges, () => IsEditing && !IsSaving);
-        SaveAllCommand = new AsyncRelayCommand(SaveAsync, () => IsEditing && IsDirty && !IsSaving);
-
-        OpenLogFolderCommand = new RelayCommand(OpenLogFolder);
-        OpenInstallFolderCommand = new RelayCommand(OpenInstallFolder);
-        OpenAppDataFolderCommand = new RelayCommand(OpenAppDataFolder);
         DensityOptions = UiDensityManager.All;
         UiDensity = UiDensityManager.CurrentDensity;
     }
 
-    public IRelayCommand OpenLogFolderCommand { get; }
-    public IRelayCommand OpenInstallFolderCommand { get; }
-    public IRelayCommand OpenAppDataFolderCommand { get; }
     public IReadOnlyList<string> DensityOptions { get; }
 
     /// <summary>
@@ -148,10 +137,13 @@ public partial class SettingsViewModel : ObservableObject,
     public string InstallFolderPath => AppContext.BaseDirectory;
     public string AppDataFolderPath => SettingsFolderLauncher.AppDataFolderPath;
 
+    [RelayCommand]
     private static void OpenLogFolder() => SettingsFolderLauncher.OpenLogFolder();
 
+    [RelayCommand]
     private static void OpenInstallFolder() => SettingsFolderLauncher.OpenInstallFolder();
 
+    [RelayCommand]
     private static void OpenAppDataFolder() => SettingsFolderLauncher.OpenAppDataFolder();
 
     public ObservableCollection<SettingsSectionKey> Sections { get; }
@@ -167,21 +159,34 @@ public partial class SettingsViewModel : ObservableObject,
     public PrintLayoutViewModel PrintLayout { get; }
     public SettingsPreviewViewModel Preview { get; }
 
-    public IAsyncRelayCommand RefreshCommand { get; }
-    public IRelayCommand BeginEditCommand { get; }
-    public IRelayCommand DiscardChangesCommand { get; }
-    public IAsyncRelayCommand SaveAllCommand { get; }
-
     [ObservableProperty] private SettingsSectionKey selectedSection;
-    [ObservableProperty] private bool isLoading;
-    [ObservableProperty] private bool isSaving;
-    [ObservableProperty] private bool isEditing;
-    [ObservableProperty] private bool isDirty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(BeginEditCommand), nameof(DiscardChangesCommand), nameof(SaveAllCommand))]
+    private bool isLoading;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(BeginEditCommand), nameof(DiscardChangesCommand), nameof(SaveAllCommand))]
+    private bool isSaving;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(BeginEditCommand), nameof(DiscardChangesCommand), nameof(SaveAllCommand))]
+    private bool isEditing;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveAllCommand))]
+    private bool isDirty;
+
     [ObservableProperty] private string statusMessage = string.Empty;
     [ObservableProperty] private string settingsSource = "—";
     [ObservableProperty] private string summary = string.Empty;
     [ObservableProperty] private DateTimeOffset? updatedAtUtc;
-    [ObservableProperty] private EffectiveCloudSettingsDto? settings;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActiveCompanyName))]
+    [NotifyCanExecuteChangedFor(nameof(BeginEditCommand))]
+    private EffectiveCloudSettingsDto? settings;
+
     [ObservableProperty] private string uiDensity = UiDensityManager.Standard;
 
     public IReadOnlyList<string> CloudOwnedCategories { get; private set; } = Array.Empty<string>();
@@ -265,39 +270,19 @@ public partial class SettingsViewModel : ObservableObject,
         OnPropertyChanged(nameof(SelectedSectionSubtitle));
     }
 
-    partial void OnIsLoadingChanged(bool value) => NotifyCommandsChanged();
-    partial void OnIsSavingChanged(bool value) => NotifyCommandsChanged();
     partial void OnIsEditingChanged(bool value)
     {
-        NotifyCommandsChanged();
         MasterData.NotifyShellStateChanged();
         RaiseSectionHeader();
     }
 
-    partial void OnIsDirtyChanged(bool value)
-    {
-        SaveAllCommand.NotifyCanExecuteChanged();
-        RaiseSectionHeader();
-    }
+    partial void OnIsDirtyChanged(bool value) => RaiseSectionHeader();
 
     partial void OnSettingsSourceChanged(string value) => RaiseSectionHeader();
     partial void OnUpdatedAtUtcChanged(DateTimeOffset? value) => RaiseSectionHeader();
     partial void OnUiDensityChanged(string value) => UiDensityManager.ApplyDensity(value);
 
-    partial void OnSettingsChanged(EffectiveCloudSettingsDto? value)
-    {
-        OnPropertyChanged(nameof(ActiveCompanyName));
-        BeginEditCommand.NotifyCanExecuteChanged();
-        MasterData.NotifyShellStateChanged();
-    }
-
-    private void NotifyCommandsChanged()
-    {
-        RefreshCommand.NotifyCanExecuteChanged();
-        BeginEditCommand.NotifyCanExecuteChanged();
-        DiscardChangesCommand.NotifyCanExecuteChanged();
-        SaveAllCommand.NotifyCanExecuteChanged();
-    }
+    partial void OnSettingsChanged(EffectiveCloudSettingsDto? value) => MasterData.NotifyShellStateChanged();
 
     public void NotifySectionPropertiesChanged()
     {
@@ -394,15 +379,28 @@ public partial class SettingsViewModel : ObservableObject,
         }
     }
 
+    private bool CanRefresh => !IsLoading && !IsEditing;
+
+    private bool CanBeginEdit => !IsEditing && !IsLoading && Settings is not null;
+
+    private bool CanDiscardChanges => IsEditing && !IsSaving;
+
+    private bool CanSaveAll => IsEditing && IsDirty && !IsSaving;
+
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
+    private Task RefreshAsync() => LoadAsync(CancellationToken.None);
+
+    [RelayCommand(CanExecute = nameof(CanBeginEdit))]
     private void BeginEdit()
         => _editWorkflow.BeginEdit();
 
+    [RelayCommand(CanExecute = nameof(CanDiscardChanges))]
     private void DiscardChanges()
         => _editWorkflow.DiscardChanges();
 
-    private async Task SaveAsync(CancellationToken cancellationToken)
-        => await _editWorkflow.SaveAsync(cancellationToken);
-
+    [RelayCommand(CanExecute = nameof(CanSaveAll))]
+    private Task SaveAllAsync(CancellationToken cancellationToken)
+        => _editWorkflow.SaveAsync(cancellationToken);
 }
 
 public enum SettingsSectionKey

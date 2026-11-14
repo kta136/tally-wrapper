@@ -44,14 +44,6 @@ public partial class SyntheticBatchViewModel : ObservableObject
         KaratOptions = new ObservableCollection<SelectableKarat>();
         PaymentOptions = new ObservableCollection<string> { Contracts.Bills.PaymentMode.Cash, Contracts.Bills.PaymentMode.CreditDebit };
 
-        // Commands must be initialised BEFORE any [ObservableProperty] setter that
-        // triggers RecomputeValidation, because the validation path calls
-        // StartCommand.NotifyCanExecuteChanged().
-        StartCommand = new AsyncRelayCommand(RunBatchAsync, CanStart);
-        CancelCommand = new RelayCommand(() => _cts?.Cancel(), () => IsRunning);
-        SelectAllKaratsCommand = new RelayCommand(() => SetAllKarats(true));
-        ClearAllKaratsCommand = new RelayCommand(() => SetAllKarats(false));
-
         var now = DateTimeOffset.Now;
         var localStart = new DateTimeOffset(now.Year, now.Month, now.Day, 9, 0, 0, now.Offset);
         StartAt = localStart > now ? localStart : new DateTimeOffset(now.DateTime.Date, now.Offset);
@@ -73,26 +65,33 @@ public partial class SyntheticBatchViewModel : ObservableObject
     public ObservableCollection<SelectableKarat> KaratOptions { get; }
     public ObservableCollection<string> PaymentOptions { get; }
 
-    public IAsyncRelayCommand StartCommand { get; }
-    public IRelayCommand CancelCommand { get; }
-    public IRelayCommand SelectAllKaratsCommand { get; }
-    public IRelayCommand ClearAllKaratsCommand { get; }
-
     [ObservableProperty] private long totalAmount = 1_000_000;
     [ObservableProperty] private long maxBillAmount = SyntheticBatchPlanLimits.HardMaxBillAmount;
     // No built-in rate: it is taken from the Invoice tab when the dialog
     // opens, or typed. A stale default would price a whole batch wrongly.
-    [ObservableProperty] private decimal rate24Kt;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRateMissing))]
+    private decimal rate24Kt;
+
     [ObservableProperty] private string paymentMode = Contracts.Bills.PaymentMode.Cash;
     [ObservableProperty] private int minItemsPerBill = 1;
     [ObservableProperty] private int maxItemsPerBill = 3;
     [ObservableProperty] private DateTimeOffset startAt;
     [ObservableProperty] private DateTimeOffset endAt;
 
-    [ObservableProperty] private bool isRunning;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(CancelCommand))]
+    private bool isRunning;
+
     [ObservableProperty] private string statusMessage = string.Empty;
-    [ObservableProperty] private string? errorMessage;
-    [ObservableProperty] private string? validationMessage;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    private string? errorMessage;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasValidation))]
+    private string? validationMessage;
 
     public bool HasValidation => !string.IsNullOrWhiteSpace(ValidationMessage);
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
@@ -100,25 +99,23 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     partial void OnTotalAmountChanged(long value) => RecomputeValidation();
     partial void OnMaxBillAmountChanged(long value) => RecomputeValidation();
-    partial void OnRate24KtChanged(decimal value)
-    {
-        OnPropertyChanged(nameof(IsRateMissing));
-        RecomputeValidation();
-    }
+    partial void OnRate24KtChanged(decimal value) => RecomputeValidation();
     partial void OnMinItemsPerBillChanged(int value) => RecomputeValidation();
     partial void OnMaxItemsPerBillChanged(int value) => RecomputeValidation();
     partial void OnStartAtChanged(DateTimeOffset value) => RecomputeValidation();
     partial void OnEndAtChanged(DateTimeOffset value) => RecomputeValidation();
     partial void OnPaymentModeChanged(string value) => RecomputeValidation();
-    partial void OnValidationMessageChanged(string? value) => OnPropertyChanged(nameof(HasValidation));
-    partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
-    partial void OnIsRunningChanged(bool value)
-    {
-        StartCommand.NotifyCanExecuteChanged();
-        CancelCommand.NotifyCanExecuteChanged();
-    }
 
     private bool CanStart() => !IsRunning && !HasValidation && AnyKaratSelected();
+
+    [RelayCommand(CanExecute = nameof(IsRunning))]
+    private void Cancel() => _cts?.Cancel();
+
+    [RelayCommand]
+    private void SelectAllKarats() => SetAllKarats(true);
+
+    [RelayCommand]
+    private void ClearAllKarats() => SetAllKarats(false);
 
     private bool AnyKaratSelected()
         => KaratOptions.Count > 0 && KaratOptions.Any(k => k.IsSelected);
@@ -212,7 +209,8 @@ public partial class SyntheticBatchViewModel : ObservableObject
         return (int)(e - s).TotalMinutes + 1;
     }
 
-    private async Task RunBatchAsync(CancellationToken _)
+    [RelayCommand(CanExecute = nameof(CanStart))]
+    private async Task StartAsync(CancellationToken _)
     {
         _cts = new CancellationTokenSource();
         ErrorMessage = null;

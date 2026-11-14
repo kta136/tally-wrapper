@@ -24,17 +24,22 @@ public partial class SetupWizardViewModel : ObservableObject
     {
         _settingsApi = settingsApi;
         _completionStore = completionStore;
-
-        SaveBasicsCommand = new AsyncRelayCommand(SaveBasicsAsync, () => !IsBusy && CanFinish);
     }
 
     public event EventHandler? Completed;
 
-    public IAsyncRelayCommand SaveBasicsCommand { get; }
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveBasicsCommand))]
+    private bool isBusy;
 
-    [ObservableProperty] private bool isBusy;
-    [ObservableProperty] private string statusMessage = string.Empty;
-    [ObservableProperty] private string errorMessage = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    private string statusMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasErrorMessage))]
+    private string errorMessage = string.Empty;
+
     [ObservableProperty] private string tallyHost = "127.0.0.1";
     [ObservableProperty] private string tallyPort = "9000";
     [ObservableProperty] private string tallyTimeoutSeconds = "30";
@@ -89,6 +94,9 @@ public partial class SetupWizardViewModel : ObservableObject
         return true;
     }
 
+    private bool CanSaveBasics => !IsBusy && CanFinish;
+
+    [RelayCommand(CanExecute = nameof(CanSaveBasics))]
     private async Task SaveBasicsAsync(CancellationToken cancellationToken)
     {
         ClearMessages();
@@ -214,7 +222,4 @@ public partial class SetupWizardViewModel : ObservableObject
         ErrorMessage = message;
     }
 
-    partial void OnIsBusyChanged(bool value) => SaveBasicsCommand.NotifyCanExecuteChanged();
-    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
-    partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(HasErrorMessage));
 }

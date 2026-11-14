@@ -39,26 +39,6 @@ public partial class PrintLayoutViewModel : ObservableObject
         Assets = new ObservableCollection<PrintAssetResponse>();
         SectionLayouts = new ObservableCollection<PrintLayoutSectionRowViewModel>();
 
-        LoadCommand = new AsyncRelayCommand(LoadAsync, () => !IsBusy);
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsBusy);
-        UploadLogoCommand = new AsyncRelayCommand(() => UploadAsync(PrintAssetKinds.Logo), () => !IsBusy);
-        UploadSignatureCommand = new AsyncRelayCommand(() => UploadAsync(PrintAssetKinds.Signature), () => !IsBusy);
-        UploadWatermarkCommand = new AsyncRelayCommand(() => UploadAsync(PrintAssetKinds.Watermark), () => !IsBusy);
-        DeleteLogoCommand = new AsyncRelayCommand(() => DeleteByKindAsync(PrintAssetKinds.Logo),
-            () => !IsBusy && LogoAssetId is not null);
-        DeleteSignatureCommand = new AsyncRelayCommand(() => DeleteByKindAsync(PrintAssetKinds.Signature),
-            () => !IsBusy && SignatureAssetId is not null);
-        DeleteWatermarkCommand = new AsyncRelayCommand(() => DeleteByKindAsync(PrintAssetKinds.Watermark),
-            () => !IsBusy && HasWatermark);
-        MoveSectionUpCommand = new RelayCommand<PrintLayoutSectionRowViewModel>(MoveSectionUp);
-        MoveSectionDownCommand = new RelayCommand<PrintLayoutSectionRowViewModel>(MoveSectionDown);
-        PinBottomFromHereCommand = new RelayCommand<PrintLayoutSectionRowViewModel>(
-            row => BottomPinnedFromSectionKey = row?.SectionKey);
-        ClearBottomPinCommand = new RelayCommand(
-            () => BottomPinnedFromSectionKey = null,
-            () => BottomPinnedFromSectionKey is not null);
-        ResetPageLayoutCommand = new RelayCommand(ResetPageLayout);
-
         ApplyPageLayout(null);
     }
 
@@ -66,21 +46,11 @@ public partial class PrintLayoutViewModel : ObservableObject
     public ObservableCollection<PrintLayoutSectionRowViewModel> SectionLayouts { get; }
     public IReadOnlyList<string> DensityOptions => PrintPageDensity.All;
 
-    public IAsyncRelayCommand LoadCommand { get; }
-    public IAsyncRelayCommand SaveCommand { get; }
-    public IAsyncRelayCommand UploadLogoCommand { get; }
-    public IAsyncRelayCommand UploadSignatureCommand { get; }
-    public IAsyncRelayCommand UploadWatermarkCommand { get; }
-    public IAsyncRelayCommand DeleteLogoCommand { get; }
-    public IAsyncRelayCommand DeleteSignatureCommand { get; }
-    public IAsyncRelayCommand DeleteWatermarkCommand { get; }
-    public IRelayCommand<PrintLayoutSectionRowViewModel> MoveSectionUpCommand { get; }
-    public IRelayCommand<PrintLayoutSectionRowViewModel> MoveSectionDownCommand { get; }
-    public IRelayCommand<PrintLayoutSectionRowViewModel> PinBottomFromHereCommand { get; }
-    public IRelayCommand ClearBottomPinCommand { get; }
-    public IRelayCommand ResetPageLayoutCommand { get; }
+    // Nothing loads, saves, uploads or deletes while another of them is in flight.
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(LoadCommand), nameof(SaveCommand), nameof(UploadLogoCommand), nameof(UploadSignatureCommand), nameof(UploadWatermarkCommand), nameof(DeleteLogoCommand), nameof(DeleteSignatureCommand), nameof(DeleteWatermarkCommand))]
+    private bool isBusy;
 
-    [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string statusMessage = string.Empty;
     [ObservableProperty] private DateTimeOffset? updatedAtUtc;
 
@@ -89,7 +59,11 @@ public partial class PrintLayoutViewModel : ObservableObject
     [ObservableProperty] private double topMarginCm;
     [ObservableProperty] private double bottomMarginCm;
 
-    [ObservableProperty] private Guid? logoAssetId;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLogo))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteLogoCommand))]
+    private Guid? logoAssetId;
+
     [ObservableProperty] private string logoFileName = "—";
     [ObservableProperty] private double logoOffsetXCm;
     [ObservableProperty] private double logoOffsetYCm;
@@ -100,14 +74,22 @@ public partial class PrintLayoutViewModel : ObservableObject
     public bool HasSignature => SignatureAssetId is not null;
     public bool HasWatermark => WatermarkAssetId is not null || PendingWatermarkBytes is not null;
 
-    [ObservableProperty] private Guid? signatureAssetId;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSignature))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteSignatureCommand))]
+    private Guid? signatureAssetId;
+
     [ObservableProperty] private string signatureFileName = "—";
     [ObservableProperty] private double signatureOffsetXCm;
     [ObservableProperty] private double signatureOffsetYCm;
     [ObservableProperty] private double signatureWidthCm;
     [ObservableProperty] private double signatureHeightCm;
 
-    [ObservableProperty] private Guid? watermarkAssetId;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasWatermark))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteWatermarkCommand))]
+    private Guid? watermarkAssetId;
+
     [ObservableProperty] private string watermarkFileName = "—";
     [ObservableProperty] private double watermarkOffsetXCm = PrintLayoutDefaults.WatermarkOffsetXCm;
     [ObservableProperty] private double watermarkOffsetYCm = PrintLayoutDefaults.WatermarkOffsetYCm;
@@ -117,57 +99,59 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     [ObservableProperty] private string pageDensity = PrintPageDensity.Standard;
     [ObservableProperty] private double invoiceBorderThicknessPt = PrintLayoutDefaults.InvoiceBorderThicknessPt;
-    [ObservableProperty] private string? bottomPinnedFromSectionKey = PrintLayoutSectionKeys.GstBreakup;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ClearBottomPinCommand))]
+    private string? bottomPinnedFromSectionKey = PrintLayoutSectionKeys.GstBreakup;
 
     /// <summary>Unsaved bytes from the last local upload; cleared on delete. Consumed
     /// by the live Settings preview so the pane reflects the browse result immediately,
     /// without waiting for the API round-trip.</summary>
     [ObservableProperty] private byte[]? pendingLogoBytes;
     [ObservableProperty] private byte[]? pendingSignatureBytes;
-    [ObservableProperty] private byte[]? pendingWatermarkBytes;
 
-    partial void OnIsBusyChanged(bool value)
-    {
-        LoadCommand.NotifyCanExecuteChanged();
-        SaveCommand.NotifyCanExecuteChanged();
-        UploadLogoCommand.NotifyCanExecuteChanged();
-        UploadSignatureCommand.NotifyCanExecuteChanged();
-        UploadWatermarkCommand.NotifyCanExecuteChanged();
-        DeleteLogoCommand.NotifyCanExecuteChanged();
-        DeleteSignatureCommand.NotifyCanExecuteChanged();
-        DeleteWatermarkCommand.NotifyCanExecuteChanged();
-    }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasWatermark))]
+    [NotifyCanExecuteChangedFor(nameof(DeleteWatermarkCommand))]
+    private byte[]? pendingWatermarkBytes;
 
-    partial void OnLogoAssetIdChanged(Guid? value)
-    {
-        DeleteLogoCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(HasLogo));
-    }
+    partial void OnBottomPinnedFromSectionKeyChanged(string? value) => UpdatePinnedStates();
 
-    partial void OnSignatureAssetIdChanged(Guid? value)
-    {
-        DeleteSignatureCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(HasSignature));
-    }
+    private bool IsIdle => !IsBusy;
 
-    partial void OnWatermarkAssetIdChanged(Guid? value)
-    {
-        DeleteWatermarkCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(HasWatermark));
-    }
+    private bool CanDeleteLogo => !IsBusy && HasLogo;
 
-    partial void OnPendingWatermarkBytesChanged(byte[]? value)
-    {
-        DeleteWatermarkCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(HasWatermark));
-    }
+    private bool CanDeleteSignature => !IsBusy && HasSignature;
 
-    partial void OnBottomPinnedFromSectionKeyChanged(string? value)
-    {
-        UpdatePinnedStates();
-        ClearBottomPinCommand.NotifyCanExecuteChanged();
-    }
+    private bool CanDeleteWatermark => !IsBusy && HasWatermark;
 
+    private bool HasBottomPin => BottomPinnedFromSectionKey is not null;
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task UploadLogoAsync() => UploadAsync(PrintAssetKinds.Logo);
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task UploadSignatureAsync() => UploadAsync(PrintAssetKinds.Signature);
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private Task UploadWatermarkAsync() => UploadAsync(PrintAssetKinds.Watermark);
+
+    [RelayCommand(CanExecute = nameof(CanDeleteLogo))]
+    private Task DeleteLogoAsync() => DeleteByKindAsync(PrintAssetKinds.Logo);
+
+    [RelayCommand(CanExecute = nameof(CanDeleteSignature))]
+    private Task DeleteSignatureAsync() => DeleteByKindAsync(PrintAssetKinds.Signature);
+
+    [RelayCommand(CanExecute = nameof(CanDeleteWatermark))]
+    private Task DeleteWatermarkAsync() => DeleteByKindAsync(PrintAssetKinds.Watermark);
+
+    [RelayCommand]
+    private void PinBottomFromHere(PrintLayoutSectionRowViewModel? row) => BottomPinnedFromSectionKey = row?.SectionKey;
+
+    [RelayCommand(CanExecute = nameof(HasBottomPin))]
+    private void ClearBottomPin() => BottomPinnedFromSectionKey = null;
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         IsBusy = true;
@@ -209,6 +193,7 @@ public partial class PrintLayoutViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
         if (PendingWatermarkBytes is not null && WatermarkAssetId is null)
@@ -513,6 +498,7 @@ public partial class PrintLayoutViewModel : ObservableObject
         OnPropertyChanged(nameof(SectionLayouts));
     }
 
+    [RelayCommand]
     private void MoveSectionUp(PrintLayoutSectionRowViewModel? row)
     {
         if (row is null) return;
@@ -523,6 +509,7 @@ public partial class PrintLayoutViewModel : ObservableObject
         OnPropertyChanged(nameof(SectionLayouts));
     }
 
+    [RelayCommand]
     private void MoveSectionDown(PrintLayoutSectionRowViewModel? row)
     {
         if (row is null) return;
@@ -556,6 +543,7 @@ public partial class PrintLayoutViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
     private void ResetPageLayout() => ApplyPageLayout(PrintLayoutDefaults.CreatePageLayout());
 
     private void OnSectionLayoutPropertyChanged(object? sender, PropertyChangedEventArgs e)

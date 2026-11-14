@@ -18,11 +18,6 @@ public partial class AdminUnlockViewModel : ObservableObject
         _adminApi = adminApi;
         _tokenStore = tokenStore;
 
-        LoadStatusCommand = new AsyncRelayCommand(LoadStatusAsync);
-        UnlockCommand = new AsyncRelayCommand(UnlockAsync, () => !IsBusy);
-        LockCommand = new AsyncRelayCommand(LockAsync);
-        SetOrChangePasscodeCommand = new AsyncRelayCommand(SetOrChangePasscodeAsync, () => !IsBusy);
-
         _tokenStore.Changed += _ =>
         {
             OnPropertyChanged(nameof(IsUnlocked));
@@ -35,14 +30,8 @@ public partial class AdminUnlockViewModel : ObservableObject
     }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowUnlockForm), nameof(ShowInitialSetupForm), nameof(DialogTitle))]
     private bool isPasscodeConfigured;
-
-    partial void OnIsPasscodeConfiguredChanged(bool value)
-    {
-        OnPropertyChanged(nameof(ShowUnlockForm));
-        OnPropertyChanged(nameof(ShowInitialSetupForm));
-        OnPropertyChanged(nameof(DialogTitle));
-    }
 
     [ObservableProperty]
     private string currentPasscode = string.Empty;
@@ -57,21 +46,22 @@ public partial class AdminUnlockViewModel : ObservableObject
     private string passcode = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
     private string? statusMessage;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasErrorMessage))]
     private string? errorMessage;
 
     public bool HasStatusMessage => !string.IsNullOrEmpty(StatusMessage);
 
     public bool HasErrorMessage => !string.IsNullOrEmpty(ErrorMessage);
 
-    partial void OnStatusMessageChanged(string? value) => OnPropertyChanged(nameof(HasStatusMessage));
-
-    partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasErrorMessage));
-
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UnlockCommand), nameof(SetOrChangePasscodeCommand))]
     private bool isBusy;
+
+    private bool IsIdle => !IsBusy;
 
     /// <summary>
     /// Set while a hand-over asks for the passcode to update a bill already in Tally: the sentence
@@ -114,17 +104,7 @@ public partial class AdminUnlockViewModel : ObservableObject
         }
     }
 
-    public IAsyncRelayCommand LoadStatusCommand { get; }
-    public IAsyncRelayCommand UnlockCommand { get; }
-    public IAsyncRelayCommand LockCommand { get; }
-    public IAsyncRelayCommand SetOrChangePasscodeCommand { get; }
-
-    partial void OnIsBusyChanged(bool value)
-    {
-        UnlockCommand.NotifyCanExecuteChanged();
-        SetOrChangePasscodeCommand.NotifyCanExecuteChanged();
-    }
-
+    [RelayCommand]
     public async Task LoadStatusAsync()
     {
         try
@@ -140,6 +120,7 @@ public partial class AdminUnlockViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task UnlockAsync()
     {
         if (string.IsNullOrWhiteSpace(Passcode))
@@ -171,6 +152,7 @@ public partial class AdminUnlockViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
     private async Task LockAsync()
     {
         var current = _tokenStore.Current;
@@ -187,6 +169,7 @@ public partial class AdminUnlockViewModel : ObservableObject
         StatusMessage = "Admin session ended.";
     }
 
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task SetOrChangePasscodeAsync()
     {
         var isInitialSetup = !IsPasscodeConfigured;

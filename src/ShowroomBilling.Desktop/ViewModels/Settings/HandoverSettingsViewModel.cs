@@ -16,36 +16,29 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
     public HandoverSettingsViewModel(HandoverKeyStore store)
     {
         Store = store;
-        ChangeCommand = new RelayCommand(OpenKeyDialog);
-        RemoveCommand = new AsyncRelayCommand(RemoveAsync, () => HasKey);
-        SaveKeyCommand = new RelayCommand(SaveKey);
-        CancelKeyCommand = new RelayCommand(CloseKeyDialog);
         Store.Changed += (_, _) => Refresh();
         Refresh();
     }
 
     public HandoverKeyStore Store { get; }
 
-    [ObservableProperty] private bool hasKey;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KeyDisplay))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCommand))]
+    private bool hasKey;
 
     /// <summary>What the operator pasted into the key dialog. Cleared whenever the dialog opens or closes.</summary>
     [ObservableProperty] private string newKey = string.Empty;
 
     /// <summary>Why the pasted text is not a key; empty while there is nothing to say.</summary>
-    [ObservableProperty] private string keyError = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasKeyError))]
+    private string keyError = string.Empty;
 
     public bool HasKeyError => !string.IsNullOrEmpty(KeyError);
 
     /// <summary>The key field: dots while a key is set, "No key" while there is none.</summary>
     public string KeyDisplay => HasKey ? MaskedKey : "No key";
-
-    public IRelayCommand ChangeCommand { get; }
-
-    public IAsyncRelayCommand RemoveCommand { get; }
-
-    public IRelayCommand SaveKeyCommand { get; }
-
-    public IRelayCommand CancelKeyCommand { get; }
 
     /// <summary>Shows the key dialog; the shell wires it to its dialog host.</summary>
     public Action? ShowKeyDialog { get; set; }
@@ -55,14 +48,6 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
 
     /// <summary>Asks before the key is removed; the shell wires it to the confirm overlay. With none wired the answer is "no".</summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
-
-    partial void OnHasKeyChanged(bool value)
-    {
-        OnPropertyChanged(nameof(KeyDisplay));
-        RemoveCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnKeyErrorChanged(string value) => OnPropertyChanged(nameof(HasKeyError));
 
     partial void OnNewKeyChanged(string value)
     {
@@ -74,13 +59,16 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
 
     private void Refresh() => HasKey = Store.HasKey;
 
-    private void OpenKeyDialog()
+    /// <summary>Change…: opens the key dialog, empty.</summary>
+    [RelayCommand]
+    private void Change()
     {
         NewKey = string.Empty;
         KeyError = string.Empty;
         ShowKeyDialog?.Invoke();
     }
 
+    [RelayCommand]
     private void SaveKey()
     {
         var problem = Store.Save(NewKey);
@@ -93,6 +81,9 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
         CloseKeyDialog();
     }
 
+    [RelayCommand]
+    private void CancelKey() => CloseKeyDialog();
+
     private void CloseKeyDialog()
     {
         NewKey = string.Empty;
@@ -100,6 +91,7 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
         HideKeyDialog?.Invoke();
     }
 
+    [RelayCommand(CanExecute = nameof(HasKey))]
     private async Task RemoveAsync()
     {
         if (ConfirmHandler is null)

@@ -61,12 +61,6 @@ public partial class PrintPreviewViewModel : ObservableObject
             selectedCollationMode = _preferredPrintJobSettings.Collation;
             preferences.PrintPreviewZoomPercentChanged += OnStoredZoomChanged;
         }
-
-        PrintCommand = new AsyncRelayCommand(PrintAsync, CanPrint);
-        SavePdfCommand = new AsyncRelayCommand(SavePdfAsync, () => !IsBusy && IsSingleDocument && _contents.Count == 1);
-        ZoomOutCommand = new RelayCommand(() => PreviewZoomPercent -= ZoomStepPercent, () => PreviewZoomPercent > MinZoomPercent);
-        ResetZoomCommand = new RelayCommand(() => PreviewZoomPercent = 100, () => Math.Abs(PreviewZoomPercent - 100) > 0.01);
-        ZoomInCommand = new RelayCommand(() => PreviewZoomPercent += ZoomStepPercent, () => PreviewZoomPercent < MaxZoomPercent);
     }
 
     public ObservableCollection<string> Printers { get; }
@@ -75,25 +69,36 @@ public partial class PrintPreviewViewModel : ObservableObject
     public ObservableCollection<PrintSettingOption<PrintColorMode>> ColorOptions { get; }
     public ObservableCollection<PrintSettingOption<PrintCollationMode>> CollationOptions { get; }
 
-    public IAsyncRelayCommand PrintCommand { get; }
-    public IAsyncRelayCommand SavePdfCommand { get; }
-    public IRelayCommand ZoomOutCommand { get; }
-    public IRelayCommand ResetZoomCommand { get; }
-    public IRelayCommand ZoomInCommand { get; }
-
     [ObservableProperty] private bool copyOriginal = true;
     [ObservableProperty] private bool copyDuplicate;
     [ObservableProperty] private bool copyTriplicate;
     [ObservableProperty] private bool directPrintAfterSave;
     private bool _suppressCopyHandler;
-    [ObservableProperty] private string? selectedPrinter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedPrinter))]
+    [NotifyCanExecuteChangedFor(nameof(PrintCommand))]
+    private string? selectedPrinter;
+
     [ObservableProperty] private PrintDuplexMode selectedDuplexMode;
     [ObservableProperty] private PrintColorMode selectedColorMode;
     [ObservableProperty] private PrintCollationMode selectedCollationMode;
-    [ObservableProperty] private string statusMessage = string.Empty;
-    [ObservableProperty] private bool isBusy;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FooterText))]
+    private string statusMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PrintCommand), nameof(SavePdfCommand))]
+    private bool isBusy;
+
     [ObservableProperty] private string invoiceNumber = string.Empty;
-    [ObservableProperty] private int documentCount = 1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSingleDocument))]
+    [NotifyCanExecuteChangedFor(nameof(SavePdfCommand))]
+    private int documentCount = 1;
+
     [ObservableProperty] private double dialogWidth = 990;
     [ObservableProperty] private double dialogHeight = 710;
     [ObservableProperty] private double previewZoomPercent = 100;
@@ -104,23 +109,10 @@ public partial class PrintPreviewViewModel : ObservableObject
     public string PreviewZoomDisplay => $"{PreviewZoomPercent:0}%";
     public PrintJobSettings CurrentPrintJobSettings => new(SelectedDuplexMode, SelectedColorMode, SelectedCollationMode);
 
-    partial void OnIsBusyChanged(bool value)
-    {
-        PrintCommand.NotifyCanExecuteChanged();
-        SavePdfCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnDocumentCountChanged(int value)
-    {
-        OnPropertyChanged(nameof(IsSingleDocument));
-        NotifyDisplayChanged();
-        SavePdfCommand.NotifyCanExecuteChanged();
-    }
+    partial void OnDocumentCountChanged(int value) => NotifyDisplayChanged();
 
     partial void OnSelectedPrinterChanged(string? value)
     {
-        PrintCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(HasSelectedPrinter));
         NotifyDisplayChanged();
 
         var version = Interlocked.Increment(ref _printerCapabilityLoadVersion);
@@ -655,6 +647,24 @@ public partial class PrintPreviewViewModel : ObservableObject
 
     private bool CanPrint() => !IsBusy && _contents.Count > 0 && !string.IsNullOrWhiteSpace(SelectedPrinter);
 
+    private bool CanSavePdf => !IsBusy && IsSingleDocument && _contents.Count == 1;
+
+    private bool CanZoomOut => PreviewZoomPercent > MinZoomPercent;
+
+    private bool CanResetZoom => Math.Abs(PreviewZoomPercent - 100) > 0.01;
+
+    private bool CanZoomIn => PreviewZoomPercent < MaxZoomPercent;
+
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
+    private void ZoomOut() => PreviewZoomPercent -= ZoomStepPercent;
+
+    [RelayCommand(CanExecute = nameof(CanResetZoom))]
+    private void ResetZoom() => PreviewZoomPercent = 100;
+
+    [RelayCommand(CanExecute = nameof(CanZoomIn))]
+    private void ZoomIn() => PreviewZoomPercent += ZoomStepPercent;
+
+    [RelayCommand(CanExecute = nameof(CanPrint))]
     private async Task PrintAsync(CancellationToken cancellationToken)
     {
         if (_dispatcher is null || _contents.Count == 0 || string.IsNullOrWhiteSpace(SelectedPrinter)) return;
@@ -686,6 +696,7 @@ public partial class PrintPreviewViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanSavePdf))]
     private async Task SavePdfAsync(CancellationToken cancellationToken)
     {
         if (_dispatcher is null || _contents.Count != 1)

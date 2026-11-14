@@ -18,21 +18,21 @@ public enum HandoverResultChoice
 /// </summary>
 public sealed partial class HandoverResultViewModel : ObservableObject
 {
-    public HandoverResultViewModel()
-    {
-        TryAgainCommand = new RelayCommand(() => Choose(HandoverResultChoice.TryAgain), () => CanTryAgain);
-        OpenBillsCommand = new RelayCommand(() => Choose(HandoverResultChoice.OpenBills), () => CanOpenBills);
-        CloseCommand = new RelayCommand(() => Choose(HandoverResultChoice.Close));
-    }
-
     [ObservableProperty] private string title = string.Empty;
 
     /// <summary>The red line over the table: why nothing in the hand-over was used, or that the server cannot be reached.</summary>
-    [ObservableProperty] private string? banner;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBanner))]
+    private string? banner;
 
-    [ObservableProperty] private bool canTryAgain;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FocusesClose))]
+    [NotifyCanExecuteChangedFor(nameof(TryAgainCommand))]
+    private bool canTryAgain;
 
-    [ObservableProperty] private bool canOpenBills;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenBillsCommand))]
+    private bool canOpenBills;
 
     public ObservableCollection<HandoverRowViewModel> Rows { get; } = [];
 
@@ -42,12 +42,6 @@ public sealed partial class HandoverResultViewModel : ObservableObject
 
     /// <summary>Close takes the focus when there is nothing to try again, so a stray Enter only closes.</summary>
     public bool FocusesClose => !CanTryAgain;
-
-    public IRelayCommand TryAgainCommand { get; }
-
-    public IRelayCommand OpenBillsCommand { get; }
-
-    public IRelayCommand CloseCommand { get; }
 
     /// <summary>Raised once per showing, with the button the operator chose; Esc counts as Close.</summary>
     public event EventHandler<HandoverResultChoice>? Closed;
@@ -70,15 +64,14 @@ public sealed partial class HandoverResultViewModel : ObservableObject
     /// <summary>The shell closed the dialog (Esc, or another dialog took its place).</summary>
     internal void Dismiss() => Choose(HandoverResultChoice.Close);
 
-    partial void OnBannerChanged(string? value) => OnPropertyChanged(nameof(HasBanner));
+    [RelayCommand(CanExecute = nameof(CanTryAgain))]
+    private void TryAgain() => Choose(HandoverResultChoice.TryAgain);
 
-    partial void OnCanTryAgainChanged(bool value)
-    {
-        TryAgainCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(FocusesClose));
-    }
+    [RelayCommand(CanExecute = nameof(CanOpenBills))]
+    private void OpenBills() => Choose(HandoverResultChoice.OpenBills);
 
-    partial void OnCanOpenBillsChanged(bool value) => OpenBillsCommand.NotifyCanExecuteChanged();
+    [RelayCommand]
+    private void Close() => Choose(HandoverResultChoice.Close);
 
     private void Choose(HandoverResultChoice choice) => Closed?.Invoke(this, choice);
 }

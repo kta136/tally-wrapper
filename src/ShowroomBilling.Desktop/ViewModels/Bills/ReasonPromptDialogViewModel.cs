@@ -25,16 +25,10 @@ public partial class ReasonPromptDialogViewModel : ObservableObject
     [ObservableProperty] private string contextText = string.Empty;
     [ObservableProperty] private string warningText = string.Empty;
     [ObservableProperty] private string confirmText = "OK";
-    [ObservableProperty] private string reasonText = string.Empty;
-
-    public ReasonPromptDialogViewModel()
-    {
-        OkCommand = new RelayCommand(OnOk, CanOk);
-        CancelCommand = new RelayCommand(OnCancel);
-    }
-
-    public IRelayCommand OkCommand { get; }
-    public IRelayCommand CancelCommand { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CountText), nameof(IsLongEnough))]
+    [NotifyCanExecuteChangedFor(nameof(OkCommand))]
+    private string reasonText = string.Empty;
 
     /// <summary>Fires on OK (with the reason) or Cancel (null).</summary>
     public event Action<string?>? Closed;
@@ -57,20 +51,15 @@ public partial class ReasonPromptDialogViewModel : ObservableObject
         ReasonText = string.Empty;
     }
 
-    partial void OnReasonTextChanged(string value)
-    {
-        OnPropertyChanged(nameof(CountText));
-        OnPropertyChanged(nameof(IsLongEnough));
-        OkCommand.NotifyCanExecuteChanged();
-    }
-
     private bool CanOk() => IsLongEnough;
 
+    [RelayCommand(CanExecute = nameof(CanOk))]
     private void OnOk()
     {
         if (!IsLongEnough) return;
         Closed?.Invoke((ReasonText ?? string.Empty).Trim());
     }
 
+    [RelayCommand]
     private void OnCancel() => Closed?.Invoke(null);
 }

@@ -14,11 +14,15 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
 {
     [ObservableProperty] private string currentNumberDisplay = "(none)";
     [ObservableProperty] private string contextText = string.Empty;
-    [ObservableProperty] private string newNumberRaw = string.Empty;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OkCommand))]
+    private string newNumberRaw = string.Empty;
     [ObservableProperty] private string? reason;
 
     /// <summary>The number the bill would get, formatted; empty until valid digits are typed.</summary>
-    [ObservableProperty] private string previewNumber = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPreview), nameof(PreviewMarkup))]
+    private string previewNumber = string.Empty;
 
     /// <summary>Something has been typed that the server would reject.</summary>
     [ObservableProperty] private bool isInvalid;
@@ -38,15 +42,6 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
     private string? _suffix;
     private string _fiscalYear = "—";
     private int _padding = InvoiceNumberFormatter.DefaultPadding;
-
-    public ChangeNumberDialogViewModel()
-    {
-        OkCommand = new RelayCommand(OnOk, CanOk);
-        CancelCommand = new RelayCommand(OnCancel);
-    }
-
-    public IRelayCommand OkCommand { get; }
-    public IRelayCommand CancelCommand { get; }
 
     /// <summary>Fires on OK or Cancel with the user's result.</summary>
     public event Action<(bool Confirmed, string NewNumber, string? Reason)>? Closed;
@@ -69,11 +64,7 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
         UpdatePreview();
     }
 
-    partial void OnNewNumberRawChanged(string value)
-    {
-        UpdatePreview();
-        OkCommand.NotifyCanExecuteChanged();
-    }
+    partial void OnNewNumberRawChanged(string value) => UpdatePreview();
 
     private void UpdatePreview()
     {
@@ -92,9 +83,6 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
             PreviewNumber = string.Empty;
             IsInvalid = true;
         }
-
-        OnPropertyChanged(nameof(HasPreview));
-        OnPropertyChanged(nameof(PreviewMarkup));
     }
 
     private bool TryReadCore(out long core)
@@ -109,6 +97,7 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
 
     private bool CanOk() => TryReadCore(out _);
 
+    [RelayCommand(CanExecute = nameof(CanOk))]
     private void OnOk()
     {
         if (!TryReadCore(out _)) return;
@@ -117,5 +106,6 @@ public partial class ChangeNumberDialogViewModel : ObservableObject
         Closed?.Invoke((true, v, trimmedReason));
     }
 
+    [RelayCommand]
     private void OnCancel() => Closed?.Invoke((false, string.Empty, null));
 }

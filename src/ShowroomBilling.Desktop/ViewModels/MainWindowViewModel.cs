@@ -107,85 +107,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
         ApplySystemState(SystemState.Degraded);
 
-        SwitchTabCommand = new RelayCommand<NavTab>(SwitchTab);
-        DismissBannerCommand = new RelayCommand(() =>
-        {
-            _dismissedBannerText = BannerText;
-            RaiseBannerChanged();
-        });
-        OpenShortcutsCommand = new RelayCommand(() => ActiveDialog = ShellDialogs.Shortcuts);
-        OpenAdminUnlockCommand = new RelayCommand(() =>
-        {
-            ActiveDialog = ShellDialogs.Admin;
-            _ = Admin.LoadStatusCommand.ExecuteAsync(null);
-        });
-        // Bare-key variants for the window key bindings. A false CanExecute
-        // lets the key fall through, so "?" and "`" still type into text
-        // boxes, and an open (possibly awaited) prompt is never replaced.
-        OpenShortcutsKeyCommand = new RelayCommand(() => OpenShortcutsCommand.Execute(null), CanUseBareKeyShortcut);
-        OpenAdminUnlockKeyCommand = new RelayCommand(() => OpenAdminUnlockCommand.Execute(null), CanUseBareKeyShortcut);
-        OpenSyntheticBatchCommand = new RelayCommand(() =>
-        {
-            SyntheticBatch.RefreshKaratOptions();
-            if (SyntheticBatch.Rate24Kt <= 0m && Invoice.Rate24Kt is > 0m)
-            {
-                SyntheticBatch.Rate24Kt = Invoice.Rate24Kt.Value;
-            }
-            ActiveDialog = ShellDialogs.SyntheticBatch;
-        });
-        OpenHealthCommand = new RelayCommand(() =>
-        {
-            ActiveDialog = ShellDialogs.Health;
-            _ = RefreshHealthAsync(forceTallyCompany: true);
-        });
-        SaveActiveCommand = new AsyncRelayCommand(SaveActiveAsync);
-        AddInvoiceRowCommand = new RelayCommand(
-            () => Invoice.AddRowCommand.Execute(null),
-            () => ActiveTab == NavTab.Invoice && Invoice.AddRowCommand.CanExecute(null));
-        RemoveInvoiceRowCommand = new RelayCommand(
-            () => Invoice.RemoveFocusedRowCommand.Execute(null),
-            () => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null));
-        PrintEstimateCommand = new RelayCommand(PrintEstimate, () => Invoice.ItemCount > 0);
-        NewInvoiceBillCommand = new AsyncRelayCommand(NewInvoiceBillAsync);
-        OpenServerSettingsCommand = new RelayCommand(OpenServerSettings);
-        RefreshHealthCommand = new AsyncRelayCommand(ct => RefreshHealthAsync(forceTallyCompany: true, ct));
-        RefreshAllMastersCommand = new AsyncRelayCommand(RefreshAllMastersAsync);
-        CloseDialogCommand = new RelayCommand(() =>
-        {
-            // The confirm overlay sits above everything, so Esc answers it first.
-            if (ConfirmDialog.IsOpen)
-            {
-                ConfirmDialog.Cancel();
-                return;
-            }
-
-            // Esc-close: if a prompting overlay is in flight, resolve its TCS
-            // as "cancel" first so the await'ing caller unblocks instead of
-            // hanging forever.
-            if (ActiveDialog == ShellDialogs.ChangeNumber) OnChangeNumberDialogClosed((false, string.Empty, null));
-            else if (ActiveDialog == ShellDialogs.ReasonPrompt) OnReasonPromptDialogClosed(null);
-
-            // The key dialog forgets what was pasted into it when it closes.
-            if (ActiveDialog == ShellDialogs.HandoverKey)
-            {
-                Settings.Handover.CancelKeyCommand.Execute(null);
-                return;
-            }
-
-            if (ActiveDialog is not null)
-            {
-                ActiveDialog = null;
-                return;
-            }
-
-            if (ActiveTab == NavTab.Settings && Settings.DiscardChangesCommand.CanExecute(null))
-            {
-                Settings.DiscardChangesCommand.Execute(null);
-            }
-        });
-        OpenBillDetailsCommand = new RelayCommand(OpenSelectedBillDetails, () => Bills.SelectedBill is not null);
-        OpenSelectedBillsPrintPreviewCommand = new AsyncRelayCommand(OpenSelectedBillsPrintPreviewAsync, () => Bills.CanPrintSelected);
-        OpenFinalPrintPreviewCommand = new RelayCommand(_printCoordinator.OpenFinalPrintPreview, () => BillDetails.Bill is not null);
         Bills.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(BillsViewModel.SelectedBill))
@@ -378,34 +299,25 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public StatusBarViewModel StatusBar { get; }
     public FKeyStripViewModel FKeys { get; }
 
-    public IRelayCommand<NavTab> SwitchTabCommand { get; }
-    public IRelayCommand OpenShortcutsCommand { get; }
-    public IRelayCommand OpenAdminUnlockCommand { get; }
-    public IRelayCommand OpenShortcutsKeyCommand { get; }
-    public IRelayCommand OpenAdminUnlockKeyCommand { get; }
-
     /// <summary>True while any overlay, including the confirm question, covers the tabs.</summary>
     public bool IsAnyDialogOpen => ActiveDialog is not null || ConfirmDialog.IsOpen;
 
     private bool CanUseBareKeyShortcut() =>
         !IsAnyDialogOpen
         && System.Windows.Input.Keyboard.FocusedElement is not (System.Windows.Controls.Primitives.TextBoxBase or System.Windows.Controls.PasswordBox);
-    public IRelayCommand OpenSyntheticBatchCommand { get; }
-    public IRelayCommand OpenHealthCommand { get; }
-    public IRelayCommand OpenServerSettingsCommand { get; }
-    public IAsyncRelayCommand RefreshHealthCommand { get; }
-    public IAsyncRelayCommand RefreshAllMastersCommand { get; }
-    public IAsyncRelayCommand SaveActiveCommand { get; }
-    public IRelayCommand AddInvoiceRowCommand { get; }
-    public IRelayCommand RemoveInvoiceRowCommand { get; }
-    public IRelayCommand PrintEstimateCommand { get; }
 
-    /// <summary>Ctrl+Shift+N: the Invoice tab's New bill. Ctrl+N is New row.</summary>
-    public IAsyncRelayCommand NewInvoiceBillCommand { get; }
-    public IRelayCommand CloseDialogCommand { get; }
-    public IRelayCommand OpenBillDetailsCommand { get; }
-    public IAsyncRelayCommand OpenSelectedBillsPrintPreviewCommand { get; }
-    public IRelayCommand OpenFinalPrintPreviewCommand { get; }
+    private bool CanAddInvoiceRow => ActiveTab == NavTab.Invoice && Invoice.AddRowCommand.CanExecute(null);
+
+    private bool CanRemoveInvoiceRow => ActiveTab == NavTab.Invoice && Invoice.RemoveFocusedRowCommand.CanExecute(null);
+
+    // Printing an estimate needs at least one line on it.
+    private bool CanPrintEstimate => Invoice.ItemCount > 0;
+
+    private bool CanOpenBillDetails => Bills.SelectedBill is not null;
+
+    private bool CanPrintSelectedBills => Bills.CanPrintSelected;
+
+    private bool CanOpenFinalPrintPreview => BillDetails.Bill is not null;
 
     [ObservableProperty]
     private NavTab activeTab = NavTab.Invoice;
@@ -423,6 +335,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     private SystemHealthSnapshot? lastHealthSnapshot;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LastHealthCheckedDisplay))]
     private DateTimeOffset? lastHealthCheckedAtUtc;
 
     [ObservableProperty]
@@ -435,9 +348,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         LastHealthCheckedAtUtc is null
             ? "never"
             : LastHealthCheckedAtUtc.Value.ToLocalTime().ToString("HH:mm:ss");
-
-    partial void OnLastHealthCheckedAtUtcChanged(DateTimeOffset? value) =>
-        OnPropertyChanged(nameof(LastHealthCheckedDisplay));
 
     partial void OnLastHealthSnapshotChanged(SystemHealthSnapshot? value)
     {
@@ -479,7 +389,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public bool IsBannerDismissible => BannerTone == "info";
 
     /// <summary>Hides the information banner until its text changes.</summary>
-    public IRelayCommand DismissBannerCommand { get; }
+    [RelayCommand]
+    private void DismissBanner()
+    {
+        _dismissedBannerText = BannerText;
+        RaiseBannerChanged();
+    }
 
     private string? _dismissedBannerText;
 
@@ -515,8 +430,93 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         RaiseBannerChanged();
     }
 
+    [RelayCommand]
     public void SwitchTab(NavTab tab) => ActiveTab = tab;
 
+    [RelayCommand]
+    private void OpenShortcuts() => ActiveDialog = ShellDialogs.Shortcuts;
+
+    [RelayCommand]
+    private void OpenAdminUnlock()
+    {
+        ActiveDialog = ShellDialogs.Admin;
+        _ = Admin.LoadStatusCommand.ExecuteAsync(null);
+    }
+
+    // Bare-key variants for the window key bindings. A false CanExecute lets the key fall
+    // through, so "?" and "`" still type into text boxes, and an open (possibly awaited)
+    // prompt is never replaced.
+    [RelayCommand(CanExecute = nameof(CanUseBareKeyShortcut))]
+    private void OpenShortcutsKey() => OpenShortcuts();
+
+    [RelayCommand(CanExecute = nameof(CanUseBareKeyShortcut))]
+    private void OpenAdminUnlockKey() => OpenAdminUnlock();
+
+    [RelayCommand]
+    private void OpenSyntheticBatch()
+    {
+        SyntheticBatch.RefreshKaratOptions();
+        if (SyntheticBatch.Rate24Kt <= 0m && Invoice.Rate24Kt is > 0m)
+        {
+            SyntheticBatch.Rate24Kt = Invoice.Rate24Kt.Value;
+        }
+
+        ActiveDialog = ShellDialogs.SyntheticBatch;
+    }
+
+    [RelayCommand]
+    private void OpenHealth()
+    {
+        ActiveDialog = ShellDialogs.Health;
+        _ = RefreshHealthAsync(forceTallyCompany: true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanAddInvoiceRow))]
+    private void AddInvoiceRow() => Invoice.AddRowCommand.Execute(null);
+
+    [RelayCommand(CanExecute = nameof(CanRemoveInvoiceRow))]
+    private void RemoveInvoiceRow() => Invoice.RemoveFocusedRowCommand.Execute(null);
+
+    /// <summary>Esc: answers the confirm question, cancels a prompt, closes the dialog, or discards a Settings edit.</summary>
+    [RelayCommand]
+    private void CloseDialog()
+    {
+        // The confirm overlay sits above everything, so Esc answers it first.
+        if (ConfirmDialog.IsOpen)
+        {
+            ConfirmDialog.Cancel();
+            return;
+        }
+
+        // Esc-close: if a prompting overlay is in flight, resolve its TCS
+        // as "cancel" first so the await'ing caller unblocks instead of
+        // hanging forever.
+        if (ActiveDialog == ShellDialogs.ChangeNumber) OnChangeNumberDialogClosed((false, string.Empty, null));
+        else if (ActiveDialog == ShellDialogs.ReasonPrompt) OnReasonPromptDialogClosed(null);
+
+        // The key dialog forgets what was pasted into it when it closes.
+        if (ActiveDialog == ShellDialogs.HandoverKey)
+        {
+            Settings.Handover.CancelKeyCommand.Execute(null);
+            return;
+        }
+
+        if (ActiveDialog is not null)
+        {
+            ActiveDialog = null;
+            return;
+        }
+
+        if (ActiveTab == NavTab.Settings && Settings.DiscardChangesCommand.CanExecute(null))
+        {
+            Settings.DiscardChangesCommand.Execute(null);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenFinalPrintPreview))]
+    private void OpenFinalPrintPreview() => _printCoordinator.OpenFinalPrintPreview();
+
+    [RelayCommand]
     private async Task SaveActiveAsync(CancellationToken cancellationToken)
     {
         if (IsAnyDialogOpen)
@@ -534,6 +534,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanPrintEstimate))]
     private void PrintEstimate()
     {
         if (!IsAnyDialogOpen && ActiveTab == NavTab.Invoice)
@@ -542,6 +543,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
     }
 
+    /// <summary>Ctrl+Shift+N: the Invoice tab's New bill. Ctrl+N is New row.</summary>
+    [RelayCommand]
     private async Task NewInvoiceBillAsync()
     {
         if (IsAnyDialogOpen || !IsInvoiceVisible || !Invoice.NewBillCommand.CanExecute(null))
@@ -552,7 +555,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         await Invoice.NewBillCommand.ExecuteAsync(null);
     }
 
-    private void OpenSelectedBillDetails()
+    [RelayCommand(CanExecute = nameof(CanOpenBillDetails))]
+    private void OpenBillDetails()
     {
         var selected = Bills.SelectedBill;
         if (selected is null) return;
@@ -560,6 +564,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         _ = BillDetails.LoadAsync(selected.Id);
     }
 
+    [RelayCommand(CanExecute = nameof(CanPrintSelectedBills))]
     private async Task OpenSelectedBillsPrintPreviewAsync(CancellationToken cancellationToken)
     {
         try
@@ -655,6 +660,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
     }
 
+    [RelayCommand]
     private void OpenServerSettings()
     {
         Settings.SelectedSection = SettingsSectionKey.Server;
@@ -681,8 +687,14 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         _healthTimer.Start();
     }
 
+    [RelayCommand]
     private async Task RefreshAllMastersAsync()
         => await _healthCoordinator.RefreshAllMastersAsync();
+
+    /// <summary>The Check again / Retry buttons: a poll that also asks Tally which company is open.</summary>
+    [RelayCommand]
+    private Task RefreshHealth(CancellationToken cancellationToken)
+        => RefreshHealthAsync(forceTallyCompany: true, cancellationToken);
 
     public async Task RefreshHealthAsync(
         bool forceTallyCompany = false,

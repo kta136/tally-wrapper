@@ -34,24 +34,27 @@ public partial class ServerSettingsViewModel : ObservableObject
         _hasUnsavedSettingsEdits = hasUnsavedSettingsEdits ?? (static () => false);
         _saveServerAddress = saveServerAddress ?? DesktopBootstrapLocalOverrideStore.SaveAsync;
 
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => IsServerAddressValid && !IsBusy);
-        TestCommand = new AsyncRelayCommand(TestAsync, () => IsServerAddressValid && !IsBusy);
-        FindCommand = new AsyncRelayCommand(FindAsync, () => !IsBusy);
-
         ServerAddress = _bootstrapOptions.ApiBaseUrl;
     }
-
-    public IAsyncRelayCommand SaveCommand { get; }
-    public IAsyncRelayCommand TestCommand { get; }
-    public IAsyncRelayCommand FindCommand { get; }
 
     /// <summary>Handler the shell wires up to ask a yes/no question in the confirm overlay.</summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
-    [ObservableProperty] private string serverAddress = string.Empty;
-    [ObservableProperty] private string status = string.Empty;
-    [ObservableProperty] private bool isTesting;
-    [ObservableProperty] private bool isFinding;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(TestCommand))]
+    private string serverAddress = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatus))]
+    private string status = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(TestCommand), nameof(FindCommand))]
+    private bool isTesting;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(TestCommand), nameof(FindCommand))]
+    private bool isFinding;
 
     /// <summary>The address this running copy is using; a saved change applies after the restart.</summary>
     public string CurrentServerAddress => _bootstrapOptions.ApiBaseUrl;
@@ -60,23 +63,16 @@ public partial class ServerSettingsViewModel : ObservableObject
 
     private bool IsBusy => IsTesting || IsFinding;
 
+    private bool IsIdle => !IsBusy;
+
+    private bool CanUseAddress => IsServerAddressValid && !IsBusy;
+
     private bool IsServerAddressValid =>
         Uri.TryCreate(ServerAddress?.Trim(), UriKind.Absolute, out var uri)
         && uri.Scheme is "http" or "https"
         && !string.IsNullOrWhiteSpace(uri.Host);
 
-    partial void OnServerAddressChanged(string value) => NotifyCommands();
-    partial void OnIsTestingChanged(bool value) => NotifyCommands();
-    partial void OnIsFindingChanged(bool value) => NotifyCommands();
-    partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(HasStatus));
-
-    private void NotifyCommands()
-    {
-        SaveCommand.NotifyCanExecuteChanged();
-        TestCommand.NotifyCanExecuteChanged();
-        FindCommand.NotifyCanExecuteChanged();
-    }
-
+    [RelayCommand(CanExecute = nameof(CanUseAddress))]
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
         if (!IsServerAddressValid)
@@ -105,6 +101,7 @@ public partial class ServerSettingsViewModel : ObservableObject
             IsWarning: true,
             Note: "Unsaved Settings edits will be lost."));
 
+    [RelayCommand(CanExecute = nameof(CanUseAddress))]
     private async Task TestAsync(CancellationToken cancellationToken)
     {
         IsTesting = true;
@@ -119,6 +116,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task FindAsync(CancellationToken cancellationToken)
     {
         IsFinding = true;

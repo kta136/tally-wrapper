@@ -126,6 +126,4 @@ public partial class BillDetailsViewModel
         OnPropertyChanged(nameof(FooterText));
         OnPropertyChanged(nameof(Timeline));
     }
-
-    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(FooterText));
 }

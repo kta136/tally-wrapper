@@ -112,6 +112,6 @@ public partial class SetupWizardViewModel
         OnPropertyChanged(nameof(LedgersBadge));
         OnPropertyChanged(nameof(FirstNumberMarkup));
         OnPropertyChanged(nameof(FooterNote));
-        SaveBasicsCommand?.NotifyCanExecuteChanged();
+        SaveBasicsCommand.NotifyCanExecuteChanged();
     }
 }

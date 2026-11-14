@@ -34,16 +34,9 @@ public partial class ConfirmDialogViewModel : ObservableObject
     [ObservableProperty] private string confirmText = "OK";
     [ObservableProperty] private bool isWarning;
     [ObservableProperty] private bool isDestructive;
-    [ObservableProperty] private string noteText = string.Empty;
-
-    public ConfirmDialogViewModel()
-    {
-        ConfirmCommand = new RelayCommand(() => Close(true));
-        CancelCommand = new RelayCommand(() => Close(false));
-    }
-
-    public IRelayCommand ConfirmCommand { get; }
-    public IRelayCommand CancelCommand { get; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNote))]
+    private string noteText = string.Empty;
 
     public bool HasNote => !string.IsNullOrWhiteSpace(NoteText);
 
@@ -69,10 +62,12 @@ public partial class ConfirmDialogViewModel : ObservableObject
         return _pending.Task;
     }
 
-    /// <summary>Esc: the same as pressing Cancel.</summary>
-    public void Cancel() => Close(false);
+    [RelayCommand]
+    private void Confirm() => Close(true);
 
-    partial void OnNoteTextChanged(string value) => OnPropertyChanged(nameof(HasNote));
+    /// <summary>The Cancel button, and Esc.</summary>
+    [RelayCommand]
+    public void Cancel() => Close(false);
 
     private void Close(bool confirmed)
     {
