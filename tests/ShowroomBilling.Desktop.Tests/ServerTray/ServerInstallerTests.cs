@@ -29,6 +29,53 @@ public sealed class ServerInstallerTests
             ServerInstaller.LanCidrProblem(" the whole shop "));
     }
 
+    [Fact]
+    public void A_first_install_starts_from_this_pcs_own_network_not_a_wider_one()
+    {
+        var (value, hint) = ServerInstaller.LanCidrPrompt(configuredCidr: null, ownNetwork: "192.168.1.0/24");
+
+        Assert.Equal("192.168.1.0/24", value);
+        Assert.Equal("This PC's own network is 192.168.1.0/24.", hint);
+    }
+
+    [Fact]
+    public void A_repair_starts_from_the_range_the_service_already_has()
+    {
+        var (value, hint) = ServerInstaller.LanCidrPrompt(configuredCidr: "10.20.0.0/24", ownNetwork: "192.168.1.0/24");
+
+        Assert.Equal("10.20.0.0/24", value);
+        Assert.Equal("This PC's own network is 192.168.1.0/24.", hint);
+    }
+
+    [Fact]
+    public void With_no_network_to_read_the_prompt_gives_an_example_that_is_right()
+    {
+        var (value, hint) = ServerInstaller.LanCidrPrompt(configuredCidr: null, ownNetwork: null);
+
+        Assert.Equal(ServerInstaller.DefaultLanCidr, value);
+        Assert.Equal("For a network where every address starts with 192.168.1, that is 192.168.1.0/24.", hint);
+    }
+
+    [Theory]
+    [InlineData("192.168.1.24", 24, "192.168.1.0/24")]
+    [InlineData("192.168.1.130", 25, "192.168.1.128/25")]
+    [InlineData("10.20.30.40", 16, "10.20.0.0/16")]
+    [InlineData("10.20.30.40", 8, "10.0.0.0/8")]
+    public void A_pcs_network_is_its_address_with_the_host_part_cleared(string address, int prefixLength, string expected)
+    {
+        Assert.Equal(expected, ServerUrlHelper.NetworkOf(IPAddress.Parse(address), prefixLength));
+    }
+
+    [Theory]
+    [InlineData("10.8.0.2", 32)]    // a VPN's point-to-point link
+    [InlineData("10.8.0.2", 31)]
+    [InlineData("10.8.0.2", 0)]
+    [InlineData("fd00::1", 64)]
+    public void An_adapter_that_is_not_on_a_lan_gives_no_network(string address, int prefixLength)
+    {
+        Assert.Null(ServerUrlHelper.NetworkOf(IPAddress.Parse(address), prefixLength));
+    }
+
     [Theory]
     [InlineData("192.168.0.0/16", "192.168.0.0/16")]
     [InlineData("  10.0.0.0/24  ", "10.0.0.0/24")]

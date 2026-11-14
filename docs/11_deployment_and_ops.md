@@ -87,7 +87,7 @@ The server is published with:
 .\tools\publish-server-tray.ps1
 ```
 
-Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR, elevates via UAC, extracts the API it carries to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
+Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR (the box starts with the server PC's own network, read from its LAN adapter; a repair starts with the range already installed), elevates via UAC (answering No there installs nothing and is reported as "Setup did not finish"), extracts the API it carries to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
 
 Running the same EXE again is idempotent. It checks the extracted API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
 

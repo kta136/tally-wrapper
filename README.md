@@ -270,11 +270,13 @@ One server PC runs TallyPrime and the Tally Wrapper API; every counter connects 
 
 3. Run it on the Tally server.
 
-4. On first run, enter the trusted LAN CIDR for billing workstations, for example:
+4. On first run, confirm the trusted LAN CIDR for billing workstations. The box starts with the server PC's own network, for example:
 
    ```text
    192.168.1.0/24
    ```
+
+   Answering No at the Windows permission prompt that follows leaves nothing installed; run Install again from the tray's dashboard.
 
 5. The installer:
 

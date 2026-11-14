@@ -59,18 +59,21 @@ public sealed class ServerDashboardViewTests
     {
         OnStaThread(() =>
         {
+            // The installer's own words, as a first install on a PC whose
+            // network could be read shows them, and with no network to read.
+            var (value, hint) = ServerInstaller.LanCidrPrompt(configuredCidr: null, ownNetwork: "192.168.1.0/24");
             var prompt = TrayDialog.TextPrompt(
-                "Which PCs may use this server?",
-                "Counters whose address is inside this network range can save bills. Any other PC is refused.",
-                "192.168.1.0/24",
-                "For a network where every address starts with 192.168.1, that is 192.168.1.0/24.",
+                ServerInstaller.LanCidrPromptTitle,
+                ServerInstaller.LanCidrPromptMessage,
+                value,
+                hint,
                 "Install",
                 ServerInstaller.LanCidrProblem);
             var refused = TrayDialog.TextPrompt(
-                "Which PCs may use this server?",
-                "Counters whose address is inside this network range can save bills. Any other PC is refused.",
+                ServerInstaller.LanCidrPromptTitle,
+                ServerInstaller.LanCidrPromptMessage,
                 "the whole shop",
-                "For a network where every address starts with 192.168.1, that is 192.168.1.0/24.",
+                ServerInstaller.LanCidrPrompt(configuredCidr: null, ownNetwork: null).Hint,
                 "Install",
                 ServerInstaller.LanCidrProblem);
 

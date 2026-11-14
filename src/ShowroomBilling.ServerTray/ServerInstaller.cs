@@ -10,7 +10,15 @@ namespace ShowroomBilling.ServerTray;
 
 public static class ServerInstaller
 {
+    /// <summary>
+    /// The range used only when nothing better is known: this PC's own network
+    /// could not be read, or the elevated step was started without one.
+    /// </summary>
     public const string DefaultLanCidr = "192.168.0.0/16";
+
+    internal const string LanCidrPromptTitle = "Which PCs may use this server?";
+    internal const string LanCidrPromptMessage =
+        "Counters whose address is inside this network range can save bills. Any other PC is refused.";
 
     // This class is the only server installer. tools/uninstall-server-api-service.ps1
     // undoes it and repeats the next three names: change them together.
@@ -62,11 +70,12 @@ public static class ServerInstaller
         // An automatic repair (the tray carries a newer API than the one
         // installed) keeps the range the operator chose. Only a first install,
         // or Install / Repair pressed by hand, asks for it, and then starts
-        // from the current value rather than the default.
+        // from the current value; a first install starts from this PC's own
+        // network.
         var configuredCidr = ReadConfiguredLanCidr(options.ServiceName);
         var lanCidr = !forceRepair && configuredCidr is not null
             ? configuredCidr
-            : PromptForLanCidr(configuredCidr ?? DefaultLanCidr);
+            : PromptForLanCidr(configuredCidr, ServerUrlHelper.GetLanNetwork());
         if (string.IsNullOrWhiteSpace(lanCidr))
         {
             return false;
@@ -74,6 +83,14 @@ public static class ServerInstaller
 
         var exitCode = RunSelfElevated("--install-service", "--lan-cidr", lanCidr);
         EnsureTrayStartup(options);
+        if (exitCode is null)
+        {
+            // Setup never ran, so the end of the install log is from an
+            // earlier run; the caller says that setup did not finish.
+            Log(options, "Install/repair did not start: the Windows permission prompt was declined, or Windows refused it.");
+            return false;
+        }
+
         if (exitCode != 0 && File.Exists(options.InstallLogPath))
         {
             CopyableMessageDialog.ShowMessage(
@@ -345,18 +362,35 @@ public static class ServerInstaller
         }
     }
 
-    private static int RunSelfElevated(params string[] arguments)
+    /// <summary>
+    /// Runs this exe again as administrator and waits for it. Null when it
+    /// never started: the Windows permission prompt was answered No (which
+    /// <see cref="Process.Start(ProcessStartInfo)"/> reports by throwing), or
+    /// Windows refused to start it.
+    /// </summary>
+    private static int? RunSelfElevated(params string[] arguments)
     {
-        using var process = Process.Start(new ProcessStartInfo
+        try
         {
-            FileName = Environment.ProcessPath ?? Application.ExecutablePath,
-            Arguments = string.Join(" ", arguments.Select(QuoteArgument)),
-            UseShellExecute = true,
-            Verb = "runas"
-        });
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = Environment.ProcessPath ?? Application.ExecutablePath,
+                Arguments = string.Join(" ", arguments.Select(QuoteArgument)),
+                UseShellExecute = true,
+                Verb = "runas"
+            });
+            if (process is null)
+            {
+                return null;
+            }
 
-        process?.WaitForExit();
-        return process?.ExitCode ?? -1;
+            process.WaitForExit();
+            return process.ExitCode;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
     }
 
     private static void RunProcess(string fileName, string arguments, bool requireSuccess)
@@ -382,18 +416,32 @@ public static class ServerInstaller
         }
     }
 
-    private static string? PromptForLanCidr(string defaultValue)
+    private static string? PromptForLanCidr(string? configuredCidr, string? ownNetwork)
     {
+        var (value, hint) = LanCidrPrompt(configuredCidr, ownNetwork);
         var entered = Ui.TrayDialog.Prompt(
             owner: null,
-            title: "Which PCs may use this server?",
-            message: "Counters whose address is inside this network range can save bills. Any other PC is refused.",
-            value: defaultValue,
-            hint: $"For a network where every address starts with 192.168.1, that is {DefaultLanCidr}.",
+            title: LanCidrPromptTitle,
+            message: LanCidrPromptMessage,
+            value: value,
+            hint: hint,
             actionText: "Install",
             problemWith: LanCidrProblem);
         return entered is not null && TryNormalizeLanCidr(entered, out var normalized) ? normalized : null;
     }
+
+    /// <summary>
+    /// What the range prompt starts with, and the line under its box. A repair
+    /// starts from the range the service already has. A first install starts
+    /// from this PC's own network, so that nobody is steered to a range wider
+    /// than the shop's; only when that cannot be read does it fall back to
+    /// <see cref="DefaultLanCidr"/>, with an example of a narrower one.
+    /// </summary>
+    internal static (string Value, string Hint) LanCidrPrompt(string? configuredCidr, string? ownNetwork) =>
+        (configuredCidr ?? ownNetwork ?? DefaultLanCidr,
+         ownNetwork is not null
+             ? $"This PC's own network is {ownNetwork}."
+             : "For a network where every address starts with 192.168.1, that is 192.168.1.0/24.");
 
     /// <summary>What is wrong with a range the operator typed, or null when it is one.</summary>
     internal static string? LanCidrProblem(string text) =>
