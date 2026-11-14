@@ -34,7 +34,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     private readonly DesktopBootstrapOptions _bootstrapOptions;
 
     private readonly AdminTokenStore _adminTokenStore;
-    private readonly ShellDialogCoordinator _dialogCoordinator;
+    private readonly DialogService _dialogs;
     private readonly ShellHealthCoordinator _healthCoordinator;
     private readonly ShellPrintCoordinator _printCoordinator;
 
@@ -52,6 +52,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         IPrintDispatcher printDispatcher,
         IPrintPreferencesStore printPreferences,
         AdminTokenStore adminTokenStore,
+        DialogService dialogs,
         InvoiceViewModel invoice,
         BillsViewModel bills,
         BillDetailsViewModel billDetails,
@@ -65,7 +66,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         _billsApiClient = billsApiClient;
         _bootstrapOptions = bootstrapOptions.Value;
         _adminTokenStore = adminTokenStore;
-        _adminTokenStore.Changed += OnAdminTokenChanged;
+        _dialogs = dialogs;
         Invoice = invoice;
         Bills = bills;
         BillDetails = billDetails;
@@ -74,18 +75,13 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         Admin = admin;
         SetupWizard = setupWizard;
         SyntheticBatch = syntheticBatch;
-        ChangeNumberDialog = new ChangeNumberDialogViewModel();
-        ReasonPromptDialog = new ReasonPromptDialogViewModel();
-        ConfirmDialog = new ConfirmDialogViewModel();
-        _dialogCoordinator = new ShellDialogCoordinator(
-            _adminTokenStore,
-            Admin,
-            ChangeNumberDialog,
-            ReasonPromptDialog,
-            value => ActiveDialog = value,
-            () => ActiveDialog);
-        ChangeNumberDialog.Closed += OnChangeNumberDialogClosed;
-        ReasonPromptDialog.Closed += OnReasonPromptDialogClosed;
+        _dialogs.PropertyChanged += (_, e) =>
+        {
+            // The dialog service holds which dialog is open; the window binds it through here.
+            if (e.PropertyName != nameof(DialogService.ActiveDialog)) return;
+            OnPropertyChanged(nameof(ActiveDialog));
+            Handover?.OnActiveDialogChanged(ActiveDialog);
+        };
         BillDetails.BillMutated = () => _ = Bills.LoadAsync();
 
         TitleBar = new TitleBarViewModel
@@ -146,30 +142,18 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 _ = _printCoordinator.RefreshPrintLayoutAsync();
         };
 
-        Bills.AdminUnlockHandler = RequestAdminUnlockAsync;
-        Invoice.AdminUnlockHandler = RequestAdminUnlockAsync;
         Settings.AdminVm = Admin;
         SetupWizard.Completed += OnSetupWizardCompleted;
-        SyntheticBatch.AdminUnlockHandler = RequestAdminUnlockAsync;
         SyntheticBatch.BatchCompleted += (_, _) => _ = Bills.LoadAsync();
+
+        // What Bills needs of the shell that is not a dialog: the Invoice tab, the health
+        // check, and the two commands its row menu binds. Dialogs it reaches by itself.
         Bills.EditBillHandler = LoadBillForEditInInvoiceTabAsync;
-        Bills.ChangeNumberPromptHandler = PromptChangeNumberAsync;
-        Bills.ReasonPromptHandler = PromptReasonAsync;
-        Bills.ConfirmHandler = ConfirmDialog.ShowAsync;
+        Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
         Bills.OpenDetailsCommand = OpenBillDetailsCommand;
         Bills.PrintSelectedCommand = OpenSelectedBillsPrintPreviewCommand;
-        BillDetails.ConfirmHandler = ConfirmDialog.ShowAsync;
-        Invoice.ConfirmHandler = ConfirmDialog.ShowAsync;
-        Settings.Server.ConfirmHandler = ConfirmDialog.ShowAsync;
-        Bills.RefreshTallyHealthHandler = RefreshBillsTallyHealthAsync;
 
         Handover = new HandoverCoordinator(_billsApiClient, this);
-        Settings.Handover.ShowKeyDialog = () => ActiveDialog = ShellDialogs.HandoverKey;
-        Settings.Handover.HideKeyDialog = () =>
-        {
-            if (ActiveDialog == ShellDialogs.HandoverKey) ActiveDialog = null;
-        };
-        Settings.Handover.ConfirmHandler = ConfirmDialog.ShowAsync;
     }
 
     /// <summary>Takes the bill hand-overs this app receives; see docs/18_bill_handover.md.</summary>
@@ -177,97 +161,16 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     AdminTokenStore IHandoverHost.AdminTokens => _adminTokenStore;
 
-    Task IHandoverHost.RequestAdminUnlockAsync(CancellationToken cancellationToken) => RequestAdminUnlockAsync(cancellationToken);
+    Task IHandoverHost.RequestAdminUnlockAsync(CancellationToken cancellationToken) => _dialogs.RequestAdminUnlockAsync(cancellationToken);
 
     Task<bool> IHandoverHost.PrintSavedBillAsync(BillResponse bill) => _printCoordinator.PrintSavedBillAsync(bill);
 
     void IHandoverHost.OpenSavedBillsPreview(IReadOnlyList<BillResponse> bills) => _printCoordinator.OpenSavedBillsPreview(bills);
 
-    private Task RequestAdminUnlockAsync(CancellationToken cancellationToken)
-    {
-        return _dialogCoordinator.RequestAdminUnlockAsync(cancellationToken);
-    }
-
-    private void OnAdminTokenChanged(Contracts.Admin.AdminUnlockResponse? unlock)
-    {
-        _dialogCoordinator.OnAdminTokenChanged(unlock);
-    }
-
     private async Task LoadBillForEditInInvoiceTabAsync(Guid billId, CancellationToken cancellationToken)
     {
         ActiveTab = NavTab.Invoice;
         await Invoice.LoadBillForEditAsync(billId, cancellationToken);
-    }
-
-    private async Task<(bool Confirmed, string NewNumber, string? Reason)> PromptChangeNumberAsync(
-        BillListRowViewModel row,
-        CancellationToken cancellationToken)
-    {
-        var token = _adminTokenStore.Current?.Token;
-        if (string.IsNullOrWhiteSpace(token)) return (false, string.Empty, null);
-
-        var numbering = Settings.Settings?.Numbering;
-        // A bill keeps the fiscal year of its bill date, so the preview uses
-        // that rather than today's; they differ for a bill from an earlier year.
-        var fiscalYear = row.BillDate is { } billDate
-            ? Contracts.Numbering.InvoiceNumberFormatter.ComputeFiscalYear(billDate)
-            : Contracts.Numbering.InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow);
-
-        var result = await ShowChangeNumberDialogAsync(
-            row.InvoiceNumber,
-            numbering?.InvoicePrefix,
-            numbering?.InvoiceSuffix,
-            fiscalYear,
-            numbering?.InvoicePadding ?? Contracts.Numbering.InvoiceNumberFormatter.DefaultPadding,
-            $"{row.PartyName} · ₹{Shell.UiCulture.Rupees(row.GrandTotal)} · {row.StateChipLabel}");
-        if (!result.Confirmed) return (false, string.Empty, null);
-
-        // Dry-run to surface warnings before the real commit.
-        try
-        {
-            var dry = await _billsApiClient.ChangeInvoiceNumberAsync(
-                row.Id,
-                new ChangeBillNumberRequest(result.NewNumber, result.Reason, DryRun: true),
-                token,
-                cancellationToken);
-            if (!string.IsNullOrWhiteSpace(dry.WarningSummary))
-            {
-                var goAhead = await ConfirmDialog.ShowAsync(new ConfirmRequest(
-                    "Change the number anyway?",
-                    dry.WarningSummary,
-                    "Change number",
-                    IsWarning: true));
-                if (!goAhead) return (false, string.Empty, null);
-            }
-        }
-        catch (Exception ex)
-        {
-            Bills.StatusMessage = $"Change number check failed: {ApiResponseReader.FormatError(ex)}";
-            return (false, string.Empty, null);
-        }
-
-        return (true, result.NewNumber, result.Reason);
-    }
-
-    private Task<(bool Confirmed, string NewNumber, string? Reason)> ShowChangeNumberDialogAsync(
-        string? currentNumber, string? prefix, string? suffix, string fiscalYear, int padding, string? context)
-    {
-        return _dialogCoordinator.ShowChangeNumberDialogAsync(currentNumber, prefix, suffix, fiscalYear, padding, context);
-    }
-
-    private void OnChangeNumberDialogClosed((bool Confirmed, string NewNumber, string? Reason) result)
-    {
-        _dialogCoordinator.OnChangeNumberDialogClosed(result);
-    }
-
-    private Task<string?> PromptReasonAsync(ReasonRequest request, CancellationToken cancellationToken)
-    {
-        return _dialogCoordinator.PromptReasonAsync(request, cancellationToken);
-    }
-
-    private void OnReasonPromptDialogClosed(string? result)
-    {
-        _dialogCoordinator.OnReasonPromptDialogClosed(result);
     }
 
     private async void OnInvoiceSaveCompletedReadyForPrint(object? sender, Guid billId)
@@ -290,9 +193,9 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     public AdminUnlockViewModel Admin { get; }
     public SetupWizardViewModel SetupWizard { get; }
     public SyntheticBatchViewModel SyntheticBatch { get; }
-    public ChangeNumberDialogViewModel ChangeNumberDialog { get; }
-    public ReasonPromptDialogViewModel ReasonPromptDialog { get; }
-    public ConfirmDialogViewModel ConfirmDialog { get; }
+    public ChangeNumberDialogViewModel ChangeNumberDialog => _dialogs.ChangeNumberDialog;
+    public ReasonPromptDialogViewModel ReasonPromptDialog => _dialogs.ReasonPromptDialog;
+    public ConfirmDialogViewModel ConfirmDialog => _dialogs.ConfirmDialog;
 
     public TitleBarViewModel TitleBar { get; }
     public HealthClusterViewModel Health { get; }
@@ -325,8 +228,15 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     [ObservableProperty]
     private SystemState systemState = SystemState.Degraded;
 
-    [ObservableProperty]
-    private string? activeDialog;
+    /// <summary>
+    /// The open dialog, one of the <see cref="ShellDialogs"/> names, or null. The dialog
+    /// service holds it, so that a view model can open a prompt without the shell.
+    /// </summary>
+    public string? ActiveDialog
+    {
+        get => _dialogs.ActiveDialog;
+        set => _dialogs.ActiveDialog = value;
+    }
 
     [ObservableProperty]
     private string bannerText = string.Empty;
@@ -411,12 +321,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         if (value == NavTab.Settings) _ = Settings.RefreshOnShownAsync();
     }
 
-    partial void OnActiveDialogChanged(string? value)
-    {
-        _dialogCoordinator.OnActiveDialogChanged(value);
-        Handover?.OnActiveDialogChanged(value);
-    }
-
     partial void OnSystemStateChanged(SystemState value) => ApplySystemState(value);
 
     private void ApplySystemState(SystemState value)
@@ -488,11 +392,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             return;
         }
 
-        // Esc-close: if a prompting overlay is in flight, resolve its TCS
-        // as "cancel" first so the await'ing caller unblocks instead of
-        // hanging forever.
-        if (ActiveDialog == ShellDialogs.ChangeNumber) OnChangeNumberDialogClosed((false, string.Empty, null));
-        else if (ActiveDialog == ShellDialogs.ReasonPrompt) OnReasonPromptDialogClosed(null);
+        // A prompt someone awaits is answered "cancelled", so its caller goes on instead of
+        // waiting for ever.
+        if (_dialogs.CancelPrompt())
+        {
+            return;
+        }
 
         // The key dialog forgets what was pasted into it when it closes.
         if (ActiveDialog == ShellDialogs.HandoverKey)

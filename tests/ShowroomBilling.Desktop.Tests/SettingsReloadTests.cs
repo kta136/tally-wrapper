@@ -54,7 +54,7 @@ public sealed class SettingsReloadTests
         var api = new FakeSettingsApi(Response(Items(Item("Gold Ring", wastage: 8m)), Karats("22K")));
         var settings = OfflineApi.Settings(api);
         await settings.LoadAsync(TestContext.Current.CancellationToken);
-        var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings);
+        var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings);
         var line = invoice.Lines[0];
         var item = settings.Draft.ItemMasterRows.Single();
         var karat = settings.Draft.KaratRows.Single();

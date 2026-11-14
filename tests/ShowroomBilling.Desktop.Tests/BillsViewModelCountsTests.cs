@@ -8,7 +8,7 @@ public sealed class BillsViewModelCountsTests
 {
     private static BillsViewModel WithBills(params string[] states)
     {
-        var vm = new BillsViewModel(new FakeBillsApi()) { HideFullyPostedDays = false };
+        var vm = new BillsViewModel(new FakeBillsApi(), new FakeDialogs()) { HideFullyPostedDays = false };
         var created = DateTimeOffset.UtcNow;
         var number = 0;
         foreach (var state in states)

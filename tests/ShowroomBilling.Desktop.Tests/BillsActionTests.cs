@@ -162,7 +162,7 @@ public sealed class BillsActionTests
                 "The database has not had the schema migrations this version needs.",
                 rawBody: null)
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
         var raised = new List<string?>();
         vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
@@ -184,10 +184,10 @@ public sealed class BillsActionTests
     }
 
     [Fact]
-    public async Task Without_a_confirm_overlay_nothing_destructive_runs()
+    public async Task When_the_answer_is_no_nothing_destructive_runs()
     {
         var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001", BillStates.Posted)]) };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
         await vm.LoadAsync();
 
         await vm.RepostRowCommand.ExecuteAsync(vm.Items[0]);
@@ -196,7 +196,7 @@ public sealed class BillsActionTests
 
         var billId = Guid.NewGuid();
         api.GetResponse = FakeBillsApi.Bill(billId);
-        var details = new BillDetailsViewModel(api);
+        var details = new BillDetailsViewModel(api, new FakeDialogs());
         await details.LoadAsync(billId);
         api.Calls.Clear();
 
@@ -212,16 +212,19 @@ public sealed class BillsActionTests
         var tokens = new AdminTokenStore();
         var opened = new List<Guid>();
         var prompts = 0;
-        var vm = new BillsViewModel(api, tokens)
+        var dialogs = new FakeDialogs
+        {
+            AdminUnlock = _ =>
+            {
+                prompts++;
+                return Task.CompletedTask;
+            }
+        };
+        var vm = new BillsViewModel(api, dialogs, tokens)
         {
             EditBillHandler = (id, _) =>
             {
                 opened.Add(id);
-                return Task.CompletedTask;
-            },
-            AdminUnlockHandler = _ =>
-            {
-                prompts++;
                 return Task.CompletedTask;
             }
         };
@@ -233,7 +236,7 @@ public sealed class BillsActionTests
         Assert.Empty(opened);
         Assert.Equal("SR/25-26/0001 is posted; editing it needs admin unlock.", vm.StatusMessage);
 
-        vm.AdminUnlockHandler = _ =>
+        dialogs.AdminUnlock = _ =>
         {
             tokens.Set(new AdminUnlockResponse("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "test"));
             return Task.CompletedTask;
@@ -249,16 +252,19 @@ public sealed class BillsActionTests
         var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001")]) };
         var opened = new List<Guid>();
         var prompts = 0;
-        var vm = new BillsViewModel(api, new AdminTokenStore())
+        var dialogs = new FakeDialogs
+        {
+            AdminUnlock = _ =>
+            {
+                prompts++;
+                return Task.CompletedTask;
+            }
+        };
+        var vm = new BillsViewModel(api, dialogs, new AdminTokenStore())
         {
             EditBillHandler = (id, _) =>
             {
                 opened.Add(id);
-                return Task.CompletedTask;
-            },
-            AdminUnlockHandler = _ =>
-            {
-                prompts++;
                 return Task.CompletedTask;
             }
         };
@@ -299,14 +305,14 @@ public sealed class BillsActionTests
         var billId = Guid.NewGuid();
         var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, BillStates.Posted) };
         var asked = new List<ConfirmRequest>();
-        var details = new BillDetailsViewModel(api)
+        var details = new BillDetailsViewModel(api, new FakeDialogs
         {
-            ConfirmHandler = request =>
+            Confirm = request =>
             {
                 asked.Add(request);
                 return Task.FromResult(false);
             }
-        };
+        });
         await details.LoadAsync(billId);
         api.Calls.Clear();
 
@@ -349,7 +355,7 @@ public sealed class BillsActionTests
     {
         var billId = Guid.NewGuid();
         var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, BillStates.Failed) };
-        var details = new BillDetailsViewModel(api);
+        var details = new BillDetailsViewModel(api, new FakeDialogs());
 
         await details.LoadAsync(billId);
 
@@ -367,14 +373,14 @@ public sealed class BillsActionTests
         var billId = Guid.NewGuid();
         var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId) };
         var asked = new List<ConfirmRequest>();
-        var details = new BillDetailsViewModel(api)
+        var details = new BillDetailsViewModel(api, new FakeDialogs
         {
-            ConfirmHandler = request =>
+            Confirm = request =>
             {
                 asked.Add(request);
                 return Task.FromResult(answer);
             }
-        };
+        });
         await details.LoadAsync(billId);
         api.Calls.Clear();
         return (details, api, asked);
@@ -388,14 +394,14 @@ public sealed class BillsActionTests
         var tokens = new AdminTokenStore();
         tokens.Set(new AdminUnlockResponse("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "test"));
         var asked = new List<ConfirmRequest>();
-        var vm = new BillsViewModel(api, tokens)
+        var vm = new BillsViewModel(api, new FakeDialogs
         {
-            ConfirmHandler = request =>
+            Confirm = request =>
             {
                 asked.Add(request);
                 return Task.FromResult(answer);
             }
-        };
+        }, tokens);
         vm.ApplyTallyHealthSnapshot(new SystemHealthSnapshot(
             ApiReachable: true,
             Masters: null,

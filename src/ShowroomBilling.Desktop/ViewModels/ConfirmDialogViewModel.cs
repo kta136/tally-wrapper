@@ -21,7 +21,7 @@ public sealed record ConfirmRequest(
 /// <summary>
 /// The shared confirmation overlay. It sits above every other dialog, so a
 /// question asked from inside one (repost from Bill Details) does not replace
-/// it. View models reach it through a <c>ConfirmHandler</c> delegate, which
+/// it. View models reach it through <c>IDialogService.ConfirmAsync</c>, which
 /// keeps them testable without a message box appearing.
 /// </summary>
 public partial class ConfirmDialogViewModel : ObservableObject

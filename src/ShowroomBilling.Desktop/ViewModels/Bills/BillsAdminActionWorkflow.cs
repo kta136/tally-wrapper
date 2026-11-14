@@ -1,4 +1,6 @@
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Contracts.Numbering;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Shell;
 
@@ -9,7 +11,9 @@ internal sealed class BillsAdminActionWorkflow(
     IBillsApiClient billsApi,
     BillsAdminTokenGate adminTokenGate,
     IBillsActionWorkflowHost host,
-    BillsActionRunner runner)
+    BillsActionRunner runner,
+    IDialogService dialogs,
+    Func<NumberingSettingsDto?> numbering)
 {
     /// <summary>The two "mark" actions differ only in these words and in the call they make.</summary>
     private sealed record MarkAction(
@@ -42,13 +46,49 @@ internal sealed class BillsAdminActionWorkflow(
     internal async Task ChangeNumberRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
         if (row is null) return;
-        if (host.ChangeNumberPromptHandler is null) return;
 
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
 
-        var (confirmed, newNumber, reason) = await host.ChangeNumberPromptHandler(row, cancellationToken);
+        var format = numbering();
+        // A bill keeps the fiscal year of its bill date, so the preview uses
+        // that rather than today's; they differ for a bill from an earlier year.
+        var fiscalYear = row.BillDate is { } billDate
+            ? InvoiceNumberFormatter.ComputeFiscalYear(billDate)
+            : InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow);
+
+        var (confirmed, newNumber, reason) = await dialogs.PromptChangeNumberAsync(new ChangeNumberPrompt(
+            row.InvoiceNumber,
+            format?.InvoicePrefix,
+            format?.InvoiceSuffix,
+            fiscalYear,
+            format?.InvoicePadding ?? InvoiceNumberFormatter.DefaultPadding,
+            $"{row.PartyName} · ₹{UiCulture.Rupees(row.GrandTotal)} · {row.StateChipLabel}"));
         if (!confirmed || string.IsNullOrWhiteSpace(newNumber)) return;
+
+        // A dry run first, so that what it warns of is put to the operator before anything changes.
+        try
+        {
+            var dry = await billsApi.ChangeInvoiceNumberAsync(
+                row.Id,
+                new ChangeBillNumberRequest(newNumber, reason, DryRun: true),
+                token,
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(dry.WarningSummary)
+                && !await dialogs.ConfirmAsync(new ConfirmRequest(
+                    "Change the number anyway?",
+                    dry.WarningSummary,
+                    "Change number",
+                    IsWarning: true)))
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            host.StatusMessage = $"Change number check failed: {ApiResponseReader.FormatError(ex)}";
+            return;
+        }
 
         await runner.RunAsync(
             $"Changing number of {row.InvoiceNumberDisplay} → {newNumber}…",
@@ -91,14 +131,13 @@ internal sealed class BillsAdminActionWorkflow(
 
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
-        if (host.ReasonPromptHandler is null) return;
 
         var subject = rows.Count == 1 ? rows[0].InvoiceNumberDisplay : $"{rows.Count} selected bills";
         var total = UiCulture.Rupees(rows.Sum(row => row.GrandTotal));
         var context = rows.Count == 1
             ? $"{subject} · {rows[0].PartyName} · ₹{total}"
             : $"{subject} · ₹{total}";
-        var reason = await host.ReasonPromptHandler(
+        var reason = await dialogs.PromptReasonAsync(
             new ReasonRequest(mark.Title, context, $"This marks {subject} {mark.Effect} {mark.Check}", mark.Title),
             cancellationToken);
         if (reason is null) return;

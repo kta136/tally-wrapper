@@ -20,24 +20,21 @@ public partial class SyntheticBatchViewModel : ObservableObject
     private static readonly CultureInfo AmountCulture = CultureInfo.GetCultureInfo("en-IN");
 
     private readonly IBillsApiClient _billsApi;
+    private readonly IDialogService _dialogs;
     private readonly AdminTokenStore? _adminTokens;
     private readonly SettingsViewModel? _settings;
-
-    /// <summary>
-    /// Delegate wired by <c>MainWindowViewModel</c> to open the admin-unlock dialog
-    /// when the batch is started without an active admin session.
-    /// </summary>
-    public Func<CancellationToken, Task>? AdminUnlockHandler { get; set; }
 
     /// <summary>Fires on successful completion so the Bills tab can refresh.</summary>
     public event EventHandler? BatchCompleted;
 
     public SyntheticBatchViewModel(
         IBillsApiClient billsApi,
+        IDialogService dialogs,
         AdminTokenStore? adminTokens,
         SettingsViewModel? settings)
     {
         _billsApi = billsApi;
+        _dialogs = dialogs;
         _adminTokens = adminTokens;
         _settings = settings;
 
@@ -277,10 +274,9 @@ public partial class SyntheticBatchViewModel : ObservableObject
     {
         var current = _adminTokens?.Current?.Token;
         if (!string.IsNullOrWhiteSpace(current)) return current;
-        if (AdminUnlockHandler is null) return null;
         try
         {
-            await AdminUnlockHandler(cancellationToken);
+            await _dialogs.RequestAdminUnlockAsync(cancellationToken);
         }
         catch (OperationCanceledException) { return null; }
         return _adminTokens?.Current?.Token;

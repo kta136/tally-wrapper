@@ -1,6 +1,7 @@
 using System.IO;
 using ShowroomBilling.Contracts;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Admin;
@@ -79,11 +80,8 @@ public sealed class HandoverKeyAndSettingsTests
     public void The_section_shows_the_key_masked_and_changes_it_through_the_dialog()
     {
         var store = new HandoverKeyStore(ScratchKeyPath());
-        var section = new HandoverSettingsViewModel(store);
-        var shown = 0;
-        var hidden = 0;
-        section.ShowKeyDialog = () => shown++;
-        section.HideKeyDialog = () => hidden++;
+        var dialogs = new FakeDialogs();
+        var section = new HandoverSettingsViewModel(store, dialogs);
         Assert.False(section.HasKey);
         Assert.Equal("No key", section.KeyDisplay);
         Assert.False(section.RemoveCommand.CanExecute(null));
@@ -92,8 +90,7 @@ public sealed class HandoverKeyAndSettingsTests
         section.NewKey = "not a key";
         section.SaveKeyCommand.Execute(null);
 
-        Assert.Equal(1, shown);
-        Assert.Equal(0, hidden);
+        Assert.Equal([ShellDialogs.HandoverKey], dialogs.Shown);
         Assert.True(section.HasKeyError);
         Assert.False(store.HasKey);
 
@@ -101,7 +98,7 @@ public sealed class HandoverKeyAndSettingsTests
         Assert.False(section.HasKeyError);
         section.SaveKeyCommand.Execute(null);
 
-        Assert.Equal(1, hidden);
+        Assert.Empty(dialogs.Shown);
         Assert.True(section.HasKey);
         Assert.Equal(HandoverSettingsViewModel.MaskedKey, section.KeyDisplay);
         Assert.DoesNotContain(HandoverTestLinks.VectorKey[..6], section.KeyDisplay, StringComparison.Ordinal);
@@ -114,14 +111,16 @@ public sealed class HandoverKeyAndSettingsTests
     {
         var store = new HandoverKeyStore(ScratchKeyPath());
         Assert.Null(store.Save(HandoverTestLinks.VectorKey));
-        var section = new HandoverSettingsViewModel(store);
         ConfirmRequest? asked = null;
         var answer = false;
-        section.ConfirmHandler = request =>
+        var section = new HandoverSettingsViewModel(store, new FakeDialogs
         {
-            asked = request;
-            return Task.FromResult(answer);
-        };
+            Confirm = request =>
+            {
+                asked = request;
+                return Task.FromResult(answer);
+            }
+        });
 
         await section.RemoveCommand.ExecuteAsync(null);
         Assert.True(store.HasKey);

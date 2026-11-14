@@ -219,9 +219,9 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
     private sealed class FakePrintHost : IShellPrintHost
     {
         public string? ActiveDialog { get; set; }
-        public InvoiceViewModel Invoice { get; } = new(new FakeBillsApi(), FakeNumberingApi.Offline(), settings: null);
-        public BillsViewModel Bills { get; } = new(new FakeBillsApi());
-        public BillDetailsViewModel BillDetails { get; } = new(new FakeBillsApi());
+        public InvoiceViewModel Invoice { get; } = new(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings: null);
+        public BillsViewModel Bills { get; } = new(new FakeBillsApi(), new FakeDialogs());
+        public BillDetailsViewModel BillDetails { get; } = new(new FakeBillsApi(), new FakeDialogs());
         public PrintPreviewViewModel PrintPreview { get; } = new(dispatcher: null, preferences: null);
     }
 

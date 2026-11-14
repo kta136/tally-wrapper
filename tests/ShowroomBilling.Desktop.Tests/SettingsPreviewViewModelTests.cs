@@ -239,6 +239,7 @@ public class SettingsPreviewViewModelTests
             settingsApi: new OfflineSettingsApi(),
             mastersApi: new OfflineMastersApi(),
             printAssetApi: assets,
+            dialogs: new FakeDialogs(),
             previewFactory: (draft, layout, host) =>
                 new SettingsPreviewViewModel(draft, layout, host, dispatcher, assets, null, FastDebounce));
 

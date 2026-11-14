@@ -20,7 +20,7 @@ public sealed class InvoiceNewBillTests
     [Fact]
     public void An_empty_form_has_nothing_to_start_over_from()
     {
-        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), null);
+        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), null);
 
         Assert.False(vm.NewBillCommand.CanExecute(null));
         Assert.Equal("Clear", vm.NewBillLabel);
@@ -75,14 +75,14 @@ public sealed class InvoiceNewBillTests
     public async Task A_typed_bill_not_yet_saved_is_discarded_only_after_asking()
     {
         var questions = new List<ConfirmRequest>();
-        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), null)
+        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs
         {
-            ConfirmHandler = request =>
+            Confirm = request =>
             {
                 questions.Add(request);
                 return Task.FromResult(true);
             }
-        };
+        }, null);
         vm.PartyName = "Walk-in Customer";
         vm.Lines[0].ItemName = "Gold Coin";
         vm.Lines[0].GrossWeight = 2m;
@@ -96,7 +96,7 @@ public sealed class InvoiceNewBillTests
     [Fact]
     public async Task With_no_one_to_ask_unsaved_changes_are_kept()
     {
-        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), null);
+        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), null);
         vm.PartyName = "Walk-in Customer";
 
         await vm.NewBillCommand.ExecuteAsync(null);
@@ -131,14 +131,14 @@ public sealed class InvoiceNewBillTests
             Rate24Kt: null);
         var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, BillStates.Pending, payload, OpenedNumber) };
         var questions = new List<ConfirmRequest>();
-        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null)
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs
         {
-            ConfirmHandler = request =>
+            Confirm = request =>
             {
                 questions.Add(request);
                 return Task.FromResult(answer);
             }
-        };
+        }, null);
         await vm.LoadBillForEditAsync(billId);
         return (vm, questions);
     }

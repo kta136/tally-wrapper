@@ -36,6 +36,7 @@ public partial class SettingsViewModel : ObservableObject,
         ISettingsApiClient settingsApi,
         IMastersApiClient mastersApi,
         IPrintAssetApiClient printAssetApi,
+        IDialogService dialogs,
         IPrintDispatcher? printDispatcher = null,
         IPrintPreferencesStore? printPreferences = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
@@ -44,11 +45,12 @@ public partial class SettingsViewModel : ObservableObject,
         HandoverKeyStore? handoverKeys = null)
     {
         _settingsApi = settingsApi;
-        Handover = new HandoverSettingsViewModel(handoverKeys ?? new HandoverKeyStore());
+        Handover = new HandoverSettingsViewModel(handoverKeys ?? new HandoverKeyStore(), dialogs);
         Draft = new SettingsDraft();
         Draft.PropertyChanged += OnDraftPropertyChanged;
 
         Server = new ServerSettingsViewModel(
+            dialogs,
             bootstrapOptions,
             restartApplication,
             hasUnsavedSettingsEdits: () => IsDirty);

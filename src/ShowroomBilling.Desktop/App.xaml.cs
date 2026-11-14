@@ -135,27 +135,37 @@ public partial class App : System.Windows.Application
         builder.Services.AddSingleton<ICompanyProfileProvider, CompanyProfileProvider>();
         builder.Services.AddSingleton<IPrintLayoutOptionsProvider, PrintLayoutOptionsProvider>();
 
+        // One dialog service: the shell shows what it holds, and every view model asks through it.
+        builder.Services.AddSingleton<DialogService>();
+        builder.Services.AddSingleton<IDialogService>(sp => sp.GetRequiredService<DialogService>());
+
         builder.Services.AddSingleton(sp => new InvoiceViewModel(
             sp.GetRequiredService<IBillsApiClient>(),
             sp.GetRequiredService<INumberingApiClient>(),
+            sp.GetRequiredService<IDialogService>(),
             sp.GetRequiredService<SettingsViewModel>(),
             sp.GetRequiredService<AdminTokenStore>()));
         builder.Services.AddSingleton(sp => new BillsViewModel(
             sp.GetRequiredService<IBillsApiClient>(),
-            sp.GetRequiredService<AdminTokenStore>()));
+            sp.GetRequiredService<IDialogService>(),
+            sp.GetRequiredService<AdminTokenStore>(),
+            sp.GetRequiredService<SettingsViewModel>()));
         builder.Services.AddSingleton(sp => new BillDetailsViewModel(
-            sp.GetRequiredService<IBillsApiClient>()));
+            sp.GetRequiredService<IBillsApiClient>(),
+            sp.GetRequiredService<IDialogService>()));
         builder.Services.AddSingleton<PrintPreviewViewModel>();
         builder.Services.AddSingleton(sp => new SettingsViewModel(
             sp.GetRequiredService<ISettingsApiClient>(),
             sp.GetRequiredService<IMastersApiClient>(),
             sp.GetRequiredService<IPrintAssetApiClient>(),
+            sp.GetRequiredService<IDialogService>(),
             sp.GetRequiredService<IPrintDispatcher>(),
             sp.GetRequiredService<IPrintPreferencesStore>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DesktopBootstrapOptions>>().Value));
         builder.Services.AddSingleton<AdminUnlockViewModel>();
         builder.Services.AddSingleton(sp => new ViewModels.SyntheticBatch.SyntheticBatchViewModel(
             sp.GetRequiredService<IBillsApiClient>(),
+            sp.GetRequiredService<IDialogService>(),
             sp.GetRequiredService<AdminTokenStore>(),
             sp.GetRequiredService<SettingsViewModel>()));
         builder.Services.AddSingleton(sp => new SetupWizardViewModel(

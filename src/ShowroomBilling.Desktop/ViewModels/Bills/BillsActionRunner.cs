@@ -10,9 +10,6 @@ internal interface IBillsActionWorkflowHost
     string StatusMessage { get; set; }
     bool IsActing { get; set; }
     Func<Guid, CancellationToken, Task>? EditBillHandler { get; }
-    Func<BillListRowViewModel, CancellationToken, Task<(bool Confirmed, string NewNumber, string? Reason)>>? ChangeNumberPromptHandler { get; }
-    Func<ReasonRequest, CancellationToken, Task<string?>>? ReasonPromptHandler { get; }
-    Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; }
     Task<bool> EnsureTallyPushAllowedAsync(CancellationToken cancellationToken);
     Task LoadAsync(CancellationToken cancellationToken = default);
 }
@@ -21,7 +18,7 @@ internal interface IBillsActionWorkflowHost
 /// The steps every Bills action shares: which rows it applies to, asking the
 /// operator first, and the busy flag / status text / reload around the call.
 /// </summary>
-internal sealed class BillsActionRunner(IBillsActionWorkflowHost host)
+internal sealed class BillsActionRunner(IBillsActionWorkflowHost host, IDialogService dialogs)
 {
     public IReadOnlyList<BillListRowViewModel> SelectedRows()
         => host.Items.Where(x => x.IsSelected).ToArray();
@@ -41,9 +38,7 @@ internal sealed class BillsActionRunner(IBillsActionWorkflowHost host)
         return row.IsSelected && selected.Count > 1 ? selected : [row];
     }
 
-    /// <summary>Asks the operator; with nothing to ask through, the answer is "no".</summary>
-    public async Task<bool> ConfirmAsync(ConfirmRequest request)
-        => host.ConfirmHandler is { } ask && await ask(request);
+    public Task<bool> ConfirmAsync(ConfirmRequest request) => dialogs.ConfirmAsync(request);
 
     /// <summary>
     /// Runs one action: shows <paramref name="starting"/>, then the text the

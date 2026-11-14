@@ -9,7 +9,6 @@ internal interface IBillDetailsActionHost
     bool IsActing { get; set; }
     string StatusMessage { get; set; }
     Action? BillMutated { get; }
-    Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; }
     Task LoadAsync(Guid billId, CancellationToken cancellationToken = default);
     Task ReloadSupportingStateAsync(Guid billId, CancellationToken cancellationToken);
 }
@@ -17,7 +16,8 @@ internal interface IBillDetailsActionHost
 /// <summary>The action buttons in the Bill Details dialog.</summary>
 internal sealed class BillDetailsActionWorkflow(
     IBillsApiClient billsApi,
-    IBillDetailsActionHost host)
+    IBillDetailsActionHost host,
+    IDialogService dialogs)
 {
     public Task PushAsync(CancellationToken cancellationToken) => RunAsync(
         "Pushing to Tally…",
@@ -46,7 +46,7 @@ internal sealed class BillDetailsActionWorkflow(
         var question = BillConfirmations.Repost(
             $"invoice {bill.InvoiceNumber ?? "—"}",
             BillStateCapabilities.IsPosted(bill.State));
-        if (host.ConfirmHandler is null || !await host.ConfirmHandler(question)) return;
+        if (!await dialogs.ConfirmAsync(question)) return;
 
         await RunAsync(
             "Reposting…",
@@ -67,7 +67,7 @@ internal sealed class BillDetailsActionWorkflow(
         if (host.Bill is not { } bill) return;
 
         var question = BillConfirmations.Void($"invoice {bill.InvoiceNumber ?? "—"}");
-        if (host.ConfirmHandler is null || !await host.ConfirmHandler(question)) return;
+        if (!await dialogs.ConfirmAsync(question)) return;
 
         await RunAsync(
             "Voiding…",

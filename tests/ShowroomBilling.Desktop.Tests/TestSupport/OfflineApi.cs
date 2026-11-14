@@ -4,6 +4,7 @@ using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests.TestSupport;
@@ -22,11 +23,13 @@ internal static class OfflineApi
     public static SettingsViewModel Settings(
         ISettingsApiClient? settingsApi = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
-        HandoverKeyStore? handoverKeys = null)
+        HandoverKeyStore? handoverKeys = null,
+        IDialogService? dialogs = null)
         => new(
             settingsApi ?? new OfflineSettingsApi(),
             new OfflineMastersApi(),
             new OfflinePrintAssetApi(),
+            dialogs ?? new FakeDialogs(),
             bootstrapOptions: bootstrapOptions,
             handoverKeys: handoverKeys);
 

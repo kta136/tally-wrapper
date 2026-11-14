@@ -19,16 +19,19 @@ public partial class ServerSettingsViewModel : ObservableObject
     private const int ServerPort = 5107;
 
     private readonly DesktopBootstrapOptions _bootstrapOptions;
+    private readonly IDialogService _dialogs;
     private readonly Action _restartApplication;
     private readonly Func<bool> _hasUnsavedSettingsEdits;
     private readonly Func<string, CancellationToken, Task> _saveServerAddress;
 
     public ServerSettingsViewModel(
+        IDialogService dialogs,
         DesktopBootstrapOptions? bootstrapOptions = null,
         Action? restartApplication = null,
         Func<bool>? hasUnsavedSettingsEdits = null,
         Func<string, CancellationToken, Task>? saveServerAddress = null)
     {
+        _dialogs = dialogs;
         _bootstrapOptions = bootstrapOptions ?? new DesktopBootstrapOptions();
         _restartApplication = restartApplication ?? AppRestart.Restart;
         _hasUnsavedSettingsEdits = hasUnsavedSettingsEdits ?? (static () => false);
@@ -36,9 +39,6 @@ public partial class ServerSettingsViewModel : ObservableObject
 
         ServerAddress = _bootstrapOptions.ApiBaseUrl;
     }
-
-    /// <summary>Handler the shell wires up to ask a yes/no question in the confirm overlay.</summary>
-    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(TestCommand))]
@@ -93,8 +93,8 @@ public partial class ServerSettingsViewModel : ObservableObject
         _restartApplication();
     }
 
-    private async Task<bool> ConfirmRestartAsync()
-        => ConfirmHandler is not null && await ConfirmHandler(new ConfirmRequest(
+    private Task<bool> ConfirmRestartAsync()
+        => _dialogs.ConfirmAsync(new ConfirmRequest(
             "Restart Billing?",
             "Billing must restart to use a different server.",
             "Restart Billing",

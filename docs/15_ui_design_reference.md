@@ -118,7 +118,7 @@ A dialog is a `UserControl` overlay hosted once in `MainWindow.xaml`; it is neve
 - **A tone for the icon tile.** `HeaderTone="warn"` draws the head's tile amber, for a dialog that reports something gone wrong (the hand-over result); the default is the soft indigo tile.
 - **The one window that is not a dialog** is the hand-over's toast (`Shell/ToastWindow`): a card at the bottom right of the screen that must show while the main window is behind another program, so it is a top-most window that never takes the focus (`WS_EX_NOACTIVATE`) and fades by itself. Its content is a `UserControl` (`HandoverToastView`) like any view. Anything the operator must answer stays an overlay in the main window, brought to the front.
 - **Yes/no questions** go through `ConfirmDialogViewModel`: a `ConfirmRequest` has a title (the question), a message, an optional `Note` (the line to read twice, in a banner) and flags `IsWarning` and `IsDestructive` (a red confirm button and a trash icon). Questions two screens share are worded once in `BillConfirmations`.
-- **Reason and change-number prompts** take a `ReasonRequest` (title, context line, warning with `**bold**`, confirm text) and the change-number configuration, and complete a `TaskCompletionSource` held by the shell.
+- **Reason and change-number prompts** take a `ReasonRequest` (title, context line, warning with `**bold**`, confirm text) and the change-number configuration (`ChangeNumberPrompt`), and complete a `TaskCompletionSource` held by the dialog service (`DialogService`), which every view model reaches through `IDialogService`.
 - **Shortcuts** are listed from `ShortcutCatalog`; change it with the key bindings.
 
 ## 7. Keyboard-first rules

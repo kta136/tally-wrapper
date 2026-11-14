@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Shell;
 
 namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -13,9 +14,12 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
     /// <summary>What the key field shows while a key is set: dots, never the key or a part of it.</summary>
     public const string MaskedKey = "••••••••••••••••••••••••";
 
-    public HandoverSettingsViewModel(HandoverKeyStore store)
+    private readonly IDialogService _dialogs;
+
+    public HandoverSettingsViewModel(HandoverKeyStore store, IDialogService dialogs)
     {
         Store = store;
+        _dialogs = dialogs;
         Store.Changed += (_, _) => Refresh();
         Refresh();
     }
@@ -40,15 +44,6 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
     /// <summary>The key field: dots while a key is set, "No key" while there is none.</summary>
     public string KeyDisplay => HasKey ? MaskedKey : "No key";
 
-    /// <summary>Shows the key dialog; the shell wires it to its dialog host.</summary>
-    public Action? ShowKeyDialog { get; set; }
-
-    /// <summary>Hides the key dialog again.</summary>
-    public Action? HideKeyDialog { get; set; }
-
-    /// <summary>Asks before the key is removed; the shell wires it to the confirm overlay. With none wired the answer is "no".</summary>
-    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
-
     partial void OnNewKeyChanged(string value)
     {
         if (HasKeyError)
@@ -65,7 +60,7 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
     {
         NewKey = string.Empty;
         KeyError = string.Empty;
-        ShowKeyDialog?.Invoke();
+        _dialogs.Show(ShellDialogs.HandoverKey);
     }
 
     [RelayCommand]
@@ -88,18 +83,13 @@ public sealed partial class HandoverSettingsViewModel : ObservableObject
     {
         NewKey = string.Empty;
         KeyError = string.Empty;
-        HideKeyDialog?.Invoke();
+        _dialogs.Close(ShellDialogs.HandoverKey);
     }
 
     [RelayCommand(CanExecute = nameof(HasKey))]
     private async Task RemoveAsync()
     {
-        if (ConfirmHandler is null)
-        {
-            return;
-        }
-
-        var remove = await ConfirmHandler(new ConfirmRequest(
+        var remove = await _dialogs.ConfirmAsync(new ConfirmRequest(
             "Remove the hand-over key?",
             "This PC stops taking hand-overs until a key is set again.",
             "Remove key",

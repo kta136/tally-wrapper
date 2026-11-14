@@ -25,7 +25,7 @@ public sealed class BillsViewModelSelectionTests
                     Summary(selectedId, "SR/25-26/0002")
                 ])
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
 
         await vm.LoadAsync();
         vm.SelectOnly(vm.Items[1]);
@@ -63,7 +63,7 @@ public sealed class BillsViewModelSelectionTests
                     Summary(Guid.NewGuid(), "SR/25-26/0003")
                 ])
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
         await vm.LoadAsync();
 
         vm.Items[0].IsSelected = true;
@@ -92,7 +92,7 @@ public sealed class BillsViewModelSelectionTests
                     Summary(Guid.NewGuid(), "SR/25-26/0003")
                 ])
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
         await vm.LoadAsync();
 
         vm.Items[0].IsSelected = true;
@@ -116,7 +116,7 @@ public sealed class BillsViewModelSelectionTests
                 Take: 50,
                 Items: [Summary(Guid.NewGuid(), "SR/25-26/0001")])
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
         await vm.LoadAsync();
         vm.Items[0].IsSelected = true;
 
@@ -150,14 +150,14 @@ public sealed class BillsViewModelSelectionTests
                 ])
         };
         var promptCount = 0;
-        var vm = new BillsViewModel(api, tokenStore)
+        var vm = new BillsViewModel(api, new FakeDialogs
         {
-            ReasonPromptHandler = (_, _) =>
+            Reason = (_, _) =>
             {
                 promptCount++;
                 return Task.FromResult<string?>("operator correction");
             }
-        };
+        }, tokenStore);
         await vm.LoadAsync();
         vm.Items[0].IsSelected = true;
         vm.Items[1].IsSelected = true;
@@ -188,10 +188,10 @@ public sealed class BillsViewModelSelectionTests
                     Summary(second, "SR/25-26/0002", BillStates.Failed)
                 ])
         };
-        var vm = new BillsViewModel(api, tokenStore)
+        var vm = new BillsViewModel(api, new FakeDialogs
         {
-            ReasonPromptHandler = (_, _) => Task.FromResult<string?>("needs retry")
-        };
+            Reason = (_, _) => Task.FromResult<string?>("needs retry")
+        }, tokenStore);
         await vm.LoadAsync();
         vm.Items[0].IsSelected = true;
         vm.Items[1].IsSelected = true;
@@ -219,7 +219,7 @@ public sealed class BillsViewModelSelectionTests
                     Summary(Guid.NewGuid(), "SR/25-26/0002", BillStates.Posted)
                 ])
         };
-        var vm = new BillsViewModel(api, tokenStore);
+        var vm = new BillsViewModel(api, new FakeDialogs(), tokenStore);
         await vm.LoadAsync();
         vm.Items[0].IsSelected = true;
         vm.Items[1].IsSelected = true;
@@ -238,7 +238,7 @@ public sealed class BillsViewModelSelectionTests
                 Take: 50,
                 Items: [])
         };
-        var vm = new BillsViewModel(api)
+        var vm = new BillsViewModel(api, new FakeDialogs())
         {
             SearchQuery = "Walk-in"
         };
@@ -263,7 +263,7 @@ public sealed class BillsViewModelSelectionTests
                     Summary(Guid.NewGuid(), "SR/25-26/0002", BillStates.Posted)
                 ])
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
 
         await vm.LoadAsync();
 
@@ -325,7 +325,7 @@ public sealed class BillsViewModelSelectionTests
         {
             Response = new BillListResponse(3, 0, 50, [Summary(Guid.NewGuid(), "SR/25-26/0001"), Summary(Guid.NewGuid(), "SR/25-26/0002")], HasMore: true)
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
 
         await vm.LoadAsync();
         Assert.Equal("2+", vm.TotalDisplay);
@@ -343,7 +343,7 @@ public sealed class BillsViewModelSelectionTests
         {
             Response = new BillListResponse(300, 0, 50, [Summary(Guid.NewGuid(), "SR/25-26/0001")], HasMore: true)
         };
-        var vm = new BillsViewModel(api);
+        var vm = new BillsViewModel(api, new FakeDialogs());
         await vm.LoadAsync();
         await vm.NextPageCommand.ExecuteAsync(null);
         await vm.NextPageCommand.ExecuteAsync(null);

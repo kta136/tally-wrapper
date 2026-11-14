@@ -14,7 +14,7 @@ public sealed class InvoiceNextNumberTests
     public async Task The_next_number_is_shown_in_place_of_the_hint()
     {
         var numbering = new FakeNumberingApi();
-        var vm = new InvoiceViewModel(billsApi: new FakeBillsApi(), numberingApi: numbering, settings: null);
+        var vm = new InvoiceViewModel(billsApi: new FakeBillsApi(), numberingApi: numbering, dialogs: new FakeDialogs(), settings: null);
         Assert.False(vm.IsInvoiceNumberAssigned);
 
         await vm.RefreshNextNumberAsync(TestContext.Current.CancellationToken);
@@ -28,7 +28,7 @@ public sealed class InvoiceNextNumberTests
     public async Task When_the_server_cannot_be_asked_the_hint_stays()
     {
         var numbering = new FakeNumberingApi { Failure = new HttpRequestException("No connection could be made") };
-        var vm = new InvoiceViewModel(billsApi: new FakeBillsApi(), numberingApi: numbering, settings: null);
+        var vm = new InvoiceViewModel(billsApi: new FakeBillsApi(), numberingApi: numbering, dialogs: new FakeDialogs(), settings: null);
         var hint = vm.InvoiceNumber;
 
         await vm.RefreshNextNumberAsync(TestContext.Current.CancellationToken);

@@ -26,6 +26,7 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly IBillsApiClient _billsApi;
     private readonly INumberingApiClient _numberingApi;
     private readonly SettingsViewModel? _settings;
+    private readonly IDialogService _dialogs;
     private readonly BillsAdminTokenGate _adminTokenGate;
     private readonly InvoiceLineCollectionObserver _lineCollectionObserver;
     private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
@@ -47,13 +48,15 @@ public partial class InvoiceViewModel : ObservableObject
     public InvoiceViewModel(
         IBillsApiClient billsApi,
         INumberingApiClient numberingApi,
+        IDialogService dialogs,
         SettingsViewModel? settings,
         AdminTokenStore? adminTokens = null)
     {
         _billsApi = billsApi;
         _numberingApi = numberingApi;
+        _dialogs = dialogs;
         _settings = settings;
-        _adminTokenGate = new BillsAdminTokenGate(adminTokens);
+        _adminTokenGate = new BillsAdminTokenGate(adminTokens, dialogs);
 
         Lines = new ObservableCollection<BillLineViewModel>();
         AddTrailingBlankRow();
@@ -93,22 +96,6 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private string? currentBillState;
     [ObservableProperty] private bool rateMissing;
     [ObservableProperty] private bool isEditingPosted;
-
-    /// <summary>
-    /// Handler the shell wires up to open the admin-unlock dialog and wait
-    /// until it closes. Used when the bill being saved is posted.
-    /// </summary>
-    public Func<CancellationToken, Task>? AdminUnlockHandler
-    {
-        get => _adminTokenGate.AdminUnlockHandler;
-        set => _adminTokenGate.AdminUnlockHandler = value;
-    }
-
-    /// <summary>
-    /// Asks the operator a yes/no question; the shell wires it to the confirm overlay.
-    /// With none wired the answer is "no".
-    /// </summary>
-    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
     public event EventHandler<Guid>? SaveCompletedReadyForPrint;
     public event EventHandler<BillLineViewModel>? QuickAddCommitted;
@@ -831,10 +818,8 @@ public partial class InvoiceViewModel : ObservableObject
         NewBillStarted?.Invoke(this, EventArgs.Empty);
     }
 
-    private async Task<bool> ConfirmDiscardAsync()
+    private Task<bool> ConfirmDiscardAsync()
     {
-        if (ConfirmHandler is null) return false;
-
         var question = _draftBillId is null
             ? new ConfirmRequest(
                 "Discard this bill?",
@@ -846,7 +831,7 @@ public partial class InvoiceViewModel : ObservableObject
                 "The bill stays as it was last saved, and the form starts a new bill.",
                 "Discard changes",
                 IsWarning: true);
-        return await ConfirmHandler(question);
+        return _dialogs.ConfirmAsync(question);
     }
 
     private void ClearInvoice()

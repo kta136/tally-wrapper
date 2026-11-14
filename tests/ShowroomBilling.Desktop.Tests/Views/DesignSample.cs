@@ -52,7 +52,7 @@ internal static class DesignSample
         => new(new DateTime(2026, 10, day, hour, minute, 0, DateTimeKind.Unspecified), TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 10, day, hour, minute, 0)));
 
     /// <summary>The settings of the sample showroom: its company, ledgers, ten items and three karats, loaded as the server would send them.</summary>
-    public static SettingsViewModel CreateSettings()
+    public static SettingsViewModel CreateSettings(IDialogService? dialogs = null)
     {
         ItemMasterEntry Item(string name, decimal wastage, decimal labour, string mapping, string mode = PricingModes.Both, string category = ItemCategories.GoldBased, string unit = ItemUnits.Gram)
             => new(name, unit, wastage, category, mode, labour, mapping);
@@ -102,7 +102,8 @@ internal static class DesignSample
         // Showing the Settings tab loads them again, so the sample's server gives the same answer.
         var settings = OfflineApi.Settings(
             new SampleSettingsApi(fromServer),
-            new DesktopBootstrapOptions { ApiBaseUrl = "http://192.168.1.20:5108" });
+            new DesktopBootstrapOptions { ApiBaseUrl = "http://192.168.1.20:5108" },
+            dialogs: dialogs);
         settings.ApplyEffectiveSettings(fromServer);
 
         var master = settings.MasterData;
@@ -142,9 +143,9 @@ internal static class DesignSample
     }
 
     /// <summary>The estimate of Main.png: three gold lines, one diamond line, a discount of 5,000.</summary>
-    public static InvoiceViewModel CreateFilledInvoice(SettingsViewModel settings)
+    public static InvoiceViewModel CreateFilledInvoice(SettingsViewModel settings, IDialogService? dialogs = null)
     {
-        var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings);
+        var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), dialogs ?? new FakeDialogs(), settings);
         invoice.BillDate = new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.FromHours(5.5));
         invoice.PartyName = "Meera Subramaniam";
         invoice.Rate24Kt = 7780m;
@@ -177,12 +178,17 @@ internal static class DesignSample
         SettingsViewModel? settings = null,
         AdminTokenStore? tokenStore = null)
     {
-        settings ??= CreateSettings();
-        invoice ??= CreateFilledInvoice(settings);
-
+        // One dialog service for the shell and for every view model in it, as in the app:
+        // a question asked from the Invoice tab opens the shell's confirm overlay.
         tokenStore ??= new AdminTokenStore();
+        var admin = new AdminUnlockViewModel(adminApi: null!, tokenStore);
+        var dialogs = new DialogService(tokenStore, admin);
+
+        settings ??= CreateSettings(dialogs);
+        invoice ??= CreateFilledInvoice(settings, dialogs);
+
         var billsApi = new FakeBillsApi();
-        var bills = new BillsViewModel(billsApi, tokenStore) { HideFullyPostedDays = false };
+        var bills = new BillsViewModel(billsApi, dialogs, tokenStore, settings) { HideFullyPostedDays = false };
         var summaries = new List<BillSummaryItem>();
         // The nine bills of Bills.png: every state once, three days.
         static DateTimeOffset At(int day, int hour, int minute)
@@ -232,16 +238,17 @@ internal static class DesignSample
             printDispatcher: null!,
             printPreferences: null!,
             adminTokenStore: tokenStore,
+            dialogs: dialogs,
             invoice: invoice,
             bills: bills,
-            billDetails: new BillDetailsViewModel(new FakeBillsApi()),
+            billDetails: new BillDetailsViewModel(new FakeBillsApi(), dialogs),
             printPreview: new PrintPreviewViewModel(dispatcher: null, preferences: null),
             settings: settings,
-            admin: new AdminUnlockViewModel(adminApi: null!, tokenStore),
+            admin: admin,
             setupWizard: new SetupWizardViewModel(
                 settingsApi: null!,
                 completionStore: null!),
-            syntheticBatch: new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings: null));
+            syntheticBatch: new SyntheticBatchViewModel(new FakeBillsApi(), dialogs, adminTokens: null, settings: null));
 
         // Left open so the confirm overlay has its texts; nothing awaits the answer.
         _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));

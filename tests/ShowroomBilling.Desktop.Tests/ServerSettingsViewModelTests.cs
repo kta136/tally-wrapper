@@ -1,4 +1,5 @@
 using ShowroomBilling.Desktop.Configuration;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -49,12 +50,14 @@ public sealed class ServerSettingsViewModelTests
     public async Task With_unsaved_settings_edits_save_asks_first_and_does_nothing_when_declined()
     {
         var asked = new List<ConfirmRequest>();
-        var vm = Build(out var saved, out var restarts, unsavedEdits: true);
-        vm.ConfirmHandler = request =>
+        var vm = Build(out var saved, out var restarts, unsavedEdits: true, dialogs: new FakeDialogs
         {
-            asked.Add(request);
-            return Task.FromResult(false);
-        };
+            Confirm = request =>
+            {
+                asked.Add(request);
+                return Task.FromResult(false);
+            }
+        });
         vm.ServerAddress = "http://192.168.1.60:5107";
 
         await vm.SaveCommand.ExecuteAsync(null);
@@ -95,13 +98,15 @@ public sealed class ServerSettingsViewModelTests
         out List<string> saved,
         out Func<int> restarts,
         string current = "http://localhost:5107",
-        bool unsavedEdits = false)
+        bool unsavedEdits = false,
+        FakeDialogs? dialogs = null)
     {
         var savedAddresses = new List<string>();
         var restartCount = 0;
         saved = savedAddresses;
         restarts = () => restartCount;
         return new ServerSettingsViewModel(
+            dialogs ?? new FakeDialogs(),
             new DesktopBootstrapOptions { ApiBaseUrl = current },
             restartApplication: () => restartCount++,
             hasUnsavedSettingsEdits: () => unsavedEdits,

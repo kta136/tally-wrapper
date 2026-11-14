@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
@@ -25,38 +26,10 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private bool _selectingInBulk;
 
     /// <summary>
-    /// Handler the shell wires up to open the admin-unlock dialog and wait until it closes.
-    /// Used before admin-gated commands (change-number, mark-posted/pending, delete).
-    /// </summary>
-    public Func<CancellationToken, Task>? AdminUnlockHandler
-    {
-        get => _adminTokenGate.AdminUnlockHandler;
-        set => _adminTokenGate.AdminUnlockHandler = value;
-    }
-
-    /// <summary>
     /// Handler the shell wires up to load a bill into the Invoice tab for editing
     /// and switch the active tab. Context-menu Edit invokes this.
     /// </summary>
     public Func<Guid, CancellationToken, Task>? EditBillHandler { get; set; }
-
-    /// <summary>
-    /// Handler the shell wires up to open the Change Number dialog and await its result.
-    /// Returns (confirmed, newNumber, reason) — confirmed=false means user cancelled.
-    /// </summary>
-    public Func<BillListRowViewModel, CancellationToken, Task<(bool Confirmed, string NewNumber, string? Reason)>>? ChangeNumberPromptHandler { get; set; }
-
-    /// <summary>
-    /// Handler the shell wires up to prompt for a reason. Returns null if user cancels;
-    /// otherwise the entered reason (min 4 chars guaranteed by dialog).
-    /// </summary>
-    public Func<ReasonRequest, CancellationToken, Task<string?>>? ReasonPromptHandler { get; set; }
-
-    /// <summary>
-    /// Handler the shell wires up to ask a yes/no question in the confirm
-    /// overlay (repost, delete, push all).
-    /// </summary>
-    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
     /// <summary>
     /// Opens Bill Details for the focused bill. The shell owns the dialog and
@@ -74,15 +47,21 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     /// </summary>
     public Func<CancellationToken, Task<SystemHealthSnapshot?>>? RefreshTallyHealthHandler { get; set; }
 
-    public BillsViewModel(IBillsApiClient billsApi, AdminTokenStore? adminTokens = null)
+    /// <param name="settings">Where Change bill number reads the prefix, suffix and padding a number is formatted with.</param>
+    public BillsViewModel(
+        IBillsApiClient billsApi,
+        IDialogService dialogs,
+        AdminTokenStore? adminTokens = null,
+        SettingsViewModel? settings = null)
     {
         _billsApi = billsApi;
         _adminTokens = adminTokens;
-        _adminTokenGate = new BillsAdminTokenGate(_adminTokens);
-        var runner = new BillsActionRunner(this);
+        _adminTokenGate = new BillsAdminTokenGate(_adminTokens, dialogs);
+        var runner = new BillsActionRunner(this, dialogs);
         var batch = new BillsBatchActionWorkflow(_billsApi, this, runner);
         var rows = new BillsRowActionWorkflow(_billsApi, _adminTokenGate, this, runner);
-        var admin = new BillsAdminActionWorkflow(_billsApi, _adminTokenGate, this, runner);
+        var admin = new BillsAdminActionWorkflow(
+            _billsApi, _adminTokenGate, this, runner, dialogs, () => settings?.Settings?.Numbering);
 
         // Re-publish admin state to XAML so admin-only actions
         // (Change Bill Number, Mark Posted/Pending, Delete, Delete Selected)

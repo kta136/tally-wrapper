@@ -14,10 +14,10 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     private readonly IBillsApiClient _billsApi;
     private readonly BillDetailsActionWorkflow _actions;
 
-    public BillDetailsViewModel(IBillsApiClient billsApi)
+    public BillDetailsViewModel(IBillsApiClient billsApi, IDialogService dialogs)
     {
         _billsApi = billsApi;
-        _actions = new BillDetailsActionWorkflow(_billsApi, this);
+        _actions = new BillDetailsActionWorkflow(_billsApi, this, dialogs);
         AuditTrail = new ObservableCollection<BillAuditTrailItemViewModel>();
         AuditTrail.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Timeline));
     }
@@ -43,9 +43,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     private BillResponse? bill;
 
     public Action? BillMutated { get; set; }
-
-    /// <summary>Handler the shell wires up to ask a yes/no question in the confirm overlay.</summary>
-    public Func<ConfirmRequest, Task<bool>>? ConfirmHandler { get; set; }
 
     public IReadOnlyList<BillLineItemDto> Lines =>
         Bill?.CurrentRevision?.Payload.Lines ?? Array.Empty<BillLineItemDto>();

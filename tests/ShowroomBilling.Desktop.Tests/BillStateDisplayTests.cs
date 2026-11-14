@@ -52,7 +52,7 @@ public sealed class BillStateDisplayTests
         Assert.Equal("bang", row.StateKind);
 
         // No bill loaded yet: a neutral dash, not a blank chip.
-        var details = new BillDetailsViewModel(new FakeBillsApi());
+        var details = new BillDetailsViewModel(new FakeBillsApi(), new FakeDialogs());
         Assert.Equal("—", details.StateChipLabel);
         Assert.Equal("neutral", details.StateTone);
         Assert.Equal("none", details.StateKind);

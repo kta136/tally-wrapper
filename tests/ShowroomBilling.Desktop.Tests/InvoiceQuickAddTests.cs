@@ -95,6 +95,6 @@ public sealed class InvoiceQuickAddTests
             settings.Draft.ItemMasterRows.Add(new ItemMasterRowVm { Name = name });
         }
 
-        return (new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings), settings);
+        return (new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings), settings);
     }
 }

@@ -2,23 +2,20 @@ using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
-internal sealed class BillsAdminTokenGate(AdminTokenStore? adminTokens)
+/// <summary>
+/// Gets the admin token for an admin-only call: the one in hand, or the one
+/// the operator gets by unlocking when asked.
+/// </summary>
+internal sealed class BillsAdminTokenGate(AdminTokenStore? adminTokens, IDialogService dialogs)
 {
-    public Func<CancellationToken, Task>? AdminUnlockHandler { get; set; }
-
     public async Task<(string? Token, string? StatusMessage)> EnsureAsync(CancellationToken cancellationToken)
     {
         var current = adminTokens?.Current?.Token;
         if (!string.IsNullOrWhiteSpace(current)) return (current, null);
 
-        if (AdminUnlockHandler is null)
-        {
-            return (null, "Admin unlock required.");
-        }
-
         try
         {
-            await AdminUnlockHandler(cancellationToken);
+            await dialogs.RequestAdminUnlockAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {

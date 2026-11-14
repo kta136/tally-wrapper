@@ -41,6 +41,9 @@ internal sealed class FakeBillsApi : IBillsApiClient
     public List<string> AdminTokens { get; } = [];
     public bool DeleteDryRunSaysTallyDiverges { get; set; }
 
+    /// <summary>What a change-number dry run warns of; null when it has nothing to say.</summary>
+    public string? ChangeNumberWarning { get; set; }
+
     // Synthetic batch
     public SyntheticBatchRequest? LastRequest { get; private set; }
     public string? LastAdminToken => AdminTokens.LastOrDefault();
@@ -163,7 +166,7 @@ internal sealed class FakeBillsApi : IBillsApiClient
         AdminTokens.Add(adminToken);
         return Write(
             $"change-number:{billId}:{request.NewInvoiceNumber}",
-            () => new ChangeBillNumberResponse(billId, null, request.NewInvoiceNumber, !request.DryRun, false, false, null, null));
+            () => new ChangeBillNumberResponse(billId, null, request.NewInvoiceNumber, !request.DryRun, false, false, null, request.DryRun ? ChangeNumberWarning : null));
     }
 
     public Task<BillResponse> MarkPostedAsync(Guid billId, MarkBillStateRequest request, string adminToken, CancellationToken cancellationToken = default)

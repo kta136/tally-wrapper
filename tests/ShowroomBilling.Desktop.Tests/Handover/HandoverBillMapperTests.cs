@@ -598,7 +598,7 @@ public sealed class HandoverBillMapperTests
     {
         var api = new FakeBillsApi();
         var settings = HandoverTestMasters.Settings();
-        var invoice = new InvoiceViewModel(api, FakeNumberingApi.Offline(), settings)
+        var invoice = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), settings)
         {
             BillDate = new DateTimeOffset(handedOver.BillDate.ToDateTime(new TimeOnly(12, 0)), DateTimeOffset.Now.Offset),
             PartyName = handedOver.PartyName!,
@@ -641,7 +641,7 @@ public sealed class HandoverBillMapperTests
     private static async Task<InvoiceViewModel> OpenForEditAsync(BillPayloadDto payload)
     {
         var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(Guid.NewGuid(), BillStates.Pending, payload) };
-        var invoice = new InvoiceViewModel(api, FakeNumberingApi.Offline(), HandoverTestMasters.Settings());
+        var invoice = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), HandoverTestMasters.Settings());
         await invoice.LoadBillForEditAsync(api.GetResponse.Id);
         return invoice;
     }
