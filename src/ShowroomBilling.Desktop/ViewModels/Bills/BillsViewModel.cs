@@ -15,7 +15,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private const int PageSize = 50;
     private const string SortWorkflow = "workflow";
 
-    private readonly IBillsApiClient? _billsApi;
+    private readonly IBillsApiClient _billsApi;
     private readonly AdminTokenStore? _adminTokens;
     private readonly BillsAdminTokenGate _adminTokenGate;
     private int _loadGeneration;
@@ -74,9 +74,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     /// </summary>
     public Func<CancellationToken, Task<SystemHealthSnapshot?>>? RefreshTallyHealthHandler { get; set; }
 
-    public BillsViewModel() : this(null, null) { }
-
-    public BillsViewModel(IBillsApiClient? billsApi, AdminTokenStore? adminTokens = null)
+    public BillsViewModel(IBillsApiClient billsApi, AdminTokenStore? adminTokens = null)
     {
         _billsApi = billsApi;
         _adminTokens = adminTokens;
@@ -424,11 +422,6 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        if (_billsApi is null)
-        {
-            return;
-        }
-
         // Only the newest load may write the list: an older, slower response
         // (previous page or filter) must not overwrite a newer one.
         var generation = ++_loadGeneration;
@@ -614,7 +607,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanAct => _billsApi is not null && !IsLoading && !IsActing;
+    private bool CanAct => !IsLoading && !IsActing;
 
     private bool CanActOnSelection(Func<BillListRowViewModel, bool> allowed, bool needsTally = false)
         => CanAct && HasSelection && (!needsTally || IsTallyPushAllowed) && SelectedRows.All(allowed);

@@ -128,10 +128,6 @@ public partial class App : System.Windows.Application
         builder.Services.AddApiClient<IClientPresenceApiClient, ClientPresenceApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddHostedService<ClientPresenceHeartbeatService>();
         builder.Services.AddSingleton<AdminTokenStore>();
-        // Set by MainWindow.OnLoaded once the API has been given a moment to answer; awaited
-        // by InvoiceViewModel.RefreshNextNumberAsync(waitForApi: true) so the
-        // first numbering preview lands on a hot connection.
-        builder.Services.AddSingleton<IApiReadinessSignal, ApiReadinessSignal>();
 
         builder.Services.AddSingleton<BillPrintRenderer>();
         builder.Services.AddSingleton<IPrintDispatcher, PrintDispatcher>();
@@ -140,29 +136,28 @@ public partial class App : System.Windows.Application
         builder.Services.AddSingleton<IPrintLayoutOptionsProvider, PrintLayoutOptionsProvider>();
 
         builder.Services.AddSingleton(sp => new InvoiceViewModel(
-            sp.GetService<IBillsApiClient>(),
-            sp.GetService<INumberingApiClient>(),
-            sp.GetService<SettingsViewModel>(),
-            sp.GetService<IApiReadinessSignal>(),
-            sp.GetService<AdminTokenStore>()));
+            sp.GetRequiredService<IBillsApiClient>(),
+            sp.GetRequiredService<INumberingApiClient>(),
+            sp.GetRequiredService<SettingsViewModel>(),
+            sp.GetRequiredService<AdminTokenStore>()));
         builder.Services.AddSingleton(sp => new BillsViewModel(
-            sp.GetService<IBillsApiClient>(),
-            sp.GetService<AdminTokenStore>()));
+            sp.GetRequiredService<IBillsApiClient>(),
+            sp.GetRequiredService<AdminTokenStore>()));
         builder.Services.AddSingleton(sp => new BillDetailsViewModel(
-            sp.GetService<IBillsApiClient>()));
+            sp.GetRequiredService<IBillsApiClient>()));
         builder.Services.AddSingleton<PrintPreviewViewModel>();
         builder.Services.AddSingleton(sp => new SettingsViewModel(
-            sp.GetService<ISettingsApiClient>(),
-            sp.GetService<IMastersApiClient>(),
-            sp.GetService<IPrintAssetApiClient>(),
-            sp.GetService<IPrintDispatcher>(),
-            sp.GetService<IPrintPreferencesStore>(),
+            sp.GetRequiredService<ISettingsApiClient>(),
+            sp.GetRequiredService<IMastersApiClient>(),
+            sp.GetRequiredService<IPrintAssetApiClient>(),
+            sp.GetRequiredService<IPrintDispatcher>(),
+            sp.GetRequiredService<IPrintPreferencesStore>(),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DesktopBootstrapOptions>>().Value));
         builder.Services.AddSingleton<AdminUnlockViewModel>();
         builder.Services.AddSingleton(sp => new ViewModels.SyntheticBatch.SyntheticBatchViewModel(
-            sp.GetService<IBillsApiClient>(),
-            sp.GetService<AdminTokenStore>(),
-            sp.GetService<SettingsViewModel>()));
+            sp.GetRequiredService<IBillsApiClient>(),
+            sp.GetRequiredService<AdminTokenStore>(),
+            sp.GetRequiredService<SettingsViewModel>()));
         builder.Services.AddSingleton(sp => new SetupWizardViewModel(
             sp.GetRequiredService<ISettingsApiClient>(),
             sp.GetRequiredService<ISetupWizardCompletionStore>()));

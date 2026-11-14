@@ -13,7 +13,7 @@ internal sealed class BillsAdminTokenGate(AdminTokenStore? adminTokens)
 
         if (AdminUnlockHandler is null)
         {
-            return (null, "Admin unlock required — no unlock handler wired.");
+            return (null, "Admin unlock required.");
         }
 
         try

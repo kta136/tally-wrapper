@@ -163,7 +163,6 @@ public sealed class DashboardStateTests
         var state = From(ServiceControllerStatus.Running, Runtime(reachable: true), counters: 1);
 
         var row = Assert.Single(state.Counters);
-        Assert.Equal("Counter 1", row.Counter);
         Assert.Equal(@"SHOWROOM-PC1\ravi", row.PcAndUser);
         Assert.Equal("192.168.1.21", row.Address);
         Assert.Equal(At.AddSeconds(-9).LocalDateTime.ToString("HH:mm:ss"), row.LastSeen);
@@ -177,7 +176,6 @@ public sealed class DashboardStateTests
             Enumerable.Range(1, counters)
                 .Select(n => new ClientPresenceResponse(
                     $"device-{n}",
-                    $"Counter {n}",
                     "1.0",
                     $"SHOWROOM-PC{n}",
                     "ravi",
@@ -191,10 +189,7 @@ public sealed class DashboardStateTests
 
     private static RuntimeHealthResponse Runtime(bool reachable, int pending = 0) => new(
         reachable && pending == 0 ? "Healthy" : "Unhealthy",
-        ApiAvailable: true,
-        DatabaseConfigured: true,
         DatabaseReachable: reachable,
-        SettingsLoadedFromApi: true,
         Message: "from the server",
         DatabaseIdentity: reachable ? "PROD" : null,
         ExpectedDatabaseIdentity: "PROD",

@@ -128,7 +128,7 @@ internal static class HandoverTestMasters
     /// <summary>Settings as the server would send them, with these masters, for tests that need a whole settings view model.</summary>
     public static SettingsViewModel Settings(HandoverKeyStore? keys = null)
     {
-        var settings = new SettingsViewModel(handoverKeys: keys ?? new HandoverKeyStore(Path.Combine(TestAppData.Root, "keys", Guid.NewGuid().ToString("N"), HandoverKeyStore.FileName)));
+        var settings = OfflineApi.Settings(handoverKeys: keys ?? new HandoverKeyStore(Path.Combine(TestAppData.Root, "keys", Guid.NewGuid().ToString("N"), HandoverKeyStore.FileName)));
         settings.ApplyEffectiveSettings(new EffectiveSettingsResponse(
             "cloud",
             "Settings loaded from the server",

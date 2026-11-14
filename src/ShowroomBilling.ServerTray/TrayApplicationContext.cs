@@ -9,10 +9,13 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _notifyIcon;
     private readonly System.Windows.Forms.Timer _timer;
     private StatusForm? _statusForm;
+    private readonly SynchronizationContext _ui;
 
-    public TrayApplicationContext(ServerTrayOptions options)
+    /// <param name="showDashboard">Open the dashboard at once: this copy took over from one that was running, and the operator who started it expects to see something.</param>
+    public TrayApplicationContext(ServerTrayOptions options, bool showDashboard = false)
     {
         _options = options;
+        _ui = SynchronizationContext.Current as WindowsFormsSynchronizationContext ?? new WindowsFormsSynchronizationContext();
         _actions = new ServerTrayActions(options);
         _actions.StatusChanged += (_, _) => RefreshTrayText();
         _notifyIcon = new NotifyIcon
@@ -28,7 +31,14 @@ public sealed class TrayApplicationContext : ApplicationContext
         _timer.Tick += (_, _) => RefreshTrayText();
         _timer.Start();
         RefreshTrayText();
+        if (showDashboard)
+        {
+            _ui.Post(_ => ShowStatus(), null);
+        }
     }
+
+    /// <summary>Closes the tray from any thread, leaving the service as it is: another copy is taking over.</summary>
+    public void Close() => _ui.Post(_ => ExitThread(), null);
 
     /// <summary>The tray icon's menu: the dashboard first, what stops the server last and in red.</summary>
     internal static ContextMenuStrip BuildMenu(ServerTrayActions actions, Action openDashboard, Action stopServerAndExit)
@@ -38,9 +48,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         var open = menu.Items.Add("Open dashboard", null, (_, _) => openDashboard());
         open.Font = Theme.Font(TextRole.BodyStrong);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Start service", null, (_, _) => actions.StartService());
-        menu.Items.Add("Stop service", null, (_, _) => actions.StopService());
-        menu.Items.Add("Restart service", null, (_, _) => actions.RestartService());
+        menu.Items.Add("Start service", null, async (_, _) => await actions.StartServiceAsync());
+        menu.Items.Add("Stop service", null, async (_, _) => await actions.StopServiceAsync());
+        menu.Items.Add("Restart service", null, async (_, _) => await actions.RestartServiceAsync());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Copy address for counters", null, (_, _) => actions.CopyServerUrl());
         menu.Items.Add("Open logs", null, (_, _) => actions.OpenLogs());
@@ -71,7 +81,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _notifyIcon.Text = $"{ServerTrayOptions.ProductName}: {ServerTrayActions.Describe(_actions.GetServiceStatus())}";
     }
 
-    private void StopServiceAndExitTray()
+    private async void StopServiceAndExitTray()
     {
         var owner = _statusForm is { IsDisposed: false, Visible: true } ? _statusForm : null;
         var confirmed = TrayDialog.Confirm(
@@ -85,9 +95,17 @@ public sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        if (_actions.StopService())
+        try
         {
-            ExitThread();
+            if (await _actions.StopServiceAsync(owner))
+            {
+                ExitThread();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Nothing awaits this handler; an error let out of it would end the tray.
+            TrayDialog.ShowMessage(owner, Tone.Err, "The service did not stop.", ex.Message);
         }
     }
 

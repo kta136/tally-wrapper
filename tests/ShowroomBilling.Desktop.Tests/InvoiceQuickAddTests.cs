@@ -1,3 +1,4 @@
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -88,12 +89,12 @@ public sealed class InvoiceQuickAddTests
 
     private static (InvoiceViewModel Vm, SettingsViewModel Settings) InvoiceWith(params string[] itemNames)
     {
-        var settings = new SettingsViewModel();
+        var settings = OfflineApi.Settings();
         foreach (var name in itemNames)
         {
             settings.Draft.ItemMasterRows.Add(new ItemMasterRowVm { Name = name });
         }
 
-        return (new InvoiceViewModel(null, null, settings), settings);
+        return (new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings), settings);
     }
 }

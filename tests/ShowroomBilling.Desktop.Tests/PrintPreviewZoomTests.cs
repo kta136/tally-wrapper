@@ -22,7 +22,7 @@ public sealed class PrintPreviewZoomTests
     {
         // The view allowed 25% while the store that saved the value clamped it
         // to 50%, so the store's change event pushed the view back to 50.
-        var vm = new PrintPreviewViewModel();
+        var vm = new PrintPreviewViewModel(dispatcher: null, preferences: null);
         vm.PreviewZoomPercent = 50;
 
         vm.ZoomOutCommand.Execute(null);

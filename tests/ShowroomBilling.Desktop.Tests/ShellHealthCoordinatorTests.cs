@@ -14,10 +14,7 @@ public sealed class ShellHealthCoordinatorTests
         var host = new FakeShellHealthHost();
         var runtime = new RuntimeHealthResponse(
             "Healthy",
-            ApiAvailable: true,
-            DatabaseConfigured: true,
             DatabaseReachable: true,
-            SettingsLoadedFromApi: true,
             Message: "Database identity mismatch: PostgreSQL is reachable, but database identity is PROD; expected DEV for Development.",
             DatabaseIdentity: "PROD",
             ExpectedDatabaseIdentity: "DEV",
@@ -154,19 +151,13 @@ public sealed class ShellHealthCoordinatorTests
 
     private static RuntimeHealthResponse DatabaseDown() => new(
         "Unhealthy",
-        ApiAvailable: true,
-        DatabaseConfigured: true,
         DatabaseReachable: false,
-        SettingsLoadedFromApi: true,
         Message: "API is online. PostgreSQL must be configured and reachable for readiness.",
         ExpectedDatabaseIdentity: "PROD");
 
     private static RuntimeHealthResponse Runtime(int pending) => new(
         pending > 0 ? "Unhealthy" : "Healthy",
-        ApiAvailable: true,
-        DatabaseConfigured: true,
         DatabaseReachable: true,
-        SettingsLoadedFromApi: true,
         Message: "from the server",
         DatabaseIdentity: "PROD",
         ExpectedDatabaseIdentity: "PROD",

@@ -19,7 +19,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
 {
     private static readonly CultureInfo AmountCulture = CultureInfo.GetCultureInfo("en-IN");
 
-    private readonly IBillsApiClient? _billsApi;
+    private readonly IBillsApiClient _billsApi;
     private readonly AdminTokenStore? _adminTokens;
     private readonly SettingsViewModel? _settings;
 
@@ -32,10 +32,8 @@ public partial class SyntheticBatchViewModel : ObservableObject
     /// <summary>Fires on successful completion so the Bills tab can refresh.</summary>
     public event EventHandler? BatchCompleted;
 
-    public SyntheticBatchViewModel() : this(null, null, null) { }
-
     public SyntheticBatchViewModel(
-        IBillsApiClient? billsApi,
+        IBillsApiClient billsApi,
         AdminTokenStore? adminTokens,
         SettingsViewModel? settings)
     {
@@ -216,12 +214,6 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     private async Task RunBatchAsync(CancellationToken _)
     {
-        if (_billsApi is null)
-        {
-            ErrorMessage = "Bills API is not wired.";
-            return;
-        }
-
         _cts = new CancellationTokenSource();
         ErrorMessage = null;
         IsRunning = true;

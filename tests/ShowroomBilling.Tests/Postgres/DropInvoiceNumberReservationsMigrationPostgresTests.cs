@@ -63,7 +63,7 @@ public sealed class DropInvoiceNumberReservationsMigrationPostgresTests(Postgres
         await using (var db = database.CreateContext())
         {
             var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
-                new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("After the drop", 100m)));
+                new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("After the drop", 100m)));
             Assert.EndsWith("/0001", bill.InvoiceNumber);
         }
 

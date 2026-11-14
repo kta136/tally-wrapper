@@ -16,7 +16,7 @@ internal interface IBillDetailsActionHost
 
 /// <summary>The action buttons in the Bill Details dialog.</summary>
 internal sealed class BillDetailsActionWorkflow(
-    IBillsApiClient? billsApi,
+    IBillsApiClient billsApi,
     IBillDetailsActionHost host)
 {
     public Task PushAsync(CancellationToken cancellationToken) => RunAsync(
@@ -94,7 +94,7 @@ internal sealed class BillDetailsActionWorkflow(
 
     private async Task RunAsync(string starting, string done, string failure, Func<IBillsApiClient, Guid, Task> action)
     {
-        if (billsApi is null || host.Bill is null) return;
+        if (host.Bill is null) return;
 
         var billId = host.Bill.Id;
         host.IsActing = true;

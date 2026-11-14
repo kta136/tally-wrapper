@@ -64,10 +64,10 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         await AddSettingsAsync(db, suffix: "-A");
         var service = PostgresBillTestSupport.BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
         await service.DeleteAsync(second.Id, new DeleteBillRequest("test", DryRun: false));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("C", 100m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("C", 100m)));
 
         Assert.EndsWith("/0001-A", first.InvoiceNumber);
         Assert.EndsWith("/0002-A", third.InvoiceNumber);
@@ -81,8 +81,8 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         await AddSettingsAsync(db, suffix: "-A2");
         var service = PostgresBillTestSupport.BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
 
         Assert.EndsWith("/0001-A2", first.InvoiceNumber);
         Assert.EndsWith("/0002-A2", second.InvoiceNumber);

@@ -35,7 +35,7 @@ public sealed class TestIsolationTests
     [Fact]
     public void A_settings_screen_built_in_a_test_points_at_no_real_server()
     {
-        var settings = new SettingsViewModel();
+        var settings = OfflineApi.Settings();
 
         Assert.Equal("http://localhost:5107", settings.Server.ServerAddress);
     }

@@ -11,7 +11,7 @@ public sealed class SyntheticBatchViewModelTests
     [Fact]
     public void ValidationMessage_FlagsInvalidMaxBillAmount()
     {
-        var vm = new SyntheticBatchViewModel();
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings: null);
         vm.MaxBillAmount = 250_000; // above ₹1,99,000
 
         Assert.NotNull(vm.ValidationMessage);
@@ -22,7 +22,7 @@ public sealed class SyntheticBatchViewModelTests
     [Fact]
     public void ValidationMessage_FlagsReversedTimeWindow()
     {
-        var vm = new SyntheticBatchViewModel { Rate24Kt = 6000m };
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings: null) { Rate24Kt = 6000m };
         var now = DateTimeOffset.Now;
         vm.StartAt = now.AddHours(5);
         vm.EndAt = now;
@@ -34,7 +34,7 @@ public sealed class SyntheticBatchViewModelTests
     [Fact]
     public void A_new_scheduler_has_no_built_in_rate_and_says_so()
     {
-        var vm = new SyntheticBatchViewModel();
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings: null);
 
         Assert.Equal(0m, vm.Rate24Kt);
         Assert.Equal("24kt rate must be greater than zero.", vm.ValidationMessage);
@@ -43,8 +43,8 @@ public sealed class SyntheticBatchViewModelTests
     [Fact]
     public void KaratOptions_FollowKaratRowsAddedAndEditedInSettings()
     {
-        var settings = new ShowroomBilling.Desktop.ViewModels.Settings.SettingsViewModel();
-        var vm = new SyntheticBatchViewModel(billsApi: null, adminTokens: null, settings);
+        var settings = OfflineApi.Settings();
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings);
         Assert.Empty(vm.KaratOptions);
 
         var row = new ShowroomBilling.Desktop.ViewModels.Settings.KaratMasterRowVm

@@ -69,15 +69,15 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         var response = await service.IngestLedgersAsync(new PushLedgerSnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
             [
-                new LedgerSnapshotItem("Sales A/c", "  Sales Accounts  ", "Sales Accounts", true, null),
-                new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null)
+                new LedgerSnapshotItem("  Sales A/c  "),
+                new LedgerSnapshotItem("Cash")
             ]));
 
         Assert.Equal(2, response.ItemCount);
 
         var read = await service.GetLedgersAsync();
         Assert.Equal(2, read.Ledgers.Count);
-        Assert.Contains(read.Ledgers, l => l.Name == "Sales A/c" && l.Parent == "Sales Accounts" && l.IsRevenue);
+        Assert.Contains(read.Ledgers, l => l.Name == "Sales A/c");
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
         var ledgers = Enumerable.Range(1, 501)
-            .Select(n => new LedgerSnapshotItem($"Customer {n:0000}", null, "Sundry Debtors", false, null))
+            .Select(n => new LedgerSnapshotItem($"Customer {n:0000}"))
             .ToArray();
         await service.IngestLedgersAsync(new PushLedgerSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, ledgers));
 
@@ -125,12 +125,11 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
 
         await service.IngestVoucherTypesAsync(new PushVoucherTypeSnapshotRequest(
             ShowroomCode, DateTimeOffset.UtcNow,
-            [new VoucherTypeSnapshotItem("Sales", "Sales", true)]));
+            [new VoucherTypeSnapshotItem("Sales")]));
 
         var read = await service.GetVoucherTypesAsync();
         Assert.Single(read.VoucherTypes);
         Assert.Equal("Sales", read.VoucherTypes[0].Name);
-        Assert.True(read.VoucherTypes[0].IsDeemedPositive);
     }
 
     [Fact]

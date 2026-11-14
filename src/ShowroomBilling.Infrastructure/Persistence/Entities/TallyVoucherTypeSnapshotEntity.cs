@@ -10,10 +10,6 @@ public sealed class TallyVoucherTypeSnapshotEntity
 
     public string Name { get; set; } = string.Empty;
 
-    public string? ParentType { get; set; }
-
-    public bool IsDeemedPositive { get; set; }
-
 
     public TallyMasterSnapshotBatchEntity Batch { get; set; } = null!;
 }

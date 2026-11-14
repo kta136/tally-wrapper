@@ -19,7 +19,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
 
         var backdate = new DateTimeOffset(2026, 1, 15, 10, 30, 0, TimeSpan.Zero);
         var response = await service.CreateBackdatedDraftAsync(
-            new CreateBillDraftRequest(null, SamplePayload("Backdated Party", 12_345m)),
+            new CreateBillDraftRequest(SamplePayload("Backdated Party", 12_345m)),
             backdate);
 
         Assert.Equal(BillStates.Pending, response.State);
@@ -41,7 +41,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
         var before = DateTimeOffset.UtcNow;
 
         var response = await service.CreateDraftAsync(
-            new CreateBillDraftRequest(null, SamplePayload("Default Path", 100m)));
+            new CreateBillDraftRequest(SamplePayload("Default Path", 100m)));
 
         var after = DateTimeOffset.UtcNow;
         Assert.InRange(response.CreatedAtUtc, before, after);

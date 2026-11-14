@@ -29,8 +29,7 @@ public sealed class RuntimeHealthContractTests(PostgresFixture postgres)
         var response = await client.GetFromJsonAsync<RuntimeHealthResponse>(uri);
 
         Assert.NotNull(response);
-        Assert.True(response!.ApiAvailable);
-        Assert.True(response.DatabaseReachable);
+        Assert.True(response!.DatabaseReachable);
         Assert.Equal("Healthy", response.Status);
         Assert.Equal(0, response.PendingMigrationCount);
         Assert.Contains("PostgreSQL is reachable", response.Message);

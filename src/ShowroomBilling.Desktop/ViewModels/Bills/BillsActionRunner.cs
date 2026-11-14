@@ -41,16 +41,9 @@ internal sealed class BillsActionRunner(IBillsActionWorkflowHost host)
         return row.IsSelected && selected.Count > 1 ? selected : [row];
     }
 
+    /// <summary>Asks the operator; with nothing to ask through, the answer is "no".</summary>
     public async Task<bool> ConfirmAsync(ConfirmRequest request)
-    {
-        if (host.ConfirmHandler is null)
-        {
-            host.StatusMessage = "Confirmation prompt is not wired.";
-            return false;
-        }
-
-        return await host.ConfirmHandler(request);
-    }
+        => host.ConfirmHandler is { } ask && await ask(request);
 
     /// <summary>
     /// Runs one action: shows <paramref name="starting"/>, then the text the

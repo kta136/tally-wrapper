@@ -6,7 +6,7 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
 /// <summary>Admin-only actions: change number, mark pushed / pending, delete.</summary>
 internal sealed class BillsAdminActionWorkflow(
-    IBillsApiClient? billsApi,
+    IBillsApiClient billsApi,
     BillsAdminTokenGate adminTokenGate,
     IBillsActionWorkflowHost host,
     BillsActionRunner runner)
@@ -41,12 +41,8 @@ internal sealed class BillsAdminActionWorkflow(
 
     internal async Task ChangeNumberRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
-        if (host.ChangeNumberPromptHandler is null)
-        {
-            host.StatusMessage = "Change number dialog is not wired.";
-            return;
-        }
+        if (row is null) return;
+        if (host.ChangeNumberPromptHandler is null) return;
 
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
@@ -86,7 +82,7 @@ internal sealed class BillsAdminActionWorkflow(
         IReadOnlyList<BillListRowViewModel> rows,
         CancellationToken cancellationToken)
     {
-        if (billsApi is null || rows.Count == 0) return;
+        if (rows.Count == 0) return;
         if (!rows.All(mark.Allowed))
         {
             host.StatusMessage = mark.Blocked;
@@ -95,11 +91,7 @@ internal sealed class BillsAdminActionWorkflow(
 
         var token = await EnsureAdminTokenAsync(cancellationToken);
         if (token is null) return;
-        if (host.ReasonPromptHandler is null)
-        {
-            host.StatusMessage = "Reason prompt is not wired.";
-            return;
-        }
+        if (host.ReasonPromptHandler is null) return;
 
         var subject = rows.Count == 1 ? rows[0].InvoiceNumberDisplay : $"{rows.Count} selected bills";
         var total = UiCulture.Rupees(rows.Sum(row => row.GrandTotal));
@@ -124,7 +116,7 @@ internal sealed class BillsAdminActionWorkflow(
 
     internal async Task DeleteRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
+        if (row is null) return;
         if (runner.ContextRows(row).Count > 1)
         {
             await DeleteSelectedAsync(cancellationToken);
@@ -164,7 +156,6 @@ internal sealed class BillsAdminActionWorkflow(
 
     internal async Task DeleteSelectedAsync(CancellationToken cancellationToken)
     {
-        if (billsApi is null) return;
         var rows = runner.SelectedRows();
         if (rows.Count == 0) return;
 

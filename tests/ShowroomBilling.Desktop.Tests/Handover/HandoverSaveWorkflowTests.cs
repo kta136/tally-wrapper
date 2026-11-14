@@ -56,7 +56,6 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Equal(HandoverPrintResult.Printed, outcome.Print);
         var create = Assert.Single(_api.Creates);
         Assert.Equal(saveId, create.ClientOperationId);
-        Assert.Null(create.CounterId);
         Assert.True(HandoverPayloads.SameContent(PayloadOf(document), create.Payload));
         Assert.Equal([$"by-operation:{saveId}"], _api.Calls);
         Assert.Single(_printed);

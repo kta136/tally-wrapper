@@ -148,9 +148,9 @@ public sealed class ServerDashboardViewTests
     {
         var counters = new[]
         {
-            Counter("Counter 1", "SHOWROOM-PC1", "ravi", "192.168.1.21", 9),
-            Counter("Counter 2", "SHOWROOM-PC2", "meera", "192.168.1.22", 21),
-            Counter("Back office", "OFFICE-LAPTOP", "kartikey", "192.168.1.40", 4),
+            Counter("SHOWROOM-PC1", "ravi", "192.168.1.21", 9),
+            Counter("SHOWROOM-PC2", "meera", "192.168.1.22", 21),
+            Counter("OFFICE-LAPTOP", "office", "192.168.1.40", 4),
         };
 
         yield return ("Checking", DashboardState.Checking);
@@ -172,19 +172,15 @@ public sealed class ServerDashboardViewTests
 
     private static RuntimeHealthResponse Runtime(bool reachable, int pending = 0) => new(
         reachable && pending == 0 ? "Healthy" : "Unhealthy",
-        ApiAvailable: true,
-        DatabaseConfigured: true,
         DatabaseReachable: reachable,
-        SettingsLoadedFromApi: true,
         Message: "from the server",
         DatabaseIdentity: reachable ? "PROD" : null,
         ExpectedDatabaseIdentity: "PROD",
         DatabaseIdentityMatches: reachable ? true : null,
         PendingMigrationCount: pending);
 
-    private static ClientPresenceResponse Counter(string name, string pc, string user, string address, int secondsAgo) => new(
+    private static ClientPresenceResponse Counter(string pc, string user, string address, int secondsAgo) => new(
         Guid.NewGuid().ToString("N"),
-        name,
         "1.0",
         pc,
         user,

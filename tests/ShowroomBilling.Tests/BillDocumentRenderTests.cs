@@ -26,6 +26,25 @@ public class BillDocumentRenderTests
         AssertPdfMagic(pdf);
     }
 
+    [Theory]
+    // The taxable value and the two taxes, each rounded to the paisa, come to
+    // 100.01 for lines of 100.00. The stored round-off is -0.01, but against
+    // the figures the summary prints there is nothing to round.
+    [InlineData(100.00, 97.09, 0, 2.92, -0.01, 100, 0)]
+    [InlineData(100.40, 97.48, 0, 2.92, -0.40, 100, -0.40)]
+    [InlineData(1000.00, 970.87, 100.25, 29.13, 0.25, 900, 0.25)]
+    public void The_summarys_round_off_takes_the_figures_above_it_to_the_total(
+        double itemsTotal, double subtotal, double discount, double tax, double storedRoundOff, double grandTotal, double printed)
+    {
+        var totals = new BillTotalsDto((decimal)subtotal, (decimal)discount, (decimal)tax, (decimal)storedRoundOff, (decimal)grandTotal);
+
+        var roundOff = BillDocument.SummaryRoundOff((decimal)itemsTotal, totals);
+
+        Assert.Equal((decimal)printed, roundOff);
+        // What the customer adds up by hand comes to the total printed below it.
+        Assert.Equal(totals.GrandTotal, (decimal)itemsTotal - totals.DiscountTotal + roundOff);
+    }
+
     [Fact]
     public void GeneratePdf_renders_one_page_per_copy()
     {

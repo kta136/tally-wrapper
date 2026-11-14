@@ -39,10 +39,8 @@ $desktopPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtim
 if ($LASTEXITCODE -ne 0) { throw "Desktop publish failed." }
 
 # --- Tidy up ----------------------------------------------------------------------
-# Final layout in publish/prod/:
-#   TallyWrapper.exe                  — the single-file Desktop exe
-#   TallyWrapper.deps.json            — .NET runtime: assembly resolution manifest, required
-#   TallyWrapper.runtimeconfig.json   — .NET runtime: framework/runtime options, required
+# Final layout in publish/prod/: TallyWrapper.exe and nothing else. A single-file
+# publish carries its deps.json and runtimeconfig.json inside the exe.
 # The Desktop's baseline appsettings.json is an EmbeddedResource and is loaded via
 # AddJsonStream in App.OnStartup. The .pdb is already gone via DebugType=embedded;
 # the LatoFont folder is removed below.
@@ -61,7 +59,7 @@ if (Test-Path $publishedProdAppSettings) { Remove-Item -Force $publishedProdAppS
 # appsettings.json is now an EmbeddedResource (loaded via AddJsonStream), so dotnet
 # publish should not emit it. Defensive cleanup in case a future SDK change or a
 # stale incremental copy puts one back next to the exe — we always want the prod
-# folder to be exe + the two runtime .json files only.
+# folder to hold the exe only.
 $publishedAppSettings = Join-Path $desktopOut 'appsettings.json'
 if (Test-Path $publishedAppSettings) { Remove-Item -Force $publishedAppSettings }
 

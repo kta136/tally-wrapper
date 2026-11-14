@@ -38,8 +38,6 @@ public partial class PrintPreviewViewModel : ObservableObject
     private PrintJobSettings _preferredPrintJobSettings = PrintJobSettings.Default;
     private Action? _onPrintSucceeded;
 
-    public PrintPreviewViewModel() : this(null, null) { }
-
     public PrintPreviewViewModel(IPrintDispatcher? dispatcher, IPrintPreferencesStore? preferences)
     {
         _dispatcher = dispatcher;

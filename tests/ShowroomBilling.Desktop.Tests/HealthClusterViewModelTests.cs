@@ -81,10 +81,7 @@ public sealed class HealthClusterViewModelTests
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
             "Healthy",
-            ApiAvailable: true,
-            DatabaseConfigured: true,
             DatabaseReachable: true,
-            SettingsLoadedFromApi: true,
             Message: "API is online and PostgreSQL is reachable (DEV).",
             DatabaseIdentity: "DEV",
             ExpectedDatabaseIdentity: "DEV",
@@ -101,10 +98,7 @@ public sealed class HealthClusterViewModelTests
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
             "Healthy",
-            ApiAvailable: true,
-            DatabaseConfigured: true,
             DatabaseReachable: true,
-            SettingsLoadedFromApi: true,
             Message: "Database identity mismatch.",
             DatabaseIdentity: "PROD",
             ExpectedDatabaseIdentity: "DEV",
@@ -122,10 +116,7 @@ public sealed class HealthClusterViewModelTests
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
             "Unhealthy",
-            ApiAvailable: true,
-            DatabaseConfigured: true,
             DatabaseReachable: false,
-            SettingsLoadedFromApi: true,
             Message: "API is online. PostgreSQL must be configured and reachable for readiness.",
             ExpectedDatabaseIdentity: "PROD")));
 
@@ -143,10 +134,7 @@ public sealed class HealthClusterViewModelTests
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
             "Unhealthy",
-            ApiAvailable: true,
-            DatabaseConfigured: true,
             DatabaseReachable: reachable,
-            SettingsLoadedFromApi: true,
             Message: "whatever the server says",
             DatabaseIdentity: reachable ? "PROD" : null,
             ExpectedDatabaseIdentity: "PROD",
@@ -165,10 +153,7 @@ public sealed class HealthClusterViewModelTests
 
         vm.Apply(Snapshot(new RuntimeHealthResponse(
             "Healthy",
-            ApiAvailable: true,
-            DatabaseConfigured: true,
             DatabaseReachable: true,
-            SettingsLoadedFromApi: true,
             Message: "API is online and PostgreSQL is reachable (PROD).",
             DatabaseIdentity: "PROD",
             ExpectedDatabaseIdentity: "PROD",

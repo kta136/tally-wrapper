@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Printing;
 using Xunit;
@@ -235,8 +236,8 @@ public class SettingsPreviewViewModelTests
         // Previously the test created a second Preview over the same draft/layout and
         // both were subscribed — harmless in production but noisy in tests.
         var settings = new SettingsViewModel(
-            settingsApi: null,
-            mastersApi: null,
+            settingsApi: new OfflineSettingsApi(),
+            mastersApi: new OfflineMastersApi(),
             printAssetApi: assets,
             previewFactory: (draft, layout, host) =>
                 new SettingsPreviewViewModel(draft, layout, host, dispatcher, assets, null, FastDebounce));

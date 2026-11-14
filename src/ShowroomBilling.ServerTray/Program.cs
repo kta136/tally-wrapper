@@ -23,11 +23,9 @@ internal static class Program
             }
             catch (Exception ex)
             {
+                // No message from here: the tray that started this copy reads
+                // the exit code and reports, with the end of this log.
                 ServerInstaller.Log(options, $"FAILED {ex}");
-                CopyableMessageDialog.ShowMessage(
-                    null,
-                    $"Setup failed.\n\n{ex.Message}\n\nThe install log has the rest: {options.InstallLogPath}",
-                    MessageBoxIcon.Error);
                 Environment.ExitCode = 1;
             }
 
@@ -57,16 +55,34 @@ internal static class Program
             return;
         }
 
-        var installed = ServerInstaller.EnsureInstalledInteractive(options);
-        if (!installed)
+        var outcome = ServerInstaller.EnsureInstalledInteractive(options);
+        if (outcome != InstallOutcome.Done)
         {
+            var (message, icon) = ServerTrayActions.InstallReport(
+                outcome,
+                ServerInstaller.TryGetServiceStatus(options.ServiceName),
+                options.InstallLogPath,
+                ServerInstaller.InstallLogTail(options));
             CopyableMessageDialog.ShowMessage(
                 null,
-                "Setup did not finish.\n\nThe tray icon will still appear, but counters may not be able to bill. Open the dashboard from it to see what is missing.",
-                MessageBoxIcon.Warning);
+                $"{message}\n\nThe tray icon will still appear, but counters may not be able to bill. Open the dashboard from it to see what is missing.",
+                icon);
         }
 
-        Application.Run(new TrayApplicationContext(options));
+        // One tray for this Windows session. Running the exe again is how the
+        // server is repaired and upgraded, so a copy that is already running is
+        // asked to close and this one takes its place; two used to run side by
+        // side, each with its own icon and timers.
+        using var instance = SingleInstance.Acquire(TimeSpan.FromSeconds(15), out var tookOver);
+        if (instance is null)
+        {
+            // The other copy did not close. It keeps the tray; this one is done.
+            return;
+        }
+
+        using var tray = new TrayApplicationContext(options, showDashboard: tookOver);
+        instance.OnAskedToHandOver(tray.Close);
+        Application.Run(tray);
     }
 
     private static string? GetArgumentValue(string[] args, string name)

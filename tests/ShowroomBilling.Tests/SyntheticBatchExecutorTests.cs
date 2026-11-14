@@ -27,7 +27,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
         var windowStart = DateTimeOffset.UtcNow.AddHours(-6);
         var existingAt = windowStart.AddHours(1);
         var existing = await bills.CreateBackdatedDraftAsync(
-            new CreateBillDraftRequest(null, new BillPayloadDto(
+            new CreateBillDraftRequest(new BillPayloadDto(
                 PartyName: "Walk-in",
                 PartyGstin: null,
                 PartyPhone: null,

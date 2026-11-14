@@ -14,12 +14,8 @@ public sealed record PushLedgerSnapshotRequest(
     DateTimeOffset FetchedAtUtc,
     IReadOnlyList<LedgerSnapshotItem> Ledgers);
 
-public sealed record LedgerSnapshotItem(
-    string Name,
-    string? Parent,
-    string? PrimaryGroup,
-    bool IsRevenue,
-    string? Gstin);
+/// <summary>A ledger of the Tally company. Only its name is kept: nothing ever read its group, revenue flag or GSTIN.</summary>
+public sealed record LedgerSnapshotItem(string Name);
 
 public sealed record PushStockItemSnapshotRequest(
     string ShowroomCode,
@@ -38,10 +34,8 @@ public sealed record PushVoucherTypeSnapshotRequest(
     DateTimeOffset FetchedAtUtc,
     IReadOnlyList<VoucherTypeSnapshotItem> VoucherTypes);
 
-public sealed record VoucherTypeSnapshotItem(
-    string Name,
-    string? ParentType,
-    bool IsDeemedPositive);
+/// <summary>A voucher type of the Tally company. Only its name is kept.</summary>
+public sealed record VoucherTypeSnapshotItem(string Name);
 
 public sealed record MasterSnapshotAcceptedResponse(
     string MasterType,

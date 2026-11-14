@@ -1,9 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
-using Microsoft.Extensions.Options;
-using ShowroomBilling.Desktop.Configuration;
-using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels;
 
@@ -14,23 +11,13 @@ public partial class MainWindow : Window
     private const int WmGetMinMaxInfo = 0x0024;
     private const uint MonitorDefaultToNearest = 0x00000002;
 
-    private static readonly TimeSpan ApiReadyPollInterval = TimeSpan.FromMilliseconds(50);
-    private static readonly TimeSpan ApiReadyTimeout = TimeSpan.FromSeconds(5);
-
     private readonly MainWindowViewModel _viewModel;
-    private readonly IApiEndpointResolver _endpointResolver;
-    private readonly IApiReadinessSignal _apiReadiness;
     private HwndSource? _windowSource;
 
-    public MainWindow(
-        MainWindowViewModel viewModel,
-        IApiEndpointResolver endpointResolver,
-        IApiReadinessSignal apiReadiness)
+    public MainWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
         _viewModel = viewModel;
-        _endpointResolver = endpointResolver;
-        _apiReadiness = apiReadiness;
         DataContext = _viewModel;
         _viewModel.Handover.BringToFront = () => WindowActivation.BringToFront(this);
         Loaded += OnLoaded;
@@ -97,7 +84,6 @@ public partial class MainWindow : Window
         Loaded -= OnLoaded;
         try
         {
-            await WaitForApiReadinessAsync();
             await _viewModel.InitializeAsync();
         }
         catch (Exception ex)
@@ -112,21 +98,9 @@ public partial class MainWindow : Window
         }
         finally
         {
-            // Unblocks consumers waiting to attempt their own bounded API call.
-            _apiReadiness.MarkReady();
             // A hand-over link that started the app is taken from here on, settings or not.
             _viewModel.Handover.MarkStarted();
         }
-    }
-
-    private async Task WaitForApiReadinessAsync()
-    {
-        if (!Uri.TryCreate(_endpointResolver.BaseUrl, UriKind.Absolute, out var uri) || uri.IsDefaultPort)
-        {
-            return;
-        }
-
-        await TcpPortProbe.WaitUntilOpenAsync(uri.Host, uri.Port, ApiReadyPollInterval, ApiReadyTimeout);
     }
 
     [StructLayout(LayoutKind.Sequential)]

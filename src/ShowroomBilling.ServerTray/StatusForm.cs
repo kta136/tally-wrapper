@@ -282,9 +282,9 @@ public sealed class StatusForm : Form
     private void WireActions()
     {
         _install.Click += (_, _) => _actions.InstallOrRepairServer(this);
-        _start.Click += (_, _) => WhileWaiting(() => _actions.StartService(this));
-        _restart.Click += (_, _) => WhileWaiting(() => _actions.RestartService(this));
-        _stop.Click += (_, _) => WhileWaiting(() => _actions.StopService(this));
+        _start.Click += async (_, _) => await WhileWaitingAsync(() => _actions.StartServiceAsync(this));
+        _restart.Click += async (_, _) => await WhileWaitingAsync(() => _actions.RestartServiceAsync(this));
+        _stop.Click += async (_, _) => await WhileWaitingAsync(() => _actions.StopServiceAsync(this));
 
         _copyAddress.Click += (_, _) =>
         {
@@ -302,17 +302,39 @@ public sealed class StatusForm : Form
         _saveConnection.Click += async (_, _) => await SaveDatabaseAsync();
     }
 
-    /// <summary>Starting or stopping a service takes seconds, and the window waits for it.</summary>
-    private void WhileWaiting(Action action)
+    /// <summary>
+    /// Starting or stopping a service takes seconds. The window stays alive
+    /// meanwhile; only the three service buttons wait, so that a second click
+    /// cannot start a second action.
+    /// </summary>
+    private async Task WhileWaitingAsync(Func<Task> action)
     {
+        Control[] buttons = [_start, _restart, _stop];
         UseWaitCursor = true;
+        foreach (var button in buttons)
+        {
+            button.Enabled = false;
+        }
+
         try
         {
-            action();
+            await action();
+        }
+        catch (Exception ex)
+        {
+            // Nothing awaits a click handler; an error let out of it would end the tray.
+            CopyableMessageDialog.ShowMessage(this, $"That did not work.\n\n{ex.Message}", MessageBoxIcon.Error);
         }
         finally
         {
-            UseWaitCursor = false;
+            if (!IsDisposed)
+            {
+                UseWaitCursor = false;
+                foreach (var button in buttons)
+                {
+                    button.Enabled = true;
+                }
+            }
         }
     }
 

@@ -69,11 +69,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 Id = Guid.CreateVersion7(),
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
-                Name = (item.Name ?? string.Empty).Trim(),
-                Parent = MasterSnapshotNormalization.Normalize(item.Parent),
-                PrimaryGroup = MasterSnapshotNormalization.Normalize(item.PrimaryGroup),
-                IsRevenue = item.IsRevenue,
-                Gstin = MasterSnapshotNormalization.Normalize(item.Gstin)
+                Name = (item.Name ?? string.Empty).Trim()
             })),
             cancellationToken);
     }
@@ -127,9 +123,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
                 Id = Guid.CreateVersion7(),
                 BatchId = batch.Id,
                 ShowroomId = showroomId,
-                Name = (item.Name ?? string.Empty).Trim(),
-                ParentType = MasterSnapshotNormalization.Normalize(item.ParentType),
-                IsDeemedPositive = item.IsDeemedPositive
+                Name = (item.Name ?? string.Empty).Trim()
             })),
             cancellationToken);
     }
@@ -164,7 +158,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             .AsNoTracking()
             .Where(x => x.BatchId == batch.Id)
             .OrderBy(x => x.Name)
-            .Select(row => new LedgerSnapshotItem(row.Name, row.Parent, row.PrimaryGroup, row.IsRevenue, row.Gstin))
+            .Select(row => new LedgerSnapshotItem(row.Name))
             .ToArrayAsync(cancellationToken);
 
         return new LedgerSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
@@ -200,7 +194,7 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
             .AsNoTracking()
             .Where(x => x.BatchId == batch.Id)
             .OrderBy(x => x.Name)
-            .Select(row => new VoucherTypeSnapshotItem(row.Name, row.ParentType, row.IsDeemedPositive))
+            .Select(row => new VoucherTypeSnapshotItem(row.Name))
             .ToArrayAsync(cancellationToken);
 
         return new VoucherTypeSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);

@@ -177,7 +177,7 @@ public sealed class HandoverCoordinatorTests
 
         public NavTab ActiveTab { get; set; } = NavTab.Invoice;
 
-        public BillsViewModel Bills { get; } = new();
+        public BillsViewModel Bills { get; } = new(new FakeBillsApi());
 
         public SettingsViewModel Settings { get; }
 

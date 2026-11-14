@@ -6,10 +6,6 @@ public sealed class BillEntity
 
     public Guid ShowroomId { get; set; }
 
-    public Guid? CounterId { get; set; }
-
-    public string BillType { get; set; } = "sales";
-
     public Guid? CurrentRevisionId { get; set; }
 
     public string State { get; set; } = "pending";
@@ -38,8 +34,6 @@ public sealed class BillEntity
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public DateTimeOffset UpdatedAtUtc { get; set; }
-
-    public DateTimeOffset? VoidedAtUtc { get; set; }
 
     public bool EditedAfterPush { get; set; }
 

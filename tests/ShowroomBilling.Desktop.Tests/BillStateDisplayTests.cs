@@ -1,4 +1,5 @@
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 
 namespace ShowroomBilling.Desktop.Tests;
@@ -51,7 +52,7 @@ public sealed class BillStateDisplayTests
         Assert.Equal("bang", row.StateKind);
 
         // No bill loaded yet: a neutral dash, not a blank chip.
-        var details = new BillDetailsViewModel();
+        var details = new BillDetailsViewModel(new FakeBillsApi());
         Assert.Equal("—", details.StateChipLabel);
         Assert.Equal("neutral", details.StateTone);
         Assert.Equal("none", details.StateKind);

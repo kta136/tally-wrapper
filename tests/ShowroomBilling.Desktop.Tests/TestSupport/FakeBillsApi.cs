@@ -53,8 +53,6 @@ internal sealed class FakeBillsApi : IBillsApiClient
         string? invoiceNumber = "SR/25-26/0001") => new(
         Id: id,
         ShowroomId: Guid.Empty,
-        CounterId: null,
-        BillType: "sales",
         State: state,
         InvoiceNumber: invoiceNumber,
         FiscalYear: "2025-2026",
@@ -62,10 +60,9 @@ internal sealed class FakeBillsApi : IBillsApiClient
         CurrentRevisionId: payload is null ? null : Guid.NewGuid(),
         CreatedAtUtc: DateTimeOffset.UtcNow,
         UpdatedAtUtc: DateTimeOffset.UtcNow,
-        VoidedAtUtc: null,
         CurrentRevision: payload is null
             ? null
-            : new BillRevisionResponse(Guid.NewGuid(), 1, DateTimeOffset.UtcNow, null, null, null, payload));
+            : new BillRevisionResponse(Guid.NewGuid(), 1, DateTimeOffset.UtcNow, null, payload));
 
     /// <summary>When set, every search fails with it.</summary>
     public Exception? SearchFailure { get; set; }

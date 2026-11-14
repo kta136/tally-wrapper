@@ -37,9 +37,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var nine = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var fortyEight = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
-        var sevenWithSuffix = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+        var nine = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var fortyEight = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
+        var sevenWithSuffix = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
         await RenumberAsync(db, nine.Id, "SR/9", 9);
         await RenumberAsync(db, fortyEight.Id, "SR/48", 48);
         // The longest text, but the lowest number: a text sort put it first.
@@ -65,7 +65,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         // Every stored row carries this id: the MD5 of "default" read as a Guid.
         var stored = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
@@ -79,7 +79,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var service = BuildService(db);
 
         var response = await service.CreateDraftAsync(new CreateBillDraftRequest(
-            CounterId: null,
             Payload: SamplePayload("Walk-in Customer", grandTotal: 1500m)));
 
         Assert.Equal(BillStates.Pending, response.State);
@@ -104,7 +103,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
         var operationId = Guid.NewGuid();
-        var request = new CreateBillDraftRequest(null, SamplePayload("A", 100m), operationId);
+        var request = new CreateBillDraftRequest(SamplePayload("A", 100m), operationId);
 
         var first = await service.CreateDraftAsync(request);
         var replay = await service.CreateDraftAsync(request);
@@ -121,10 +120,10 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
         var operationId = Guid.NewGuid();
-        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m), operationId));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m), operationId));
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
-            service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 250m), operationId)));
+            service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 250m), operationId)));
         Assert.Single(await db.Bills.ToListAsync());
     }
 
@@ -133,7 +132,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var request = new CreateBillDraftRequest(null, SamplePayload("A", 100m));
+        var request = new CreateBillDraftRequest(SamplePayload("A", 100m));
 
         await service.CreateDraftAsync(request);
         await service.CreateDraftAsync(request);
@@ -147,9 +146,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 200m)));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 300m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 200m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 300m)));
 
         Assert.Contains("/0001", first.InvoiceNumber);
         Assert.Contains("/0002", second.InvoiceNumber);
@@ -165,8 +164,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var lastYearsBill = SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 3, 31) };
         var thisYearsBill = SamplePayload("B", 100m) with { BillDate = new DateOnly(2026, 4, 1) };
 
-        var march = await service.CreateDraftAsync(new CreateBillDraftRequest(null, lastYearsBill));
-        var april = await service.CreateDraftAsync(new CreateBillDraftRequest(null, thisYearsBill));
+        var march = await service.CreateDraftAsync(new CreateBillDraftRequest(lastYearsBill));
+        var april = await service.CreateDraftAsync(new CreateBillDraftRequest(thisYearsBill));
 
         Assert.Equal("2025-26", march.FiscalYear);
         Assert.Equal("2025-26/0001", march.InvoiceNumber);
@@ -180,7 +179,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
         var created = await service.CreateDraftAsync(new CreateBillDraftRequest(
-            null, SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 4, 1) }));
+            SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 4, 1) }));
 
         await Assert.ThrowsAsync<BillStateConflictException>(() => service.UpdateDraftAsync(
             created.Id,
@@ -192,7 +191,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var openedRevision = created.CurrentRevisionId;
         await service.UpdateDraftAsync(created.Id, new UpdateBillDraftRequest(SamplePayload("Counter 2 edit", 150m), openedRevision));
 
@@ -207,7 +206,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var request = new UpdateBillDraftRequest(SamplePayload("A-edited", 150m), created.CurrentRevisionId);
         var first = await service.UpdateDraftAsync(created.Id, request);
 
@@ -223,7 +222,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var updated = await service.UpdateDraftAsync(created.Id, new UpdateBillDraftRequest(SamplePayload("A-updated", 150m)));
 
         Assert.Equal(created.InvoiceNumber, updated.InvoiceNumber);
@@ -260,7 +259,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             Totals: new BillTotalsDto(7000m, 0m, 0m, 0m, 7000m),
             Notes: null);
 
-        var response = await service.CreateDraftAsync(new CreateBillDraftRequest(null, payload));
+        var response = await service.CreateDraftAsync(new CreateBillDraftRequest(payload));
 
         var line = response.CurrentRevision!.Payload.Lines.Single();
         Assert.Equal("diamond", line.ItemCategory);
@@ -277,7 +276,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var oversized = payload with { Lines = Enumerable.Repeat(payload.Lines[0], 501).ToArray() };
 
         await Assert.ThrowsAsync<BillValidationException>(() =>
-            service.CreateDraftAsync(new CreateBillDraftRequest(null, oversized)));
+            service.CreateDraftAsync(new CreateBillDraftRequest(oversized)));
         Assert.Empty(await db.Bills.ToListAsync());
     }
 
@@ -293,7 +292,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         };
 
         var exception = await Assert.ThrowsAsync<BillValidationException>(() =>
-            service.CreateDraftAsync(new CreateBillDraftRequest(null, payload)));
+            service.CreateDraftAsync(new CreateBillDraftRequest(payload)));
         Assert.Contains(exception.Errors, x => x.Contains("PartyName", StringComparison.Ordinal));
         Assert.Contains(exception.Errors, x => x.Contains("RawJson", StringComparison.Ordinal));
     }
@@ -306,7 +305,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var payload = SamplePayload("Ram Kumar", 100m);
 
         var exception = await Assert.ThrowsAsync<BillValidationException>(() =>
-            service.CreateDraftAsync(new CreateBillDraftRequest(null, payload)));
+            service.CreateDraftAsync(new CreateBillDraftRequest(payload)));
         Assert.Contains(exception.Errors, x => x.Contains("PartyName", StringComparison.Ordinal));
         Assert.Empty(await db.Bills.ToListAsync());
     }
@@ -322,7 +321,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         };
 
         var exception = await Assert.ThrowsAsync<BillValidationException>(() =>
-            service.CreateDraftAsync(new CreateBillDraftRequest(null, payload)));
+            service.CreateDraftAsync(new CreateBillDraftRequest(payload)));
         Assert.Contains(exception.Errors, x => x.Contains("DiscountTotal", StringComparison.Ordinal));
     }
 
@@ -332,7 +331,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var draft = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var draft = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var pushed = await service.PushAsync(draft.Id, new PushBillRequest("manual"));
 
@@ -348,7 +347,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var created = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var updated = await service.UpdateDraftAsync(created.Id, new UpdateBillDraftRequest(SamplePayload("B", 250m)));
 
         Assert.Equal(2, updated.CurrentRevision!.RevisionNo);
@@ -366,7 +365,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.VoidAsync(bill.Id, new VoidBillRequest("user cancelled"));
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
@@ -379,7 +378,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(
-            null, SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 4, 1) }));
+            SamplePayload("A", 100m) with { BillDate = new DateOnly(2026, 4, 1) }));
         await service.VoidAsync(bill.Id, new VoidBillRequest("user cancelled"));
 
         var ex = await Assert.ThrowsAsync<BillStateConflictException>(() => service.UpdateDraftAsync(
@@ -394,7 +393,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("sub-1"));
 
         var updated = await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
@@ -409,7 +408,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var posted = await service.PushAsync(bill.Id, new PushBillRequest("sub-1"));
 
         var ex = await Assert.ThrowsAsync<AdminSessionRequiredException>(() =>
@@ -429,7 +428,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101");
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
 
@@ -444,7 +443,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101");
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -464,7 +463,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101");
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
 
         await service.RepostAsync(bill.Id, new RepostBillRequest("repost-1", "plain-repost"));
@@ -480,7 +479,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(remoteId: "FAKE-VCH-1", tallyMasterId: null);
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -500,7 +499,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var poster = new FakeTallyPoster();
         var lookup = new FakeVoucherLookup("4521");
         var service = BuildService(db, poster, voucherLookup: lookup);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -529,7 +528,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster();
         var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup());
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -557,7 +556,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster();
         var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup("4521", "4777"));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -576,7 +575,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var poster = new FakeTallyPoster();
         var lookup = new FakeVoucherLookup { Failure = new HttpRequestException("No connection could be made") };
         var service = BuildService(db, poster, voucherLookup: lookup);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -598,7 +597,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var poster = new FakeTallyPoster();
         var lookup = new FakeVoucherLookup("4521");
         var service = BuildService(db, poster, voucherLookup: lookup);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         var renamed = await service.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("7", "typo", DryRun: false));
 
@@ -622,7 +621,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             FailedResponse("TALLY_NO_EFFECT", "No alteration.")
         });
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -640,7 +639,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101");
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -664,7 +663,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var submitted = await service.PushAsync(bill.Id, new PushBillRequest("sub-1"));
 
@@ -672,8 +671,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(bill.InvoiceNumber, submitted.InvoiceNumber);
         Assert.Equal(bill.FiscalYear, submitted.FiscalYear);
         Assert.Contains("/0001", submitted.InvoiceNumber);
-        Assert.NotNull(submitted.CurrentRevision!.SubmittedAtUtc);
-        Assert.NotNull(submitted.CurrentRevision.FinalizedAtUtc);
     }
 
     [Fact]
@@ -683,7 +680,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         // Reposting is a separate workflow (Repost), not a second Submit.
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
@@ -695,7 +692,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.VoidAsync(bill.Id, new VoidBillRequest("mistake"));
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
@@ -708,7 +705,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101");
         var service = BuildService(db, poster);
-        var original = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var original = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var revised = await service.ReviseAsync(original.Id, new ReviseBillRequest(SamplePayload("A-revised", 120m)));
         var pushed = await service.PushAsync(revised.Id, new PushBillRequest("push revised"));
@@ -725,7 +722,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var prior = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var prior = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var revised = await service.ReviseAsync(prior.Id, new ReviseBillRequest(InitialPayload: null));
 
@@ -743,12 +740,11 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var voided = await service.VoidAsync(bill.Id, new VoidBillRequest("customer cancelled"));
 
         Assert.Equal(BillStates.Voided, voided.State);
-        Assert.NotNull(voided.VoidedAtUtc);
     }
 
     [Fact]
@@ -756,7 +752,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.VoidAsync(bill.Id, new VoidBillRequest(null));
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
@@ -769,8 +765,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var d1 = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var d2 = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 200m)));
+        var d1 = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var d2 = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 200m)));
         await service.PushAsync(d2.Id, new PushBillRequest("s2"));
         _ = d1;
 
@@ -790,8 +786,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
 
         var response = await service.PushSelectedAsync(new PushSelectedBillsRequest(
             [second.Id, first.Id],
@@ -809,8 +805,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
         var missing = Guid.NewGuid();
 
         var response = await service.GetManyAsync(new BillBatchGetRequest([second.Id, missing, first.Id]));
@@ -825,9 +821,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Third", 300m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Third", 300m)));
 
         await service.VoidAsync(second.Id, new VoidBillRequest("force failure"));
 
@@ -854,9 +850,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Third", 300m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Third", 300m)));
 
         var broken = await db.Bills.FirstAsync(x => x.Id == second.Id);
         broken.CurrentRevisionId = null;
@@ -883,7 +879,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var failingPoster = new FakeTallyPoster(TallyPostOutcome.Failed);
         var service = BuildService(db, failingPoster);
 
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("manual"));
 
         Assert.Equal(BillStates.Failed, pushed.State);
@@ -897,7 +893,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var poster = new FakeTallyPoster(TallyPostOutcome.Unknown);
         var service = BuildService(db, poster);
 
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("manual"));
 
         Assert.Equal(BillStates.ReconciliationRequired, pushed.State);
@@ -914,7 +910,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(TallyPostOutcome.Unknown));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("manual"));
 
         var posted = await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("verified in Tally"));
@@ -930,8 +926,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(TallyPostOutcome.Failed);
         var service = BuildService(db, poster);
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
 
         var response = await service.PushSelectedAsync(
             new PushSelectedBillsRequest([first.Id, second.Id], "selected-stop"));
@@ -950,7 +946,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster();
         var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var ex = await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
             service.PushAsync(bill.Id, new PushBillRequest("manual")));
@@ -968,7 +964,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster();
         var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(x => x.Id == bill.Id);
         entity.State = BillStates.Failed;
         await db.SaveChangesAsync();
@@ -987,7 +983,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster();
         var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(x => x.Id == bill.Id);
         entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
@@ -1007,8 +1003,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var poster = new FakeTallyPoster();
         var service = BuildService(db, poster, FakeTallyHealth.Unhealthy("Tally is unreachable."));
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("First", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Second", 200m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
 
         await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
             service.PushPendingAsync(new PushPendingBillsRequest("push all", 10)));
@@ -1024,10 +1020,10 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var pending = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Pending", 100m)));
-        var legacyDraft = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Legacy", 200m)));
-        var postedEarlier = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Queued-1", 300m)));
-        var postedLater = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Queued-2", 400m)));
+        var pending = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Pending", 100m)));
+        var legacyDraft = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Legacy", 200m)));
+        var postedEarlier = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Queued-1", 300m)));
+        var postedLater = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Queued-2", 400m)));
 
         var pendingEntity = await db.Bills.FirstAsync(x => x.Id == pending.Id);
         pendingEntity.CreatedAtUtc = new DateTimeOffset(2026, 4, 21, 8, 0, 0, TimeSpan.Zero);
@@ -1062,9 +1058,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var bill9 = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Nine", 100m)));
-        var bill48 = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Forty eight", 200m)));
-        var bill10 = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Ten", 300m)));
+        var bill9 = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Nine", 100m)));
+        var bill48 = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Forty eight", 200m)));
+        var bill10 = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Ten", 300m)));
 
         var rows = await db.Bills
             .Where(x => x.Id == bill9.Id || x.Id == bill48.Id || x.Id == bill10.Id)
@@ -1095,8 +1091,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var service = BuildService(db);
 
-        var alpha = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Alpha Jewels", 100m)));
-        var beta = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("Beta Customer", 200m)));
+        var alpha = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Alpha Jewels", 100m)));
+        var beta = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Beta Customer", 200m)));
 
         var byParty = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "Alpha"));
         var byInvoice = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: beta.InvoiceNumber![^4..]));
@@ -1110,7 +1106,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var submitted = await service.PushAsync(bill.Id, new PushBillRequest("sub-audit"));
 
         var audits = await db.AuditEvents.Where(x => x.EntityId == bill.Id.ToString()).ToListAsync();
@@ -1125,7 +1121,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var oldNumber = bill.InvoiceNumber!;
         var newNumber = oldNumber.Replace("/0001", "/9999");
 
@@ -1149,7 +1145,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var newNumber = bill.InvoiceNumber!.Replace("/0001", "/0007");
 
         var response = await service.ChangeInvoiceNumberAsync(bill.Id,
@@ -1166,7 +1162,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("s"));
         // simulate tally posted
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
@@ -1186,8 +1182,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var a = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var b = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 200m)));
+        var a = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var b = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 200m)));
 
         await Assert.ThrowsAsync<BillStateConflictException>(() =>
             service.ChangeInvoiceNumberAsync(a.Id, new ChangeBillNumberRequest("2", null, DryRun: false)));
@@ -1198,7 +1194,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
         entity.State = BillStates.Posting;
         await db.SaveChangesAsync();
@@ -1217,9 +1213,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         // next reservation reuses 3 instead of skipping to 4.
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
 
         // Delete the original /0001 so /0001 becomes a free core; then rename
         // bill #3 (currently /0003) to /0001. After the rename, occupied cores
@@ -1234,7 +1230,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         // The next reservation should now pick up the freed trailing core (3),
         // not skip ahead to 4.
-        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("D", 100m)));
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("D", 100m)));
         Assert.EndsWith("/0003", next.InvoiceNumber);
     }
 
@@ -1246,8 +1242,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         // occupied core when the allocator eventually reaches it.
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         // After two reservations NextValue == 3.
 
         var response = await service.ChangeInvoiceNumberAsync(first.Id,
@@ -1271,7 +1267,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             PostedResponse(remoteId: "201", tallyMasterId: "201")
         });
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var failed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
         Assert.Equal(BillStates.Failed, failed.State);
 
@@ -1296,7 +1292,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             PostedResponse(remoteId: "101", tallyMasterId: "101")
         });
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edit-1", 150m)), callerIsAdmin: true);
         await service.PushAsync(bill.Id, new PushBillRequest("alter-1"));
@@ -1314,7 +1310,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
 
@@ -1328,7 +1324,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(TallyPostOutcome.Failed));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
 
         var voided = await service.VoidAsync(bill.Id, new VoidBillRequest("never reached Tally"));
@@ -1341,7 +1337,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
         await service.MarkPendingAsync(bill.Id, new MarkBillStateRequest("voucher deleted in Tally"));
 
@@ -1356,7 +1352,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101");
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
 
         var changed = await service.ChangeInvoiceNumberAsync(bill.Id,
@@ -1378,12 +1374,12 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
-        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await service.PushAsync(second.Id, new PushBillRequest("first"));
 
         await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("9", null, DryRun: false));
-        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
 
         Assert.EndsWith("/0003", next.InvoiceNumber);
     }
@@ -1393,12 +1389,12 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
-        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await service.PushAsync(second.Id, new PushBillRequest("first"));
 
         await service.DeleteAsync(second.Id, new DeleteBillRequest("removed locally", DryRun: false));
-        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
 
         Assert.EndsWith("/0003", next.InvoiceNumber);
     }
@@ -1408,8 +1404,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
-        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await service.PushAsync(second.Id, new PushBillRequest("first"));
 
         // The series is at 3. The voucher in Tally is moved to number 5, and
@@ -1422,7 +1418,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         for (var i = 0; i < 3; i++)
         {
             var preview = await new NumberingService(db).GetPreviewAsync("sales_invoice", null);
-            var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload($"N{i}", 100m)));
+            var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload($"N{i}", 100m)));
             Assert.Equal(preview.FormattedNumber, bill.InvoiceNumber);
             issued.Add(bill.InvoiceNumber![^5..]);
         }
@@ -1435,8 +1431,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db, new FakeTallyPoster(tallyMasterId: "101"));
-        await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await service.PushAsync(second.Id, new PushBillRequest("first"));
         await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("4", null, DryRun: false));
         await service.PushAsync(second.Id, new PushBillRequest("alter"));
@@ -1445,8 +1441,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         // again, so Tally still shows 4 when the series reaches it.
         await service.ChangeInvoiceNumberAsync(second.Id, new ChangeBillNumberRequest("9", null, DryRun: false));
 
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 100m)));
-        var fourth = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("D", 100m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
+        var fourth = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("D", 100m)));
 
         Assert.EndsWith("/0003", third.InvoiceNumber);
         Assert.EndsWith("/0005", fourth.InvoiceNumber);
@@ -1459,7 +1455,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         using var requestCts = new CancellationTokenSource();
         var poster = new CancellingTallyPoster(requestCts);
         var service = BuildService(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var response = await service.PushAsync(bill.Id, new PushBillRequest("push"), requestCts.Token);
 
@@ -1476,8 +1472,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         using var requestCts = new CancellationTokenSource();
         var poster = new CancellingTallyPoster(requestCts);
         var service = BuildService(db, poster);
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
 
         await service.PushSelectedAsync(new PushSelectedBillsRequest([first.Id, second.Id], "batch"), requestCts.Token);
 
@@ -1486,13 +1482,59 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     }
 
     [Fact]
+    public async Task PushSelected_CallerGoesAwayBeforeABillIsSent_IsCutShortAndNotThatBillFailing()
+    {
+        await using var db = CreateDbContext();
+        using var requestCts = new CancellationTokenSource();
+        var poster = new FakeTallyPoster();
+        // The caller goes away while the bill's voucher is being looked up, before anything is claimed or sent.
+        var lookup = new FakeVoucherLookup
+        {
+            WhenAsked = requestCts.Cancel,
+            Failure = new OperationCanceledException(),
+        };
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+
+        var response = await service.PushSelectedAsync(
+            new PushSelectedBillsRequest([bill.Id], "batch"), requestCts.Token);
+
+        Assert.True(response.Cancelled);
+        Assert.False(response.StoppedOnFailure);
+        Assert.Equal(0, response.Failed);
+        Assert.Null(response.FailedBillId);
+        Assert.Equal(0, poster.CallCount);
+        await using var check = CreateDbContext();
+        Assert.Equal(BillStates.Pending, (await check.Bills.SingleAsync(b => b.Id == bill.Id)).State);
+    }
+
+    [Fact]
+    public async Task DeleteSelected_CallerGoesAway_StopsInsteadOfReportingEveryBillAsFailed()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
+        using var requestCts = new CancellationTokenSource();
+        requestCts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.DeleteSelectedAsync(
+            new DeleteSelectedBillsRequest(new[] { first.Id, second.Id }, "batch delete"), requestCts.Token));
+
+        await using var check = CreateDbContext();
+        Assert.Equal(2, await check.Bills.CountAsync());
+    }
+
+    [Fact]
     public async Task PushSelected_CancelledBetweenBills_SaysItWasCutShort()
     {
         await using var db = CreateDbContext();
         using var requestCts = new CancellationTokenSource();
         var service = BuildService(db, new PostThenCancelTallyPoster(requestCts));
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
 
         var response = await service.PushSelectedAsync(
             new PushSelectedBillsRequest([first.Id, second.Id], "batch"), requestCts.Token);
@@ -1510,7 +1552,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         await Assert.ThrowsAsync<ArgumentNullException>(() => service.RetryAsync(bill.Id, null!));
     }
@@ -1522,7 +1564,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var clock = new FakeTimeProvider();
         var poster = new SlowTallyPoster(clock, TimeSpan.FromSeconds(31), PostedResponse());
         var service = BuildService(db, poster, timeProvider: clock);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var response = await service.PushAsync(bill.Id, new PushBillRequest("push"));
 
@@ -1542,7 +1584,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             TimeSpan.FromSeconds(31),
             UnknownResponse("TALLY_TIMEOUT", "Tally did not answer in time."));
         var service = BuildService(db, poster, timeProvider: clock);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var response = await service.PushAsync(bill.Id, new PushBillRequest("push"));
 
@@ -1592,7 +1634,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var response = await service.MarkPostedAsync(bill.Id,
             new MarkBillStateRequest("cash register offline reprint"));
@@ -1607,7 +1649,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var response = await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest(null));
 
@@ -1619,7 +1661,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
         entity.State = BillStates.Posted;
         entity.EditedAfterPush = true;
@@ -1641,7 +1683,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         var response = await service.DeleteAsync(bill.Id,
             new DeleteBillRequest("user cancelled", DryRun: false));
@@ -1660,7 +1702,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
         entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
@@ -1678,7 +1720,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
         entity.State = BillStates.Posted;
         await db.SaveChangesAsync();
@@ -1696,7 +1738,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var entity = await db.Bills.FirstAsync(b => b.Id == bill.Id);
         entity.State = BillStates.Posting;
         await db.SaveChangesAsync();
@@ -1710,11 +1752,11 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     {
         await using var db = CreateDbContext();
         var service = BuildService(db);
-        var pending = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
-        var posted = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("B", 200m)));
+        var pending = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var posted = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 200m)));
         var postedEntity = await db.Bills.FirstAsync(b => b.Id == posted.Id);
         postedEntity.State = BillStates.Posted;
-        var posting = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("C", 300m)));
+        var posting = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 300m)));
         var postingEntity = await db.Bills.FirstAsync(b => b.Id == posting.Id);
         postingEntity.State = BillStates.Posting;
         await db.SaveChangesAsync();
@@ -1765,6 +1807,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     private sealed class FakeVoucherLookup(params string[] masterIds) : ITallyVoucherLookup
     {
         public Exception? Failure { get; init; }
+        public Action? WhenAsked { get; init; }
         public List<(string Number, string FiscalYear)> Asked { get; } = [];
 
         public Task<IReadOnlyList<string>> FindMasterIdsAsync(
@@ -1773,6 +1816,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             CancellationToken cancellationToken = default)
         {
             Asked.Add((voucherNumber, fiscalYear));
+            WhenAsked?.Invoke();
             return Failure is null
                 ? Task.FromResult<IReadOnlyList<string>>(masterIds)
                 : Task.FromException<IReadOnlyList<string>>(Failure);

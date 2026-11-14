@@ -21,7 +21,7 @@ public partial class SettingsViewModel : ObservableObject,
     ISettingsSectionHost,
     IMasterDataSettingsShell
 {
-    private readonly ISettingsApiClient? _settingsApi;
+    private readonly ISettingsApiClient _settingsApi;
     private readonly SettingsEditWorkflow _editWorkflow;
     private readonly SettingsSectionCoordinator _sectionCoordinator;
     private readonly object _loadGate = new();
@@ -33,9 +33,9 @@ public partial class SettingsViewModel : ObservableObject,
     /// over the same draft and layout.
     /// </param>
     public SettingsViewModel(
-        ISettingsApiClient? settingsApi = null,
-        IMastersApiClient? mastersApi = null,
-        IPrintAssetApiClient? printAssetApi = null,
+        ISettingsApiClient settingsApi,
+        IMastersApiClient mastersApi,
+        IPrintAssetApiClient printAssetApi,
         IPrintDispatcher? printDispatcher = null,
         IPrintPreferencesStore? printPreferences = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
@@ -109,8 +109,7 @@ public partial class SettingsViewModel : ObservableObject,
     /// <summary>
     /// Settable by the shell (MainWindowViewModel) so the Admin section of
     /// Settings can bind to the same AdminUnlockViewModel instance the unlock
-    /// dialog uses. Optional — tests and the parameterless ctor leave it null
-    /// and the Admin tab simply shows a "not wired" banner.
+    /// dialog uses. Until it is set there is no Admin section.
     /// </summary>
     public AdminUnlockViewModel? AdminVm
     {
@@ -373,12 +372,6 @@ public partial class SettingsViewModel : ObservableObject,
 
     private async Task LoadCoreAsync(CancellationToken cancellationToken = default)
     {
-        if (_settingsApi is null)
-        {
-            StatusMessage = "Settings API unavailable.";
-            return;
-        }
-
         IsLoading = true;
         StatusMessage = "Loading settings…";
         try

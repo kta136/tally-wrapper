@@ -22,8 +22,8 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
         await using (var db = database.CreateContext())
         {
             var service = PostgresBillTestSupport.BuildService(db);
-            abandoned = (await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 100m)))).Id;
-            live = (await service.CreateDraftAsync(new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("B", 100m)))).Id;
+            abandoned = (await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)))).Id;
+            live = (await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)))).Id;
             await db.Bills.Where(b => b.Id == abandoned).ExecuteUpdateAsync(s => s
                 .SetProperty(b => b.State, BillStates.Posting)
                 .SetProperty(b => b.UpdatedAtUtc, now.AddMinutes(-20)));
@@ -132,7 +132,7 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
     {
         await using var db = database.CreateContext();
         var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
-            new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("Stranded", 100m)));
+            new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("Stranded", 100m)));
         await db.Bills.Where(b => b.Id == bill.Id).ExecuteUpdateAsync(s => s
             .SetProperty(b => b.State, BillStates.Posting)
             .SetProperty(b => b.UpdatedAtUtc, claimedAt));

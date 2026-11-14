@@ -55,7 +55,13 @@ public static class ServerInstaller
         return stream.Length;
     }
 
-    public static bool EnsureInstalledInteractive(ServerTrayOptions options, bool forceRepair = false)
+    /// <summary>
+    /// Installs or repairs the server when it needs it, asking the operator
+    /// for the network range and Windows for permission. It shows no message
+    /// of its own about how it went: the caller reports the outcome, once.
+    /// (The elevated copy, this method and its caller used to show one each.)
+    /// </summary>
+    public static InstallOutcome EnsureInstalledInteractive(ServerTrayOptions options, bool forceRepair = false)
     {
         if (!forceRepair
             && IsServiceInstalled(options.ServiceName)
@@ -64,7 +70,7 @@ public static class ServerInstaller
         {
             EnsureTrayStartup(options);
             EnsureServiceRunning(options.ServiceName);
-            return true;
+            return InstallOutcome.Done;
         }
 
         // An automatic repair (the tray carries a newer API than the one
@@ -78,7 +84,7 @@ public static class ServerInstaller
             : PromptForLanCidr(configuredCidr, ServerUrlHelper.GetLanNetwork());
         if (string.IsNullOrWhiteSpace(lanCidr))
         {
-            return false;
+            return InstallOutcome.NotStarted;
         }
 
         var exitCode = RunSelfElevated("--install-service", "--lan-cidr", lanCidr);
@@ -88,19 +94,15 @@ public static class ServerInstaller
             // Setup never ran, so the end of the install log is from an
             // earlier run; the caller says that setup did not finish.
             Log(options, "Install/repair did not start: the Windows permission prompt was declined, or Windows refused it.");
-            return false;
+            return InstallOutcome.NotStarted;
         }
 
-        if (exitCode != 0 && File.Exists(options.InstallLogPath))
-        {
-            CopyableMessageDialog.ShowMessage(
-                null,
-                $"Setup failed.\n\nThe end of the install log, {options.InstallLogPath}:\n\n{Tail(options.InstallLogPath, 3000)}",
-                MessageBoxIcon.Error);
-        }
-
-        return exitCode == 0;
+        return exitCode == 0 ? InstallOutcome.Done : InstallOutcome.Failed;
     }
+
+    /// <summary>The end of the install log, for the message about a setup that failed.</summary>
+    internal static string InstallLogTail(ServerTrayOptions options) =>
+        File.Exists(options.InstallLogPath) ? Tail(options.InstallLogPath, 3000) : "(there is no install log)";
 
     public static void InstallOrRepairElevated(ServerTrayOptions options, string lanCidr)
     {

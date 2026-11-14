@@ -42,7 +42,6 @@ public sealed class ClientPresenceHeartbeatService(
             var configured = options.Value;
             var request = new ClientHeartbeatRequest(
                 DeviceId: identityStore.Resolve(configured.DeviceId),
-                CounterName: configured.CounterName,
                 AppVersion: typeof(ClientPresenceHeartbeatService).Assembly.GetName().Version?.ToString() ?? "unknown",
                 MachineName: Environment.MachineName,
                 UserName: Environment.UserName);

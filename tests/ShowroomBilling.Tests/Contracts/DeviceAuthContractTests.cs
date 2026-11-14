@@ -64,7 +64,6 @@ public sealed class DeviceAuthContractTests(PostgresFixture postgres)
     private static ClientHeartbeatRequest Heartbeat() =>
         new(
             DeviceId: "test-device",
-            CounterName: "Test Counter",
             AppVersion: "1.0",
             MachineName: "TEST-PC",
             UserName: "tester");

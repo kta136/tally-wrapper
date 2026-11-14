@@ -44,16 +44,12 @@ public sealed record BillRevisionResponse(
     Guid Id,
     int RevisionNo,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset? SubmittedAtUtc,
-    DateTimeOffset? FinalizedAtUtc,
     Guid? SupersedesRevisionId,
     BillPayloadDto Payload);
 
 public sealed record BillResponse(
     Guid Id,
     Guid ShowroomId,
-    Guid? CounterId,
-    string BillType,
     string State,
     string? InvoiceNumber,
     string? FiscalYear,
@@ -61,7 +57,6 @@ public sealed record BillResponse(
     Guid? CurrentRevisionId,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    DateTimeOffset? VoidedAtUtc,
     BillRevisionResponse? CurrentRevision,
     bool EditedAfterPush = false);
 
@@ -71,7 +66,6 @@ public sealed record BillResponse(
 /// the server returns that bill instead of creating and numbering another.
 /// </param>
 public sealed record CreateBillDraftRequest(
-    Guid? CounterId,
     BillPayloadDto Payload,
     Guid? ClientOperationId = null);
 

@@ -221,6 +221,67 @@ public sealed class ServerInstallerTests
         Assert.False(ServiceCommands.IsAccessDenied(new System.ServiceProcess.TimeoutException("The service did not stop in time.")));
     }
 
+    [Fact]
+    public void An_install_is_called_running_only_when_the_service_runs()
+    {
+        var running = ServerTrayActions.InstallReport(
+            InstallOutcome.Done, System.ServiceProcess.ServiceControllerStatus.Running, @"C:\logs\install.log", "tail");
+        var stopped = ServerTrayActions.InstallReport(
+            InstallOutcome.Done, System.ServiceProcess.ServiceControllerStatus.Stopped, @"C:\logs\install.log", "tail");
+
+        Assert.Equal("The server is installed and running.", running.Message);
+        Assert.Equal(System.Windows.Forms.MessageBoxIcon.Information, running.Icon);
+        Assert.StartsWith("The server is installed, but its Windows service is stopped.", stopped.Message);
+        Assert.Equal(System.Windows.Forms.MessageBoxIcon.Warning, stopped.Icon);
+    }
+
+    [Fact]
+    public void A_setup_that_never_ran_and_one_that_failed_say_different_things_once()
+    {
+        var notStarted = ServerTrayActions.InstallReport(InstallOutcome.NotStarted, null, @"C:\logs\install.log", "old lines");
+        var failed = ServerTrayActions.InstallReport(InstallOutcome.Failed, null, @"C:\logs\install.log", "FAILED firewall");
+
+        // Declined or cancelled: the log's last lines are from an earlier run and are not shown.
+        Assert.StartsWith("Setup did not finish.", notStarted.Message);
+        Assert.DoesNotContain("old lines", notStarted.Message);
+        Assert.StartsWith("Setup failed.", failed.Message);
+        Assert.Contains("FAILED firewall", failed.Message);
+        Assert.Equal(System.Windows.Forms.MessageBoxIcon.Error, failed.Icon);
+    }
+
+    [Fact]
+    public void A_second_copy_of_the_tray_asks_the_first_to_close_and_takes_its_place()
+    {
+        var name = @"Local\TallyWrapper.Test." + Guid.NewGuid().ToString("N");
+        var asked = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        var firstReady = new ManualResetEventSlim();
+        var firstTookOver = true;
+
+        // The first copy: holds the place on its own thread, as the tray's main thread does, until asked to go.
+        var first = new Thread(() =>
+        {
+            using var instance = SingleInstance.Acquire(name, name + ".HandOver", TimeSpan.Zero, out firstTookOver);
+            instance!.OnAskedToHandOver(asked.Set);
+            firstReady.Set();
+            release.Wait(TimeSpan.FromSeconds(10));
+        });
+        first.Start();
+        Assert.True(firstReady.Wait(TimeSpan.FromSeconds(10)));
+        Assert.False(firstTookOver);
+
+        // A copy that will not wait finds the place taken, and its asking reaches the first.
+        Assert.Null(SingleInstance.Acquire(name, name + ".HandOver", TimeSpan.Zero, out var impatient));
+        Assert.True(impatient);
+        Assert.True(asked.Wait(TimeSpan.FromSeconds(10)));
+
+        // The first closes; the next copy gets the place.
+        release.Set();
+        first.Join();
+        using var second = SingleInstance.Acquire(name, name + ".HandOver", TimeSpan.FromSeconds(10), out _);
+        Assert.NotNull(second);
+    }
+
     /// <summary>A source that gives a little and then fails, as a full disk or a held file would.</summary>
     private sealed class FailsPartWay : Stream
     {

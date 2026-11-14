@@ -1,6 +1,7 @@
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests;
@@ -12,7 +13,7 @@ public sealed class MasterDataSettingsViewModelTests
     {
         var shell = new FakeShell { ActiveCompanyNameValue = "DDA Jewels" };
         var mastersApi = new FakeMastersApiClient();
-        var vm = new MasterDataSettingsViewModel(null, mastersApi, shell);
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), mastersApi, shell);
 
         await vm.LoadMissingSnapshotsAsync(CancellationToken.None);
 
@@ -30,7 +31,7 @@ public sealed class MasterDataSettingsViewModelTests
     public void RowCommands_FollowEditingState_AndMutateDraft()
     {
         var shell = new FakeShell { IsEditingValue = false };
-        var vm = new MasterDataSettingsViewModel(null, null, shell);
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), new OfflineMastersApi(), shell);
 
         Assert.False(vm.AddItemMasterRowCommand.CanExecute(null));
         Assert.False(vm.AddKaratRowCommand.CanExecute(null));
@@ -78,7 +79,7 @@ public sealed class MasterDataSettingsViewModelTests
     public async Task Refreshing_ledgers_asks_tally_for_ledgers_and_voucher_types_only()
     {
         var mastersApi = new FakeMastersApiClient();
-        var vm = new MasterDataSettingsViewModel(null, mastersApi, new FakeShell());
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), mastersApi, new FakeShell());
 
         await vm.RequestLedgerRefreshCommand.ExecuteAsync(null);
 
@@ -93,7 +94,7 @@ public sealed class MasterDataSettingsViewModelTests
     public async Task Each_refresh_button_asks_for_its_own_master()
     {
         var mastersApi = new FakeMastersApiClient();
-        var vm = new MasterDataSettingsViewModel(null, mastersApi, new FakeShell());
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), mastersApi, new FakeShell());
 
         await vm.RequestCompanyRefreshCommand.ExecuteAsync(null);
         await vm.RequestStockItemRefreshCommand.ExecuteAsync(null);
@@ -108,7 +109,7 @@ public sealed class MasterDataSettingsViewModelTests
     {
         var shell = new FakeShell();
         var mastersApi = new FakeMastersApiClient { RefreshError = "Tally is not running." };
-        var vm = new MasterDataSettingsViewModel(null, mastersApi, shell);
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), mastersApi, shell);
 
         await vm.RequestStockItemRefreshCommand.ExecuteAsync(null);
 
@@ -155,14 +156,14 @@ public sealed class MasterDataSettingsViewModelTests
                 Metadata("ledgers", 2),
                 new[]
                 {
-                    new LedgerSnapshotItem("Sales", null, "Sales Accounts", true, null),
-                    new LedgerSnapshotItem("Cash", null, "Cash-in-Hand", false, null),
+                    new LedgerSnapshotItem("Sales"),
+                    new LedgerSnapshotItem("Cash"),
                 }));
 
         public Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new VoucherTypeSnapshotResponse(
                 Metadata("voucher-types", 1),
-                new[] { new VoucherTypeSnapshotItem("Sales", "Sales", false) }));
+                new[] { new VoucherTypeSnapshotItem("Sales") }));
 
         public Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new StockItemSnapshotResponse(

@@ -58,6 +58,17 @@ internal sealed class BillAdminWorkflow(
                 WarningSummary: "New invoice number matches the current one; nothing to do.");
         }
 
+        // The check below, the save and the sequence rollback share one
+        // transaction that holds the year's sequence row throughout. A Save
+        // Bill reserving a number waits on that same row, so it cannot take
+        // this core between the check and the save. (Without the lock the
+        // check was a plain read, and the two could both go through.)
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await NumberingSequenceReclaimer.EnsureSequenceRowAsync(
+            dbContext, bill.ShowroomId, fiscalYear, NumberingService.DocumentTypeSalesInvoice, cancellationToken);
+        await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(
+            dbContext, bill.ShowroomId, fiscalYear, NumberingService.DocumentTypeSalesInvoice, cancellationToken);
+
         var conflict = await dbContext.Bills
             .AsNoTracking()
             .AnyAsync(
@@ -104,7 +115,7 @@ internal sealed class BillAdminWorkflow(
 
         var now = DateTimeOffset.UtcNow;
         var oldNumber = bill.InvoiceNumber;
-        var oldCore = bill.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(oldNumber);
+        var oldCore = bill.InvoiceCore;
         var fromState = bill.State;
         bill.InvoiceNumber = newNumber;
         bill.InvoiceCore = autoFormatCore;
@@ -147,14 +158,23 @@ internal sealed class BillAdminWorkflow(
                 });
         }
 
-        // Save + sequence-rollback share one transaction so a moved-down number
-        // that vacates the trailing core (e.g. 94 -> 92 when 94 was the most
-        // recent reservation) immediately reclaims the freed slot for the next
-        // ReserveAsync. Without the rollback, NextValue would stay anchored past
-        // the now-empty core and the next bill would skip 94 forever.
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
+        // Save + sequence-rollback share the transaction opened above so a
+        // moved-down number that vacates the trailing core (e.g. 94 -> 92 when
+        // 94 was the most recent reservation) immediately reclaims the freed
+        // slot for the next ReserveAsync. Without the rollback, NextValue would
+        // stay anchored past the now-empty core and the next bill would skip 94
+        // forever.
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.GetBaseException() is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+        {
+            // The database's own guard (the unique indexes on a bill's number
+            // and on its core) caught what the check above did not see.
+            throw new BillStateConflictException(
+                $"Invoice number '{newNumber}' is already used by another bill in fiscal year '{bill.FiscalYear ?? "(none)"}'.");
+        }
 
         // Tally still holds the old number until the Alter lands, so its core
         // stays reserved instead of going to the next new bill.
@@ -287,7 +307,7 @@ internal sealed class BillAdminWorkflow(
         var invoiceNumber = bill.InvoiceNumber;
         var showroomId = bill.ShowroomId;
         var fiscalYear = bill.FiscalYear;
-        var core = bill.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(invoiceNumber);
+        var core = bill.InvoiceCore;
 
         var revision = bill.CurrentRevisionId is Guid rid
             ? await dbContext.BillRevisions.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rid, cancellationToken)
@@ -368,6 +388,12 @@ internal sealed class BillAdminWorkflow(
             {
                 items.Add(new DeleteBillItemResult(id, false, false, "Bill not found."));
                 skipped++;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The caller went away. This is not that bill failing, and
+                // the bills after it would only fail the same way.
+                throw;
             }
             catch (Exception ex)
             {

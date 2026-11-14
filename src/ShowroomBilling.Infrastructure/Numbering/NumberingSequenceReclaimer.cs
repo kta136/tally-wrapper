@@ -60,25 +60,12 @@ internal static class NumberingSequenceReclaimer
             return false;
         }
 
-        var scope = dbContext.Bills
+        // A bill without a stored core is a legacy custom number with no
+        // digits to it, and holds no place in the sequence.
+        long maxOccupiedCore = await dbContext.Bills
             .AsNoTracking()
-            .Where(b => b.ShowroomId == showroomId && b.FiscalYear == fiscalYear);
-        long maxOccupiedCore = await scope
-            .Where(b => b.InvoiceCore != null)
+            .Where(b => b.ShowroomId == showroomId && b.FiscalYear == fiscalYear && b.InvoiceCore != null)
             .MaxAsync(b => (long?)b.InvoiceCore, cancellationToken) ?? 0L;
-
-        // Legacy rows without a stored core: parse their display text.
-        var legacyNumbers = await scope
-            .Where(b => b.InvoiceCore == null && b.InvoiceNumber != null)
-            .Select(b => b.InvoiceNumber!)
-            .ToListAsync(cancellationToken);
-        foreach (var number in legacyNumbers)
-        {
-            if (InvoiceNumberFormatter.TryParseTrailingCore(number) is { } core && core > maxOccupiedCore)
-            {
-                maxOccupiedCore = core;
-            }
-        }
 
         var startedAt = sequence.NextValue;
         var target = Math.Max(Math.Max(1L, maxOccupiedCore + 1L), sequence.MinNextValue);
@@ -108,6 +95,24 @@ internal static class NumberingSequenceReclaimer
         await dbContext.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    /// <summary>
+    /// Makes sure the sequence row for a scope exists, so that
+    /// <see cref="LoadSequenceForUpdateAsync"/> has a row to lock. FOR UPDATE
+    /// locks nothing when the row is not there yet, which is the first bill of
+    /// a fiscal year: two callers would both find no row. A second insert
+    /// waits for the first transaction to end and then does nothing.
+    /// </summary>
+    internal static Task EnsureSequenceRowAsync(
+        ShowroomBillingDbContext dbContext,
+        Guid showroomId,
+        string fiscalYear,
+        string documentType,
+        CancellationToken cancellationToken) =>
+        dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO public.invoice_sequences (""ShowroomId"", ""FiscalYear"", ""DocumentType"", ""NextValue"", ""MinNextValue"", ""UpdatedAtUtc"")
+VALUES ({showroomId}, {fiscalYear}, {documentType}, 1, 0, {DateTimeOffset.UtcNow})
+ON CONFLICT DO NOTHING", cancellationToken);
 
     /// <summary>
     /// Loads the sequence row for a scope and locks it with <c>FOR UPDATE</c>

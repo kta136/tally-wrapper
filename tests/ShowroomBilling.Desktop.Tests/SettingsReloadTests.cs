@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -16,7 +17,7 @@ public sealed class SettingsReloadTests
     public async Task Coming_back_to_the_settings_tab_mid_edit_keeps_what_was_typed()
     {
         var api = new FakeSettingsApi(Response(Items(Item("Gold Ring", wastage: 8m))));
-        var settings = new SettingsViewModel(api);
+        var settings = OfflineApi.Settings(api);
         await settings.LoadAsync(TestContext.Current.CancellationToken);
         settings.BeginEditCommand.Execute(null);
         settings.Draft.PrintCompanyName = "Typed, not saved";
@@ -37,7 +38,7 @@ public sealed class SettingsReloadTests
     public async Task Coming_back_to_the_settings_tab_with_no_edit_open_loads_what_the_server_has_now()
     {
         var api = new FakeSettingsApi(Response(Items(Item("Gold Ring", wastage: 8m))));
-        var settings = new SettingsViewModel(api);
+        var settings = OfflineApi.Settings(api);
         await settings.LoadAsync(TestContext.Current.CancellationToken);
 
         api.Response = Response(Items(Item("Gold Ring", wastage: 10m)));
@@ -51,9 +52,9 @@ public sealed class SettingsReloadTests
     public async Task A_reload_keeps_the_item_and_karat_an_open_bills_line_points_at()
     {
         var api = new FakeSettingsApi(Response(Items(Item("Gold Ring", wastage: 8m)), Karats("22K")));
-        var settings = new SettingsViewModel(api);
+        var settings = OfflineApi.Settings(api);
         await settings.LoadAsync(TestContext.Current.CancellationToken);
-        var invoice = new InvoiceViewModel(null, null, settings);
+        var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings);
         var line = invoice.Lines[0];
         var item = settings.Draft.ItemMasterRows.Single();
         var karat = settings.Draft.KaratRows.Single();

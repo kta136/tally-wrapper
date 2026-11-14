@@ -492,12 +492,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
         if (value == NavTab.Bills) _ = Bills.LoadAsync();
-        // waitForApi: true defers the preview fetch until the API has been
-        // probed. On a cold launch, the very first activation can fire
-        // before that — without the wait the catch in RefreshNextNumberAsync
-        // silently swallows the failure and the operator pays the full
-        // cold-path cost on first SaveDraft instead.
-        if (value == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync(waitForApi: true);
+        if (value == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync();
         if (value == NavTab.Settings) _ = Settings.RefreshOnShownAsync();
     }
 
@@ -592,7 +587,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         // wouldn't otherwise run on a cold launch where the operator stays put.
         // Triggering it explicitly here primes the numbering preview + warms
         // the connection pool while the user is still settling into the form.
-        if (ActiveTab == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync(waitForApi: true);
+        if (ActiveTab == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync();
 
         if (LastHealthSnapshot?.ApiReachable == true
             && await SetupWizard.PrepareForStartupAsync(settingsResponse))

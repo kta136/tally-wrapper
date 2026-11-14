@@ -21,9 +21,5 @@ public sealed class BillRevisionEntity
 
     public DateTimeOffset CreatedAtUtc { get; set; }
 
-    public DateTimeOffset? SubmittedAtUtc { get; set; }
-
-    public DateTimeOffset? FinalizedAtUtc { get; set; }
-
     public BillEntity? Bill { get; set; }
 }

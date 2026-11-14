@@ -5,13 +5,12 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
 /// <summary>Toolbar actions on the selected bills, or on every pending bill.</summary>
 internal sealed class BillsBatchActionWorkflow(
-    IBillsApiClient? billsApi,
+    IBillsApiClient billsApi,
     IBillsActionWorkflowHost host,
     BillsActionRunner runner)
 {
     internal async Task PushSelectedAsync(CancellationToken cancellationToken)
     {
-        if (billsApi is null) return;
         var rows = runner.SelectedRows();
         if (rows.Count == 0) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
@@ -27,7 +26,6 @@ internal sealed class BillsBatchActionWorkflow(
 
     internal async Task PushAllPendingAsync(CancellationToken cancellationToken)
     {
-        if (billsApi is null) return;
         var confirmed = await runner.ConfirmAsync(new ConfirmRequest(
             "Push all pending bills?",
             "Every pending and draft bill goes to Tally, oldest first. The run stops at the first failure.",
@@ -52,7 +50,6 @@ internal sealed class BillsBatchActionWorkflow(
 
     internal async Task RetrySelectedAsync(CancellationToken cancellationToken)
     {
-        if (billsApi is null) return;
         var rows = runner.SelectedRows();
         if (rows.Count == 0) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
@@ -68,7 +65,6 @@ internal sealed class BillsBatchActionWorkflow(
 
     internal async Task RepostSelectedAsync(CancellationToken cancellationToken)
     {
-        if (billsApi is null) return;
         var rows = runner.SelectedRows();
         if (rows.Count == 0) return;
 

@@ -193,7 +193,6 @@ public sealed class BillsActionTests
         await vm.RepostRowCommand.ExecuteAsync(vm.Items[0]);
 
         Assert.Empty(api.Calls);
-        Assert.Equal("Confirmation prompt is not wired.", vm.StatusMessage);
 
         var billId = Guid.NewGuid();
         api.GetResponse = FakeBillsApi.Bill(billId);

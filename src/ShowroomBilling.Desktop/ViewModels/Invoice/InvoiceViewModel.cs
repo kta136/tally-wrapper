@@ -23,10 +23,9 @@ namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 
 public partial class InvoiceViewModel : ObservableObject
 {
-    private readonly IBillsApiClient? _billsApi;
-    private readonly INumberingApiClient? _numberingApi;
+    private readonly IBillsApiClient _billsApi;
+    private readonly INumberingApiClient _numberingApi;
     private readonly SettingsViewModel? _settings;
-    private readonly IApiReadinessSignal? _apiReadiness;
     private readonly BillsAdminTokenGate _adminTokenGate;
     private readonly InvoiceLineCollectionObserver _lineCollectionObserver;
     private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
@@ -44,27 +43,16 @@ public partial class InvoiceViewModel : ObservableObject
     // printed before the bill is saved. Deliberately not shaped like a real
     // number: the old placeholder carried a prefix and a past fiscal year.
     private const string InvoiceNumberPlaceholder = "Assigned on save";
-    /// <summary>
-    /// Upper bound on the readiness wait when <c>RefreshNextNumberAsync(waitForApi: true)</c>
-    /// is called. If the API is genuinely down past this we bail to the
-    /// placeholder and let the regular "Save" path surface the failure —
-    /// hanging the preview forever would only delay the operator's feedback.
-    /// </summary>
-    private static readonly TimeSpan ApiReadinessWait = TimeSpan.FromSeconds(10);
-
-    public InvoiceViewModel() : this(null, null, null, null) { }
 
     public InvoiceViewModel(
-        IBillsApiClient? billsApi,
-        INumberingApiClient? numberingApi,
+        IBillsApiClient billsApi,
+        INumberingApiClient numberingApi,
         SettingsViewModel? settings,
-        IApiReadinessSignal? apiReadiness = null,
         AdminTokenStore? adminTokens = null)
     {
         _billsApi = billsApi;
         _numberingApi = numberingApi;
         _settings = settings;
-        _apiReadiness = apiReadiness;
         _adminTokenGate = new BillsAdminTokenGate(adminTokens);
 
         Lines = new ObservableCollection<BillLineViewModel>();
@@ -661,9 +649,7 @@ public partial class InvoiceViewModel : ObservableObject
         => InvoicePayloadMapper.ResolvePurityPercent(line, KaratMasters);
 
     private bool CanSaveDraft()
-        => !IsSaving
-           && _billsApi is not null
-           && Lines.Any(l => !l.IsEmpty);
+        => !IsSaving && Lines.Any(l => !l.IsEmpty);
 
     partial void OnIsSavingChanged(bool value)
     {
@@ -676,8 +662,6 @@ public partial class InvoiceViewModel : ObservableObject
 
     private async Task SaveDraftAsync(CancellationToken cancellationToken)
     {
-        if (_billsApi is null) return;
-
         var validationError = ValidateForSave();
         if (validationError is not null)
         {
@@ -715,7 +699,7 @@ public partial class InvoiceViewModel : ObservableObject
                 try
                 {
                     bill = await _billsApi.CreateDraftAsync(
-                        new CreateBillDraftRequest(null, payload, _createOperationId),
+                        new CreateBillDraftRequest(payload, _createOperationId),
                         cancellationToken);
                 }
                 catch (ApiException ex) when (earlierSaveMayHaveLanded && ex.StatusCode == HttpStatusCode.Conflict)
@@ -901,44 +885,13 @@ public partial class InvoiceViewModel : ObservableObject
         ReplaceLines([]);
     }
 
-    public Task RefreshNextNumberAsync(CancellationToken cancellationToken = default)
-        => RefreshNextNumberAsync(waitForApi: false, cancellationToken);
-
     /// <summary>
-    /// Fetches the next-invoice-number preview and, if <paramref name="waitForApi"/>
-    /// is true, defers the HTTP call until <see cref="IApiReadinessSignal"/>
-    /// reports the API is reachable. The first activation of the Invoice
-    /// tab on a cold launch can fire before the API has answered; by
-    /// waiting up to ~10 s for readiness we (a) make the preview actually land
-    /// and (b) pre-pay the cold-pool / EF model-build / TLS handshake cost
-    /// before the operator hits Save, so the first SaveDraft of the session
-    /// no longer blocks visibly.
+    /// Fetches the number the next bill would get, to show in place of the
+    /// "Assigned on save" hint. It is only a hint: a failure leaves the hint.
     /// </summary>
-    public async Task RefreshNextNumberAsync(bool waitForApi, CancellationToken cancellationToken = default)
+    public async Task RefreshNextNumberAsync(CancellationToken cancellationToken = default)
     {
-        if (_numberingApi is null) return;
         if (_draftBillId is not null) return;
-
-        if (waitForApi && _apiReadiness is { IsReady: false })
-        {
-            try
-            {
-                using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                waitCts.CancelAfter(ApiReadinessWait);
-                await _apiReadiness.WhenReadyAsync(waitCts.Token);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // Readiness wait timed out. Fall through and try the request
-                // anyway — Save will surface a clearer error than the preview
-                // ever could, and the placeholder stays on screen meanwhile.
-            }
-            catch (OperationCanceledException)
-            {
-                // External cancellation — caller is no longer interested.
-                return;
-            }
-        }
 
         try
         {
@@ -959,8 +912,6 @@ public partial class InvoiceViewModel : ObservableObject
 
     public async Task LoadBillForEditAsync(Guid billId, CancellationToken cancellationToken = default)
     {
-        if (_billsApi is null) return;
-
         IsSaving = true;
         SaveStatus = "Loading bill…";
         try

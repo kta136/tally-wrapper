@@ -239,9 +239,6 @@ internal sealed class BillPostingWorkflow(
         using var claimCts = new CancellationTokenSource(SettleBudget, _timeProvider);
         var claimToken = claimCts.Token;
 
-        currentRevision.SubmittedAtUtc ??= now;
-        currentRevision.FinalizedAtUtc = now;
-
         var operation = bill.EditedAfterPush ? TallyPostOperation.Alter : TallyPostOperation.Create;
         var targetTagName = operation == TallyPostOperation.Alter ? TallyAlterTargetTagName : null;
         var targetTagValue = bill.EditedAfterPush ? alterTarget.MasterId : null;
@@ -297,7 +294,6 @@ internal sealed class BillPostingWorkflow(
                 BillId: bill.Id,
                 RevisionId: currentRevision.Id,
                 RevisionNo: currentRevision.RevisionNo,
-                BillType: bill.BillType,
                 InvoiceNumber: bill.InvoiceNumber!,
                 FiscalYear: bill.FiscalYear!,
                 IdempotencyKey: idempotencyKey,
@@ -470,6 +466,15 @@ internal sealed class BillPostingWorkflow(
                     response.InvoiceNumber,
                     null));
                 succeeded++;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The caller went away before this bill was sent (once a bill
+                // is claimed its outcome is settled regardless). That is the
+                // batch being cut short, not this bill failing.
+                dbContext.ChangeTracker.Clear();
+                cancelled = true;
+                break;
             }
             catch (Exception ex)
             {

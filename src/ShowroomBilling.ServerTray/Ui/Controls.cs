@@ -546,7 +546,7 @@ internal sealed class FieldBox : Panel
 }
 
 /// <summary>One counter in the table of connected counters.</summary>
-internal sealed record CounterRow(string Counter, string PcAndUser, string Address, string LastSeen);
+internal sealed record CounterRow(string PcAndUser, string Address, string LastSeen);
 
 /// <summary>
 /// The counters the server has heard from: a grey heading band, then one row
@@ -555,7 +555,9 @@ internal sealed record CounterRow(string Counter, string PcAndUser, string Addre
 /// </summary>
 internal sealed class CounterTable : Control
 {
-    private static readonly string[] Headings = ["Counter", "PC and user", "Address", "Last seen"];
+    // No column for a counter's name: nothing in the app lets one be set, so
+    // every row said "Counter 1". The PC and its user tell the counters apart.
+    private static readonly string[] Headings = ["PC and user", "Address", "Last seen"];
 
     private IReadOnlyList<CounterRow> _rows = [];
     private string _emptyText = string.Empty;
@@ -611,7 +613,7 @@ internal sealed class CounterTable : Control
         var headFont = Theme.Font(TextRole.SmallStrong, DeviceDpi);
         for (var i = 0; i < Headings.Length; i++)
         {
-            Draw(g, Headings[i], headFont, Theme.InkMuted, columns[i], 0, headHeight, rightAligned: i == 3);
+            Draw(g, Headings[i], headFont, Theme.InkMuted, columns[i], 0, headHeight, rightAligned: i == Headings.Length - 1);
         }
 
         if (_rows.Count == 0)
@@ -634,10 +636,9 @@ internal sealed class CounterTable : Control
         {
             var top = headHeight + r * rowHeight;
             var row = _rows[r];
-            Draw(g, row.Counter, strong, Theme.Ink, columns[0], top, rowHeight, rightAligned: false);
-            Draw(g, row.PcAndUser, body, Theme.Ink, columns[1], top, rowHeight, rightAligned: false);
-            Draw(g, row.Address, body, Theme.Ink, columns[2], top, rowHeight, rightAligned: false);
-            Draw(g, row.LastSeen, body, Theme.Ink, columns[3], top, rowHeight, rightAligned: true);
+            Draw(g, row.PcAndUser, strong, Theme.Ink, columns[0], top, rowHeight, rightAligned: false);
+            Draw(g, row.Address, body, Theme.Ink, columns[1], top, rowHeight, rightAligned: false);
+            Draw(g, row.LastSeen, body, Theme.Ink, columns[2], top, rowHeight, rightAligned: true);
             if (r < _rows.Count - 1)
             {
                 g.DrawLine(hairline, 0, top + rowHeight - 1, Width, top + rowHeight - 1);
@@ -645,24 +646,21 @@ internal sealed class CounterTable : Control
         }
     }
 
-    /// <summary>Three columns share the width; the time has a width of its own at the right.</summary>
+    /// <summary>Two columns share the width; the time has a width of its own at the right.</summary>
     private Rectangle[] Columns(int side)
     {
         var gap = Theme.Px(this, 12);
         var timeWidth = Theme.Px(this, 84);
-        var shared = Math.Max(0, Width - 2 * side - timeWidth - 3 * gap);
-        var first = (int)(shared * 0.30);
-        var second = (int)(shared * 0.40);
-        var third = shared - first - second;
+        var shared = Math.Max(0, Width - 2 * side - timeWidth - 2 * gap);
+        var first = (int)(shared * 0.58);
+        var second = shared - first;
 
         var x = side;
-        var counter = new Rectangle(x, 0, first, 0);
+        var pc = new Rectangle(x, 0, first, 0);
         x += first + gap;
-        var pc = new Rectangle(x, 0, second, 0);
+        var address = new Rectangle(x, 0, second, 0);
         x += second + gap;
-        var address = new Rectangle(x, 0, third, 0);
-        x += third + gap;
-        return [counter, pc, address, new Rectangle(x, 0, timeWidth, 0)];
+        return [pc, address, new Rectangle(x, 0, timeWidth, 0)];
     }
 
     private static void Draw(

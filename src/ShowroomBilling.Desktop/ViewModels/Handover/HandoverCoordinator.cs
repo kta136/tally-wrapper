@@ -41,7 +41,7 @@ internal interface IHandoverHost
 /// </summary>
 public sealed class HandoverCoordinator
 {
-    private readonly IBillsApiClient? _bills;
+    private readonly IBillsApiClient _bills;
     private readonly IHandoverHost _host;
     private readonly TimeProvider _time;
     private readonly Queue<string> _links = new();
@@ -52,7 +52,7 @@ public sealed class HandoverCoordinator
     // Saves sent without an answer, remembered across hand-overs (see HandoverSaveWorkflow).
     private readonly Dictionary<Guid, HandoverBillResult> _unanswered = [];
 
-    internal HandoverCoordinator(IBillsApiClient? bills, IHandoverHost host, TimeProvider? time = null)
+    internal HandoverCoordinator(IBillsApiClient bills, IHandoverHost host, TimeProvider? time = null)
     {
         _bills = bills;
         _host = host;
@@ -131,7 +131,7 @@ public sealed class HandoverCoordinator
             return;
         }
 
-        var workflow = new HandoverSaveWorkflow(_bills!, RequestAdminTokenAsync, _host.PrintSavedBillAsync, _unanswered);
+        var workflow = new HandoverSaveWorkflow(_bills, RequestAdminTokenAsync, _host.PrintSavedBillAsync, _unanswered);
         while (true)
         {
             var run = await RunAsync(workflow, document);
@@ -194,13 +194,13 @@ public sealed class HandoverCoordinator
     private async Task<HandoverRun> RunAsync(HandoverSaveWorkflow workflow, HandoverDocument document)
     {
         var settings = _host.Settings;
-        if (_bills is not null && settings.Settings is null)
+        if (settings.Settings is null)
         {
             // The app started without its settings (the server did not answer then): try once more.
             await settings.LoadAsync();
         }
 
-        if (_bills is null || settings.Settings is not { } loaded)
+        if (settings.Settings is not { } loaded)
         {
             return new HandoverRun(
                 document.Bills.Select(bill => new HandoverBillOutcome(

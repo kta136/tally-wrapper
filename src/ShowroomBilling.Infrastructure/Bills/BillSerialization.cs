@@ -61,8 +61,6 @@ internal static class BillSerialization
                 Id: currentRevision.Id,
                 RevisionNo: currentRevision.RevisionNo,
                 CreatedAtUtc: currentRevision.CreatedAtUtc,
-                SubmittedAtUtc: currentRevision.SubmittedAtUtc,
-                FinalizedAtUtc: currentRevision.FinalizedAtUtc,
                 SupersedesRevisionId: currentRevision.SupersedesRevisionId,
                 Payload: payload);
         }
@@ -70,8 +68,6 @@ internal static class BillSerialization
         return new BillResponse(
             Id: bill.Id,
             ShowroomId: bill.ShowroomId,
-            CounterId: bill.CounterId,
-            BillType: bill.BillType,
             State: bill.State,
             InvoiceNumber: bill.InvoiceNumber,
             FiscalYear: bill.FiscalYear,
@@ -79,7 +75,6 @@ internal static class BillSerialization
             CurrentRevisionId: bill.CurrentRevisionId,
             CreatedAtUtc: bill.CreatedAtUtc,
             UpdatedAtUtc: bill.UpdatedAtUtc,
-            VoidedAtUtc: bill.VoidedAtUtc,
             CurrentRevision: revisionResponse,
             EditedAfterPush: bill.EditedAfterPush);
     }

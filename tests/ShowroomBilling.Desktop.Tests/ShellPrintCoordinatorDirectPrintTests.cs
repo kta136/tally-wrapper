@@ -1,6 +1,7 @@
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
@@ -218,10 +219,10 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
     private sealed class FakePrintHost : IShellPrintHost
     {
         public string? ActiveDialog { get; set; }
-        public InvoiceViewModel Invoice { get; } = new();
-        public BillsViewModel Bills { get; } = new();
-        public BillDetailsViewModel BillDetails { get; } = new();
-        public PrintPreviewViewModel PrintPreview { get; } = new();
+        public InvoiceViewModel Invoice { get; } = new(new FakeBillsApi(), FakeNumberingApi.Offline(), settings: null);
+        public BillsViewModel Bills { get; } = new(new FakeBillsApi());
+        public BillDetailsViewModel BillDetails { get; } = new(new FakeBillsApi());
+        public PrintPreviewViewModel PrintPreview { get; } = new(dispatcher: null, preferences: null);
     }
 
     private sealed class FakeCompanyProfileProvider : ICompanyProfileProvider

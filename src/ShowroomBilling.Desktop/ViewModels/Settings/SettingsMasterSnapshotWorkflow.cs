@@ -38,8 +38,8 @@ internal interface ISettingsMasterSnapshotHost
 /// snapshot into the dropdown) and a "refresh" (ask Tally again, then fetch).
 /// </summary>
 internal sealed class SettingsMasterSnapshotWorkflow(
-    ISettingsApiClient? settingsApi,
-    IMastersApiClient? mastersApi,
+    ISettingsApiClient settingsApi,
+    IMastersApiClient mastersApi,
     ISettingsMasterSnapshotHost host,
     Func<CancellationToken, Task> reloadSettings)
 {
@@ -123,7 +123,7 @@ internal sealed class SettingsMasterSnapshotWorkflow(
 
     public async Task SetActiveCompanyAsync(CancellationToken cancellationToken)
     {
-        if (settingsApi is null || host.SelectedCompany is null) return;
+        if (host.SelectedCompany is null) return;
 
         host.IsSettingActiveCompany = true;
         var targetName = host.SelectedCompany.Name;
@@ -151,8 +151,6 @@ internal sealed class SettingsMasterSnapshotWorkflow(
     /// <summary>Reads a cached snapshot; <paramref name="load"/> returns the status text to show.</summary>
     private async Task FetchAsync(Action<bool> setBusy, string what, Func<IMastersApiClient, Task<string>> load)
     {
-        if (mastersApi is null) return;
-
         setBusy(true);
         host.StatusMessage = $"Fetching {what}…";
         try
@@ -182,8 +180,6 @@ internal sealed class SettingsMasterSnapshotWorkflow(
         Func<CancellationToken, Task> fetch,
         CancellationToken cancellationToken)
     {
-        if (mastersApi is null) return;
-
         setBusy(true);
         host.StatusMessage = $"Refreshing {what} from Tally…";
         var refreshed = false;

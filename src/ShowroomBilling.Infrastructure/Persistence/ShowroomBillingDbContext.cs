@@ -126,9 +126,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.ToTable("tally_ledger_snapshots");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(256);
-            entity.Property(x => x.Parent).HasMaxLength(256);
-            entity.Property(x => x.PrimaryGroup).HasMaxLength(256);
-            entity.Property(x => x.Gstin).HasMaxLength(32);
             // The one index: rows are only ever read through their batch, in name order.
             entity.HasIndex(x => new { x.BatchId, x.Name });
             entity.HasOne(x => x.Batch)
@@ -159,7 +156,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.ToTable("tally_voucher_type_snapshots");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(256);
-            entity.Property(x => x.ParentType).HasMaxLength(256);
             // The one index: rows are only ever read through their batch, in name order.
             entity.HasIndex(x => new { x.BatchId, x.Name });
             entity.HasOne(x => x.Batch)
@@ -184,7 +180,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
                     "CK_bills_state",
                     "\"State\" IN ('draft', 'pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')"));
             entity.HasKey(x => x.Id);
-            entity.Property(x => x.BillType).HasMaxLength(32);
             entity.Property(x => x.State).HasMaxLength(32);
             entity.Property(x => x.InvoiceNumber).HasMaxLength(128);
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
@@ -194,7 +189,12 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceNumber })
                 .IsUnique()
                 .HasFilter("\"InvoiceNumber\" IS NOT NULL");
-            entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceCore });
+            // Unique: the number's text alone does not keep two bills off one
+            // core, because the prefix, suffix and padding are settings and
+            // the same core formats to other text once one of them changes.
+            entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceCore })
+                .IsUnique()
+                .HasFilter("\"InvoiceCore\" IS NOT NULL");
             entity.HasIndex(x => x.CreateOperationId)
                 .IsUnique()
                 .HasFilter("\"CreateOperationId\" IS NOT NULL");

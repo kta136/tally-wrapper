@@ -6,14 +6,14 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
 /// <summary>Context-menu actions on one bill row.</summary>
 internal sealed class BillsRowActionWorkflow(
-    IBillsApiClient? billsApi,
+    IBillsApiClient billsApi,
     BillsAdminTokenGate adminTokenGate,
     IBillsActionWorkflowHost host,
     BillsActionRunner runner)
 {
     internal async Task PushRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
+        if (row is null) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         await runner.RunAsync(
@@ -29,7 +29,7 @@ internal sealed class BillsRowActionWorkflow(
 
     internal async Task RetryRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
+        if (row is null) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 
         await runner.RunAsync(
@@ -45,7 +45,7 @@ internal sealed class BillsRowActionWorkflow(
 
     internal async Task RepostRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
     {
-        if (billsApi is null || row is null) return;
+        if (row is null) return;
         if (!await runner.ConfirmAsync(BillConfirmations.Repost(row.InvoiceNumberDisplay, BillConfirmations.IsPosted(row)))) return;
         if (!await host.EnsureTallyPushAllowedAsync(cancellationToken)) return;
 

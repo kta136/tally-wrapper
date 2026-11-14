@@ -13,11 +13,9 @@ namespace ShowroomBilling.Api.Controllers;
 [ApiController]
 [Route("api/runtime")]
 public sealed class RuntimeController(
-    IConfiguration configuration,
     IDatabaseConnectionVerifier databaseConnectionVerifier,
     IHostEnvironment hostEnvironment,
     MaintenanceTokenStore maintenanceTokenStore,
-    ClientPresenceRegistry clientPresenceRegistry,
     DatabaseHealthProbe databaseHealthProbe,
     DatabaseHealthCache databaseHealthCache,
     ILogger<RuntimeController> logger) : ControllerBase
@@ -95,15 +93,11 @@ public sealed class RuntimeController(
 
         var response = new RuntimeHealthResponse(
             (schemaBehind || !database.Reachable ? HealthStatus.Unhealthy : HealthStatus.Healthy).ToString(),
-            ApiAvailable: true,
-            DatabaseConfigured: !string.IsNullOrWhiteSpace(configuration.GetConnectionString("Postgres")),
             DatabaseReachable: database.Reachable,
-            SettingsLoadedFromApi: true,
             Message: message,
             DatabaseIdentity: database.Identity,
             ExpectedDatabaseIdentity: expectedDatabaseIdentity,
             DatabaseIdentityMatches: databaseIdentityMatches,
-            ActiveClientCount: clientPresenceRegistry.ActiveCount,
             PendingMigrationCount: database.PendingMigrationCount);
 
         return Ok(response);

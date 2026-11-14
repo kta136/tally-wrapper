@@ -23,7 +23,7 @@ public sealed class BillByOperationContractTests(PostgresFixture postgres)
         var operationId = Guid.NewGuid();
         var create = await writer.PostAsJsonAsync(
             "/api/bills/drafts",
-            new CreateBillDraftRequest(null, Payload(1_000m), operationId),
+            new CreateBillDraftRequest(Payload(1_000m), operationId),
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         var created = await create.Content.ReadFromJsonAsync<BillResponse>(TestContext.Current.CancellationToken);
@@ -54,7 +54,7 @@ public sealed class BillByOperationContractTests(PostgresFixture postgres)
         // A bill saved without an operation id must not be found by an empty or a random one.
         var create = await writer.PostAsJsonAsync(
             "/api/bills/drafts",
-            new CreateBillDraftRequest(null, Payload(1_000m)),
+            new CreateBillDraftRequest(Payload(1_000m)),
             TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
 

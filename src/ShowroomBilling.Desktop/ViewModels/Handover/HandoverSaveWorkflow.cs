@@ -233,7 +233,7 @@ internal sealed class HandoverSaveWorkflow(
         try
         {
             _unanswered[bill.SaveId] = HandoverBillResult.Saved;
-            created = await bills.CreateDraftAsync(new CreateBillDraftRequest(null, payload, bill.SaveId), cancellationToken);
+            created = await bills.CreateDraftAsync(new CreateBillDraftRequest(payload, bill.SaveId), cancellationToken);
             _unanswered.Remove(bill.SaveId);
         }
         catch (Exception ex) when (IsUnreachable(ex, cancellationToken))

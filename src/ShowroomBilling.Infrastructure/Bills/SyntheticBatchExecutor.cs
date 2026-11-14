@@ -57,7 +57,7 @@ public sealed class SyntheticBatchExecutor(
         {
             cancellationToken.ThrowIfCancellationRequested();
             await billService.CreateBackdatedDraftAsync(
-                new CreateBillDraftRequest(CounterId: null, Payload: planned.Payload),
+                new CreateBillDraftRequest(Payload: planned.Payload),
                 planned.ScheduledAtUtc,
                 cancellationToken);
         }

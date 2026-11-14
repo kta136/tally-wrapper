@@ -159,14 +159,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BillType")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<Guid?>("CounterId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("CreateOperationId")
                         .HasColumnType("uuid");
 
@@ -210,9 +202,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("VoidedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreateOperationId")
@@ -227,7 +216,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ShowroomId", "CreatedAtUtc");
 
-                    b.HasIndex("ShowroomId", "FiscalYear", "InvoiceCore");
+                    b.HasIndex("ShowroomId", "FiscalYear", "InvoiceCore")
+                        .IsUnique()
+                        .HasFilter("\"InvoiceCore\" IS NOT NULL");
 
                     b.HasIndex("ShowroomId", "FiscalYear", "InvoiceNumber")
                         .IsUnique()
@@ -256,9 +247,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("FinalizedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<decimal>("GrandTotal")
                         .HasColumnType("numeric(18,3)");
 
@@ -272,9 +260,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<string>("SnapshotJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
-
-                    b.Property<DateTimeOffset?>("SubmittedAtUtc")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("SupersedesRevisionId")
                         .HasColumnType("uuid");
@@ -593,23 +578,8 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BatchId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Gstin")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<bool>("IsRevenue")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("Parent")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("PrimaryGroup")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
@@ -709,15 +679,8 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BatchId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("IsDeemedPositive")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("ParentType")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 

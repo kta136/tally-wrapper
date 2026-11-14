@@ -87,7 +87,6 @@ internal sealed record DashboardState(
             countersChip,
             (counters ?? [])
                 .Select(counter => new CounterRow(
-                    string.IsNullOrWhiteSpace(counter.CounterName) ? "(no name)" : counter.CounterName,
                     $@"{counter.MachineName}\{counter.UserName}",
                     counter.RemoteAddress,
                     counter.LastSeenAtUtc.LocalDateTime.ToString("HH:mm:ss")))

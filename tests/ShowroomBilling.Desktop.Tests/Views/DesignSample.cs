@@ -7,6 +7,7 @@ using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Admin;
 using ShowroomBilling.Desktop.ViewModels.Bills;
@@ -24,6 +25,27 @@ namespace ShowroomBilling.Desktop.Tests.Views;
 /// </summary>
 internal static class DesignSample
 {
+    /// <summary>The sample's server, for settings: it answers a load with the sample and is otherwise unreachable.</summary>
+    private sealed class SampleSettingsApi(EffectiveSettingsResponse settings) : ISettingsApiClient
+    {
+        private readonly OfflineSettingsApi _offline = new();
+
+        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(settings);
+
+        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(UpdateEffectiveSettingsRequest request, CancellationToken cancellationToken = default)
+            => _offline.SaveEffectiveSettingsAsync(request, cancellationToken);
+
+        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(SelectActiveCompanyRequest request, CancellationToken cancellationToken = default)
+            => _offline.SelectActiveCompanyAsync(request, cancellationToken);
+
+        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default)
+            => _offline.GetPrintLayoutAsync(cancellationToken);
+
+        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(UpdatePrintLayoutRequest request, CancellationToken cancellationToken = default)
+            => _offline.UpdatePrintLayoutAsync(request, cancellationToken);
+    }
+
     public static readonly Size WindowSize = new(1280, 800);
 
     private static DateTimeOffset LocalAt(int day, int hour, int minute)
@@ -32,8 +54,6 @@ internal static class DesignSample
     /// <summary>The settings of the sample showroom: its company, ledgers, ten items and three karats, loaded as the server would send them.</summary>
     public static SettingsViewModel CreateSettings()
     {
-        var settings = new SettingsViewModel(bootstrapOptions: new DesktopBootstrapOptions { ApiBaseUrl = "http://192.168.1.20:5108" });
-
         ItemMasterEntry Item(string name, decimal wastage, decimal labour, string mapping, string mode = PricingModes.Both, string category = ItemCategories.GoldBased, string unit = ItemUnits.Gram)
             => new(name, unit, wastage, category, mode, labour, mapping);
 
@@ -71,13 +91,19 @@ internal static class DesignSample
                 JsonSerializer.Serialize(items),
                 JsonSerializer.Serialize(karats)));
 
-        settings.ApplyEffectiveSettings(new EffectiveSettingsResponse(
+        var fromServer = new EffectiveSettingsResponse(
             "cloud",
             "Settings loaded from the server",
             dto,
             ["Company on the invoice", "Bank details", "Invoice numbering", "Print copies and layout", "Ledger mappings", "Item and karat masters", "Tally connection and active company"],
             ["Server address", "Display density", "Print preferences and zoom", "Window and column sizes"],
-            LocalAt(11, 15, 12)));
+            LocalAt(11, 15, 12));
+
+        // Showing the Settings tab loads them again, so the sample's server gives the same answer.
+        var settings = OfflineApi.Settings(
+            new SampleSettingsApi(fromServer),
+            new DesktopBootstrapOptions { ApiBaseUrl = "http://192.168.1.20:5108" });
+        settings.ApplyEffectiveSettings(fromServer);
 
         var master = settings.MasterData;
         master.Companies.Add(new CompanySnapshotItem("Sample Jewellers", true));
@@ -93,10 +119,10 @@ internal static class DesignSample
             "Jewellery Sales", "Cash", "Credit and Debit", "Output CGST", "Output SGST", "Round Off", "Vijaya Stores", "Walk-in Customer",
         })
         {
-            master.LedgerOptions.Add(new LedgerSnapshotItem(ledger, null, null, false, null));
+            master.LedgerOptions.Add(new LedgerSnapshotItem(ledger));
         }
 
-        master.VoucherTypeOptions.Add(new VoucherTypeSnapshotItem("Sales", null, true));
+        master.VoucherTypeOptions.Add(new VoucherTypeSnapshotItem("Sales"));
         master.LedgersCount = 142;
         master.VoucherTypesCount = 12;
         master.LedgersFreshness = "fresh";
@@ -118,7 +144,7 @@ internal static class DesignSample
     /// <summary>The estimate of Main.png: three gold lines, one diamond line, a discount of 5,000.</summary>
     public static InvoiceViewModel CreateFilledInvoice(SettingsViewModel settings)
     {
-        var invoice = new InvoiceViewModel(null, null, settings);
+        var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings);
         invoice.BillDate = new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.FromHours(5.5));
         invoice.PartyName = "Meera Subramaniam";
         invoice.Rate24Kt = 7780m;
@@ -155,13 +181,15 @@ internal static class DesignSample
         invoice ??= CreateFilledInvoice(settings);
 
         tokenStore ??= new AdminTokenStore();
-        var bills = new BillsViewModel(null, tokenStore) { HideFullyPostedDays = false };
+        var billsApi = new FakeBillsApi();
+        var bills = new BillsViewModel(billsApi, tokenStore) { HideFullyPostedDays = false };
+        var summaries = new List<BillSummaryItem>();
         // The nine bills of Bills.png: every state once, three days.
         static DateTimeOffset At(int day, int hour, int minute)
             => new(new DateTime(2026, 10, day, hour, minute, 0, DateTimeKind.Unspecified), TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 10, day, hour, minute, 0)));
 
         void Bill(string state, int number, string party, decimal amount, int day, int hour, int minute, bool edited = false)
-            => bills.Items.Add(new BillListRowViewModel(new BillSummaryItem(
+            => summaries.Add(new BillSummaryItem(
                 Guid.NewGuid(),
                 state,
                 $"SR/2026-27/{number:0000}",
@@ -170,7 +198,7 @@ internal static class DesignSample
                 amount,
                 At(day, hour, minute),
                 At(day, hour, minute),
-                edited)));
+                edited));
 
         Bill(BillStates.Posting, 11, "Kavita Iyer", 84250m, 11, 17, 52);
         Bill(BillStates.Pending, 10, "Anand Pillai", 131592m, 11, 16, 40);
@@ -182,11 +210,17 @@ internal static class DesignSample
         Bill(BillStates.Voided, 4, "Walk-in Customer", 8000m, 9, 20, 14);
         Bill(BillStates.Posted, 3, "Walk-in Customer", 47988m, 9, 11, 2);
 
+        // Showing the Bills tab loads the list again, so the sample's server answers with these nine.
+        billsApi.Response = new BillListResponse(summaries.Count, 0, summaries.Count, summaries);
+        foreach (var summary in summaries)
+        {
+            bills.Items.Add(new BillListRowViewModel(summary));
+        }
+
         bills.Total = bills.Items.Count;
         bills.Items[1].IsSelected = true;
 
-        // The constructors only store their clients; no view-model method that
-        // would call one is invoked here.
+        // The shell's own clients are only stored; no method that would call one is invoked here.
         var shell = new MainWindowViewModel(
             settingsApiClient: null!,
             healthApiClient: null!,
@@ -200,14 +234,14 @@ internal static class DesignSample
             adminTokenStore: tokenStore,
             invoice: invoice,
             bills: bills,
-            billDetails: new BillDetailsViewModel(),
-            printPreview: new PrintPreviewViewModel(),
+            billDetails: new BillDetailsViewModel(new FakeBillsApi()),
+            printPreview: new PrintPreviewViewModel(dispatcher: null, preferences: null),
             settings: settings,
             admin: new AdminUnlockViewModel(adminApi: null!, tokenStore),
             setupWizard: new SetupWizardViewModel(
                 settingsApi: null!,
                 completionStore: null!),
-            syntheticBatch: new SyntheticBatchViewModel());
+            syntheticBatch: new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings: null));
 
         // Left open so the confirm overlay has its texts; nothing awaits the answer.
         _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));

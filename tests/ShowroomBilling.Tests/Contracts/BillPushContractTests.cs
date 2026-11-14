@@ -20,7 +20,7 @@ public sealed class BillPushContractTests(PostgresFixture postgres)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add(DeviceTokenConstants.HeaderName, factory.GetDeviceToken());
         var total = 1_000m;
-        var created = await client.PostAsJsonAsync("/api/bills/drafts", new CreateBillDraftRequest(null, new BillPayloadDto(
+        var created = await client.PostAsJsonAsync("/api/bills/drafts", new CreateBillDraftRequest(new BillPayloadDto(
             "Walk-in",
             null,
             null,

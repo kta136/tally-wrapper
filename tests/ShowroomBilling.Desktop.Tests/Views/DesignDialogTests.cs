@@ -169,9 +169,9 @@ public sealed class DesignDialogTests
                     "Cash",
                     7780m);
                 shell.BillDetails.Bill = new BillResponse(
-                    Guid.NewGuid(), Guid.NewGuid(), null, "sale", BillStates.Draft, "SR/2026-27/0009", "2026-27", null, Guid.NewGuid(),
-                    created, created, null,
-                    new BillRevisionResponse(Guid.NewGuid(), 1, created, null, null, null, payload));
+                    Guid.NewGuid(), Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, Guid.NewGuid(),
+                    created, created,
+                    new BillRevisionResponse(Guid.NewGuid(), 1, created, null, payload));
                 shell.BillDetails.AuditTrail.Add(new BillAuditTrailItemViewModel(Guid.NewGuid(), created, "Bill created", "Saved as a draft with 4 lines", "info", null!));
                 shell.BillDetails.AuditTrail.Add(new BillAuditTrailItemViewModel(Guid.NewGuid(), LocalAt(11, 15, 18), "Saved again", "Discount of ₹5,000 added", "info", null!));
                 return new BillDetailsDialog();

@@ -18,20 +18,18 @@ namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
 public partial class PrintLayoutViewModel : ObservableObject
 {
-    private readonly ISettingsApiClient? _settingsApi;
-    private readonly IPrintAssetApiClient? _printAssetApi;
+    private readonly ISettingsApiClient _settingsApi;
+    private readonly IPrintAssetApiClient _printAssetApi;
     private readonly IPrintLayoutImagePicker _imagePicker;
 
-    public PrintLayoutViewModel() : this(null, null) { }
-
-    public PrintLayoutViewModel(ISettingsApiClient? settingsApi, IPrintAssetApiClient? printAssetApi)
+    public PrintLayoutViewModel(ISettingsApiClient settingsApi, IPrintAssetApiClient printAssetApi)
         : this(settingsApi, printAssetApi, new WpfPrintLayoutImagePicker())
     {
     }
 
     internal PrintLayoutViewModel(
-        ISettingsApiClient? settingsApi,
-        IPrintAssetApiClient? printAssetApi,
+        ISettingsApiClient settingsApi,
+        IPrintAssetApiClient printAssetApi,
         IPrintLayoutImagePicker imagePicker)
     {
         _settingsApi = settingsApi;
@@ -172,12 +170,6 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        if (_settingsApi is null || _printAssetApi is null)
-        {
-            StatusMessage = "Print-layout API unavailable.";
-            return;
-        }
-
         IsBusy = true;
         StatusMessage = "Loading print layout…";
         try
@@ -219,11 +211,6 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
-        if (_settingsApi is null)
-        {
-            StatusMessage = "Settings API unavailable.";
-            return;
-        }
         if (PendingWatermarkBytes is not null && WatermarkAssetId is null)
         {
             StatusMessage =
@@ -270,12 +257,6 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     private async Task UploadAsync(string kind)
     {
-        if (_printAssetApi is null)
-        {
-            StatusMessage = "Print-asset API unavailable.";
-            return;
-        }
-
         PrintLayoutImageSelection? selection;
         try
         {
@@ -376,8 +357,6 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     private async Task DeleteByKindAsync(string kind)
     {
-        if (_printAssetApi is null) return;
-
         var id = kind switch
         {
             PrintAssetKinds.Logo => LogoAssetId,
@@ -435,7 +414,6 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     private async Task RefreshAssetsAsync()
     {
-        if (_printAssetApi is null) return;
         var assets = await _printAssetApi.ListAsync();
         Assets.Clear();
         foreach (var asset in assets.Assets)

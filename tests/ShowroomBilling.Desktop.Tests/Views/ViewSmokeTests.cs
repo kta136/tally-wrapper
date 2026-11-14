@@ -87,7 +87,7 @@ public sealed class ViewSmokeTests
         // unrealised here; the loop above covered them.
         try
         {
-            var mainWindow = new MainWindow(shell, endpointResolver: null!, apiReadiness: null!);
+            var mainWindow = new MainWindow(shell);
             var root = (FrameworkElement)mainWindow.Content;
             Layout(root);
             ViewSnapshot.Save(root, nameof(MainWindow));

@@ -10,7 +10,6 @@ public sealed record TallyPostRequest(
     Guid BillId,
     Guid RevisionId,
     int RevisionNo,
-    string BillType,
     string InvoiceNumber,
     string FiscalYear,
     string IdempotencyKey,

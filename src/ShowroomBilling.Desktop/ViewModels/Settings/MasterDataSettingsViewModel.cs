@@ -25,17 +25,15 @@ internal interface IMasterDataSettingsShell
 
 public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMasterSnapshotHost
 {
-    private readonly ISettingsApiClient? _settingsApi;
-    private readonly IMastersApiClient? _mastersApi;
+    private readonly IMastersApiClient _mastersApi;
     private readonly IMasterDataSettingsShell _shell;
     private readonly SettingsMasterSnapshotWorkflow _masterWorkflow;
 
     internal MasterDataSettingsViewModel(
-        ISettingsApiClient? settingsApi,
-        IMastersApiClient? mastersApi,
+        ISettingsApiClient settingsApi,
+        IMastersApiClient mastersApi,
         IMasterDataSettingsShell shell)
     {
-        _settingsApi = settingsApi;
         _mastersApi = mastersApi;
         _shell = shell;
         _masterWorkflow = new SettingsMasterSnapshotWorkflow(settingsApi, mastersApi, this, shell.LoadAsync);
@@ -46,17 +44,16 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
         StockItems = new ObservableCollection<StockItemSnapshotItem>();
 
         RequestCompanyRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestCompanyRefreshAsync,
-            () => _mastersApi is not null && !IsFetchingCompanies && !IsSettingActiveCompany);
+            () => !IsFetchingCompanies && !IsSettingActiveCompany);
         SetActiveCompanyCommand = new AsyncRelayCommand(_masterWorkflow.SetActiveCompanyAsync,
-            () => _settingsApi is not null
-                && SelectedCompany is not null
+            () => SelectedCompany is not null
                 && !IsSettingActiveCompany
                 && !IsFetchingCompanies
                 && !string.Equals(SelectedCompany.Name, ActiveCompanyName, StringComparison.Ordinal));
         RequestLedgerRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestLedgerRefreshAsync,
-            () => _mastersApi is not null && !IsFetchingLedgers);
+            () => !IsFetchingLedgers);
         RequestStockItemRefreshCommand = new AsyncRelayCommand(_masterWorkflow.RequestStockItemRefreshAsync,
-            () => _mastersApi is not null && !IsFetchingStockItems);
+            () => !IsFetchingStockItems);
 
         AddItemMasterRowCommand = new RelayCommand(AddItemMasterRow, () => IsEditing);
         RemoveItemMasterRowCommand = new RelayCommand<ItemMasterRowVm>(RemoveItemMasterRow, _ => IsEditing);
@@ -142,8 +139,6 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
 
     public async Task LoadMissingSnapshotsAsync(CancellationToken cancellationToken)
     {
-        if (_mastersApi is null) return;
-
         var snapshotLoads = new List<Task>(capacity: 3);
         if (Companies.Count == 0)
             snapshotLoads.Add(_masterWorkflow.FetchCompaniesAsync(cancellationToken));

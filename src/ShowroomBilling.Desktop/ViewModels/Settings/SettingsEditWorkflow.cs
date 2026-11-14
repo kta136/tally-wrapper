@@ -18,7 +18,7 @@ internal interface ISettingsEditWorkflowHost
 }
 
 internal sealed class SettingsEditWorkflow(
-    ISettingsApiClient? settingsApi,
+    ISettingsApiClient settingsApi,
     ISettingsEditWorkflowHost host)
 {
     public void BeginEdit()
@@ -46,7 +46,7 @@ internal sealed class SettingsEditWorkflow(
 
     public async Task SaveAsync(CancellationToken cancellationToken)
     {
-        if (settingsApi is null || host.Settings is null) return;
+        if (host.Settings is null) return;
 
         if (!host.Draft.TryBuildDto(host.Settings, out var dto, out var error))
         {

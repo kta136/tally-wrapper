@@ -491,10 +491,23 @@ public sealed class BillDocument : IDocument
 
     private static string KeepOnOneLine(string text) => text.Replace(" ", "\u00A0", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The round-off the summary prints: what takes the customer from the
+    /// figures above it (the items' total, less the discount) to the total
+    /// amount. It is not always the bill's stored round-off. That one rounds
+    /// the taxable value plus CGST plus SGST, and those three, each rounded
+    /// to the paisa, can come to a paisa more or less than the lines they
+    /// were worked back from. Printing the stored figure left the column a
+    /// paisa out when added up by hand.
+    /// </summary>
+    public static decimal SummaryRoundOff(decimal itemsTotalInclusive, BillTotalsDto totals) =>
+        totals.GrandTotal - (itemsTotalInclusive - totals.DiscountTotal);
+
     private void ComposeSummary(IContainer container)
     {
         var totals = _options.Content.Totals;
         var itemsTotalIncl = _options.Content.Lines.Sum(l => l.LineTotal);
+        var roundOff = SummaryRoundOff(itemsTotalIncl, totals);
 
         container.PaddingTop(V(4)).Row(row =>
         {
@@ -516,12 +529,12 @@ public sealed class BillDocument : IDocument
                     });
                 }
 
-                if (totals.RoundOff != 0m)
+                if (roundOff != 0m)
                 {
                     c.Item().PaddingTop(V(1)).Row(r =>
                     {
                         r.RelativeItem().Text("Round Off").FontSize(_bodyFont);
-                        r.ConstantItem(110).AlignRight().Text(FormatSigned(totals.RoundOff)).FontSize(_bodyFont);
+                        r.ConstantItem(110).AlignRight().Text(FormatSigned(roundOff)).FontSize(_bodyFont);
                     });
                 }
 

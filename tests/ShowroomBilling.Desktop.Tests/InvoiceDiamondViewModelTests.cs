@@ -34,7 +34,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Diamond_only_bill_saves_without_24kt_rate()
     {
         var api = new FakeBillsApi();
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster(defaultStockMappingLabel: "Diamond Stock");
         line.GrossWeight = 2m;
@@ -58,7 +58,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Save_retry_after_lost_response_reuses_the_same_operation_id()
     {
         var api = new FakeBillsApi { FailNextCreates = 1 };
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster();
         line.GrossWeight = 2m;
@@ -76,7 +76,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Save_after_a_lost_answer_and_an_edit_updates_the_bill_the_first_save_made()
     {
         var api = new FakeBillsApi { FailNextCreates = 1 };
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster();
         line.GrossWeight = 2m;
@@ -117,7 +117,7 @@ public sealed class InvoiceDiamondViewModelTests
         var oldBill = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null))
             with { BillDate = new DateOnly(2026, 4, 24), Payment = PaymentMode.CreditDebit };
         var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, oldBill) };
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         await vm.LoadBillForEditAsync(billId);
         Assert.Equal(PaymentMode.CreditDebit, vm.Payment);
 
@@ -194,7 +194,7 @@ public sealed class InvoiceDiamondViewModelTests
         }
 
         var prompts = 0;
-        var vm = new InvoiceViewModel(api, null, null, null, tokens)
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null, tokens)
         {
             AdminUnlockHandler = _ =>
             {
@@ -225,7 +225,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Line_without_weight_is_not_saved()
     {
         var api = new FakeBillsApi();
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster();
         line.DiamondRate = 3500m;
@@ -240,7 +240,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Saved_print_content_ignores_edits_typed_after_the_save()
     {
         var api = new FakeBillsApi();
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         vm.PartyName = "Saved Customer";
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster();
@@ -258,7 +258,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Gold_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = GoldMaster();
         line.GrossWeight = 2m;
@@ -275,7 +275,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Diamond_bill_requires_diamond_rate()
     {
         var api = new FakeBillsApi();
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster();
         line.GrossWeight = 2m;
@@ -290,7 +290,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task Mixed_bill_requires_24kt_rate()
     {
         var api = new FakeBillsApi();
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
         vm.Lines[0].ItemMaster = DiamondMaster();
         vm.Lines[0].GrossWeight = 2m;
         vm.Lines[0].DiamondRate = 3500m;
@@ -307,10 +307,10 @@ public sealed class InvoiceDiamondViewModelTests
     [Fact]
     public void Typed_item_name_attaches_matching_master_after_master_name_changes()
     {
-        var settings = new SettingsViewModel();
+        var settings = OfflineApi.Settings();
         var master = GoldMaster();
         settings.Draft.ItemMasterRows.Add(master);
-        var vm = new InvoiceViewModel(null, null, settings);
+        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), settings);
 
         vm.Lines[0].ItemName = " 22k ring ";
 
@@ -350,7 +350,7 @@ public sealed class InvoiceDiamondViewModelTests
         {
             GetResponse = BillResponseFor(billId, payload)
         };
-        var vm = new InvoiceViewModel(api, null, null);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), null);
 
         await vm.LoadBillForEditAsync(billId);
 
@@ -366,7 +366,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task LoadBillForEdit_preserves_stored_wastage_and_labour_when_master_defaults_differ()
     {
         var billId = Guid.NewGuid();
-        var settings = new SettingsViewModel();
+        var settings = OfflineApi.Settings();
         var master = new ItemMasterRowVm
         {
             Name = "22K Ring",
@@ -418,7 +418,7 @@ public sealed class InvoiceDiamondViewModelTests
         {
             GetResponse = BillResponseFor(billId, payload)
         };
-        var vm = new InvoiceViewModel(api, null, settings);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), settings);
 
         await vm.LoadBillForEditAsync(billId);
 
@@ -433,7 +433,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task LoadBillForEdit_preserves_stored_values_when_same_master_rebinds()
     {
         var billId = Guid.NewGuid();
-        var settings = new SettingsViewModel();
+        var settings = OfflineApi.Settings();
         var master = new ItemMasterRowVm
         {
             Name = "22K Ring",
@@ -479,7 +479,7 @@ public sealed class InvoiceDiamondViewModelTests
         {
             GetResponse = BillResponseFor(billId, payload)
         };
-        var vm = new InvoiceViewModel(api, null, settings);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), settings);
 
         await vm.LoadBillForEditAsync(billId);
 
@@ -505,7 +505,7 @@ public sealed class InvoiceDiamondViewModelTests
     public async Task LoadBillForEdit_preserves_gold_making_fields_for_diamond_named_line()
     {
         var billId = Guid.NewGuid();
-        var settings = new SettingsViewModel();
+        var settings = OfflineApi.Settings();
         var master = new ItemMasterRowVm
         {
             Name = "Diamond Jewellery",
@@ -557,7 +557,7 @@ public sealed class InvoiceDiamondViewModelTests
         {
             GetResponse = BillResponseFor(billId, payload)
         };
-        var vm = new InvoiceViewModel(api, null, settings);
+        var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), settings);
 
         await vm.LoadBillForEditAsync(billId);
 
@@ -670,7 +670,7 @@ public sealed class InvoiceDiamondViewModelTests
 
     private static InvoiceViewModel InvoiceWithDiamondLine()
     {
-        var vm = new InvoiceViewModel(null, null, null);
+        var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), null);
         var line = vm.Lines[0];
         line.ItemMaster = DiamondMaster();
         line.GrossWeight = 10m;
@@ -693,8 +693,6 @@ public sealed class InvoiceDiamondViewModelTests
     private static BillResponse BillResponseFor(Guid id, BillPayloadDto payload) => new(
         Id: id,
         ShowroomId: Guid.NewGuid(),
-        CounterId: null,
-        BillType: "sales",
         State: "pending",
         InvoiceNumber: "SR/25-26/0001",
         FiscalYear: "2025-2026",
@@ -702,13 +700,10 @@ public sealed class InvoiceDiamondViewModelTests
         CurrentRevisionId: Guid.NewGuid(),
         CreatedAtUtc: DateTimeOffset.UtcNow,
         UpdatedAtUtc: DateTimeOffset.UtcNow,
-        VoidedAtUtc: null,
         CurrentRevision: new BillRevisionResponse(
             Id: Guid.NewGuid(),
             RevisionNo: 1,
             CreatedAtUtc: DateTimeOffset.UtcNow,
-            SubmittedAtUtc: null,
-            FinalizedAtUtc: null,
             SupersedesRevisionId: null,
             Payload: payload));
 }

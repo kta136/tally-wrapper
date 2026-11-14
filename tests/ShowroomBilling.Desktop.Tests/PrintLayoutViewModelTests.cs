@@ -2,6 +2,7 @@ using System.Net;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 using Xunit;
 
@@ -12,7 +13,7 @@ public sealed class PrintLayoutViewModelTests
     [Fact]
     public void Mandatory_visibility_is_locked_while_optional_visibility_is_editable()
     {
-        var vm = new PrintLayoutViewModel();
+        var vm = new PrintLayoutViewModel(new OfflineSettingsApi(), new OfflinePrintAssetApi());
         var items = vm.SectionLayouts.Single(row => row.SectionKey == PrintLayoutSectionKeys.ItemsTable);
         var notes = vm.SectionLayouts.Single(row => row.SectionKey == PrintLayoutSectionKeys.Notes);
 
@@ -28,7 +29,7 @@ public sealed class PrintLayoutViewModelTests
     [Fact]
     public void Move_and_pin_commands_keep_pinned_group_contiguous_from_boundary()
     {
-        var vm = new PrintLayoutViewModel();
+        var vm = new PrintLayoutViewModel(new OfflineSettingsApi(), new OfflinePrintAssetApi());
         var terms = vm.SectionLayouts.Single(row => row.SectionKey == PrintLayoutSectionKeys.Terms);
         vm.PinBottomFromHereCommand.Execute(terms);
 
@@ -49,7 +50,7 @@ public sealed class PrintLayoutViewModelTests
     [Fact]
     public void Reset_defaults_restores_order_visibility_density_border_and_gst_pin()
     {
-        var vm = new PrintLayoutViewModel
+        var vm = new PrintLayoutViewModel(new OfflineSettingsApi(), new OfflinePrintAssetApi())
         {
             PageDensity = PrintPageDensity.Comfortable,
             InvoiceBorderThicknessPt = 4

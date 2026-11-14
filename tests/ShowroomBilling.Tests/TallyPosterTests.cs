@@ -224,7 +224,6 @@ public sealed class TallyPosterTests
             BillId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
             RevisionId: Guid.Parse("22222222-2222-2222-2222-222222222222"),
             RevisionNo: 1,
-            BillType: "sales",
             InvoiceNumber: "DEV-26/0001",
             FiscalYear: "2026-27",
             IdempotencyKey: "post-key",

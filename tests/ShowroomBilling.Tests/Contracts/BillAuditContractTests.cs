@@ -64,7 +64,7 @@ public sealed class BillAuditContractTests(PostgresFixture postgres)
 
     private static async Task<BillResponse> CreateBillAsync(HttpClient client)
     {
-        var create = await client.PostAsJsonAsync("/api/bills/drafts", new CreateBillDraftRequest(null, Payload(1_000m)));
+        var create = await client.PostAsJsonAsync("/api/bills/drafts", new CreateBillDraftRequest(Payload(1_000m)));
         var createBody = await create.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.True(
             create.StatusCode == HttpStatusCode.Created,

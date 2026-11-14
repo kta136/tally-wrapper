@@ -31,9 +31,9 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        var first = await service.ReserveAsync(SalesInvoice, "2026-27");
-        var second = await service.ReserveAsync(SalesInvoice, "2026-27");
-        var third = await service.ReserveAsync(SalesInvoice, "2026-27");
+        var first = await ReserveAsync(db, service, "2026-27");
+        var second = await ReserveAsync(db, service, "2026-27");
+        var third = await ReserveAsync(db, service, "2026-27");
 
         Assert.Equal(1L, first.ReservedValue);
         Assert.Equal(2L, second.ReservedValue);
@@ -47,8 +47,8 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        await service.ReserveAsync(SalesInvoice, "2026-27");
-        await service.ReserveAsync(SalesInvoice, "2026-27");
+        await ReserveAsync(db, service, "2026-27");
+        await ReserveAsync(db, service, "2026-27");
 
         var preview = await service.GetPreviewAsync(SalesInvoice, "2026-27", CancellationToken.None);
 
@@ -61,9 +61,9 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await using var db = CreateDbContext();
         var service = new NumberingService(db);
 
-        var year1a = await service.ReserveAsync(SalesInvoice, "2025-26");
-        var year1b = await service.ReserveAsync(SalesInvoice, "2025-26");
-        var year2a = await service.ReserveAsync(SalesInvoice, "2026-27");
+        var year1a = await ReserveAsync(db, service, "2025-26");
+        var year1b = await ReserveAsync(db, service, "2025-26");
+        var year2a = await ReserveAsync(db, service, "2026-27");
 
         Assert.Equal(1L, year1a.ReservedValue);
         Assert.Equal(2L, year1b.ReservedValue);
@@ -131,6 +131,32 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
     }
 
     [Fact]
+    public async Task Reserve_OutsideATransaction_IsRefused()
+    {
+        // The number and its bill commit together, and the sequence lock lasts
+        // only as long as the transaction: a caller without one is a mistake.
+        await using var db = CreateDbContext();
+        var service = new NumberingService(db);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ReserveAsync(SalesInvoice, "2026-27"));
+        Assert.Empty(await db.InvoiceSequences.ToListAsync());
+    }
+
+    /// <summary>Reserves as the bill workflows do: inside a transaction, saved and committed by the caller.</summary>
+    private static async Task<ReservedNumber> ReserveAsync(
+        ShowroomBilling.Infrastructure.Persistence.ShowroomBillingDbContext db,
+        NumberingService service,
+        string fiscalYear)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var reserved = await service.ReserveAsync(SalesInvoice, fiscalYear);
+        await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return reserved;
+    }
+
+    [Fact]
     public async Task Reserve_SkipsOverExistingBillInvoiceNumber()
     {
         await using var db = CreateDbContext();
@@ -140,6 +166,7 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
             ShowroomId = DefaultShowroomId,
             FiscalYear = "2026-27",
             InvoiceNumber = "2026-27/0002",
+            InvoiceCore = 2,
             State = "pending",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -147,8 +174,8 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         await db.SaveChangesAsync();
 
         var service = new NumberingService(db);
-        var first = await service.ReserveAsync(SalesInvoice, "2026-27");
-        var second = await service.ReserveAsync(SalesInvoice, "2026-27");
+        var first = await ReserveAsync(db, service, "2026-27");
+        var second = await ReserveAsync(db, service, "2026-27");
 
         Assert.Equal(1L, first.ReservedValue);
         Assert.Equal(3L, second.ReservedValue);
@@ -165,6 +192,7 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
             ShowroomId = DefaultShowroomId,
             FiscalYear = "2026-27",
             InvoiceNumber = "2026-27/0002",
+            InvoiceCore = 2,
             State = "pending",
             CreatedAtUtc = DateTimeOffset.UtcNow,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
@@ -175,7 +203,7 @@ public sealed class NumberingServiceTests(PostgresFixture postgres) : DatabaseTe
         var before = await service.GetPreviewAsync(SalesInvoice, "2026-27", CancellationToken.None);
         Assert.Equal(1L, before.PreviewValue);
 
-        await service.ReserveAsync(SalesInvoice, "2026-27");
+        await ReserveAsync(db, service, "2026-27");
 
         var after = await service.GetPreviewAsync(SalesInvoice, "2026-27", CancellationToken.None);
         Assert.Equal(3L, after.PreviewValue);

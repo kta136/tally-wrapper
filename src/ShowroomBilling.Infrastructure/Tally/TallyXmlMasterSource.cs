@@ -35,7 +35,7 @@ public sealed class TallyXmlMasterSource(
 
     public Task<IReadOnlyList<LedgerSnapshotItem>> FetchLedgersAsync(CancellationToken cancellationToken = default) =>
         FetchAsync(
-            CollectionLedger, tallyType: "Ledger", fetches: ["Name", "Parent", "PrimaryGroup", "IsRevenue", "PartyGSTIN"],
+            CollectionLedger, tallyType: "Ledger", fetches: ["Name"],
             includeCompanyScope: true, "LEDGER", MapLedger, cancellationToken);
 
     public Task<IReadOnlyList<StockItemSnapshotItem>> FetchStockItemsAsync(CancellationToken cancellationToken = default) =>
@@ -45,7 +45,7 @@ public sealed class TallyXmlMasterSource(
 
     public Task<IReadOnlyList<VoucherTypeSnapshotItem>> FetchVoucherTypesAsync(CancellationToken cancellationToken = default) =>
         FetchAsync(
-            CollectionVoucherType, tallyType: "Voucher Type", fetches: ["Name", "Parent", "IsDeemedPositive"],
+            CollectionVoucherType, tallyType: "Voucher Type", fetches: ["Name"],
             includeCompanyScope: true, "VOUCHERTYPE", MapVoucherType, cancellationToken);
 
     private async Task<XElement> BuildCollectionRequest(
@@ -122,12 +122,7 @@ public sealed class TallyXmlMasterSource(
     {
         var name = ReadNameFromAttrOrChild(element);
         if (string.IsNullOrWhiteSpace(name)) return null;
-        return new LedgerSnapshotItem(
-            Name: name!,
-            Parent: ReadChild(element, "PARENT"),
-            PrimaryGroup: ReadChild(element, "PRIMARYGROUP"),
-            IsRevenue: ReadBool(element, "ISREVENUE", defaultValue: false),
-            Gstin: ReadChild(element, "PARTYGSTIN"));
+        return new LedgerSnapshotItem(Name: name!);
     }
 
     private static StockItemSnapshotItem? MapStockItem(XElement element)
@@ -146,10 +141,7 @@ public sealed class TallyXmlMasterSource(
     {
         var name = ReadNameFromAttrOrChild(element);
         if (string.IsNullOrWhiteSpace(name)) return null;
-        return new VoucherTypeSnapshotItem(
-            Name: name!,
-            ParentType: ReadChild(element, "PARENT"),
-            IsDeemedPositive: ReadBool(element, "ISDEEMEDPOSITIVE", defaultValue: false));
+        return new VoucherTypeSnapshotItem(Name: name!);
     }
 
     private static string? ReadNameFromAttrOrChild(XElement element)

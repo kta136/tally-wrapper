@@ -11,12 +11,10 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
 public partial class BillDetailsViewModel : ObservableObject, IBillDetailsActionHost
 {
-    private readonly IBillsApiClient? _billsApi;
+    private readonly IBillsApiClient _billsApi;
     private readonly BillDetailsActionWorkflow _actions;
 
-    public BillDetailsViewModel() : this(null) { }
-
-    public BillDetailsViewModel(IBillsApiClient? billsApi)
+    public BillDetailsViewModel(IBillsApiClient billsApi)
     {
         _billsApi = billsApi;
         _actions = new BillDetailsActionWorkflow(_billsApi, this);
@@ -116,16 +114,10 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     }
 
     private bool CanAct(Func<string?, bool> allowedInState)
-        => _billsApi is not null && Bill is not null && !IsActing && !IsLoading && allowedInState(Bill.State);
+        => Bill is not null && !IsActing && !IsLoading && allowedInState(Bill.State);
 
     public async Task LoadAsync(Guid billId, CancellationToken cancellationToken = default)
     {
-        if (_billsApi is null)
-        {
-            StatusMessage = "Bills API unavailable.";
-            return;
-        }
-
         IsLoading = true;
         StatusMessage = "Loading bill…";
         Bill = null;
@@ -164,11 +156,6 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
 
     public async Task ReloadSupportingStateAsync(Guid billId, CancellationToken cancellationToken)
     {
-        if (_billsApi is null)
-        {
-            return;
-        }
-
         // The timeline may fail on its own; the bill itself is still worth showing.
         try
         {

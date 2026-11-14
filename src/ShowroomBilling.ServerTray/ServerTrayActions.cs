@@ -7,24 +7,45 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
 {
     public event EventHandler? StatusChanged;
 
-    public bool InstallOrRepairServer(IWin32Window? owner = null)
+    public InstallOutcome InstallOrRepairServer(IWin32Window? owner = null)
     {
-        var installed = ServerInstaller.EnsureInstalledInteractive(options, forceRepair: true);
+        var outcome = ServerInstaller.EnsureInstalledInteractive(options, forceRepair: true);
         StatusChanged?.Invoke(this, EventArgs.Empty);
-        CopyableMessageDialog.ShowMessage(
-            owner,
-            installed
-                ? "The server is installed and running."
-                : "Setup did not finish.\n\nIt was cancelled, or Windows did not allow it. The install log has the details.",
-            installed ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-        return installed;
+        var (message, icon) = InstallReport(
+            outcome, GetServiceStatus(), options.InstallLogPath, ServerInstaller.InstallLogTail(options));
+        CopyableMessageDialog.ShowMessage(owner, message, icon);
+        return outcome;
     }
 
-    public bool StartService(IWin32Window? owner = null) => ControlService(ServiceCommand.Start, owner);
+    /// <summary>
+    /// The one message about an install or repair. "Installed and running" is
+    /// said only when the service is running: setup finishing does not prove
+    /// that, because a service that will not start is not a setup failure.
+    /// </summary>
+    internal static (string Message, MessageBoxIcon Icon) InstallReport(
+        InstallOutcome outcome,
+        ServiceControllerStatus? service,
+        string installLogPath,
+        string installLogTail) => outcome switch
+    {
+        InstallOutcome.Done when service == ServiceControllerStatus.Running =>
+            ("The server is installed and running.", MessageBoxIcon.Information),
+        InstallOutcome.Done =>
+            ($"The server is installed, but its Windows service is {Describe(service)}.\n\nStart it from the dashboard. If it will not start, the install log has the reason: {installLogPath}",
+                MessageBoxIcon.Warning),
+        InstallOutcome.NotStarted =>
+            ("Setup did not finish.\n\nIt was cancelled, or Windows did not give permission. Nothing was changed.",
+                MessageBoxIcon.Warning),
+        _ =>
+            ($"Setup failed.\n\nThe end of the install log, {installLogPath}:\n\n{installLogTail}",
+                MessageBoxIcon.Error),
+    };
 
-    public bool StopService(IWin32Window? owner = null) => ControlService(ServiceCommand.Stop, owner);
+    public Task<bool> StartServiceAsync(IWin32Window? owner = null) => ControlServiceAsync(ServiceCommand.Start, owner);
 
-    public bool RestartService(IWin32Window? owner = null) => ControlService(ServiceCommand.Restart, owner);
+    public Task<bool> StopServiceAsync(IWin32Window? owner = null) => ControlServiceAsync(ServiceCommand.Stop, owner);
+
+    public Task<bool> RestartServiceAsync(IWin32Window? owner = null) => ControlServiceAsync(ServiceCommand.Restart, owner);
 
     /// <summary>The API service's status, or null when it is not installed.</summary>
     public ServiceControllerStatus? GetServiceStatus() => ServerInstaller.TryGetServiceStatus(options.ServiceName);
@@ -61,9 +82,14 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
         Process.Start(new ProcessStartInfo { FileName = options.InstallLogPath, UseShellExecute = true });
     }
 
-    private bool ControlService(ServiceCommand action, IWin32Window? owner)
+    /// <summary>
+    /// A service takes up to 20 seconds to start or stop, so the waiting is
+    /// done off the UI thread; the window used to freeze for all of it. The
+    /// message, if there is one, is shown back on the UI thread.
+    /// </summary>
+    private async Task<bool> ControlServiceAsync(ServiceCommand action, IWin32Window? owner)
     {
-        var problem = TryControlService(action);
+        var problem = await Task.Run(() => TryControlService(action));
         StatusChanged?.Invoke(this, EventArgs.Empty);
         if (problem is null)
         {

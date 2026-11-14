@@ -14,7 +14,6 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
 {
     public const string DocumentTypeSalesInvoice = "sales_invoice";
 
-    private const int MaxReservationAttempts = 3;
 
     public async Task<NumberingPreviewResponse> GetPreviewAsync(
         string documentType,
@@ -63,34 +62,15 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
         var year = NormalizeFiscalYear(fiscalYear);
         var showroomId = Showrooms.DefaultId;
 
-        for (var attempt = 1; attempt <= MaxReservationAttempts; attempt++)
+        // The number and the bill it is for have to commit together, and the
+        // row lock below lasts only as long as a transaction does. This method
+        // once opened one of its own when the caller had none, and retried a
+        // lost race; no caller ever came without one, so both are gone.
+        if (dbContext.Database.CurrentTransaction is null)
         {
-            try
-            {
-                return await ReserveCoreAsync(normalizedType, year, showroomId, cancellationToken);
-            }
-            catch (DbUpdateException ex) when (IsRetryableReservationConflict(ex) && attempt < MaxReservationAttempts)
-            {
-                dbContext.ChangeTracker.Clear();
-            }
+            throw new InvalidOperationException(
+                "An invoice number is reserved inside the transaction that saves its bill. Open one before calling ReserveAsync.");
         }
-
-        throw new InvalidOperationException("Invoice number reservation retry loop exited unexpectedly.");
-    }
-
-    private async Task<ReservedNumber> ReserveCoreAsync(
-        string normalizedType,
-        string year,
-        Guid showroomId,
-        CancellationToken cancellationToken)
-    {
-        var ambientTransaction = dbContext.Database.CurrentTransaction;
-
-        // If the caller already opened a transaction, enlist in it and leave
-        // commit responsibility to them. Otherwise own the txn here.
-        await using var transaction = ambientTransaction is not null
-            ? null
-            : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         // FOR UPDATE locks nothing when the row is not there yet, which is the
         // first bill of a fiscal year: two counters saving at once would both
@@ -98,10 +78,8 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
         // primary key. So the row is made first. A second insert waits for the
         // first transaction to end and then does nothing, and the lock below
         // always has a row to hold.
-        await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
-INSERT INTO public.invoice_sequences (""ShowroomId"", ""FiscalYear"", ""DocumentType"", ""NextValue"", ""MinNextValue"", ""UpdatedAtUtc"")
-VALUES ({showroomId}, {year}, {normalizedType}, 1, 0, {DateTimeOffset.UtcNow})
-ON CONFLICT DO NOTHING", cancellationToken);
+        await NumberingSequenceReclaimer.EnsureSequenceRowAsync(
+            dbContext, showroomId, year, normalizedType, cancellationToken);
 
         var sequence = await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(
                 dbContext, showroomId, year, normalizedType, cancellationToken)
@@ -120,28 +98,10 @@ ON CONFLICT DO NOTHING", cancellationToken);
 
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, reservedValue, year, padding);
 
-        // Inside a caller-owned transaction the caller's SaveChanges persists
-        // the sequence together with its own rows: one batched round trip to
-        // the database instead of two. (A failed insert aborts a PostgreSQL
-        // transaction anyway, so the retry loop above can only help when this
-        // method owns the transaction.)
-        if (ambientTransaction is null)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        if (transaction is not null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-        }
-
+        // The caller's SaveChanges persists the sequence together with its own
+        // rows: one batched round trip to the database instead of two.
         return new ReservedNumber(year, reservedValue, formatted);
     }
-
-    private static bool IsRetryableReservationConflict(DbUpdateException exception) =>
-        exception.GetBaseException() is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation
-        };
 
     /// <summary>
     /// The invoice prefix, suffix and padding a fresh reservation uses. Public
@@ -175,8 +135,9 @@ ON CONFLICT DO NOTHING", cancellationToken);
     /// <c>bills.InvoiceCore</c>, so a suffix (<c>-A</c>, <c>-A2</c>) or a
     /// change in padding never hides an occupied core. Only the cores inside
     /// the skip window are fetched, through the (showroom, year, core) index,
-    /// instead of every invoice number in the year. Rows without a stored
-    /// core (legacy custom numbers) fall back to trailing-digit parsing.
+    /// instead of every invoice number in the year. A row without a stored
+    /// core is a legacy custom number with no digits to it (the migration
+    /// that added the column filled every other one) and occupies no core.
     /// Capped at 1000 iterations to avoid a pathological spin if the admin
     /// has jumped numbers far ahead and the entire skip range happens to be
     /// occupied.
@@ -200,22 +161,15 @@ ON CONFLICT DO NOTHING", cancellationToken);
             .AsNoTracking()
             .Where(b => b.ShowroomId == showroomId
                         && b.FiscalYear == fiscalYear
-                        && ((b.InvoiceCore >= candidate && b.InvoiceCore < windowEnd)
-                            || (b.InvoiceCore == null && b.InvoiceNumber != null)))
-            .Select(b => new { b.InvoiceCore, b.InvoiceNumber })
+                        && b.InvoiceCore >= candidate
+                        && b.InvoiceCore < windowEnd)
+            .Select(b => b.InvoiceCore!.Value)
             .ToListAsync(cancellationToken);
 
-        var occupied = new HashSet<long>();
+        var occupied = new HashSet<long>(rows);
         if (keptForTally is { } kept)
         {
             occupied.Add(kept);
-        }
-        foreach (var row in rows)
-        {
-            if ((row.InvoiceCore ?? InvoiceNumberFormatter.TryParseTrailingCore(row.InvoiceNumber)) is { } core)
-            {
-                occupied.Add(core);
-            }
         }
 
         for (var i = 0; i < SafetyCap; i++)

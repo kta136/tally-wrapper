@@ -21,7 +21,6 @@ public sealed class ClientPresenceRegistry
             var firstSeen = _entries.TryGetValue(deviceId, out var known) ? known.FirstSeenAtUtc : now;
             var entry = new Entry(
                 DeviceId: deviceId,
-                CounterName: Normalize(request.CounterName, "Counter"),
                 AppVersion: Normalize(request.AppVersion, "unknown"),
                 MachineName: Normalize(request.MachineName, "unknown"),
                 UserName: Normalize(request.UserName, "unknown"),
@@ -32,19 +31,6 @@ public sealed class ClientPresenceRegistry
             _entries[deviceId] = entry;
             TrimOverflow();
             return ToResponse(entry, now);
-        }
-    }
-
-    public int ActiveCount
-    {
-        get
-        {
-            var now = DateTimeOffset.UtcNow;
-            lock (_gate)
-            {
-                PruneExpired(now);
-                return _entries.Count;
-            }
         }
     }
 
@@ -93,7 +79,6 @@ public sealed class ClientPresenceRegistry
     private static ClientPresenceResponse ToResponse(Entry entry, DateTimeOffset now) =>
         new(
             entry.DeviceId,
-            entry.CounterName,
             entry.AppVersion,
             entry.MachineName,
             entry.UserName,
@@ -110,7 +95,6 @@ public sealed class ClientPresenceRegistry
 
     private sealed record Entry(
         string DeviceId,
-        string CounterName,
         string AppVersion,
         string MachineName,
         string UserName,

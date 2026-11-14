@@ -1,6 +1,7 @@
 using System.Globalization;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Desktop.Converters;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 using ShowroomBilling.Desktop.ViewModels.Setup;
@@ -104,7 +105,7 @@ public sealed class DialogDisplayTests
     [Fact]
     public void The_bill_details_lines_read_the_way_the_operator_does()
     {
-        var details = new BillDetailsViewModel();
+        var details = new BillDetailsViewModel(new FakeBillsApi());
         var created = new DateTimeOffset(2026, 10, 11, 15, 12, 0, TimeSpan.Zero);
         var payload = new BillPayloadDto(
             "Meera Subramaniam", null, null, null, new DateOnly(2026, 10, 11),
@@ -116,8 +117,8 @@ public sealed class DialogDisplayTests
             null, "Cash", 7780m);
 
         details.Bill = new BillResponse(
-            Guid.NewGuid(), Guid.NewGuid(), null, "sale", BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null,
-            created, created, null, new BillRevisionResponse(Guid.NewGuid(), 1, created, null, null, null, payload));
+            Guid.NewGuid(), Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null,
+            created, created, new BillRevisionResponse(Guid.NewGuid(), 1, created, null, payload));
 
         Assert.Equal(["12.450 g", "0.500 ct"], details.LineRows.Select(line => line.Net));
         Assert.Equal(["22kt", "—"], details.LineRows.Select(line => line.Karat));
@@ -139,7 +140,7 @@ public sealed class DialogDisplayTests
     [Fact]
     public void The_last_action_replaces_the_state_in_the_foot_of_bill_details()
     {
-        var details = new BillDetailsViewModel { StatusMessage = "Pushed to Tally." };
+        var details = new BillDetailsViewModel(new FakeBillsApi()) { StatusMessage = "Pushed to Tally." };
 
         Assert.Equal("Pushed to Tally.", details.FooterText);
     }
@@ -165,7 +166,7 @@ public sealed class DialogDisplayTests
     [Fact]
     public void The_batch_says_where_it_is_and_how_far()
     {
-        var batch = new SyntheticBatchViewModel();
+        var batch = new SyntheticBatchViewModel(new FakeBillsApi(), adminTokens: null, settings: null);
 
         Assert.Equal("Not started", batch.RunState);
         Assert.Equal("neutral", batch.RunTone);

@@ -30,7 +30,7 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
         await using (var db = database.CreateContext())
         {
             var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
-                new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload("A", 1234.5m)));
+                new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 1234.5m)));
             billId = bill.Id;
             revisionId = bill.CurrentRevisionId!.Value;
             await new MasterSnapshotService(db).IngestCompaniesAsync(new PushCompanySnapshotRequest(

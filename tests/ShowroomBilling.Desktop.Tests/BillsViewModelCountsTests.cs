@@ -1,4 +1,5 @@
 using ShowroomBilling.Contracts.Bills;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 
 namespace ShowroomBilling.Desktop.Tests;
@@ -7,7 +8,7 @@ public sealed class BillsViewModelCountsTests
 {
     private static BillsViewModel WithBills(params string[] states)
     {
-        var vm = new BillsViewModel { HideFullyPostedDays = false };
+        var vm = new BillsViewModel(new FakeBillsApi()) { HideFullyPostedDays = false };
         var created = DateTimeOffset.UtcNow;
         var number = 0;
         foreach (var state in states)
