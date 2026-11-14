@@ -130,7 +130,7 @@ internal static class DesignSample
 
         foreach (var stock in new[] { "Gold Chain 22kt", "Bangles 22kt", "Pendant 22kt", "Ring 22kt", "Kada 22kt", "Mangalsutra 22kt", "Gold 24kt", "Gold 22kt", "Gold 18kt", "Coin 24kt", "Diamond Ring" })
         {
-            master.StockItems.Add(new StockItemSnapshotItem(stock, null, "gm", "7113", null));
+            master.StockItems.Add(new StockItemSnapshotItem(stock, "gm", "7113"));
         }
 
         master.StockItemsCount = master.StockItems.Count;

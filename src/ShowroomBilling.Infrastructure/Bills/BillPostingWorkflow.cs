@@ -292,10 +292,7 @@ internal sealed class BillPostingWorkflow(
         {
             postRequest = new TallyPostRequest(
                 BillId: bill.Id,
-                RevisionId: currentRevision.Id,
-                RevisionNo: currentRevision.RevisionNo,
                 InvoiceNumber: bill.InvoiceNumber!,
-                FiscalYear: bill.FiscalYear!,
                 IdempotencyKey: idempotencyKey,
                 Payload: payload,
                 Operation: operation,

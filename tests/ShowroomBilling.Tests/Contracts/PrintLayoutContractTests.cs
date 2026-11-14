@@ -64,7 +64,6 @@ public sealed class PrintLayoutContractTests : IClassFixture<TestApiFactory>
             new PrintAssetUploadRequest(
                 PrintAssetKinds.Watermark,
                 "watermark.png",
-                "image/png",
                 Convert.ToBase64String(bytes)));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -90,7 +89,6 @@ public sealed class PrintLayoutContractTests : IClassFixture<TestApiFactory>
             new PrintAssetUploadRequest(
                 PrintAssetKinds.Watermark,
                 "watermark.png",
-                "image/png",
                 Convert.ToBase64String([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])));
 
         Assert.Equal(HttpStatusCode.Unauthorized, put.StatusCode);

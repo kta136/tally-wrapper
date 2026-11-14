@@ -132,18 +132,19 @@ END
 
 # The master lists a restored copy holds, for the stand-in Tally to serve, so
 # "Refresh from Tally" gives back what the copy has instead of test names.
+# Read after the migrations, so from tally_masters: one row per list, the list as JSON.
 function Export-MastersForStandIn {
     $json = Invoke-ScratchSql @'
 SELECT json_build_object(
     'activeCompany', (SELECT "ActiveCompanyName" FROM public.cloud_settings LIMIT 1),
-    'companies', (SELECT coalesce(json_agg(json_build_object('name', s."Name", 'active', s."IsActive") ORDER BY s."Name"), '[]'::json)
-                  FROM public.tally_company_snapshots s JOIN public.tally_master_snapshot_batches b ON b."Id" = s."BatchId" WHERE b."Status" = 'active'),
-    'ledgers', (SELECT coalesce(json_agg(json_build_object('name', s."Name", 'parent', s."Parent", 'primaryGroup', s."PrimaryGroup", 'isRevenue', s."IsRevenue", 'gstin', s."Gstin") ORDER BY s."Name"), '[]'::json)
-                FROM public.tally_ledger_snapshots s JOIN public.tally_master_snapshot_batches b ON b."Id" = s."BatchId" WHERE b."Status" = 'active'),
-    'stockItems', (SELECT coalesce(json_agg(json_build_object('name', s."Name", 'alias', s."Alias", 'unit', s."BaseUnit", 'hsn', s."HsnCode") ORDER BY s."Name"), '[]'::json)
-                   FROM public.tally_stock_item_snapshots s JOIN public.tally_master_snapshot_batches b ON b."Id" = s."BatchId" WHERE b."Status" = 'active'),
-    'voucherTypes', (SELECT coalesce(json_agg(json_build_object('name', s."Name", 'parent', s."ParentType", 'deemedPositive', s."IsDeemedPositive") ORDER BY s."Name"), '[]'::json)
-                     FROM public.tally_voucher_type_snapshots s JOIN public.tally_master_snapshot_batches b ON b."Id" = s."BatchId" WHERE b."Status" = 'active'))
+    'companies', (SELECT coalesce(json_agg(json_build_object('name', item->>'name', 'active', coalesce((item->>'isActive')::boolean, false))), '[]'::json)
+                  FROM public.tally_masters m CROSS JOIN LATERAL jsonb_array_elements(m."ItemsJson") AS item WHERE m."MasterType" = 'companies'),
+    'ledgers', (SELECT coalesce(json_agg(json_build_object('name', item->>'name')), '[]'::json)
+                FROM public.tally_masters m CROSS JOIN LATERAL jsonb_array_elements(m."ItemsJson") AS item WHERE m."MasterType" = 'ledgers'),
+    'stockItems', (SELECT coalesce(json_agg(json_build_object('name', item->>'name', 'unit', item->>'baseUnit', 'hsn', item->>'hsnCode')), '[]'::json)
+                   FROM public.tally_masters m CROSS JOIN LATERAL jsonb_array_elements(m."ItemsJson") AS item WHERE m."MasterType" = 'stock_items'),
+    'voucherTypes', (SELECT coalesce(json_agg(json_build_object('name', item->>'name')), '[]'::json)
+                     FROM public.tally_masters m CROSS JOIN LATERAL jsonb_array_elements(m."ItemsJson") AS item WHERE m."MasterType" = 'voucher_types'))
 '@
     ($json -join '') | Set-Content -LiteralPath $mastersPath -Encoding utf8
 }

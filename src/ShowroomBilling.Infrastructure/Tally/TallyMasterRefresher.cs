@@ -16,32 +16,28 @@ public sealed class TallyMasterRefresher(
         RefreshAsync(
             MasterTypes.Companies,
             source.FetchCompaniesAsync,
-            (items, token) => snapshotService.IngestCompaniesAsync(
-                new PushCompanySnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            snapshotService.IngestCompaniesAsync,
             cancellationToken);
 
     public Task<TallyMasterRefreshResult> RefreshLedgersAsync(CancellationToken cancellationToken = default) =>
         RefreshAsync(
             MasterTypes.Ledgers,
             source.FetchLedgersAsync,
-            (items, token) => snapshotService.IngestLedgersAsync(
-                new PushLedgerSnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            snapshotService.IngestLedgersAsync,
             cancellationToken);
 
     public Task<TallyMasterRefreshResult> RefreshStockItemsAsync(CancellationToken cancellationToken = default) =>
         RefreshAsync(
             MasterTypes.StockItems,
             source.FetchStockItemsAsync,
-            (items, token) => snapshotService.IngestStockItemsAsync(
-                new PushStockItemSnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            snapshotService.IngestStockItemsAsync,
             cancellationToken);
 
     public Task<TallyMasterRefreshResult> RefreshVoucherTypesAsync(CancellationToken cancellationToken = default) =>
         RefreshAsync(
             MasterTypes.VoucherTypes,
             source.FetchVoucherTypesAsync,
-            (items, token) => snapshotService.IngestVoucherTypesAsync(
-                new PushVoucherTypeSnapshotRequest(Showrooms.DefaultCode, DateTimeOffset.UtcNow, items), token),
+            snapshotService.IngestVoucherTypesAsync,
             cancellationToken);
 
     /// <summary>
@@ -52,14 +48,14 @@ public sealed class TallyMasterRefresher(
     private async Task<TallyMasterRefreshResult> RefreshAsync<TItem>(
         string masterType,
         Func<CancellationToken, Task<IReadOnlyList<TItem>>> fetch,
-        Func<IReadOnlyList<TItem>, CancellationToken, Task<MasterSnapshotAcceptedResponse>> ingest,
+        Func<IReadOnlyList<TItem>, CancellationToken, Task<MasterSnapshotMetadata>> ingest,
         CancellationToken cancellationToken)
     {
         try
         {
             var items = await fetch(cancellationToken);
-            var response = await ingest(items, cancellationToken);
-            return new TallyMasterRefreshResult(masterType, true, response.ItemCount, response.BatchId, null);
+            var stored = await ingest(items, cancellationToken);
+            return new TallyMasterRefreshResult(masterType, true, stored.ItemCount, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -116,5 +112,5 @@ public sealed class TallyMasterRefresher(
     }
 
     private static TallyMasterRefreshResult Fail(string masterType, string message) =>
-        new(masterType, false, 0, null, message);
+        new(masterType, false, 0, message);
 }

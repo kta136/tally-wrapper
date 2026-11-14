@@ -2,22 +2,26 @@ using ShowroomBilling.Contracts.Masters;
 
 namespace ShowroomBilling.Application.Masters;
 
+/// <summary>
+/// The lists last read from Tally. Storing one replaces the whole list;
+/// reading one returns the whole list, in name order.
+/// </summary>
 public interface IMasterSnapshotService
 {
-    Task<MasterSnapshotAcceptedResponse> IngestCompaniesAsync(
-        PushCompanySnapshotRequest request,
+    Task<MasterSnapshotMetadata> IngestCompaniesAsync(
+        IReadOnlyList<CompanySnapshotItem> companies,
         CancellationToken cancellationToken = default);
 
-    Task<MasterSnapshotAcceptedResponse> IngestLedgersAsync(
-        PushLedgerSnapshotRequest request,
+    Task<MasterSnapshotMetadata> IngestLedgersAsync(
+        IReadOnlyList<LedgerSnapshotItem> ledgers,
         CancellationToken cancellationToken = default);
 
-    Task<MasterSnapshotAcceptedResponse> IngestStockItemsAsync(
-        PushStockItemSnapshotRequest request,
+    Task<MasterSnapshotMetadata> IngestStockItemsAsync(
+        IReadOnlyList<StockItemSnapshotItem> stockItems,
         CancellationToken cancellationToken = default);
 
-    Task<MasterSnapshotAcceptedResponse> IngestVoucherTypesAsync(
-        PushVoucherTypeSnapshotRequest request,
+    Task<MasterSnapshotMetadata> IngestVoucherTypesAsync(
+        IReadOnlyList<VoucherTypeSnapshotItem> voucherTypes,
         CancellationToken cancellationToken = default);
 
     Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default);

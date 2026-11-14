@@ -39,6 +39,8 @@ public sealed class MigratedIndexesPostgresTests(PostgresFixture fixture)
         }
 
         Assert.Empty(expected.Except(actual).Order());
-        Assert.Contains("IX_tally_ledger_snapshots_Name_trgm", actual);
+        // One the model cannot vouch for: it is made by a migration's own SQL.
+        Assert.Contains("IX_bills_ShowroomId_FiscalYear_InvoiceCore", actual);
+        Assert.Contains("PK_tally_masters", actual);
     }
 }

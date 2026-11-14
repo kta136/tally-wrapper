@@ -169,7 +169,7 @@ public sealed class DesignDialogTests
                     "Cash",
                     7780m);
                 shell.BillDetails.Bill = new BillResponse(
-                    Guid.NewGuid(), Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, Guid.NewGuid(),
+                    Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, Guid.NewGuid(),
                     created, created,
                     new BillRevisionResponse(Guid.NewGuid(), 1, created, null, payload));
                 shell.BillDetails.AuditTrail.Add(new BillAuditTrailItemViewModel(Guid.NewGuid(), created, "Bill created", "Saved as a draft with 4 lines", "info", null!));
@@ -192,10 +192,10 @@ public sealed class DesignDialogTests
                     new MasterFreshnessSummaryResponse(
                         "fresh",
                         [
-                            new MasterSnapshotMetadata(MasterTypes.Ledgers, null, LocalAt(11, 15, 10, 4), 142, "fresh"),
-                            new MasterSnapshotMetadata(MasterTypes.VoucherTypes, null, LocalAt(11, 15, 10, 4), 12, "fresh"),
-                            new MasterSnapshotMetadata(MasterTypes.StockItems, null, LocalAt(11, 15, 10, 5), 5, "fresh"),
-                            new MasterSnapshotMetadata(MasterTypes.Companies, null, LocalAt(11, 15, 10, 5), 3, "fresh"),
+                            new MasterSnapshotMetadata(MasterTypes.Ledgers, LocalAt(11, 15, 10, 4), 142, "fresh"),
+                            new MasterSnapshotMetadata(MasterTypes.VoucherTypes, LocalAt(11, 15, 10, 4), 12, "fresh"),
+                            new MasterSnapshotMetadata(MasterTypes.StockItems, LocalAt(11, 15, 10, 5), 5, "fresh"),
+                            new MasterSnapshotMetadata(MasterTypes.Companies, LocalAt(11, 15, 10, 5), 3, "fresh"),
                         ]),
                     null);
                 return new SystemHealthDialog();

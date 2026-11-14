@@ -185,7 +185,6 @@ public sealed class ServerDashboardViewTests
         pc,
         user,
         address,
-        At.AddHours(-2),
         At.AddSeconds(-secondsAgo),
         At.AddMinutes(2));
 

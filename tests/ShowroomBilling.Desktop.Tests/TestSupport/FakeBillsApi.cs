@@ -52,7 +52,6 @@ internal sealed class FakeBillsApi : IBillsApiClient
         BillPayloadDto? payload = null,
         string? invoiceNumber = "SR/25-26/0001") => new(
         Id: id,
-        ShowroomId: Guid.Empty,
         State: state,
         InvoiceNumber: invoiceNumber,
         FiscalYear: "2025-2026",
@@ -148,10 +147,10 @@ internal sealed class FakeBillsApi : IBillsApiClient
         => Write("push-pending", () => new BillBatchPushResponse(0, 0, 0, false, null, null, []));
 
     public Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default)
-        => Write($"retry:{billId}", () => new BillPostingStatusResponse(billId, BillStates.Posted, null, null, null));
+        => Write($"retry:{billId}", () => new BillPostingStatusResponse(billId, BillStates.Posted, null, null));
 
     public Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default)
-        => Write($"repost:{billId}", () => new BillPostingStatusResponse(billId, BillStates.Posted, null, null, null));
+        => Write($"repost:{billId}", () => new BillPostingStatusResponse(billId, BillStates.Posted, null, null));
 
     public Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default)
         => Write($"void:{billId}", () => Bill(billId, BillStates.Voided));

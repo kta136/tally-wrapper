@@ -117,7 +117,7 @@ public sealed class DialogDisplayTests
             null, "Cash", 7780m);
 
         details.Bill = new BillResponse(
-            Guid.NewGuid(), Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null,
+            Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null,
             created, created, new BillRevisionResponse(Guid.NewGuid(), 1, created, null, payload));
 
         Assert.Equal(["12.450 g", "0.500 ct"], details.LineRows.Select(line => line.Net));

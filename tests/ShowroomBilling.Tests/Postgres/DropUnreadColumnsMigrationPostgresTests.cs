@@ -48,6 +48,7 @@ public sealed class DropUnreadColumnsMigrationPostgresTests(PostgresFixture fixt
 
         // Copied aside: only the rows that held something.
         Assert.Equal(DropUnreadColumns.Backups.Order(), (await ExistingBackupsAsync(database)).Order());
+        Assert.All(DropUnreadColumns.Backups, name => Assert.DoesNotContain(name, MasterSnapshotsInOneTable.Backups));
         Assert.Equal(1L, await ScalarAsync<long>(database, "SELECT count(*) FROM public.dropped_20261114_bills"));
         Assert.Equal(counterId, await ScalarAsync<Guid>(database,
             $"""SELECT "CounterId" FROM public.dropped_20261114_bills WHERE "Id" = '{billId}'"""));
@@ -127,10 +128,8 @@ public sealed class DropUnreadColumnsMigrationPostgresTests(PostgresFixture fixt
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
         var untouched = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
         var masters = new MasterSnapshotService(db);
-        await masters.IngestLedgersAsync(new PushLedgerSnapshotRequest(
-            "DEV-SHOWROOM", DateTimeOffset.UtcNow, [new LedgerSnapshotItem("Sales A/c"), new LedgerSnapshotItem("Cash")]));
-        await masters.IngestVoucherTypesAsync(new PushVoucherTypeSnapshotRequest(
-            "DEV-SHOWROOM", DateTimeOffset.UtcNow, [new VoucherTypeSnapshotItem("Sales")]));
+        await masters.IngestLedgersAsync([new LedgerSnapshotItem("Sales A/c"), new LedgerSnapshotItem("Cash")]);
+        await masters.IngestVoucherTypesAsync([new VoucherTypeSnapshotItem("Sales")]);
         return (bill.Id, bill.CurrentRevisionId!.Value, untouched.Id);
     }
 
@@ -157,7 +156,11 @@ public sealed class DropUnreadColumnsMigrationPostgresTests(PostgresFixture fixt
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
-        command.CommandText = """SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261114\_%'""";
+        // The copies of the migration under test; MasterSnapshotsInOneTable's own end in _rows.
+        command.CommandText = """
+            SELECT tablename FROM pg_tables
+            WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261114\_%' AND tablename NOT LIKE '%\_rows'
+            """;
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {

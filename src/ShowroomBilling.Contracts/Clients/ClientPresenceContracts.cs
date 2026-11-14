@@ -12,7 +12,6 @@ public sealed record ClientPresenceResponse(
     string MachineName,
     string UserName,
     string RemoteAddress,
-    DateTimeOffset FirstSeenAtUtc,
     DateTimeOffset LastSeenAtUtc,
     DateTimeOffset ExpiresAtUtc);
 

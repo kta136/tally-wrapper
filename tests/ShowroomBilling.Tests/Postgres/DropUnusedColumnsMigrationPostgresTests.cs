@@ -33,8 +33,8 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
                 new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 1234.5m)));
             billId = bill.Id;
             revisionId = bill.CurrentRevisionId!.Value;
-            await new MasterSnapshotService(db).IngestCompaniesAsync(new PushCompanySnapshotRequest(
-                "DEV-SHOWROOM", DateTimeOffset.UtcNow, [new CompanySnapshotItem("ACME", true), new CompanySnapshotItem("Other", true)]));
+            await new MasterSnapshotService(db).IngestCompaniesAsync(
+                [new CompanySnapshotItem("ACME", true), new CompanySnapshotItem("Other", true)]);
         }
 
         // Back to the schema that still has the columns, and give them values

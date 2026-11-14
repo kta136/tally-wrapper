@@ -1,8 +1,8 @@
 namespace ShowroomBilling.Contracts.Masters;
 
+/// <summary>When a master list was last read from Tally and how many entries it holds.</summary>
 public sealed record MasterSnapshotMetadata(
     string MasterType,
-    string? BatchId,
     DateTimeOffset? FetchedAtUtc,
     int ItemCount,
     string Freshness);
@@ -27,6 +27,4 @@ public sealed record MasterFreshnessSummaryResponse(
     string OverallStatus,
     IReadOnlyList<MasterSnapshotMetadata> Masters);
 
-public sealed record MasterRefreshRequest(
-    string? MasterType,
-    string? RequestedByActor);
+public sealed record MasterRefreshRequest(string? MasterType);

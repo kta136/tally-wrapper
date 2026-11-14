@@ -58,7 +58,7 @@ public sealed class PrintAssetService(
         {
             throw new RequestValidationException("FileName must be a plain file name of at most 256 characters.");
         }
-        // request.ContentType is not read: the type is taken from the bytes themselves.
+        // The request names no type: it is taken from the bytes themselves.
         if (string.IsNullOrWhiteSpace(request.Base64Content))
         {
             throw new RequestValidationException("Base64Content is required.");

@@ -63,7 +63,7 @@ internal sealed class ShellHealthCoordinator(
         try
         {
             var results = await mastersApiClient.RequestRefreshAsync(
-                new MasterRefreshRequest(null, "desktop-health-dialog"));
+                new MasterRefreshRequest(MasterType: null));
 
             host.MastersRefreshMessage = SettingsRefreshSummaryFormatter.Summarize(results);
         }

@@ -367,13 +367,11 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="80" />
-                                    <ColumnDefinition Width="80" />
                                     <ColumnDefinition Width="120" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" VerticalAlignment="Center" FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" Text="{Binding Karat, TargetNullValue='—'}" />
-                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" Text="{Binding BaseUnit, TargetNullValue='—'}" />
-                                <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{StaticResource InkSoftBrush}" Text="{Binding HsnCode, TargetNullValue='—'}" />
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" Text="{Binding BaseUnit, TargetNullValue='—'}" />
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{StaticResource InkSoftBrush}" Text="{Binding HsnCode, TargetNullValue='—'}" />
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

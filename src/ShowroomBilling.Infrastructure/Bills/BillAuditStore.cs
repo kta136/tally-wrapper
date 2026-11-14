@@ -62,43 +62,28 @@ internal sealed class BillAuditStore(
             .FirstOrDefaultAsync(cancellationToken);
         if (billState is null) return null;
 
-        // Single round-trip for both audit lookups. Each side of the Concat picks
-        // its own most-recent row using the covering
-        // (EntityType, EntityId, EventType, CreatedAtUtc DESC) index from
-        // PerformanceReadOptimizations, so the union returns at most two rows.
+        // The most recent push that failed or was left undecided, read through the
+        // (EntityType, EntityId, EventType, CreatedAtUtc DESC) index.
         var billIdText = billId.ToString();
-        var lastProblemQuery = dbContext.AuditEvents.AsNoTracking()
+        var lastProblem = await dbContext.AuditEvents.AsNoTracking()
             .Where(e => e.EntityType == "bill"
                 && e.EntityId == billIdText
                 && (e.EventType == BillAuditEvents.TallyFailed || e.EventType == BillAuditEvents.TallyOutcomeUnknown))
             .OrderByDescending(e => e.CreatedAtUtc)
-            .Take(1);
-        var lastSuccessQuery = dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill" && e.EntityId == billIdText && e.EventType == BillAuditEvents.TallyPosted)
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .Take(1);
-        var combined = await lastProblemQuery.Concat(lastSuccessQuery).ToListAsync(cancellationToken);
-        var lastProblem = combined.FirstOrDefault(e =>
-            e.EventType is BillAuditEvents.TallyFailed or BillAuditEvents.TallyOutcomeUnknown);
-        var lastSuccess = combined.FirstOrDefault(e => e.EventType == BillAuditEvents.TallyPosted);
+            .FirstOrDefaultAsync(cancellationToken);
 
-        string? lastErrorCode = null, lastErrorMessage = null, lastRemoteId = null;
+        string? lastErrorCode = null, lastErrorMessage = null;
         if (lastProblem is not null)
         {
             lastErrorCode = ReadDetailsString(lastProblem.PayloadJson, "errorCode");
             lastErrorMessage = ReadDetailsString(lastProblem.PayloadJson, "errorMessage");
-        }
-        if (lastSuccess is not null)
-        {
-            lastRemoteId = ReadDetailsString(lastSuccess.PayloadJson, "remoteId");
         }
 
         return new BillPostingStatusResponse(
             BillId: billId,
             BillState: billState,
             LastErrorCode: lastErrorCode,
-            LastErrorMessage: lastErrorMessage,
-            LastRemoteId: lastRemoteId);
+            LastErrorMessage: lastErrorMessage);
     }
 
     /// <summary>Reads a string from the <c>details</c> object of a bill audit payload.</summary>

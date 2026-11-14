@@ -36,7 +36,6 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, previewValue, year, padding);
 
         return new NumberingPreviewResponse(
-            ShowroomId: showroomId,
             FiscalYear: year,
             DocumentType: normalizedType,
             PreviewValue: previewValue,

@@ -131,9 +131,7 @@ public sealed class RuntimeController(
             ConfigPath: DatabaseConfigurationStore.ConfigPathForEnvironment(hostEnvironment.EnvironmentName),
             IsLocalOverridePresent: DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName),
             RequiresApiRestart: requiresRestart,
-            EnvironmentName: hostEnvironment.EnvironmentName,
-            IsEnvironmentOverridePresent: !string.IsNullOrWhiteSpace(DatabaseConfigurationStore.GetEnvironmentConnectionString()),
-            StorageProtection: "Windows DPAPI CurrentUser");
+            EnvironmentName: hostEnvironment.EnvironmentName);
     }
 
     /// <summary>

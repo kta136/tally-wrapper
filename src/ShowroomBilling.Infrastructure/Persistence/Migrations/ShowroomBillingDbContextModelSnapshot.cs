@@ -542,62 +542,11 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyCompanySnapshotEntity", b =>
+            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterEntity", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BatchId", "Name");
-
-                    b.ToTable("tally_company_snapshots", "public");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyLedgerSnapshotEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BatchId", "Name");
-
-                    b.ToTable("tally_ledger_snapshots", "public");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterSnapshotBatchEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                    b.Property<string>("MasterType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTimeOffset>("FetchedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -605,93 +554,13 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<int>("ItemCount")
                         .HasColumnType("integer");
 
-                    b.Property<string>("MasterType")
+                    b.Property<string>("ItemsJson")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("jsonb");
 
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
+                    b.HasKey("MasterType");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ShowroomId", "MasterType", "FetchedAtUtc");
-
-                    b.HasIndex("ShowroomId", "MasterType", "Status");
-
-                    b.ToTable("tally_master_snapshot_batches", "public", t =>
-                        {
-                            t.HasCheckConstraint("CK_tally_master_snapshot_batches_status", "\"Status\" IN ('active', 'superseded')");
-                        });
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyStockItemSnapshotEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Alias")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("BaseUnit")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("BatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("HsnCode")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Karat")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BatchId", "Name");
-
-                    b.ToTable("tally_stock_item_snapshots", "public");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyVoucherTypeSnapshotEntity", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BatchId", "Name");
-
-                    b.ToTable("tally_voucher_type_snapshots", "public");
+                    b.ToTable("tally_masters", "public");
                 });
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.BillRevisionEntity", b =>
@@ -705,64 +574,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Navigation("Bill");
                 });
 
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyCompanySnapshotEntity", b =>
-                {
-                    b.HasOne("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterSnapshotBatchEntity", "Batch")
-                        .WithMany("CompanySnapshots")
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Batch");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyLedgerSnapshotEntity", b =>
-                {
-                    b.HasOne("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterSnapshotBatchEntity", "Batch")
-                        .WithMany("LedgerSnapshots")
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Batch");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyStockItemSnapshotEntity", b =>
-                {
-                    b.HasOne("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterSnapshotBatchEntity", "Batch")
-                        .WithMany("StockItemSnapshots")
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Batch");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyVoucherTypeSnapshotEntity", b =>
-                {
-                    b.HasOne("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterSnapshotBatchEntity", "Batch")
-                        .WithMany("VoucherTypeSnapshots")
-                        .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Batch");
-                });
-
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.BillEntity", b =>
                 {
                     b.Navigation("Revisions");
-                });
-
-            modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.TallyMasterSnapshotBatchEntity", b =>
-                {
-                    b.Navigation("CompanySnapshots");
-
-                    b.Navigation("LedgerSnapshots");
-
-                    b.Navigation("StockItemSnapshots");
-
-                    b.Navigation("VoucherTypeSnapshots");
                 });
 #pragma warning restore 612, 618
         }

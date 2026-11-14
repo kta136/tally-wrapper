@@ -189,7 +189,7 @@ internal sealed class SettingsMasterSnapshotWorkflow(
             foreach (var masterType in masterTypes)
             {
                 results.AddRange(await mastersApi.RequestRefreshAsync(
-                    new MasterRefreshRequest(MasterType: masterType, RequestedByActor: "desktop-settings"),
+                    new MasterRefreshRequest(MasterType: masterType),
                     cancellationToken));
             }
 

@@ -218,7 +218,7 @@ public sealed class PrintLayoutViewModelTests
                 Guid.NewGuid(),
                 request.AssetKind,
                 request.FileName,
-                request.ContentType,
+                "image/png",
                 Convert.FromBase64String(request.Base64Content).LongLength,
                 DateTimeOffset.UtcNow);
             _assets.Add(response);

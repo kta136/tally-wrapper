@@ -8,10 +8,7 @@ namespace ShowroomBilling.Contracts.Tally;
 /// </summary>
 public sealed record TallyPostRequest(
     Guid BillId,
-    Guid RevisionId,
-    int RevisionNo,
     string InvoiceNumber,
-    string FiscalYear,
     string IdempotencyKey,
     BillPayloadDto Payload,
     TallyPostOperation Operation = TallyPostOperation.Create,

@@ -183,16 +183,16 @@ internal sealed class StubTallyCompanyHealthService(string? status) : ITallyComp
 internal sealed class StubTallyMasterRefresher : ITallyMasterRefresher
 {
     public Task<TallyMasterRefreshResult> RefreshCompaniesAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(new TallyMasterRefreshResult("companies", true, 5, "batch-companies", null));
+        Task.FromResult(new TallyMasterRefreshResult("companies", true, 5, null));
 
     public Task<TallyMasterRefreshResult> RefreshLedgersAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(new TallyMasterRefreshResult("ledgers", true, 12, "batch-ledgers", null));
+        Task.FromResult(new TallyMasterRefreshResult("ledgers", true, 12, null));
 
     public Task<TallyMasterRefreshResult> RefreshStockItemsAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(new TallyMasterRefreshResult("stock-items", true, 30, "batch-stock", null));
+        Task.FromResult(new TallyMasterRefreshResult("stock-items", true, 30, null));
 
     public Task<TallyMasterRefreshResult> RefreshVoucherTypesAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult(new TallyMasterRefreshResult("voucher-types", true, 7, "batch-voucher", null));
+        Task.FromResult(new TallyMasterRefreshResult("voucher-types", true, 7, null));
 
     public async Task<IReadOnlyList<TallyMasterRefreshResult>> RefreshAllAsync(CancellationToken cancellationToken = default) =>
         new[]

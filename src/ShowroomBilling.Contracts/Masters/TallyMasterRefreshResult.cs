@@ -8,5 +8,4 @@ public sealed record TallyMasterRefreshResult(
     string MasterType,
     bool Succeeded,
     int ItemCount,
-    string? BatchId,
     string? ErrorMessage);

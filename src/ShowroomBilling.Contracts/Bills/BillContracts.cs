@@ -49,7 +49,6 @@ public sealed record BillRevisionResponse(
 
 public sealed record BillResponse(
     Guid Id,
-    Guid ShowroomId,
     string State,
     string? InvoiceNumber,
     string? FiscalYear,
@@ -126,8 +125,7 @@ public sealed record BillPostingStatusResponse(
     Guid BillId,
     string BillState,
     string? LastErrorCode,
-    string? LastErrorMessage,
-    string? LastRemoteId);
+    string? LastErrorMessage);
 
 public sealed record BillSearchFilter(
     string? State,

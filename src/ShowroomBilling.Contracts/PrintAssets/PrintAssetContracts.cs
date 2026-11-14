@@ -25,8 +25,8 @@ public sealed record PrintAssetResponse(
 
 public sealed record PrintAssetListResponse(IReadOnlyList<PrintAssetResponse> Assets);
 
+/// <summary>An image to store. Its type is read from the bytes themselves, so none is sent.</summary>
 public sealed record PrintAssetUploadRequest(
     string AssetKind,
     string FileName,
-    string ContentType,
     string Base64Content);

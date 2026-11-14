@@ -287,8 +287,6 @@ public partial class PrintLayoutViewModel : ObservableObject
             WatermarkFileName = Path.GetFileName(selection.FileName);
         }
 
-        var contentType = GuessContentType(selection.FileName);
-
         IsBusy = true;
         StatusMessage = $"Uploading {kind}…";
         try
@@ -296,7 +294,6 @@ public partial class PrintLayoutViewModel : ObservableObject
             var request = new PrintAssetUploadRequest(
                 AssetKind: kind,
                 FileName: Path.GetFileName(selection.FileName),
-                ContentType: contentType,
                 Base64Content: Convert.ToBase64String(bytes));
 
             var asset = await _printAssetApi.UploadAsync(request);
@@ -592,16 +589,6 @@ public partial class PrintLayoutViewModel : ObservableObject
         WatermarkFileName = watermark?.FileName ?? "—";
     }
 
-    private static string GuessContentType(string path)
-    {
-        var ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext switch
-        {
-            ".png" => "image/png",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            _ => "application/octet-stream"
-        };
-    }
 }
 
 internal sealed record PrintLayoutImageSelection(string FileName, byte[] Bytes);

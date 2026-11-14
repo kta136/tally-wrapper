@@ -1,83 +1,93 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
-using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
 
 public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : DatabaseTest(postgres)
 {
-    private const string ShowroomCode = "DEV-SHOWROOM";
-
     [Fact]
-    public async Task IngestCompaniesAsync_PersistsBatchAndItems()
+    public async Task IngestCompaniesAsync_StoresTheListAsOneRow()
     {
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
 
-        var response = await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [
-                new CompanySnapshotItem("ACME Jewellers", true),
-                new CompanySnapshotItem("Legacy Co", false)
-            ]));
+        var stored = await service.IngestCompaniesAsync(
+        [
+            new CompanySnapshotItem("Legacy Co", false),
+            new CompanySnapshotItem("ACME Jewellers", true),
+        ]);
 
-        Assert.Equal("companies", response.MasterType);
-        Assert.Equal(2, response.ItemCount);
-
-        var stored = await service.GetCompaniesAsync();
-        Assert.Equal(2, stored.Companies.Count);
-        Assert.Equal("fresh", stored.Metadata.Freshness);
-        Assert.Equal(response.BatchId, stored.Metadata.BatchId);
-        Assert.Contains(stored.Companies, c => c.Name == "ACME Jewellers" && c.IsActive);
-    }
-
-    [Fact]
-    public async Task IngestCompaniesAsync_SupersedesPriorBatch()
-    {
-        await using var db = CreateDbContext();
-        var service = new MasterSnapshotService(db);
-
-        await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow.AddMinutes(-5),
-            [new CompanySnapshotItem("Old Co", true)]));
-
-        var latest = await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [new CompanySnapshotItem("ACME Jewellers", true)]));
-
-        // A second context: the first still tracks the old batch as it was
-        // loaded, and the service removes it with a set-based delete.
-        await using var stored = CreateDbContext();
-        var batch = Assert.Single(await stored.TallyMasterSnapshotBatches.ToListAsync());
-        Assert.Equal("active", batch.Status);
-        Assert.Equal(latest.BatchId, batch.Id.ToString());
-        Assert.Single(await stored.TallyCompanySnapshots.ToListAsync());
+        Assert.Equal("companies", stored.MasterType);
+        Assert.Equal(2, stored.ItemCount);
+        Assert.Equal("fresh", stored.Freshness);
 
         var read = await service.GetCompaniesAsync();
-        Assert.Single(read.Companies);
-        Assert.Equal("ACME Jewellers", read.Companies[0].Name);
+        Assert.Equal(["ACME Jewellers", "Legacy Co"], read.Companies.Select(c => c.Name));
+        Assert.True(read.Companies[0].IsActive);
+        Assert.Equal("fresh", read.Metadata.Freshness);
+        Assert.Equal(stored.FetchedAtUtc, read.Metadata.FetchedAtUtc);
+
+        await using var second = CreateDbContext();
+        var row = Assert.Single(await second.TallyMasters.AsNoTracking().ToListAsync());
+        Assert.Equal("companies", row.MasterType);
+        Assert.Equal(2, row.ItemCount);
+        Assert.Equal(2, JsonDocument.Parse(row.ItemsJson).RootElement.GetArrayLength());
     }
 
     [Fact]
-    public async Task IngestLedgersAsync_PersistsNormalizedRows()
+    public async Task A_second_ingest_replaces_the_list()
     {
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
 
-        var response = await service.IngestLedgersAsync(new PushLedgerSnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [
-                new LedgerSnapshotItem("  Sales A/c  "),
-                new LedgerSnapshotItem("Cash")
-            ]));
+        await service.IngestCompaniesAsync([new CompanySnapshotItem("Old Co", true), new CompanySnapshotItem("Older Co", true)]);
+        await service.IngestCompaniesAsync([new CompanySnapshotItem("ACME Jewellers", true)]);
 
-        Assert.Equal(2, response.ItemCount);
+        await using var second = CreateDbContext();
+        var row = Assert.Single(await second.TallyMasters.AsNoTracking().ToListAsync());
+        Assert.Equal(1, row.ItemCount);
+
+        var read = await service.GetCompaniesAsync();
+        Assert.Equal("ACME Jewellers", Assert.Single(read.Companies).Name);
+
+        // Each ingest leaves its line in the audit trail.
+        Assert.Equal(2, await second.AuditEvents.CountAsync(e => e.EventType == "masters.companies.ingested"));
+    }
+
+    /// <summary>The first refresh of a master on two counters at once must not fail one of them.</summary>
+    [Fact]
+    public async Task Two_first_ingests_at_once_both_succeed()
+    {
+        await using var first = CreateDbContext();
+        await using var second = CreateDbContext();
+
+        await Task.WhenAll(
+            new MasterSnapshotService(first).IngestLedgersAsync([new LedgerSnapshotItem("Cash")]),
+            new MasterSnapshotService(second).IngestLedgersAsync([new LedgerSnapshotItem("Cash")]));
+
+        await using var check = CreateDbContext();
+        Assert.Single(await check.TallyMasters.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task IngestLedgersAsync_TrimsNames()
+    {
+        await using var db = CreateDbContext();
+        var service = new MasterSnapshotService(db);
+
+        var stored = await service.IngestLedgersAsync(
+        [
+            new LedgerSnapshotItem("  Sales A/c  "),
+            new LedgerSnapshotItem("Cash"),
+        ]);
+
+        Assert.Equal(2, stored.ItemCount);
 
         var read = await service.GetLedgersAsync();
-        Assert.Equal(2, read.Ledgers.Count);
-        Assert.Contains(read.Ledgers, l => l.Name == "Sales A/c");
+        Assert.Equal(["Cash", "Sales A/c"], read.Ledgers.Select(l => l.Name));
     }
 
     /// <summary>
@@ -90,31 +100,35 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
         var ledgers = Enumerable.Range(1, 501)
+            .Reverse()
             .Select(n => new LedgerSnapshotItem($"Customer {n:0000}"))
             .ToArray();
-        await service.IngestLedgersAsync(new PushLedgerSnapshotRequest(ShowroomCode, DateTimeOffset.UtcNow, ledgers));
+        await service.IngestLedgersAsync(ledgers);
 
         var read = await service.GetLedgersAsync();
 
         Assert.Equal(501, read.Ledgers.Count);
         Assert.Equal(501, read.Metadata.ItemCount);
+        Assert.Equal("Customer 0001", read.Ledgers[0].Name);
         Assert.Equal("Customer 0501", read.Ledgers[^1].Name);
     }
 
     [Fact]
-    public async Task IngestStockItemsAsync_PersistsKaratAndHsn()
+    public async Task IngestStockItemsAsync_KeepsUnitAndHsn()
     {
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
 
-        await service.IngestStockItemsAsync(new PushStockItemSnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [new StockItemSnapshotItem("22K Gold Ring", "22K-RING", "grams", "7113", "22K")]));
+        await service.IngestStockItemsAsync(
+        [
+            new StockItemSnapshotItem("22K Gold Ring", " grams ", "7113"),
+            new StockItemSnapshotItem("Loose Stone", "  ", null),
+        ]);
 
         var read = await service.GetStockItemsAsync();
-        Assert.Single(read.StockItems);
-        Assert.Equal("22K", read.StockItems[0].Karat);
-        Assert.Equal("7113", read.StockItems[0].HsnCode);
+        Assert.Equal(2, read.StockItems.Count);
+        Assert.Equal(new StockItemSnapshotItem("22K Gold Ring", "grams", "7113"), read.StockItems[0]);
+        Assert.Equal(new StockItemSnapshotItem("Loose Stone", null, null), read.StockItems[1]);
     }
 
     [Fact]
@@ -123,13 +137,11 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
 
-        await service.IngestVoucherTypesAsync(new PushVoucherTypeSnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [new VoucherTypeSnapshotItem("Sales")]));
+        await service.IngestVoucherTypesAsync([new VoucherTypeSnapshotItem("Sales")]);
 
         var read = await service.GetVoucherTypesAsync();
-        Assert.Single(read.VoucherTypes);
-        Assert.Equal("Sales", read.VoucherTypes[0].Name);
+        Assert.Equal("Sales", Assert.Single(read.VoucherTypes).Name);
+        Assert.Equal("voucher_types", read.Metadata.MasterType);
     }
 
     [Fact]
@@ -138,16 +150,30 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         await using var db = CreateDbContext();
         var service = new MasterSnapshotService(db);
 
-        await service.IngestCompaniesAsync(new PushCompanySnapshotRequest(
-            ShowroomCode, DateTimeOffset.UtcNow,
-            [new CompanySnapshotItem("ACME", true)]));
+        await service.IngestCompaniesAsync([new CompanySnapshotItem("ACME", true)]);
 
         var summary = await service.GetFreshnessSummaryAsync();
 
         Assert.Equal(4, summary.Masters.Count);
-        Assert.Contains(summary.Masters, m => m.MasterType == "companies" && m.Freshness == "fresh");
+        Assert.Contains(summary.Masters, m => m.MasterType == "companies" && m.Freshness == "fresh" && m.ItemCount == 1);
         Assert.Contains(summary.Masters, m => m.MasterType == "ledgers" && m.Freshness == "missing");
         Assert.Equal("missing", summary.OverallStatus);
+    }
+
+    [Fact]
+    public async Task A_list_read_long_ago_is_reported_stale()
+    {
+        await using var db = CreateDbContext();
+        var service = new MasterSnapshotService(db);
+        await service.IngestCompaniesAsync([new CompanySnapshotItem("ACME", true)]);
+
+        await using (var second = CreateDbContext())
+        {
+            await second.TallyMasters.ExecuteUpdateAsync(set =>
+                set.SetProperty(x => x.FetchedAtUtc, DateTimeOffset.UtcNow.AddHours(-7)));
+        }
+
+        Assert.Equal("stale", (await service.GetCompaniesAsync()).Metadata.Freshness);
     }
 
     [Fact]
@@ -159,6 +185,6 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         var read = await service.GetCompaniesAsync();
         Assert.Empty(read.Companies);
         Assert.Equal("missing", read.Metadata.Freshness);
-        Assert.Null(read.Metadata.BatchId);
+        Assert.Null(read.Metadata.FetchedAtUtc);
     }
 }

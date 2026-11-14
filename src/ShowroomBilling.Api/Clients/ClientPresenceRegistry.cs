@@ -18,14 +18,12 @@ public sealed class ClientPresenceRegistry
         {
             PruneExpired(now);
 
-            var firstSeen = _entries.TryGetValue(deviceId, out var known) ? known.FirstSeenAtUtc : now;
             var entry = new Entry(
                 DeviceId: deviceId,
                 AppVersion: Normalize(request.AppVersion, "unknown"),
                 MachineName: Normalize(request.MachineName, "unknown"),
                 UserName: Normalize(request.UserName, "unknown"),
                 RemoteAddress: remoteAddress,
-                FirstSeenAtUtc: firstSeen,
                 LastSeenAtUtc: now);
 
             _entries[deviceId] = entry;
@@ -83,7 +81,6 @@ public sealed class ClientPresenceRegistry
             entry.MachineName,
             entry.UserName,
             entry.RemoteAddress,
-            entry.FirstSeenAtUtc,
             entry.LastSeenAtUtc,
             entry.LastSeenAtUtc.Add(Ttl));
 
@@ -99,6 +96,5 @@ public sealed class ClientPresenceRegistry
         string MachineName,
         string UserName,
         string RemoteAddress,
-        DateTimeOffset FirstSeenAtUtc,
         DateTimeOffset LastSeenAtUtc);
 }

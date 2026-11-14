@@ -19,7 +19,6 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         var response = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "logo.png",
-            "image/png",
             Convert.ToBase64String(bytes)));
 
         Assert.NotEqual(Guid.Empty, response.Id);
@@ -36,7 +35,6 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         var response = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Watermark,
             "watermark.png",
-            "image/png",
             Convert.ToBase64String(PngBytes(8))));
 
         Assert.Equal(PrintAssetKinds.Watermark, response.AssetKind);
@@ -52,7 +50,6 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         var uploaded = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Signature,
             "sign.png",
-            "image/png",
             Convert.ToBase64String(bytes)));
 
         var result = await service.GetAsync(uploaded.Id);
@@ -72,7 +69,6 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
             service.UploadAsync(new PrintAssetUploadRequest(
                 "poster",
                 "x.png",
-                "image/png",
                 Convert.ToBase64String(new byte[] { 1, 2 }))));
     }
 
@@ -84,7 +80,6 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         var uploaded = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "logo.png",
-            "image/png",
             Convert.ToBase64String(PngBytes(3))));
 
         var deleted = await service.DeleteAsync(uploaded.Id);
@@ -100,9 +95,9 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         await using var db = CreateDbContext();
         var service = new PrintAssetService(db);
         await service.UploadAsync(new PrintAssetUploadRequest(
-            PrintAssetKinds.Logo, "a.png", "image/png", Convert.ToBase64String(PngBytes(4))));
+            PrintAssetKinds.Logo, "a.png", Convert.ToBase64String(PngBytes(4))));
         await service.UploadAsync(new PrintAssetUploadRequest(
-            PrintAssetKinds.Signature, "b.png", "image/png", Convert.ToBase64String(PngBytes(5))));
+            PrintAssetKinds.Signature, "b.png", Convert.ToBase64String(PngBytes(5))));
 
         var list = await service.ListAsync();
 
@@ -118,7 +113,6 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         await Assert.ThrowsAsync<RequestValidationException>(() => service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "logo.png",
-            "image/png",
             Convert.ToBase64String([1, 2, 3, 4]))));
     }
 
@@ -131,14 +125,12 @@ public sealed class PrintAssetServiceTests(PostgresFixture postgres) : DatabaseT
         var response = await service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "logo.png",
-            "application/octet-stream",
             Convert.ToBase64String(PngBytes(6))));
         Assert.Equal("image/png", response.ContentType);
 
         await Assert.ThrowsAsync<RequestValidationException>(() => service.UploadAsync(new PrintAssetUploadRequest(
             PrintAssetKinds.Logo,
             "..\\logo.png",
-            "image/png",
             Convert.ToBase64String(PngBytes(7)))));
     }
 

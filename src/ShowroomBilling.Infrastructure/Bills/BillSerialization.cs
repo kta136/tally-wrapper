@@ -67,7 +67,6 @@ internal static class BillSerialization
 
         return new BillResponse(
             Id: bill.Id,
-            ShowroomId: bill.ShowroomId,
             State: bill.State,
             InvoiceNumber: bill.InvoiceNumber,
             FiscalYear: bill.FiscalYear,

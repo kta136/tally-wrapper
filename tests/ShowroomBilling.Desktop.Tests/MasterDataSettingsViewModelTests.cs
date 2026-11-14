@@ -170,8 +170,8 @@ public sealed class MasterDataSettingsViewModelTests
                 Metadata("stock-items", 2),
                 new[]
                 {
-                    new StockItemSnapshotItem("Gold 22K", null, "GMS", "7113", "22K"),
-                    new StockItemSnapshotItem("Diamond", null, "CTS", "7102", null),
+                    new StockItemSnapshotItem("Gold 22K", "GMS", "7113"),
+                    new StockItemSnapshotItem("Diamond", "CTS", "7102"),
                 }));
 
         public List<string?> RefreshedMasterTypes { get; } = [];
@@ -185,12 +185,12 @@ public sealed class MasterDataSettingsViewModelTests
             return Task.FromResult<IReadOnlyList<TallyMasterRefreshResult>>(
             [
                 new TallyMasterRefreshResult(
-                    request.MasterType ?? "all", RefreshError is null, 1, "batch-1", RefreshError)
+                    request.MasterType ?? "all", RefreshError is null, 1, RefreshError)
             ]);
         }
 
         private MasterSnapshotMetadata Metadata(string masterType, int count)
-            => new(masterType, "batch-1", _fetchedAt, count, "fresh");
+            => new(masterType, _fetchedAt, count, "fresh");
     }
 
     private sealed class FakeSettingsApiClient : ISettingsApiClient

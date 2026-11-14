@@ -40,7 +40,7 @@ public sealed class TallyXmlMasterSource(
 
     public Task<IReadOnlyList<StockItemSnapshotItem>> FetchStockItemsAsync(CancellationToken cancellationToken = default) =>
         FetchAsync(
-            CollectionStockItem, tallyType: "Stock Item", fetches: ["Name", "AliasName", "BaseUnits", "GSTHSNCode"],
+            CollectionStockItem, tallyType: "Stock Item", fetches: ["Name", "BaseUnits", "GSTHSNCode"],
             includeCompanyScope: true, "STOCKITEM", MapStockItem, cancellationToken);
 
     public Task<IReadOnlyList<VoucherTypeSnapshotItem>> FetchVoucherTypesAsync(CancellationToken cancellationToken = default) =>
@@ -131,10 +131,8 @@ public sealed class TallyXmlMasterSource(
         if (string.IsNullOrWhiteSpace(name)) return null;
         return new StockItemSnapshotItem(
             Name: name!,
-            Alias: ReadChild(element, "ALIASNAME"),
             BaseUnit: ReadChild(element, "BASEUNITS"),
-            HsnCode: SanitizeHsn(ReadChild(element, "GSTHSNCODE")) ?? SanitizeHsn(ReadChild(element, "HSNCODE")),
-            Karat: null);
+            HsnCode: SanitizeHsn(ReadChild(element, "GSTHSNCODE")) ?? SanitizeHsn(ReadChild(element, "HSNCODE")));
     }
 
     private static VoucherTypeSnapshotItem? MapVoucherType(XElement element)

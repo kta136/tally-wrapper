@@ -10,9 +10,7 @@ public sealed record DatabaseConfigurationResponse(
     string ConfigPath,
     bool IsLocalOverridePresent,
     bool RequiresApiRestart,
-    string EnvironmentName = "",
-    bool IsEnvironmentOverridePresent = false,
-    string StorageProtection = "");
+    string EnvironmentName = "");
 
 public sealed record UpdateDatabaseConfigurationRequest(string ConnectionString);
 

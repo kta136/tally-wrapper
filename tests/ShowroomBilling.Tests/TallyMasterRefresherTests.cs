@@ -15,7 +15,7 @@ namespace ShowroomBilling.Tests;
 public sealed class TallyMasterRefresherTests
 {
     [Fact]
-    public async Task A_successful_refresh_reports_the_stored_batch()
+    public async Task A_successful_refresh_reports_how_many_were_stored()
     {
         var refresher = Refresher(_ => Task.FromResult<IReadOnlyList<CompanySnapshotItem>>(
             [new CompanySnapshotItem("Acme Jewellers", true)]));
@@ -25,7 +25,6 @@ public sealed class TallyMasterRefresherTests
         Assert.True(result.Succeeded);
         Assert.Equal(MasterTypes.Companies, result.MasterType);
         Assert.Equal(1, result.ItemCount);
-        Assert.Equal("batch-1", result.BatchId);
         Assert.Null(result.ErrorMessage);
     }
 
@@ -103,24 +102,18 @@ public sealed class TallyMasterRefresherTests
 
     private sealed class FakeSnapshotService : IMasterSnapshotService
     {
-        public Task<MasterSnapshotAcceptedResponse> IngestCompaniesAsync(
-            PushCompanySnapshotRequest request,
+        public Task<MasterSnapshotMetadata> IngestCompaniesAsync(
+            IReadOnlyList<CompanySnapshotItem> companies,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult(new MasterSnapshotAcceptedResponse(
-                MasterTypes.Companies,
-                "batch-1",
-                request.Companies.Count,
-                request.FetchedAtUtc,
-                DateTimeOffset.UtcNow,
-                "stored"));
+            Task.FromResult(new MasterSnapshotMetadata(MasterTypes.Companies, DateTimeOffset.UtcNow, companies.Count, "fresh"));
 
-        public Task<MasterSnapshotAcceptedResponse> IngestLedgersAsync(PushLedgerSnapshotRequest request, CancellationToken cancellationToken = default) =>
+        public Task<MasterSnapshotMetadata> IngestLedgersAsync(IReadOnlyList<LedgerSnapshotItem> ledgers, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<MasterSnapshotAcceptedResponse> IngestStockItemsAsync(PushStockItemSnapshotRequest request, CancellationToken cancellationToken = default) =>
+        public Task<MasterSnapshotMetadata> IngestStockItemsAsync(IReadOnlyList<StockItemSnapshotItem> stockItems, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<MasterSnapshotAcceptedResponse> IngestVoucherTypesAsync(PushVoucherTypeSnapshotRequest request, CancellationToken cancellationToken = default) =>
+        public Task<MasterSnapshotMetadata> IngestVoucherTypesAsync(IReadOnlyList<VoucherTypeSnapshotItem> voucherTypes, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default) =>

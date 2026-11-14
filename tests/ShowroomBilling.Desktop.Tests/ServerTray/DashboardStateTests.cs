@@ -180,7 +180,6 @@ public sealed class DashboardStateTests
                     $"SHOWROOM-PC{n}",
                     "ravi",
                     $"192.168.1.{20 + n}",
-                    At.AddHours(-1),
                     At.AddSeconds(-9),
                     At.AddMinutes(2)))
                 .ToList(),

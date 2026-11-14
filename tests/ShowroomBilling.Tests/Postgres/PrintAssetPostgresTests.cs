@@ -20,7 +20,6 @@ public sealed class PrintAssetPostgresTests(PostgresFixture fixture)
             var response = await service.UploadAsync(new PrintAssetUploadRequest(
                 PrintAssetKinds.Watermark,
                 "watermark.png",
-                "image/png",
                 Convert.ToBase64String(
                     [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x01])));
 

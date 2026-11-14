@@ -217,7 +217,7 @@ public sealed class InvoiceDiamondViewModelTests
         public async Task<NumberingPreviewResponse> GetPreviewAsync(string? documentType = null, string? fiscalYear = null, CancellationToken cancellationToken = default)
         {
             await Release.Task;
-            return new NumberingPreviewResponse(Guid.Empty, "2026-27", "sales_invoice", 9, "SR/26-27/0009", "SR/", null);
+            return new NumberingPreviewResponse("2026-27", "sales_invoice", 9, "SR/26-27/0009", "SR/", null);
         }
     }
 
@@ -692,7 +692,6 @@ public sealed class InvoiceDiamondViewModelTests
 
     private static BillResponse BillResponseFor(Guid id, BillPayloadDto payload) => new(
         Id: id,
-        ShowroomId: Guid.NewGuid(),
         State: "pending",
         InvoiceNumber: "SR/25-26/0001",
         FiscalYear: "2025-2026",

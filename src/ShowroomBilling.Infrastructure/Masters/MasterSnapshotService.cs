@@ -1,220 +1,104 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Masters;
 using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Persistence;
-using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Masters;
 
+/// <summary>
+/// The lists last read from Tally: companies, ledgers, stock items and voucher
+/// types. Each is one row of <c>tally_masters</c> holding the whole list as
+/// JSON, because a refresh replaces the whole list and nothing looks inside one.
+/// </summary>
 public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : IMasterSnapshotService
 {
-    public const string MasterTypeCompanies = MasterTypes.Companies;
-    public const string MasterTypeLedgers = MasterTypes.Ledgers;
-    public const string MasterTypeStockItems = MasterTypes.StockItemsSnapshot;
-    public const string MasterTypeVoucherTypes = MasterTypes.VoucherTypesSnapshot;
+    private static readonly TimeSpan FreshThreshold = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan StaleThreshold = TimeSpan.FromHours(6);
+    private static readonly JsonSerializerOptions ItemsJsonOptions = new(JsonSerializerDefaults.Web);
 
     private static readonly string[] AllMasterTypes =
     [
-        MasterTypeCompanies,
-        MasterTypeLedgers,
-        MasterTypeStockItems,
-        MasterTypeVoucherTypes
+        MasterTypes.Companies,
+        MasterTypes.Ledgers,
+        MasterTypes.StockItemsSnapshot,
+        MasterTypes.VoucherTypesSnapshot,
     ];
 
-    public async Task<MasterSnapshotAcceptedResponse> IngestCompaniesAsync(
-        PushCompanySnapshotRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ValidateCommon(request.ShowroomCode);
-
-        var showroomId = Showrooms.IdFor(request.ShowroomCode);
-        var items = request.Companies ?? [];
-
-        return await ReplaceSnapshotAsync(
-            showroomId,
-            MasterTypeCompanies,
-            request.FetchedAtUtc,
-            items.Count,
-            batch => AddSnapshotRows(items.Select(item => new TallyCompanySnapshotEntity
-            {
-                Id = Guid.CreateVersion7(),
-                BatchId = batch.Id,
-                ShowroomId = showroomId,
-                Name = (item.Name ?? string.Empty).Trim(),
-                IsActive = item.IsActive
-            })),
+    public Task<MasterSnapshotMetadata> IngestCompaniesAsync(
+        IReadOnlyList<CompanySnapshotItem> companies,
+        CancellationToken cancellationToken = default) =>
+        ReplaceAsync(
+            MasterTypes.Companies,
+            companies.Select(item => item with { Name = Name(item.Name) }),
+            item => item.Name,
             cancellationToken);
-    }
 
-    public async Task<MasterSnapshotAcceptedResponse> IngestLedgersAsync(
-        PushLedgerSnapshotRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ValidateCommon(request.ShowroomCode);
-
-        var showroomId = Showrooms.IdFor(request.ShowroomCode);
-        var items = request.Ledgers ?? [];
-
-        return await ReplaceSnapshotAsync(
-            showroomId,
-            MasterTypeLedgers,
-            request.FetchedAtUtc,
-            items.Count,
-            batch => AddSnapshotRows(items.Select(item => new TallyLedgerSnapshotEntity
-            {
-                Id = Guid.CreateVersion7(),
-                BatchId = batch.Id,
-                ShowroomId = showroomId,
-                Name = (item.Name ?? string.Empty).Trim()
-            })),
+    public Task<MasterSnapshotMetadata> IngestLedgersAsync(
+        IReadOnlyList<LedgerSnapshotItem> ledgers,
+        CancellationToken cancellationToken = default) =>
+        ReplaceAsync(
+            MasterTypes.Ledgers,
+            ledgers.Select(item => new LedgerSnapshotItem(Name(item.Name))),
+            item => item.Name,
             cancellationToken);
-    }
 
-    public async Task<MasterSnapshotAcceptedResponse> IngestStockItemsAsync(
-        PushStockItemSnapshotRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ValidateCommon(request.ShowroomCode);
-
-        var showroomId = Showrooms.IdFor(request.ShowroomCode);
-        var items = request.StockItems ?? [];
-
-        return await ReplaceSnapshotAsync(
-            showroomId,
-            MasterTypeStockItems,
-            request.FetchedAtUtc,
-            items.Count,
-            batch => AddSnapshotRows(items.Select(item => new TallyStockItemSnapshotEntity
-            {
-                Id = Guid.CreateVersion7(),
-                BatchId = batch.Id,
-                ShowroomId = showroomId,
-                Name = (item.Name ?? string.Empty).Trim(),
-                Alias = MasterSnapshotNormalization.Normalize(item.Alias),
-                BaseUnit = MasterSnapshotNormalization.Normalize(item.BaseUnit),
-                HsnCode = MasterSnapshotNormalization.Normalize(item.HsnCode),
-                Karat = MasterSnapshotNormalization.Normalize(item.Karat)
-            })),
+    public Task<MasterSnapshotMetadata> IngestStockItemsAsync(
+        IReadOnlyList<StockItemSnapshotItem> stockItems,
+        CancellationToken cancellationToken = default) =>
+        ReplaceAsync(
+            MasterTypes.StockItemsSnapshot,
+            stockItems.Select(item => new StockItemSnapshotItem(Name(item.Name), Optional(item.BaseUnit), Optional(item.HsnCode))),
+            item => item.Name,
             cancellationToken);
-    }
 
-    public async Task<MasterSnapshotAcceptedResponse> IngestVoucherTypesAsync(
-        PushVoucherTypeSnapshotRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ValidateCommon(request.ShowroomCode);
-
-        var showroomId = Showrooms.IdFor(request.ShowroomCode);
-        var items = request.VoucherTypes ?? [];
-
-        return await ReplaceSnapshotAsync(
-            showroomId,
-            MasterTypeVoucherTypes,
-            request.FetchedAtUtc,
-            items.Count,
-            batch => AddSnapshotRows(items.Select(item => new TallyVoucherTypeSnapshotEntity
-            {
-                Id = Guid.CreateVersion7(),
-                BatchId = batch.Id,
-                ShowroomId = showroomId,
-                Name = (item.Name ?? string.Empty).Trim()
-            })),
+    public Task<MasterSnapshotMetadata> IngestVoucherTypesAsync(
+        IReadOnlyList<VoucherTypeSnapshotItem> voucherTypes,
+        CancellationToken cancellationToken = default) =>
+        ReplaceAsync(
+            MasterTypes.VoucherTypesSnapshot,
+            voucherTypes.Select(item => new VoucherTypeSnapshotItem(Name(item.Name))),
+            item => item.Name,
             cancellationToken);
-    }
 
     public async Task<CompanySnapshotResponse> GetCompaniesAsync(CancellationToken cancellationToken = default)
     {
-        var batch = await GetActiveBatchAsync(MasterTypeCompanies, cancellationToken);
-        if (batch is null)
-        {
-            return new CompanySnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeCompanies), []);
-        }
-
-        var items = await dbContext.TallyCompanySnapshots
-            .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id)
-            .OrderBy(x => x.Name)
-            .Select(row => new CompanySnapshotItem(row.Name, row.IsActive))
-            .ToArrayAsync(cancellationToken);
-
-        return new CompanySnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
+        var (metadata, items) = await ReadAsync<CompanySnapshotItem>(MasterTypes.Companies, cancellationToken);
+        return new CompanySnapshotResponse(metadata, items);
     }
 
     public async Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default)
     {
-        var batch = await GetActiveBatchAsync(MasterTypeLedgers, cancellationToken);
-        if (batch is null)
-        {
-            return new LedgerSnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeLedgers), []);
-        }
-
-        var items = await dbContext.TallyLedgerSnapshots
-            .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id)
-            .OrderBy(x => x.Name)
-            .Select(row => new LedgerSnapshotItem(row.Name))
-            .ToArrayAsync(cancellationToken);
-
-        return new LedgerSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
+        var (metadata, items) = await ReadAsync<LedgerSnapshotItem>(MasterTypes.Ledgers, cancellationToken);
+        return new LedgerSnapshotResponse(metadata, items);
     }
 
     public async Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default)
     {
-        var batch = await GetActiveBatchAsync(MasterTypeStockItems, cancellationToken);
-        if (batch is null)
-        {
-            return new StockItemSnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeStockItems), []);
-        }
-
-        var items = await dbContext.TallyStockItemSnapshots
-            .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id)
-            .OrderBy(x => x.Name)
-            .Select(row => new StockItemSnapshotItem(row.Name, row.Alias, row.BaseUnit, row.HsnCode, row.Karat))
-            .ToArrayAsync(cancellationToken);
-
-        return new StockItemSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
+        var (metadata, items) = await ReadAsync<StockItemSnapshotItem>(MasterTypes.StockItemsSnapshot, cancellationToken);
+        return new StockItemSnapshotResponse(metadata, items);
     }
 
     public async Task<VoucherTypeSnapshotResponse> GetVoucherTypesAsync(CancellationToken cancellationToken = default)
     {
-        var batch = await GetActiveBatchAsync(MasterTypeVoucherTypes, cancellationToken);
-        if (batch is null)
-        {
-            return new VoucherTypeSnapshotResponse(MasterSnapshotMetadataFactory.EmptyMetadata(MasterTypeVoucherTypes), []);
-        }
-
-        var items = await dbContext.TallyVoucherTypeSnapshots
-            .AsNoTracking()
-            .Where(x => x.BatchId == batch.Id)
-            .OrderBy(x => x.Name)
-            .Select(row => new VoucherTypeSnapshotItem(row.Name))
-            .ToArrayAsync(cancellationToken);
-
-        return new VoucherTypeSnapshotResponse(MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount), items);
+        var (metadata, items) = await ReadAsync<VoucherTypeSnapshotItem>(MasterTypes.VoucherTypesSnapshot, cancellationToken);
+        return new VoucherTypeSnapshotResponse(metadata, items);
     }
 
     public async Task<MasterFreshnessSummaryResponse> GetFreshnessSummaryAsync(CancellationToken cancellationToken = default)
     {
-        var activeBatches = await dbContext.TallyMasterSnapshotBatches
+        // The lists themselves are not read: the row carries its own count.
+        var stored = await dbContext.TallyMasters
             .AsNoTracking()
-            .Where(x => x.Status == "active")
-            .ToListAsync(cancellationToken);
-
-        var byType = activeBatches
-            .GroupBy(x => x.MasterType)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.FetchedAtUtc).First());
+            .Select(x => new { x.MasterType, x.FetchedAtUtc, x.ItemCount })
+            .ToDictionaryAsync(x => x.MasterType, cancellationToken);
 
         var metadatas = AllMasterTypes
-            .Select(type => byType.TryGetValue(type, out var batch)
-                ? MasterSnapshotMetadataFactory.BuildMetadata(batch, batch.ItemCount)
-                : MasterSnapshotMetadataFactory.EmptyMetadata(type))
+            .Select(type => stored.TryGetValue(type, out var row)
+                ? Stored(type, row.FetchedAtUtc, row.ItemCount)
+                : Missing(type))
             .ToArray();
 
         var overall = metadatas.All(m => m.Freshness == MasterFreshness.Fresh) ? MasterFreshness.Fresh
@@ -225,120 +109,89 @@ public sealed class MasterSnapshotService(ShowroomBillingDbContext dbContext) : 
         return new MasterFreshnessSummaryResponse(overall, metadatas);
     }
 
-    private async Task<MasterSnapshotAcceptedResponse> ReplaceSnapshotAsync(
-        Guid showroomId,
+    /// <summary>
+    /// Stores <paramref name="items"/> as the list of <paramref name="masterType"/>, in place of
+    /// whatever was there, and records that in the audit trail. An upsert, so two refreshes of a
+    /// master that has never been stored cannot trip over each other.
+    /// </summary>
+    private async Task<MasterSnapshotMetadata> ReplaceAsync<T>(
         string masterType,
-        DateTimeOffset fetchedAtUtc,
-        int itemCount,
-        Action<TallyMasterSnapshotBatchEntity> addRows,
+        IEnumerable<T> items,
+        Func<T, string> name,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var list = items
+            .OrderBy(name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(name, StringComparer.Ordinal)
+            .ToArray();
+        var json = JsonSerializer.Serialize(list, ItemsJsonOptions);
+        var now = DateTimeOffset.UtcNow;
+        // To the microsecond, which is what PostgreSQL keeps, so a later read returns this same time.
+        var fetchedAt = now.AddTicks(-(now.Ticks % 10));
 
         try
         {
-            var batch = await CreateBatchAsync(
-                showroomId,
-                masterType,
-                fetchedAtUtc,
-                itemCount,
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO public.tally_masters (""MasterType"", ""FetchedAtUtc"", ""ItemCount"", ""ItemsJson"")
+VALUES ({masterType}, {fetchedAt}, {list.Length}, {json}::jsonb)
+ON CONFLICT (""MasterType"") DO UPDATE
+SET ""FetchedAtUtc"" = EXCLUDED.""FetchedAtUtc"", ""ItemCount"" = EXCLUDED.""ItemCount"", ""ItemsJson"" = EXCLUDED.""ItemsJson""",
                 cancellationToken);
 
-            addRows(batch);
-
-            await FinalizeAsync(batch, cancellationToken);
+            dbContext.AuditEvents.Add(AuditRow.Create(
+                "masters",
+                masterType,
+                $"masters.{masterType}.ingested",
+                new AuditActor("api", "api"),
+                fetchedAt,
+                new { itemCount = list.Length, masterType }));
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
-
-            return MasterSnapshotMetadataFactory.AcceptedResponse(batch);
         }
         catch
         {
-            await transaction.RollbackAsync(CancellationToken.None);
-
+            // Leave nothing half-added behind for whoever uses this context next.
             dbContext.ChangeTracker.Clear();
             throw;
         }
+
+        return Stored(masterType, fetchedAt, list.Length);
     }
 
-    private async Task<TallyMasterSnapshotBatchEntity> CreateBatchAsync(
-        Guid showroomId,
-        string masterType,
-        DateTimeOffset fetchedAtUtc,
-        int itemCount,
-        CancellationToken cancellationToken)
-    {
-        await DeletePriorBatchesAsync(showroomId, masterType, cancellationToken);
-
-        var batch = new TallyMasterSnapshotBatchEntity
-        {
-            Id = Guid.CreateVersion7(),
-            ShowroomId = showroomId,
-            MasterType = masterType,
-            FetchedAtUtc = fetchedAtUtc == default ? DateTimeOffset.UtcNow : fetchedAtUtc.ToUniversalTime(),
-            Status = "active",
-            ItemCount = itemCount
-        };
-
-        dbContext.TallyMasterSnapshotBatches.Add(batch);
-        return batch;
-    }
-
-    private async Task FinalizeAsync(
-        TallyMasterSnapshotBatchEntity batch,
-        CancellationToken cancellationToken)
-    {
-        dbContext.AuditEvents.Add(AuditRow.Create(
-            "masters",
-            batch.Id.ToString(),
-            $"masters.{batch.MasterType}.ingested",
-            new AuditActor("api", "api"),
-            DateTimeOffset.UtcNow,
-            new { itemCount = batch.ItemCount, masterType = batch.MasterType }));
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task<TallyMasterSnapshotBatchEntity?> GetActiveBatchAsync(
+    private async Task<(MasterSnapshotMetadata Metadata, IReadOnlyList<T> Items)> ReadAsync<T>(
         string masterType,
         CancellationToken cancellationToken)
     {
-        return await dbContext.TallyMasterSnapshotBatches
+        var row = await dbContext.TallyMasters
             .AsNoTracking()
-            .Where(x => x.MasterType == masterType && x.Status == "active")
-            .OrderByDescending(x => x.FetchedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    private void AddSnapshotRows<T>(IEnumerable<T> rows) where T : class
-    {
-        var prior = dbContext.ChangeTracker.AutoDetectChangesEnabled;
-        try
+            .SingleOrDefaultAsync(x => x.MasterType == masterType, cancellationToken);
+        if (row is null)
         {
-            dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
-            dbContext.AddRange(rows);
+            return (Missing(masterType), []);
         }
-        finally
-        {
-            dbContext.ChangeTracker.AutoDetectChangesEnabled = prior;
-        }
+
+        var items = JsonSerializer.Deserialize<T[]>(row.ItemsJson, ItemsJsonOptions) ?? [];
+        return (Stored(masterType, row.FetchedAtUtc, items.Length), items);
     }
 
-    /// <summary>
-    /// Only the newest snapshot is ever read, so the one it replaces is deleted
-    /// in the transaction that stores the new one; its rows go by cascade.
-    /// This also clears the "superseded" batches earlier builds kept.
-    /// </summary>
-    private Task DeletePriorBatchesAsync(
-        Guid showroomId,
-        string masterType,
-        CancellationToken cancellationToken)
-        => dbContext.TallyMasterSnapshotBatches
-            .Where(x => x.ShowroomId == showroomId && x.MasterType == masterType)
-            .ExecuteDeleteAsync(cancellationToken);
+    private static MasterSnapshotMetadata Stored(string masterType, DateTimeOffset fetchedAtUtc, int itemCount) =>
+        new(masterType, fetchedAtUtc, itemCount, ClassifyFreshness(fetchedAtUtc));
 
-    private static void ValidateCommon(string showroomCode)
+    private static MasterSnapshotMetadata Missing(string masterType) =>
+        new(masterType, null, 0, MasterFreshness.Missing);
+
+    private static string ClassifyFreshness(DateTimeOffset fetchedAtUtc)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(showroomCode);
+        var age = DateTimeOffset.UtcNow - fetchedAtUtc;
+        if (age < FreshThreshold) return MasterFreshness.Fresh;
+        if (age < StaleThreshold) return MasterFreshness.Aging;
+        return MasterFreshness.Stale;
     }
+
+    private static string Name(string? value) => (value ?? string.Empty).Trim();
+
+    private static string? Optional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

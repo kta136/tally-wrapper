@@ -26,7 +26,6 @@ internal sealed class FakeNumberingApi : INumberingApiClient
         return Failure is { } failure
             ? Task.FromException<NumberingPreviewResponse>(failure)
             : Task.FromResult(new NumberingPreviewResponse(
-                ShowroomId: Guid.Empty,
                 FiscalYear: "26-27",
                 DocumentType: documentType ?? "sales_invoice",
                 PreviewValue: 1,

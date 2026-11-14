@@ -9,15 +9,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
 
     public DbSet<CloudSettingsEntity> CloudSettings => Set<CloudSettingsEntity>();
 
-    public DbSet<TallyCompanySnapshotEntity> TallyCompanySnapshots => Set<TallyCompanySnapshotEntity>();
-
-    public DbSet<TallyLedgerSnapshotEntity> TallyLedgerSnapshots => Set<TallyLedgerSnapshotEntity>();
-
-    public DbSet<TallyStockItemSnapshotEntity> TallyStockItemSnapshots => Set<TallyStockItemSnapshotEntity>();
-
-    public DbSet<TallyVoucherTypeSnapshotEntity> TallyVoucherTypeSnapshots => Set<TallyVoucherTypeSnapshotEntity>();
-
-    public DbSet<TallyMasterSnapshotBatchEntity> TallyMasterSnapshotBatches => Set<TallyMasterSnapshotBatchEntity>();
+    public DbSet<TallyMasterEntity> TallyMasters => Set<TallyMasterEntity>();
 
     public DbSet<InvoiceSequenceEntity> InvoiceSequences => Set<InvoiceSequenceEntity>();
 
@@ -97,71 +89,13 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasIndex(x => new { x.EventType, x.CreatedAtUtc });
         });
 
-        modelBuilder.Entity<TallyMasterSnapshotBatchEntity>(entity =>
+        modelBuilder.Entity<TallyMasterEntity>(entity =>
         {
-            entity.ToTable("tally_master_snapshot_batches", table =>
-                table.HasCheckConstraint("CK_tally_master_snapshot_batches_status", "\"Status\" IN ('active', 'superseded')"));
-            entity.HasKey(x => x.Id);
+            // One row per master type; the list itself is the JSON.
+            entity.ToTable("tally_masters");
+            entity.HasKey(x => x.MasterType);
             entity.Property(x => x.MasterType).HasMaxLength(64);
-            entity.Property(x => x.Status).HasMaxLength(32);
-            entity.HasIndex(x => new { x.ShowroomId, x.MasterType, x.FetchedAtUtc });
-            entity.HasIndex(x => new { x.ShowroomId, x.MasterType, x.Status });
-        });
-
-        modelBuilder.Entity<TallyCompanySnapshotEntity>(entity =>
-        {
-            entity.ToTable("tally_company_snapshots");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(256);
-            // The one index: rows are only ever read through their batch, in name order.
-            entity.HasIndex(x => new { x.BatchId, x.Name });
-            entity.HasOne(x => x.Batch)
-                .WithMany(x => x.CompanySnapshots)
-                .HasForeignKey(x => x.BatchId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<TallyLedgerSnapshotEntity>(entity =>
-        {
-            entity.ToTable("tally_ledger_snapshots");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(256);
-            // The one index: rows are only ever read through their batch, in name order.
-            entity.HasIndex(x => new { x.BatchId, x.Name });
-            entity.HasOne(x => x.Batch)
-                .WithMany(x => x.LedgerSnapshots)
-                .HasForeignKey(x => x.BatchId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<TallyStockItemSnapshotEntity>(entity =>
-        {
-            entity.ToTable("tally_stock_item_snapshots");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(256);
-            entity.Property(x => x.Alias).HasMaxLength(256);
-            entity.Property(x => x.BaseUnit).HasMaxLength(64);
-            entity.Property(x => x.HsnCode).HasMaxLength(32);
-            entity.Property(x => x.Karat).HasMaxLength(32);
-            // The one index: rows are only ever read through their batch, in name order.
-            entity.HasIndex(x => new { x.BatchId, x.Name });
-            entity.HasOne(x => x.Batch)
-                .WithMany(x => x.StockItemSnapshots)
-                .HasForeignKey(x => x.BatchId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<TallyVoucherTypeSnapshotEntity>(entity =>
-        {
-            entity.ToTable("tally_voucher_type_snapshots");
-            entity.HasKey(x => x.Id);
-            entity.Property(x => x.Name).HasMaxLength(256);
-            // The one index: rows are only ever read through their batch, in name order.
-            entity.HasIndex(x => new { x.BatchId, x.Name });
-            entity.HasOne(x => x.Batch)
-                .WithMany(x => x.VoucherTypeSnapshots)
-                .HasForeignKey(x => x.BatchId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(x => x.ItemsJson).HasColumnType("jsonb");
         });
 
         modelBuilder.Entity<InvoiceSequenceEntity>(entity =>

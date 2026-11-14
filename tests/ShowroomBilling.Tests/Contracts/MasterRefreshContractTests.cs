@@ -28,7 +28,7 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
 
         var response = await client.PostAsJsonAsync(
             "/api/masters/refresh",
-            new MasterRefreshRequest(MasterType: null, RequestedByActor: "contract-test"));
+            new MasterRefreshRequest(MasterType: null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var raw = await response.Content.ReadAsStringAsync();
@@ -45,7 +45,6 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
             Assert.True(element.TryGetProperty("succeeded", out var succeeded));
             Assert.True(succeeded.ValueKind is JsonValueKind.True or JsonValueKind.False);
             Assert.Equal(JsonValueKind.Number, element.GetProperty("itemCount").ValueKind);
-            Assert.True(element.TryGetProperty("batchId", out _));
             Assert.True(element.TryGetProperty("errorMessage", out _));
         }
     }
@@ -57,7 +56,7 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
 
         var response = await client.PostAsJsonAsync(
             "/api/masters/refresh",
-            new MasterRefreshRequest(MasterType: "companies", RequestedByActor: "contract-test"));
+            new MasterRefreshRequest(MasterType: "companies"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var rows = await response.Content.ReadFromJsonAsync<IReadOnlyList<TallyMasterRefreshResult>>();
@@ -74,7 +73,7 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
 
         var response = await client.PostAsJsonAsync(
             "/api/masters/refresh",
-            new MasterRefreshRequest(MasterType: "ledgerz", RequestedByActor: "contract-test"));
+            new MasterRefreshRequest(MasterType: "ledgerz"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -105,7 +104,7 @@ public sealed class MasterRefreshContractTests : IClassFixture<TestApiFactory>
 
         var response = await client.PostAsJsonAsync(
             "/api/masters/refresh",
-            new MasterRefreshRequest(MasterType: null, RequestedByActor: "contract-test"));
+            new MasterRefreshRequest(MasterType: null));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
