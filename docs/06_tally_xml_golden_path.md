@@ -341,7 +341,14 @@ The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.p
 </ENVELOPE>
 ```
 
-It reads each `<VOUCHER>` in the answer and keeps those whose `<VOUCHERNUMBER>` is the number asked for and whose type (`<VOUCHERTYPENAME>` or the `VCHTYPE` attribute) is the sales voucher type, taking `<MASTERID>`. Exactly one is the alter target; none is `TALLY_VOUCHER_NOT_FOUND`, several is `TALLY_VOUCHER_AMBIGUOUS`, and in both cases nothing is sent and no replacement voucher is created. **This request has not been run against TallyPrime yet** (unlike the rest of this page): it is covered by tests on hand-written answers and by the stand-in Tally only. Until it has been, a wrong request can only fail to find the voucher, because of the check on this side.
+It reads each `<VOUCHER>` in the answer and keeps those whose `<VOUCHERNUMBER>` is the number asked for and whose type (`<VOUCHERTYPENAME>` or the `VCHTYPE` attribute) is the sales voucher type, taking `<MASTERID>`. Exactly one is the alter target; none is `TALLY_VOUCHER_NOT_FOUND`, several is `TALLY_VOUCHER_AMBIGUOUS`, and in both cases nothing is sent and no replacement voucher is created. A voucher whose `<ISDELETED>` is `Yes` (one Tally keeps only as deleted) does not count.
+
+Run read-only against TallyPrime on 14 November 2026, through the app's own lookup code: for a posted bill it found exactly one voucher, and its `<MASTERID>` was the `tallyMasterId` recorded in that bill's `tally.posted` audit; for a number that does not exist it found none. Each answer took about 0.2 s. Two things about the answer, both pinned in `TallyVoucherLookupTests`:
+
+- It starts with a `<BODY><DESC><CMPINFO>` block of counts, one of which is an element named `<VOUCHER>` holding a number. It is there even when no voucher matched (the `<COLLECTION>` is then empty). The check on this side passes over it, because it has no `<VOUCHERNUMBER>`.
+- A voucher comes as `<VOUCHER REMOTEID=… VCHKEY=… VCHTYPE=… OBJVIEW=…>` with its native fields (`DATE`, `GUID`, `VOUCHERTYPENAME`, `VOUCHERNUMBER`, `ISDELETED`, `ISINVOICE`, …) beside `<MASTERID>`.
+
+The alter that follows a lookup (a hand-marked bill, edited and pushed) has been run against the stand-in Tally only.
 
 **Sign convention (Accounting Invoice view).** Tally's voucher import interprets the `AMOUNT` sign as the net change from the company's Cr-side perspective, not directly as Dr/Cr:
 

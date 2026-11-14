@@ -5,8 +5,10 @@ namespace ShowroomBilling.Tests;
 
 /// <summary>
 /// Finding a voucher in Tally by its number. The answers here are written by
-/// hand in the shape TallyPrime exports a collection; none of this has been
-/// run against TallyPrime itself.
+/// hand, in the shape TallyPrime gave when the request was run against it on
+/// 14 November 2026: a <c>CMPINFO</c> block of counts (one of them named
+/// VOUCHER) before the collection, and each voucher with its native fields
+/// beside the ones asked for.
 /// </summary>
 public sealed class TallyVoucherLookupTests
 {
@@ -80,6 +82,32 @@ public sealed class TallyVoucherLookupTests
     }
 
     [Fact]
+    public async Task The_voucher_count_in_tallys_answer_is_not_taken_for_a_voucher()
+    {
+        // Collection(...) puts the CMPINFO counts in, as TallyPrime does: its
+        // VOUCHER element is a number, and an answer with no voucher still has it.
+        var none = await Lookup(Collection())
+            .FindMasterIdsAsync(Number, FiscalYear, TestContext.Current.CancellationToken);
+        var one = await Lookup(Collection(Voucher("4521", Number, "Sales")))
+            .FindMasterIdsAsync(Number, FiscalYear, TestContext.Current.CancellationToken);
+
+        Assert.Empty(none);
+        Assert.Equal(["4521"], one);
+    }
+
+    [Fact]
+    public async Task A_voucher_tally_keeps_only_as_deleted_is_not_one_to_change()
+    {
+        var deleted = Voucher("4400", Number, "Sales");
+        deleted.Element("ISDELETED")!.Value = "Yes";
+
+        var found = await Lookup(Collection(deleted, Voucher("4521", Number, "Sales")))
+            .FindMasterIdsAsync(Number, FiscalYear, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["4521"], found);
+    }
+
+    [Fact]
     public async Task A_matching_voucher_without_a_master_id_is_an_error_not_a_miss()
     {
         var lookup = Lookup(Collection(Voucher("0", Number, "Sales")));
@@ -109,13 +137,26 @@ public sealed class TallyVoucherLookupTests
     private static XElement Collection(params XElement[] vouchers) =>
         new("ENVELOPE",
             new XElement("HEADER", new XElement("VERSION", 1), new XElement("STATUS", 1)),
-            new XElement("BODY", new XElement("DATA", new XElement("COLLECTION", vouchers))));
+            new XElement("BODY",
+                new XElement("DESC",
+                    new XElement("CMPINFO",
+                        new XElement("COMPANY", 0),
+                        new XElement("LEDGER", 0),
+                        new XElement("VOUCHERTYPE", 0),
+                        new XElement("VOUCHER", vouchers.Length))),
+                new XElement("DATA",
+                    new XElement("COLLECTION",
+                        new XAttribute("ISCMPDEPTYPE", "No"),
+                        vouchers))));
 
     private static XElement Voucher(string masterId, string number, string type) =>
         new("VOUCHER",
+            new XAttribute("REMOTEID", "post-key"),
             new XAttribute("VCHTYPE", type),
-            new XElement("MASTERID", masterId),
-            new XElement("VOUCHERNUMBER", number),
+            new XElement("DATE", new XAttribute("TYPE", "Date"), "20260415"),
             new XElement("VOUCHERTYPENAME", type),
-            new XElement("DATE", "20260415"));
+            new XElement("VOUCHERNUMBER", number),
+            new XElement("ISDELETED", "No"),
+            new XElement("ISINVOICE", "Yes"),
+            new XElement("MASTERID", masterId));
 }

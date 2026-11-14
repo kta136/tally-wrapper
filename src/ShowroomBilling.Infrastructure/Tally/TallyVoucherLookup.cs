@@ -99,7 +99,10 @@ public sealed class TallyVoucherLookup(
     /// voucher counts only when its own number is the one asked for and its
     /// type, when the answer gives one, is the sales voucher type. A wrong or
     /// ignored filter then finds nothing rather than pointing an Alter at
-    /// somebody else's voucher.
+    /// somebody else's voucher. That check is also what passes over the
+    /// <c>VOUCHER</c> element in the answer's <c>CMPINFO</c> block, which is a
+    /// count and not a voucher. A voucher Tally keeps only as deleted
+    /// (<c>ISDELETED</c>) is not one to change, so it does not count either.
     /// </summary>
     private static IReadOnlyList<string> ReadMasterIds(XElement response, string voucherNumber, string voucherType)
     {
@@ -115,6 +118,11 @@ public sealed class TallyVoucherLookup(
 
             var type = ReadChild(voucher, "VOUCHERTYPENAME") ?? voucher.Attribute("VCHTYPE")?.Value.Trim();
             if (!string.IsNullOrEmpty(type) && !string.Equals(type, voucherType, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(ReadChild(voucher, "ISDELETED"), "Yes", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
