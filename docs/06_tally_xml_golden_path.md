@@ -308,7 +308,40 @@ For an edited-after-push bill, the same voucher body is emitted with alter attri
 </VOUCHER>
 ```
 
-The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.posted` audit, preferring `details.tallyMasterId` and falling back to numeric legacy `details.remoteId`. If that target is missing, it records `TALLY_ALTER_TARGET_MISSING` and does not call Tally or create a replacement voucher.
+The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.posted` audit, preferring `details.tallyMasterId` and falling back to numeric legacy `details.remoteId`. If that audit is missing (a bill an admin marked as pushed), it asks Tally for the voucher by number:
+
+```xml
+<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TW_VouchersByNumber</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>{fiscalYearStart:yyyyMMdd}</SVFROMDATE>
+        <SVTODATE>{fiscalYearEnd:yyyyMMdd}</SVTODATE>
+        <SVCURRENTCOMPANY>{ActiveCompanyName}</SVCURRENTCOMPANY>
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TW_VouchersByNumber">
+            <TYPE>Voucher</TYPE>
+            <FETCH>MasterID, VoucherNumber, VoucherTypeName, Date</FETCH>
+            <FILTER>TW_VoucherNumberIs</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="TW_VoucherNumberIs">$VoucherNumber = "{number}" AND $VoucherTypeName = "{SalesVoucherType}"</SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>
+```
+
+It reads each `<VOUCHER>` in the answer and keeps those whose `<VOUCHERNUMBER>` is the number asked for and whose type (`<VOUCHERTYPENAME>` or the `VCHTYPE` attribute) is the sales voucher type, taking `<MASTERID>`. Exactly one is the alter target; none is `TALLY_VOUCHER_NOT_FOUND`, several is `TALLY_VOUCHER_AMBIGUOUS`, and in both cases nothing is sent and no replacement voucher is created. **This request has not been run against TallyPrime yet** (unlike the rest of this page): it is covered by tests on hand-written answers and by the stand-in Tally only. Until it has been, a wrong request can only fail to find the voucher, because of the check on this side.
 
 **Sign convention (Accounting Invoice view).** Tally's voucher import interprets the `AMOUNT` sign as the net change from the company's Cr-side perspective, not directly as Dr/Cr:
 
@@ -373,7 +406,7 @@ Tally's answer to a create it accepted (captured live):
 
 `RemoteId` on alter success: `LASTVCHID ?? LASTMID ?? request.TargetTagValue`; `tallyMasterId` is `LASTVCHID` when positive numeric, otherwise the alter target.
 
-Transport failures after a voucher write begins are classified as `Unknown`: `TALLY_TRANSPORT_UNKNOWN` for HTTP/transport errors, `TALLY_TIMEOUT` for the configured timeout, and `TALLY_RESPONSE_UNKNOWN` for an unusable response. They move the bill to `reconciliation_required`. Missing configuration is known before sending and remains `Failed` with `TALLY_NOT_CONFIGURED`. Any other failure while loading settings or building/serializing the voucher XML happens before a byte is sent, so it is `Failed` with `TALLY_PREPARE_FAILED` (and `BillValidator` rejects XML-invalid control characters in text fields at save time). A response that changed something in Tally while also reporting an error is never a definite failure: Retry/Repost from `failed` would duplicate the voucher. `BillPostingStatusResponse` returns the latest problem's `errorCode` + `errorMessage`.
+Transport failures after a voucher write begins are classified as `Unknown`: `TALLY_TRANSPORT_UNKNOWN` for HTTP/transport errors, `TALLY_TIMEOUT` for the configured timeout, and `TALLY_RESPONSE_UNKNOWN` for an unusable response. They move the bill to `reconciliation_required`. The one transport error that is not ambiguous is a connection that was never made (refused, or the host name did not resolve): nothing was sent, so it is `Failed` with `TALLY_UNREACHABLE`. Missing configuration is known before sending and remains `Failed` with `TALLY_NOT_CONFIGURED`. Any other failure while loading settings or building/serializing the voucher XML happens before a byte is sent, so it is `Failed` with `TALLY_PREPARE_FAILED` (and `BillValidator` rejects XML-invalid control characters in text fields at save time). A response that changed something in Tally while also reporting an error is never a definite failure: Retry/Repost from `failed` would duplicate the voucher. `BillPostingStatusResponse` returns the latest problem's `errorCode` + `errorMessage`.
 
 The `tally.failed` and `tally.outcome.unknown` audit events carry truncated `requestExcerpt` and `responseExcerpt` (≤4000 chars each) for diagnosis.
 
@@ -382,10 +415,11 @@ The `tally.failed` and `tally.outcome.unknown` audit events carry truncated `req
 There is no auto-retry: the operator decides what to do next. A `failed` bill cannot be revised; it is edited (which returns it to `pending`) or retried.
 
 - **Config errors → fix Settings, then Retry:** `CONFIG_MISSING_SALES_LEDGER`, `CONFIG_MISSING_CASH_LEDGER`, `CONFIG_MISSING_CREDIT_DEBIT_LEDGER`, `CONFIG_MISSING_CGST_LEDGER`, `CONFIG_MISSING_SGST_LEDGER`, `CONFIG_MISSING_ROUNDOFF_LEDGER`, `CONFIG_MISSING_DISCOUNT_LEDGER`, `CONFIG_MISSING_COMPANY`, `TALLY_NOT_CONFIGURED`.
+- **Tally was closed → open TallyPrime, then Retry:** `TALLY_UNREACHABLE`.
 - **Bill-content errors → Edit, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`, `VOUCHER_UNBALANCED`.
 - **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`, `TALLY_PARTIAL_EFFECT`, `TALLY_UNEXPECTED_CREATE_ON_ALTER`, `TALLY_UNEXPECTED`.
 - **Definite Tally rejection → correct data/config, then Retry or Edit:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`, `TALLY_PREPARE_FAILED`.
-- **Edited bill whose original voucher id cannot be found:** `TALLY_ALTER_TARGET_MISSING`. Nothing is sent to Tally and no replacement voucher is created.
+- **Edited bill whose voucher cannot be named → check Tally:** `TALLY_VOUCHER_NOT_FOUND` (no voucher with the bill's number: renumber it in Tally and Retry, or Mark as Pending if it is not there), `TALLY_VOUCHER_AMBIGUOUS` (several with that number: remove or renumber the extra one, then Retry), `TALLY_ALTER_TARGET_MISSING` (no recorded id and no lookup). Nothing is sent to Tally and no replacement voucher is created.
 
 Every voucher click makes one HTTP attempt — there is no automatic voucher retry, backoff, or next-attempt clock. Safe XML reads retain the short transport retry pipeline.
 

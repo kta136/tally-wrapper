@@ -146,7 +146,14 @@ When the operator clicks Push on the Bills tab, the desktop calls `POST /api/bil
 5. Writes `tally.posted`, `tally.failed`, or `tally.outcome.unknown` and transitions the bill to `posted`, `failed`, or `reconciliation_required`.
 6. Returns the resulting `BillResponse` to the desktop.
 
-If an edited-after-push bill cannot resolve the prior Tally `MASTER ID` from its pre-edit `tally.posted` audit, the API settles the attempt as `failed` with `TALLY_ALTER_TARGET_MISSING` and does not call Tally. It never falls back to creating a second voucher for that edited bill.
+The voucher to alter is the one named by the bill's pre-edit `tally.posted` audit (`MASTER ID`). A bill that an admin marked as pushed has no such record: its voucher was entered in Tally by hand, or came from a push whose answer was lost. For that bill the API asks Tally, before it claims the bill, which sales vouchers carry the bill's number in its fiscal year (`ITallyVoucherLookup`, a read; the request is in [06 §4.3](06_tally_xml_golden_path.md)). The number asked for is the one the bill had when Tally last held it, so a rename made since the mark looks for the old number.
+
+- **Exactly one voucher:** it is altered, and the `tally.posted` audit records its id, so later edits do not ask again.
+- **None:** the attempt is settled as `failed` with `TALLY_VOUCHER_NOT_FOUND`. Nothing is sent. The admin checks Tally: a voucher that is there under another number is renumbered in Tally and the push retried; one that is not there at all is answered with Mark as Pending, and the next push creates it.
+- **More than one:** `failed` with `TALLY_VOUCHER_AMBIGUOUS`. Nothing is sent until the extra voucher is removed or renumbered in Tally.
+- **Tally cannot be asked** (unreachable, timeout, unreadable answer): the push is refused like a failed preflight (503) and the bill stays as it was.
+
+The answer is checked again on this side: a voucher counts only when its own number is the one asked for and its type is the sales voucher type, so a filter Tally ignored finds nothing rather than a stranger's voucher. The API never falls back to creating a second voucher for an edited bill. `TALLY_ALTER_TARGET_MISSING` remains for the case where neither the audit nor a lookup is available.
 
 The conditional flip and the Tally call are deliberately **not** wrapped in a single transaction: `posting` must be durably visible in the DB before the Tally round-trip, so `StuckPostingRecoveryHostedService` can heal the row if the API crashes mid-call.
 
@@ -169,10 +176,8 @@ If the API process dies mid-call, any bill stuck in `posting` moves to `reconcil
 
 ### 5.1 Ambiguous transport outcomes (bill lands in `reconciliation_required`)
 
-- Tally transport failure after a successful preflight
-- DNS/LAN connectivity issue after a successful preflight
+- Tally transport failure once the connection to Tally was open
 - timeout after a successful preflight
-- connection refused after a successful preflight
 - HTTP error after the voucher request was sent
 - empty, malformed, or otherwise unreadable Tally response
 
@@ -185,6 +190,7 @@ These outcomes are not auto-retried: a retry could create a duplicate voucher. T
 - period lock
 - malformed business payload
 - Tally business rejection
+- the connection to Tally was refused, or its host name did not resolve, after a successful preflight (`TALLY_UNREACHABLE`: Tally was closed in between). The connection was never made, so no byte of the voucher was sent and a plain Retry is safe
 
 Explicit Tally business rejections (`LINEERROR`, import errors, and classified configuration/data failures) are definite failures, unless the same response also reports `CREATED`/`ALTERED > 0`; that mixed response moves the bill to `reconciliation_required`. `BillPostingStatusResponse.LastErrorCode` / `LastErrorMessage` surface the latest definite or ambiguous problem.
 

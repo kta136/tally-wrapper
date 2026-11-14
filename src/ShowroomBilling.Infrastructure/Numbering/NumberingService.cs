@@ -92,35 +92,31 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
             ? null
             : await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+        // FOR UPDATE locks nothing when the row is not there yet, which is the
+        // first bill of a fiscal year: two counters saving at once would both
+        // find no row and both insert it, and the second would fail on the
+        // primary key. So the row is made first. A second insert waits for the
+        // first transaction to end and then does nothing, and the lock below
+        // always has a row to hold.
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+INSERT INTO public.invoice_sequences (""ShowroomId"", ""FiscalYear"", ""DocumentType"", ""NextValue"", ""MinNextValue"", ""UpdatedAtUtc"")
+VALUES ({showroomId}, {year}, {normalizedType}, 1, 0, {DateTimeOffset.UtcNow})
+ON CONFLICT DO NOTHING", cancellationToken);
+
         var sequence = await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(
-            dbContext, showroomId, year, normalizedType, cancellationToken);
+                dbContext, showroomId, year, normalizedType, cancellationToken)
+            ?? throw new InvalidOperationException($"The invoice sequence for {year} could not be read back after it was created.");
 
         var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
 
         // Forward-skip past any core a bill of this (showroom, fiscal year)
         // already holds, so the next number never collides with a bill whose
         // number was moved by hand via change-number.
-        var startFrom = sequence?.NextValue ?? 1L;
         var reservedValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, startFrom, CoreKeptForTally(sequence), cancellationToken);
+            showroomId, year, sequence.NextValue, CoreKeptForTally(sequence), cancellationToken);
 
-        if (sequence is null)
-        {
-            sequence = new InvoiceSequenceEntity
-            {
-                ShowroomId = showroomId,
-                FiscalYear = year,
-                DocumentType = normalizedType,
-                NextValue = reservedValue + 1,
-                UpdatedAtUtc = DateTimeOffset.UtcNow
-            };
-            dbContext.InvoiceSequences.Add(sequence);
-        }
-        else
-        {
-            sequence.NextValue = reservedValue + 1;
-            sequence.UpdatedAtUtc = DateTimeOffset.UtcNow;
-        }
+        sequence.NextValue = reservedValue + 1;
+        sequence.UpdatedAtUtc = DateTimeOffset.UtcNow;
 
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, reservedValue, year, padding);
 

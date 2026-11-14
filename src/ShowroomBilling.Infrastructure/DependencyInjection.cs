@@ -117,6 +117,7 @@ public static class DependencyInjection
             });
         services.AddScoped<ITallyMasterSource, TallyXmlMasterSource>();
         services.AddScoped<ITallyPoster, TallyPoster>();
+        services.AddScoped<ITallyVoucherLookup, TallyVoucherLookup>();
         services.AddScoped<ITallyMasterRefresher, TallyMasterRefresher>();
 
         services.AddSingleton<StartupStatus>();

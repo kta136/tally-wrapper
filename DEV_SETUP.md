@@ -226,7 +226,7 @@ It needs Docker (the `proxmox-docker` context unless `-DockerContext` names anot
 
 - a `postgres:18` container named `tw-scratch-postgres` with a random password, migrated to the current schema and marked `DEV`;
 - empty settings folders, handed to the app through `SHOWROOM_BILLING_APPDATA` and `SHOWROOM_BILLING_LOCALAPPDATA`, with `SHOWROOM_BILLING_POSTGRES` pointing at the container. The API gives that variable precedence over every saved connection string;
-- a stand-in Tally (`tools\scratch-tally.ps1`) on `127.0.0.1:9000`, which is where a new database expects Tally. It serves two companies, nine ledgers, five stock items and three voucher types, and accepts vouchers. A bill whose party name or note contains `FAIL` is refused with a line error (the bill becomes `failed`); one containing `UNKNOWN` gets a server error (the bill needs reconciliation). `artifacts\scratch\tally.log` lists what the app sent;
+- a stand-in Tally (`tools\scratch-tally.ps1`) on `127.0.0.1:9000`, which is where a new database expects Tally. It serves two companies, nine ledgers, five stock items and three voucher types, and accepts vouchers. A bill whose party name or note contains `FAIL` is refused with a line error (the bill becomes `failed`); one containing `UNKNOWN` is kept but answered with a server error (the bill needs reconciliation). It also answers "which vouchers carry this number" from the vouchers of the current run, so Mark as Pushed after `UNKNOWN`, then an edit and a push, alters that voucher. `artifacts\scratch\tally.log` lists what the app sent;
 - the dev build's API on `127.0.0.1:5108`, started by the script and stopped when the app closes. The Desktop it then starts finds that API through its Development address.
 
 The script refuses to start the app when something already listens on port 9000 (probably TallyPrime; pass `-AllowRealTally` if that is intended) or on the dev API port 5108 (the Desktop would connect to that API, whatever database it uses, in place of the one the script starts).
@@ -260,6 +260,7 @@ Both hosts (API, Desktop) write rolling-file logs through Serilog's file sink, s
 - line shape: `{ISO timestamp} [{LEVEL3}] [{scope key=values}] {Category}: {message}` plus optional exception block (`LogLineFormatter`); the `CorrelationId` rides as a scope key on every API request, so desktop → API traces are greppable by a single id
 - retention: default 30 days, judged by the date in the file name; old files are removed whenever a file is opened (start-up, the daily rollover, a size rollover)
 - configuration lives under `Logging:File` in each host's `appsettings.json` — `Enabled`, `Directory`, `FilePrefix`, `RetentionDays`, `FileSizeLimitMB`, `MinLevel`
+- the API's log levels start from `LogLevelDefaults` in code (`Default` Information, `Microsoft.AspNetCore` Warning), because the installed server is published without an `appsettings.json`. A settings file or an environment variable such as `Logging__LogLevel__Default=Debug` still overrides them; on the server that is a line in the service's environment
 - writes are non-blocking: lines go into a bounded queue (4096; a full queue drops the line) and a background thread writes each one to the file as it arrives; disposing the provider at shutdown writes out whatever is still queued
 
 ## Settings-storage contract

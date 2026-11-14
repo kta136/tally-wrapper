@@ -154,6 +154,40 @@ public sealed class TallyPosterTests
         Assert.Equal("TALLY_TRANSPORT_UNKNOWN", response.ErrorCode);
     }
 
+    [Theory]
+    [InlineData(HttpRequestError.ConnectionError)]
+    [InlineData(HttpRequestError.NameResolutionError)]
+    public async Task PostAsync_ConnectionNeverMade_IsADefiniteFailure(HttpRequestError error)
+    {
+        // Tally closed between the preflight and the write: nothing was sent,
+        // so the bill can simply be retried instead of needing reconciliation.
+        var poster = new TallyPoster(
+            new ThrowingXmlClient(new HttpRequestException(error, "No connection could be made")),
+            new FakeCloudSettingsService(),
+            NullLogger<TallyPoster>.Instance);
+
+        var response = await poster.PostAsync(Request());
+
+        Assert.Equal(TallyPostOutcome.Failed, response.Outcome);
+        Assert.Equal("TALLY_UNREACHABLE", response.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData(HttpRequestError.ResponseEnded)]
+    [InlineData(HttpRequestError.Unknown)]
+    public async Task PostAsync_TransportFailureOnAnOpenConnection_StaysUnknown(HttpRequestError error)
+    {
+        var poster = new TallyPoster(
+            new ThrowingXmlClient(new HttpRequestException(error, "connection reset")),
+            new FakeCloudSettingsService(),
+            NullLogger<TallyPoster>.Instance);
+
+        var response = await poster.PostAsync(Request());
+
+        Assert.Equal(TallyPostOutcome.Unknown, response.Outcome);
+        Assert.Equal("TALLY_TRANSPORT_UNKNOWN", response.ErrorCode);
+    }
+
     private static TallyPoster BuildPoster(XElement response) =>
         BuildPosterWithClient(response).Poster;
 
@@ -214,7 +248,7 @@ public sealed class TallyPosterTests
             Notes: null,
             Payment: PaymentMode.Cash);
 
-    private sealed class FakeXmlClient(XElement response) : ITallyXmlClient
+    internal sealed class FakeXmlClient(XElement response) : ITallyXmlClient
     {
 
         public XElement? LastRequest { get; private set; }
@@ -239,7 +273,7 @@ public sealed class TallyPosterTests
             Task.FromException<XElement>(exception);
     }
 
-    private sealed class FakeCloudSettingsService(string? companyState = null, string? companyCountry = null) : ICloudSettingsService
+    internal sealed class FakeCloudSettingsService(string? companyState = null, string? companyCountry = null) : ICloudSettingsService
     {
         public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new EffectiveSettingsResponse(

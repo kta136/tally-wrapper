@@ -66,6 +66,20 @@ public sealed class BillValidatorTests
     }
 
     [Theory]
+    [InlineData(0.01)]
+    [InlineData(-0.01)]
+    [InlineData(0.50)]
+    public void A_grand_total_out_by_even_a_paisa_is_rejected(double drift)
+    {
+        // The line sum has slack for rounding. The ledger legs have none:
+        // the voucher builder refuses legs that do not net to zero.
+        var payload = Bill(
+            totals: new BillTotalsDto(Subtotal: 100_000m, DiscountTotal: 0m, TaxTotal: 3_000m, RoundOff: 0m, GrandTotal: 103_000m + (decimal)drift));
+
+        AssertRejected(payload, "does not balance");
+    }
+
+    [Theory]
     [InlineData(1.06)]
     [InlineData(-1.06)]
     public void The_line_sum_may_drift_by_rounding_only(double drift)

@@ -12,6 +12,7 @@ using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Infrastructure.Tally;
 using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
@@ -490,6 +491,125 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.True(pushed.EditedAfterPush);
         var status = await service.GetPostingStatusAsync(bill.Id);
         Assert.Equal("TALLY_ALTER_TARGET_MISSING", status!.LastErrorCode);
+    }
+
+    [Fact]
+    public async Task Push_BillMarkedPushedByHandThenEdited_AltersTheVoucherTallyHasUnderItsNumber()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var lookup = new FakeVoucherLookup("4521");
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("push-edited"));
+
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.False(pushed.EditedAfterPush);
+        Assert.Equal([(bill.InvoiceNumber!, bill.FiscalYear!)], lookup.Asked);
+        Assert.Equal(1, poster.CallCount);
+        Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
+        Assert.Equal("MASTER ID", poster.LastRequest.TargetTagName);
+        Assert.Equal("4521", poster.LastRequest.TargetTagValue);
+
+        // The id is on record now: the next edit does not ask Tally again.
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited-again", 160m)), callerIsAdmin: true);
+        await service.PushAsync(bill.Id, new PushBillRequest("push-edited-again"));
+
+        Assert.Single(lookup.Asked);
+        Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
+        Assert.Equal("4521", poster.LastRequest.TargetTagValue);
+    }
+
+    [Fact]
+    public async Task Push_BillMarkedPushedByHandThenEdited_NoSuchVoucherInTally_FailsWithNothingSent()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup());
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("push-edited"));
+
+        Assert.Equal(0, poster.CallCount);
+        Assert.Equal(BillStates.Failed, pushed.State);
+        Assert.True(pushed.EditedAfterPush);
+        var status = await service.GetPostingStatusAsync(bill.Id);
+        Assert.Equal("TALLY_VOUCHER_NOT_FOUND", status!.LastErrorCode);
+        Assert.Contains(bill.InvoiceNumber!, status.LastErrorMessage);
+
+        // The way out the message names: the admin says Tally does not hold
+        // it, and the next push creates the voucher.
+        await service.MarkPendingAsync(bill.Id, new MarkBillStateRequest("checked: not in Tally"));
+        var created = await service.PushAsync(bill.Id, new PushBillRequest("push-as-new"));
+
+        Assert.Equal(BillStates.Posted, created.State);
+        Assert.Equal(TallyPostOperation.Create, poster.LastRequest!.Operation);
+    }
+
+    [Fact]
+    public async Task Push_BillMarkedPushedByHandThenEdited_TwoVouchersWithTheNumber_FailsWithNothingSent()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup("4521", "4777"));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("push-edited"));
+
+        Assert.Equal(0, poster.CallCount);
+        Assert.Equal(BillStates.Failed, pushed.State);
+        var status = await service.GetPostingStatusAsync(bill.Id);
+        Assert.Equal("TALLY_VOUCHER_AMBIGUOUS", status!.LastErrorCode);
+    }
+
+    [Fact]
+    public async Task Push_BillMarkedPushedByHandThenEdited_TallyCannotBeAsked_LeavesTheBillAsItWas()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var lookup = new FakeVoucherLookup { Failure = new HttpRequestException("No connection could be made") };
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+
+        var ex = await Assert.ThrowsAsync<TallyPreflightUnavailableException>(() =>
+            service.PushAsync(bill.Id, new PushBillRequest("push-edited")));
+
+        Assert.Contains(bill.InvoiceNumber!, ex.Message);
+        Assert.Equal(0, poster.CallCount);
+        await using var check = CreateDbContext();
+        var stored = await check.Bills.SingleAsync(x => x.Id == bill.Id);
+        Assert.Equal(BillStates.Pending, stored.State);
+        Assert.True(stored.EditedAfterPush);
+    }
+
+    [Fact]
+    public async Task Push_BillMarkedPushedByHandThenRenumbered_LooksForTheNumberTallyStillHas()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var lookup = new FakeVoucherLookup("4521");
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(null, SamplePayload("A", 100m)));
+        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        var renamed = await service.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("7", "typo", DryRun: false));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("after-rename"));
+
+        // Tally has the voucher under the old number; the Alter carries the new one.
+        Assert.Equal([(bill.InvoiceNumber!, bill.FiscalYear!)], lookup.Asked);
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
+        Assert.Equal("4521", poster.LastRequest.TargetTagValue);
+        Assert.Equal(renamed.NewInvoiceNumber, poster.LastRequest.InvoiceNumber);
     }
 
     [Fact]
@@ -1628,7 +1748,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         ShowroomBillingDbContext db,
         ITallyPoster? poster = null,
         ITallyCompanyHealthService? tallyHealth = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ITallyVoucherLookup? voucherLookup = null)
     {
         var numbering = new NumberingService(db);
         return new BillService(
@@ -1636,7 +1757,26 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             numbering,
             poster ?? new FakeTallyPoster(),
             tallyHealth ?? FakeTallyHealth.Healthy(),
-            timeProvider: timeProvider);
+            timeProvider: timeProvider,
+            tallyVoucherLookup: voucherLookup);
+    }
+
+    /// <summary>Tally's answer to "which vouchers carry this number", and what it was asked.</summary>
+    private sealed class FakeVoucherLookup(params string[] masterIds) : ITallyVoucherLookup
+    {
+        public Exception? Failure { get; init; }
+        public List<(string Number, string FiscalYear)> Asked { get; } = [];
+
+        public Task<IReadOnlyList<string>> FindMasterIdsAsync(
+            string voucherNumber,
+            string fiscalYear,
+            CancellationToken cancellationToken = default)
+        {
+            Asked.Add((voucherNumber, fiscalYear));
+            return Failure is null
+                ? Task.FromResult<IReadOnlyList<string>>(masterIds)
+                : Task.FromException<IReadOnlyList<string>>(Failure);
+        }
     }
 
     private static void AssertVersion7(Guid id) =>

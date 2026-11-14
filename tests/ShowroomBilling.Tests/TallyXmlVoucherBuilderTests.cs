@@ -135,6 +135,31 @@ public sealed class TallyXmlVoucherBuilderTests
         var ex = Assert.Throws<VoucherBuildException>(() =>
             TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers(), "Acme Jewellers"));
         Assert.Equal("VOUCHER_UNBALANCED", ex.ErrorCode);
+
+        // Such a bill never gets this far: saving it is refused, so it cannot
+        // take an invoice number and then fail on every push.
+        var today = ShowroomBilling.Contracts.IndiaTime.Today();
+        Assert.Throws<ShowroomBilling.Application.Bills.BillValidationException>(() =>
+            ShowroomBilling.Application.Bills.BillValidator.Validate(payload with { BillDate = today }));
+    }
+
+    [Theory]
+    [InlineData(1000.00, 0, 0, 0, 1000.00, 1000.00)]        // nothing but the line
+    [InlineData(970.87, 0, 29.13, 0, 1000.00, 1000.00)]     // GST taken out of the line
+    [InlineData(970.87, 100.25, 29.13, 0.25, 900.00, 1000.00)]  // discount and round-off
+    [InlineData(970.87, 0, 29.13, -0.40, 999.60, 1001.06)]  // line sum at the edge of its slack
+    public void Build_AcceptsEveryBillTheValidatorAccepts(
+        double subtotal, double discount, double tax, double roundOff, double grandTotal, double lineTotal)
+    {
+        var payload = Payload() with
+        {
+            BillDate = ShowroomBilling.Contracts.IndiaTime.Today(),
+            Lines = [new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", 100m, (decimal)lineTotal, "22K", null)],
+            Totals = new BillTotalsDto((decimal)subtotal, (decimal)discount, (decimal)tax, (decimal)roundOff, (decimal)grandTotal)
+        };
+
+        ShowroomBilling.Application.Bills.BillValidator.Validate(payload);
+        TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers(), "Acme Jewellers");
     }
 
     private static TallyPostRequest Request(

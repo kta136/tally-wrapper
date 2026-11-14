@@ -1,14 +1,19 @@
 # A stand-in for TallyPrime's XML endpoint. run-scratch.ps1 starts it; it is
 # for the scratch environment only and keeps nothing.
 #
-# It answers the two things the API asks Tally for:
+# It answers the three things the API asks Tally for:
 #   - the four master collections (companies, ledgers, stock items, voucher types)
 #   - a voucher import (Create or Alter)
+#   - which vouchers carry a given number (asked when a bill that was marked as
+#     pushed by hand is edited and pushed); it knows the vouchers of this run only
 #
 # To see the bill states that need Tally to misbehave, put one of these words in
 # the bill's party name or note (both go into the voucher narration):
 #   FAIL     Tally refuses the voucher with a line error  -> bill becomes "failed"
-#   UNKNOWN  Tally answers with a server error            -> bill needs reconciliation
+#   UNKNOWN  Tally keeps the voucher but answers with a server error
+#                                                         -> bill needs reconciliation
+# After UNKNOWN, Mark as Pushed is the true answer: edit the bill (take the word
+# out) and push, and the voucher is found by its number and altered.
 
 [CmdletBinding()]
 param(
@@ -91,6 +96,11 @@ function Get-Collection([string]$body) {
         $voucherTypes | ForEach-Object {
             "<VOUCHERTYPE NAME=`"$(Escape-Xml $_.name)`">$(Tag 'PARENT' $_.parent)<ISDEEMEDPOSITIVE>$(Yes ([bool]$_.deemedPositive))</ISDEEMEDPOSITIVE></VOUCHERTYPE>"
         }
+    } elseif ($body -match '<ID>TW_VouchersByNumber</ID>') {
+        $wanted = if ($body -match '\$VoucherNumber = "([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '' }
+        $vouchers.GetEnumerator() | Where-Object { $_.Value.number -eq $wanted } | ForEach-Object {
+            "<VOUCHER VCHTYPE=`"$(Escape-Xml $_.Value.type)`"><MASTERID>$($_.Key)</MASTERID>$(Tag 'VOUCHERNUMBER' $_.Value.number)$(Tag 'VOUCHERTYPENAME' $_.Value.type)</VOUCHER>"
+        }
     } else {
         return $null
     }
@@ -118,6 +128,8 @@ $listener.Start()
 Write-Log "Stand-in Tally listening on http://127.0.0.1:$Port (not TallyPrime; nothing is kept). Serving $mastersSource."
 
 $nextVoucherId = 1001
+# The vouchers taken in this run, by master id, for the lookup by number.
+$vouchers = [ordered]@{}
 try {
     while ($listener.IsListening) {
         $context = $listener.GetContext()
@@ -131,21 +143,34 @@ try {
             if ($body -match '<VOUCHER\b[^>]*\bACTION="(Create|Alter)"') {
                 $action = $Matches[1]
                 $narration = if ($body -match '<NARRATION>(.*?)</NARRATION>') { $Matches[1] } else { '' }
-                $number = if ($body -match '<VOUCHERNUMBER>(.*?)</VOUCHERNUMBER>') { $Matches[1] } else { '?' }
-                if ($narration -cmatch 'UNKNOWN') {
-                    $status = 500
-                    $answer = 'Stand-in Tally: server error on request (narration contains UNKNOWN).'
-                    Write-Log "voucher $action $number -> HTTP 500 (UNKNOWN in narration)"
-                } elseif ($narration -cmatch 'FAIL') {
+                $number = if ($body -match '<VOUCHERNUMBER>(.*?)</VOUCHERNUMBER>') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '?' }
+                $type = if ($body -match '<VOUCHER\b[^>]*\bVCHTYPE="([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { 'Sales' }
+                $target = if ($body -match '<VOUCHER\b[^>]*\bTAGVALUE="(\d+)"') { $Matches[1] } else { '' }
+                if ($narration -cmatch 'FAIL') {
                     $answer = Get-ImportResult 0 0 1 'Stand-in Tally refused this voucher: the party name or note contains FAIL.' ''
                     Write-Log "voucher $action $number -> line error (FAIL in narration)"
-                } elseif ($action -eq 'Create') {
-                    $answer = Get-ImportResult 1 0 0 '' "$nextVoucherId"
-                    Write-Log "voucher Create $number -> created, voucher id $nextVoucherId"
-                    $nextVoucherId++
                 } else {
-                    $answer = Get-ImportResult 0 1 0 '' ''
-                    Write-Log "voucher Alter $number -> altered"
+                    # Tally takes the voucher, whether or not its answer gets back.
+                    $voucherId = ''
+                    if ($action -eq 'Create') {
+                        $voucherId = "$nextVoucherId"
+                        $vouchers[$voucherId] = @{ number = $number; type = $type }
+                        $nextVoucherId++
+                    } elseif ($target -and $vouchers.Contains($target)) {
+                        $vouchers[$target] = @{ number = $number; type = $type }
+                    }
+
+                    if ($narration -cmatch 'UNKNOWN') {
+                        $status = 500
+                        $answer = 'Stand-in Tally: server error on request (narration contains UNKNOWN).'
+                        Write-Log "voucher $action $number -> kept, but HTTP 500 (UNKNOWN in narration)"
+                    } elseif ($action -eq 'Create') {
+                        $answer = Get-ImportResult 1 0 0 '' $voucherId
+                        Write-Log "voucher Create $number -> created, voucher id $voucherId"
+                    } else {
+                        $answer = Get-ImportResult 0 1 0 '' ''
+                        Write-Log "voucher Alter $number -> altered$(if ($target) { ", voucher id $target" })"
+                    }
                 }
             } else {
                 $answer = Get-Collection $body

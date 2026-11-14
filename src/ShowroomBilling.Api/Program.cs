@@ -9,6 +9,7 @@ using ShowroomBilling.Application.Logging;
 using ShowroomBilling.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+LogLevelDefaults.AddTo(builder.Configuration);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 5 * 1024 * 1024);
 var windowsServiceName = Environment.GetEnvironmentVariable("SHOWROOM_BILLING_SERVICE_NAME");
 builder.Host.UseWindowsService(options =>

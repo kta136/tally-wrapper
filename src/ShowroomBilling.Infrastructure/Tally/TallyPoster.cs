@@ -52,6 +52,14 @@ public sealed class TallyPoster(
         {
             response = await xmlClient.SendWriteAsync(xml, cancellationToken);
         }
+        catch (HttpRequestException ex) when (ConnectionWasNeverMade(ex))
+        {
+            logger.LogWarning(ex, "Tally could not be reached for bill {BillId}; nothing was sent.", request.BillId);
+            return TallyPostResponse.Failed(
+                "TALLY_UNREACHABLE",
+                $"Tally could not be reached, so nothing was sent to it. Check that TallyPrime is open, then retry: {Truncate(ex.Message, 900)}",
+                requestExcerpt: requestExcerpt);
+        }
         catch (HttpRequestException ex)
         {
             logger.LogWarning(ex, "Tally HTTP call failed for bill {BillId}.", request.BillId);
@@ -94,6 +102,16 @@ public sealed class TallyPoster(
 
         return ClassifyResponse(response, request, requestExcerpt, responseExcerpt);
     }
+
+    /// <summary>
+    /// True when the connection to Tally was refused or its name did not
+    /// resolve. .NET reports these two only from the connect step, before any
+    /// byte of the request is written, so the voucher cannot have reached
+    /// Tally and the outcome is known. Every other transport error can come
+    /// after Tally has read the request, and stays ambiguous.
+    /// </summary>
+    private static bool ConnectionWasNeverMade(HttpRequestException exception) =>
+        exception.HttpRequestError is HttpRequestError.ConnectionError or HttpRequestError.NameResolutionError;
 
     private static TallyPostResponse ClassifyResponse(
         XElement response,

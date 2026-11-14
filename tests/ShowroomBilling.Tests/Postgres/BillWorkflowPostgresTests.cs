@@ -100,6 +100,32 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task CreateDraftAsync_DifferentSavesRacingForTheFirstNumberOfAYear_AllGetOne()
+    {
+        // No sequence row exists yet, so there is nothing for FOR UPDATE to
+        // hold: each save must still get a number of its own, and none may fail.
+        await using var database = await fixture.CreateDatabaseAsync();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var tasks = Enumerable.Range(0, 6)
+            .Select(n => Task.Run(async () =>
+            {
+                await start.Task;
+                await using var db = database.CreateContext();
+                return await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
+                    new CreateBillDraftRequest(null, PostgresBillTestSupport.SamplePayload($"Party {n}", 100m), Guid.NewGuid()));
+            }))
+            .ToArray();
+        start.SetResult();
+        var responses = await Task.WhenAll(tasks);
+
+        Assert.Equal(6, responses.Select(static x => x.InvoiceNumber).Distinct().Count());
+        await using var verify = database.CreateContext();
+        Assert.Equal(6, await verify.Bills.CountAsync());
+        Assert.Equal(7L, await verify.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
+    }
+
+    [Fact]
     public async Task SearchAsync_MatchesPartyNameRegardlessOfCase()
     {
         await using var database = await fixture.CreateDatabaseAsync();

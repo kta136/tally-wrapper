@@ -89,7 +89,7 @@ Both accept only the Npgsql keyword form (`Host=...;Port=...;Database=...;Userna
 - 1–500 lines; each line has non-empty `ItemName`, `Quantity > 0`, `Rate >= 0`, `LineTotal >= 0`
 - bounded text fields and per-line `RawJson` (valid JSON, at most 64 KiB); optional jewellery numeric inputs and `Rate24Kt` must be non-negative
 - `Σ LineTotal ≈ GrandTotal + Discount − RoundOff` (tolerance 0.05 × line count + ₹1). Line totals in this domain are **GST-inclusive**, so they sum to the billed amount net of discount/round-off — *not* to `Subtotal`.
-- `GrandTotal ≈ Subtotal − Discount + Tax + RoundOff` (tolerance ₹1). Catches a client that sends tampered grand totals that don't match the tax math.
+- `GrandTotal = Subtotal − Discount + Tax + RoundOff`, exactly (each is whole paise). These are the voucher's ledger legs, and the voucher builder refuses legs that do not net to zero (`VOUCHER_UNBALANCED`), so a bill that is out by a paisa is refused at save rather than stored, numbered and then failed on every push.
 - `|RoundOff| <= ₹1`, `GrandTotal > 0`, non-negative discount/tax
 - `BillDate` within `today - 1 year` to `today + 1 day`
 

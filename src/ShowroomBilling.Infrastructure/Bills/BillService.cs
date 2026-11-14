@@ -6,6 +6,7 @@ using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Infrastructure.Tally;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
@@ -29,14 +30,15 @@ public sealed class BillService
         ITallyCompanyHealthService? tallyCompanyHealthService = null,
         ILoggerFactory? loggerFactory = null,
         IAuditActorContext? auditActorContext = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ITallyVoucherLookup? tallyVoucherLookup = null)
     {
         var postingLogger = loggerFactory?.CreateLogger<BillPostingWorkflow>()
             ?? NullLogger<BillPostingWorkflow>.Instance;
         _audit = new BillAuditStore(dbContext, auditActorContext);
         _read = new BillReadWorkflow(dbContext);
         _lifecycle = new BillLifecycleWorkflow(dbContext, numberingService, _audit);
-        _posting = new BillPostingWorkflow(dbContext, tallyPoster, _audit, postingLogger, tallyCompanyHealthService, timeProvider);
+        _posting = new BillPostingWorkflow(dbContext, tallyPoster, _audit, postingLogger, tallyCompanyHealthService, timeProvider, tallyVoucherLookup);
         _admin = new BillAdminWorkflow(dbContext, numberingService, _audit);
     }
 

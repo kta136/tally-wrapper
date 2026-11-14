@@ -29,7 +29,7 @@ public static class BillValidator
 {
     // Tolerances in rupees. Sized for decimal(18,2) rounding on server-side totals.
     private const decimal LineSumTolerancePerLine = 0.05m;
-    private const decimal GrandTotalTolerance = 1.00m;
+    private const decimal LineSumFlatTolerance = 1.00m;
     private const decimal RoundOffCap = 1.00m;
     private const int MaxLineItems = 500;
     private const int MaxRawJsonLength = 64 * 1024;
@@ -138,7 +138,7 @@ public static class BillValidator
 
         // Lines (GST-inclusive) must add up to what the customer is billed,
         // modulo discount and round-off.
-        var lineSumTolerance = LineSumTolerancePerLine * payload.Lines.Count + 0.01m + GrandTotalTolerance;
+        var lineSumTolerance = LineSumTolerancePerLine * payload.Lines.Count + 0.01m + LineSumFlatTolerance;
         var expectedLineSum = totals.GrandTotal + totals.DiscountTotal - totals.RoundOff;
         if (Math.Abs(runningSubtotal - expectedLineSum) > lineSumTolerance)
         {
@@ -150,13 +150,16 @@ public static class BillValidator
         // Tax math balances independently of the line-sum check: catches a
         // client that sends an inflated GrandTotal without matching it to
         // Subtotal + Tax (e.g. a buggy client that forgets to apply discount).
+        // These five amounts are the voucher's ledger legs, and the voucher
+        // builder refuses legs that do not net to zero, so the comparison is
+        // exact: with any tolerance a bill could be stored and numbered that
+        // no push could ever send. (Each amount is whole paise, checked above.)
         var expectedGrand = totals.Subtotal - totals.DiscountTotal + totals.TaxTotal + totals.RoundOff;
-        if (Math.Abs(totals.GrandTotal - expectedGrand) > GrandTotalTolerance)
+        if (totals.GrandTotal != expectedGrand)
         {
             errors.Add(
                 $"GrandTotal {totals.GrandTotal} does not balance. "
-                + $"Expected Subtotal - Discount + Tax + RoundOff = {expectedGrand} "
-                + $"(tolerance {GrandTotalTolerance}).");
+                + $"Expected Subtotal - Discount + Tax + RoundOff = {expectedGrand}, to the paisa.");
         }
 
         if (errors.Count > 0)

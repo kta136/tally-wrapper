@@ -19,7 +19,8 @@ internal sealed class BillPostingWorkflow(
     BillAuditStore auditStore,
     ILogger<BillPostingWorkflow> logger,
     ITallyCompanyHealthService? tallyCompanyHealthService = null,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    ITallyVoucherLookup? tallyVoucherLookup = null)
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -177,6 +178,14 @@ internal sealed class BillPostingWorkflow(
             await EnsureTallyReadyAsync(cancellationToken);
         }
 
+        // An Alter needs the id of the voucher Tally holds. It is worked out
+        // before the bill is claimed: it may mean asking Tally, which can take
+        // as long as Tally's own timeout, and nothing has been written yet, so
+        // a caller who goes away meanwhile leaves the bill as it was.
+        var alterTarget = bill.EditedAfterPush
+            ? await FindAlterTargetAsync(bill, cancellationToken)
+            : default;
+
         var now = DateTimeOffset.UtcNow;
         var sourceState = bill.State;
 
@@ -235,11 +244,7 @@ internal sealed class BillPostingWorkflow(
 
         var operation = bill.EditedAfterPush ? TallyPostOperation.Alter : TallyPostOperation.Create;
         var targetTagName = operation == TallyPostOperation.Alter ? TallyAlterTargetTagName : null;
-        string? targetTagValue = null;
-        if (bill.EditedAfterPush)
-        {
-            targetTagValue = await ResolveAlterTargetMasterIdAsync(bill.Id, claimToken);
-        }
+        var targetTagValue = bill.EditedAfterPush ? alterTarget.MasterId : null;
 
         var trimmedReason = string.IsNullOrWhiteSpace(reason) ? "manual-push" : reason.Trim();
         auditStore.Write(
@@ -252,7 +257,9 @@ internal sealed class BillPostingWorkflow(
                 invoiceNumber = bill.InvoiceNumber,
                 fiscalYear = bill.FiscalYear,
                 reason = trimmedReason,
-                tallyAction = operation.ToString()
+                tallyAction = operation.ToString(),
+                // Set when the voucher to alter was found by asking Tally for this number.
+                voucherLookedUpAs = alterTarget.LookedUpNumber
             });
         await dbContext.SaveChangesAsync(claimToken);
 
@@ -280,7 +287,7 @@ internal sealed class BillPostingWorkflow(
         TallyPostResponse tallyResult;
         if (operation == TallyPostOperation.Alter && targetTagValue is null)
         {
-            tallyResult = TallyPostResponse.Failed(
+            tallyResult = alterTarget.Failure ?? TallyPostResponse.Failed(
                 "TALLY_ALTER_TARGET_MISSING",
                 "Edited bill cannot be pushed because the original Tally voucher master id is unavailable.");
         }
@@ -565,6 +572,104 @@ internal sealed class BillPostingWorkflow(
 
         return TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(lastPreEditSuccess.PayloadJson, "tallyMasterId"))
             ?? TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(lastPreEditSuccess.PayloadJson, "remoteId"));
+    }
+
+    /// <summary>
+    /// The voucher an edited bill's push has to alter: its master id, or the
+    /// definite failure to settle the push with when it cannot be told.
+    /// </summary>
+    private readonly record struct AlterTarget(string? MasterId, string? LookedUpNumber, TallyPostResponse? Failure);
+
+    /// <summary>
+    /// Finds the voucher to alter. A push that succeeded from here recorded
+    /// the voucher's id. A bill that an admin marked as pushed has no such
+    /// record: its voucher was entered in Tally by hand, or came from a push
+    /// whose answer was lost. Tally is then asked which voucher carries the
+    /// bill's number, and only exactly one answer is acted on. None or several
+    /// stops the push before anything is sent.
+    /// </summary>
+    private async Task<AlterTarget> FindAlterTargetAsync(BillEntity bill, CancellationToken cancellationToken)
+    {
+        var recorded = await ResolveAlterTargetMasterIdAsync(bill.Id, cancellationToken);
+        if (recorded is not null || tallyVoucherLookup is null)
+        {
+            return new AlterTarget(recorded, null, null);
+        }
+
+        var number = await NumberTallyHoldsAsync(bill, cancellationToken);
+        var fiscalYear = bill.FiscalYear!;
+        IReadOnlyList<string> masterIds;
+        try
+        {
+            masterIds = await tallyVoucherLookup.FindMasterIdsAsync(number, fiscalYear, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Nothing was sent and the bill is untouched, so this is reported
+            // the way a failed preflight is: try again when Tally answers.
+            throw new TallyPreflightUnavailableException(
+                $"Tally push blocked: this bill was edited after it was marked as pushed, and Tally could not be asked for voucher {number}, which the push has to change. {ex.Message}");
+        }
+
+        switch (masterIds.Count)
+        {
+            case 1:
+                logger.LogInformation(
+                    "Voucher {VoucherNumber} for bill {BillId} was found in Tally as master id {MasterId}.",
+                    number, bill.Id, masterIds[0]);
+                return new AlterTarget(masterIds[0], number, null);
+            case 0:
+                return new AlterTarget(null, number, TallyPostResponse.Failed(
+                    "TALLY_VOUCHER_NOT_FOUND",
+                    $"Tally has no sales voucher numbered {number} in {fiscalYear}, so there is nothing to change and nothing was sent. "
+                    + $"Check Tally: if the voucher is there under another number, change its number to {number} and retry. "
+                    + "If it is not there at all, use Mark as Pending and push the bill again."));
+            default:
+                return new AlterTarget(null, number, TallyPostResponse.Failed(
+                    "TALLY_VOUCHER_AMBIGUOUS",
+                    $"Tally has {masterIds.Count} sales vouchers numbered {number} in {fiscalYear}, so the one to change cannot be told apart and nothing was sent. "
+                    + "Remove or renumber the extra one in Tally, then retry."));
+        }
+    }
+
+    /// <summary>
+    /// The number the bill's voucher carries in Tally: the bill's number when
+    /// Tally last had it (a push that succeeded, or an admin's Mark as
+    /// Pushed). A rename made since then has not reached Tally, because the
+    /// Alter being prepared is what takes it there, so the first rename after
+    /// that moment holds the number to look for.
+    /// </summary>
+    private async Task<string> NumberTallyHoldsAsync(BillEntity bill, CancellationToken cancellationToken)
+    {
+        var billIdText = bill.Id.ToString();
+        var lastInTally = await dbContext.AuditEvents.AsNoTracking()
+            .Where(e => e.EntityType == "bill"
+                && e.EntityId == billIdText
+                && (e.EventType == BillAuditEvents.TallyPosted || e.EventType == BillAuditEvents.MarkPosted))
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ThenByDescending(e => e.Id)
+            .Select(e => (DateTimeOffset?)e.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (lastInTally is not { } since)
+        {
+            return bill.InvoiceNumber!;
+        }
+
+        var firstRenameSince = await dbContext.AuditEvents.AsNoTracking()
+            .Where(e => e.EntityType == "bill"
+                && e.EntityId == billIdText
+                && e.EventType == BillAuditEvents.NumberChanged
+                && e.CreatedAtUtc > since)
+            .OrderBy(e => e.CreatedAtUtc)
+            .ThenBy(e => e.Id)
+            .Select(e => e.PayloadJson)
+            .FirstOrDefaultAsync(cancellationToken);
+        var numberBefore = BillAuditStore.ReadDetailsString(firstRenameSince, "old");
+        return string.IsNullOrWhiteSpace(numberBefore) ? bill.InvoiceNumber! : numberBefore;
     }
 
 

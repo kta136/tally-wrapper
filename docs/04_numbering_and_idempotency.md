@@ -21,7 +21,7 @@ This document describes invoice numbering, renumbering, Tally posting identity, 
 Numbering is server-side only.
 
 - `CreateDraftAsync` (and `ReviseAsync`, for the new bill it creates) calls `NumberingService.ReserveAsync(documentType, fiscalYear)` inside the transaction that inserts the bill. It returns `ReservedNumber(FiscalYear, ReservedValue, FormattedNumber)`; the bill stores the formatted number in `InvoiceNumber` and the integer in `InvoiceCore`. If the bill cannot be saved the transaction rolls back and the number is not used up.
-- The sequence row in `invoice_sequences` is read `FOR UPDATE`, so two saves cannot take the same value.
+- The sequence row in `invoice_sequences` is read `FOR UPDATE`, so two saves cannot take the same value. A row lock holds nothing when the row is not there yet, so the reservation first creates it if missing (`INSERT … ON CONFLICT DO NOTHING`): the first two saves of a fiscal year queue on that insert instead of both inserting the row.
 - `InvoiceNumberFormatter.Format` gives `{prefix}{fiscalYear}/{core}{suffix}`, the core zero-padded to `Numbering.InvoicePadding` digits (default 4): prefix `SR/` in fiscal year `2026-27` gives `SR/2026-27/0145`. When the prefix or suffix already carries the fiscal year (`DDAJR/26-27/`), the year is not repeated.
 - Save is replay-safe through a client operation id: the Desktop generates `CreateBillDraftRequest.ClientOperationId` once per unsaved bill and reuses it on every retry. `bills.CreateOperationId` is unique, so a retry whose first attempt committed (response lost) returns that same bill and number; reusing the id with different contents is `409`. Requests without the id create a new bill every time. Draft updates carry `expectedRevisionId`, so a replayed update that already landed returns the stored bill instead of adding a revision.
 - The number stays on the bill through every transition. Push moves the bill to `posting` and calls Tally; it does not issue a number. `UpdateDraftAsync` never changes the number.
@@ -115,7 +115,7 @@ Limits, all from the floor being one value per sequence:
 
 - A create sends `REMOTEID = post:{billId:N}:{revisionId:N}`. It is the same for every attempt on one revision and changes when the bill is edited.
 - `POST /api/bills/{billId}/repost` requires a caller-supplied, non-blank key of at most 128 characters and sends that exact trimmed value as `REMOTEID`. The posted bill goes straight to `posting`; there is no stored `posted → pending` step.
-- An alter (a bill edited after Tally accepted it) sends no `REMOTEID`. It targets the voucher with `TAGNAME="MASTER ID"` and the master id from the pre-edit `tally.posted` audit event. If that id cannot be found the push fails with `TALLY_ALTER_TARGET_MISSING`; nothing is sent and no replacement voucher is created.
+- An alter (a bill edited after Tally accepted it) sends no `REMOTEID`. It targets the voucher with `TAGNAME="MASTER ID"` and the master id from the pre-edit `tally.posted` audit event. A bill marked as pushed by hand has no such event, so Tally is asked which voucher carries the bill's number ([05 §4](05_tally_integration_contract.md)). If no single voucher can be named the push fails; nothing is sent and no replacement voucher is created.
 - The invoice number is not the Tally identity: a repost sends the same number again under a new key.
 
 ---
