@@ -68,7 +68,7 @@ Both accept only the Npgsql keyword form (`Host=...;Port=...;Database=...;Userna
 #### Behavior
 
 - Bill payload shape: `{ partyName, partyGstin, partyPhone, partyAddress, billDate, lines[], totals, notes }`. Each line also round-trips `grossWeight`, `lessWeight`, `wastagePercent`, `labourPerUnit`, `diamondRate`, `extra` for edit support. Totals: `{ subtotal, discountTotal, taxTotal, roundOff, grandTotal }`. Stored as `bill_revisions."SnapshotJson"` (jsonb) with projected helpers.
-- `POST /api/bills/drafts` body `{ counterId?, payload, clientOperationId? }` returns 201 with a `Location` header. State starts at `pending`. A sales-invoice number is **taken from the sequence and written to the bill at this point**, in the same transaction. A request that repeats a `clientOperationId` returns the bill the first one created (`409` if the contents differ).
+- `POST /api/bills/drafts` body `{ payload, clientOperationId? }` returns 201 with a `Location` header. State starts at `pending`. A sales-invoice number is **taken from the sequence and written to the bill at this point**, in the same transaction. A request that repeats a `clientOperationId` returns the bill the first one created (`409` if the contents differ).
 - `GET /api/bills/by-operation/{operationId}` returns the bill whose create carried `operationId` as its `clientOperationId` (`bills.CreateOperationId`), at its current revision, whatever its state; `404` when no bill was created with it (a bill saved without one is never found). A read, so no device token. The bill hand-over uses it to find a bill it handed over before ([18](18_bill_handover.md)).
 - `PUT /api/bills/drafts/{billId}` body `{ payload, expectedRevisionId? }` appends a new `bill_revisions` row and makes it the bill's current revision. Accepts any state except `posting`, `reconciliation_required`, `voided`, and `revised`. An edit to a `posted` bill also needs a valid `X-Admin-Token`: without one the answer is `403` with the title `Admin session required`; with one, the audit row names the admin. A `failed`, `pending` or `draft` bill needs only the device policy. If the prior state was `posted` or `failed`, the bill is reopened to `pending`; `EditedAfterPush` is set only when Tally holds the voucher (so a corrected first-push rejection is pushed again as a Create). When `expectedRevisionId` is supplied and another save has moved the bill on, the request returns `409`; a replay of a save that already landed (same payload, superseding the expected revision) returns the stored bill. A bill date in a different fiscal year from the bill's number is also `409`.
 - `POST /api/bills/{billId}/push` body: `{ reason? }`. Synchronous: first runs a Tally company preflight. If Tally is unreachable or the configured active company is not open, returns `503 Tally unavailable` and leaves the bill unchanged. Otherwise it transitions the bill to `posting`, stamps the revision's `SubmittedAtUtc` (first push only) and `FinalizedAtUtc`, and makes one voucher HTTP attempt. A definite Tally response settles in `posted` or `failed`; a timeout, transport error, or unreadable response settles in `reconciliation_required` with `tally.outcome.unknown`. First pushes create Tally vouchers. Bills reopened after a prior successful push (`EditedAfterPush=true`) alter the original Tally voucher by `MASTER ID`; if that target cannot be resolved, the push fails with `TALLY_ALTER_TARGET_MISSING` without calling Tally. No queue or background posting.
@@ -125,7 +125,7 @@ There is no endpoint that reserves a number by itself. A number is taken by `Cre
 | `GET` | `/api/masters/voucher-types` | Load voucher type snapshot | voucher types, freshness metadata |
 | `POST` | `/api/masters/refresh` | **Synchronously** fetch fresh master data from Tally and write the snapshot | one or more `TallyMasterRefreshResult` rows |
 
-The four reads take no query parameters. Each returns the whole current snapshot of that master type, in name order, with `{ masterType, batchId, fetchedAtUtc, itemCount, freshness }` as metadata.
+The four reads take no query parameters. A ledger and a voucher type are `{ name }`; a company adds `isActive`, a stock item `alias`, `baseUnit`, `hsnCode` and `karat`. Each returns the whole current snapshot of that master type, in name order, with `{ masterType, batchId, fetchedAtUtc, itemCount, freshness }` as metadata.
 
 A refresh stores the new snapshot and deletes the previous one of that master type in the same transaction, so a failed refresh leaves the old snapshot in place and no earlier snapshot is kept.
 
@@ -163,7 +163,7 @@ Uploads require a plain file name (no path components), a decoded size of 1 byte
 | `POST` | `/api/clients/heartbeat` | Workstation heartbeat, sent every 30 seconds by Desktop | current registered client presence |
 | `GET` | `/api/clients/presence` | Tray/status view of recently seen clients | localhost-only list with 2-minute TTL |
 
-Heartbeat body: `{ deviceId, counterName, appVersion, machineName, userName }`. The desktop sends it non-blocking; failures never block billing. Presence is in-memory only, capped, and resets when the API restarts. The tray lists each client as counter, machine\user, address and last seen.
+Heartbeat body: `{ deviceId, appVersion, machineName, userName }`. The desktop sends it non-blocking; failures never block billing. Presence is in-memory only, capped, and resets when the API restarts. The tray lists each client as machine\user, address and last seen.
 
 There are no edit locks: concurrent edits of one bill are caught by the bill's row version (409 "Concurrent change").
 
@@ -206,7 +206,7 @@ These are the admin-gated Bill endpoints listed in §2.2 (the synthetic batch is
 | `GET` | `/api/health/ready` | Readiness probe | whether PostgreSQL answers; `503` when it does not. Pending migrations are reported by `/api/runtime/health`, not here |
 | `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages; `503` problem details when the database cannot be read |
 | `GET` | `/api/health/tally-company` | Operator-triggered Tally reachability + active-company check | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
-| `GET` | `/api/runtime/health` | Runtime health, from a check of the database on every call | `{ status, apiAvailable, databaseConfigured, databaseReachable, settingsLoadedFromApi, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, activeClientCount, pendingMigrationCount? }` |
+| `GET` | `/api/runtime/health` | Runtime health, from a check of the database on every call | `{ status, databaseReachable, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, pendingMigrationCount? }` |
 
 The DB-init hosted service is bounded (15 s) and each sweep of the stuck-posting-recovery service is bounded (30 s); neither throws, so a Postgres outage during startup leaves the API up. Their failures go to the API log; `/api/health/ready` and `/api/runtime/health` report whether the database answers now.
 
@@ -245,7 +245,7 @@ Response:
 
 - `BillResponse` with `State = "posted"` (success), `State = "failed"` (definite rejection), or `State = "reconciliation_required"` (ambiguous write outcome)
 - `InvoiceNumber` and `FiscalYear` (assigned at save)
-- `CurrentRevision` with `submittedAtUtc` and `finalizedAtUtc` set
+- `CurrentRevision`, unchanged by the push; when a bill was pushed is in its audit trail (`tally.posted`)
 
 Typical duration: 1–10 seconds (however long Tally takes to answer). Not async.
 

@@ -51,7 +51,7 @@ The database also carries its own identity marker in `public.database_identity` 
 
 ### Local desktop persistence allowed
 
-- the server address and the counter name
+- the server address
 - the admin unlock token, in memory only (short TTL)
 - local UX preferences such as printer name and last PDF directory
 - logs
@@ -71,7 +71,7 @@ No local durable business cache is allowed.
 
 ### Operational requirements
 
-- structured logging to rolling log files: `C:\ProgramData\ShowroomBilling\logs` for the server service
+- plain-text rolling log files, one line per event ([DEV_SETUP.md](../DEV_SETUP.md#logs) has the line shape): `C:\ProgramData\ShowroomBilling\logs` for the server service
 - `/api/health/live` and `/api/health/ready` endpoints
 - `StuckPostingRecoveryHostedService` sweeps at start-up and every 5 minutes — any bill stranded in `posting` (the API stopped mid-push, or lost the database before it could record the outcome) moves to `reconciliation_required` with a `bill.posting.recovered` audit event once its claim is older than 10 minutes
 - each successful admin unlock deletes the admin sessions that expired more than 30 days ago; nothing else is purged
@@ -87,7 +87,9 @@ The server is published with:
 .\tools\publish-server-tray.ps1
 ```
 
-Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. The first run prompts for the trusted LAN CIDR (the box starts with the server PC's own network, read from its LAN adapter; a repair starts with the range already installed), elevates via UAC (answering No there installs nothing and is reported as "Setup did not finish"), extracts the API it carries to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running.
+Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. This section is the one place the install is described; README and DEV_SETUP link here. The first run prompts for the trusted LAN CIDR (the box starts with the server PC's own network, read from its LAN adapter; a repair starts with the range already installed), elevates via UAC (answering No there installs nothing and is reported as "Setup did not finish"), extracts the API it carries to `C:\ProgramData\ShowroomBilling\bin`, installs the Tally Wrapper API Windows Service, registers the tray EXE under the current user's `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, starts the service, and leaves the tray running. Setup reports once, when it has finished: "The server is installed and running." only after checking that the service is running; otherwise that it is installed but its service is stopped, that setup did not finish, or that it failed, with the end of `server-install.log`.
+
+After the install, on the server PC, set the database connection in the tray dashboard (§5), then **Restart** on the Windows service line. Then point each workstation at the server (§2, Server address).
 
 Running the same EXE again is idempotent. It checks the extracted API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
 
@@ -249,13 +251,13 @@ The EF provider is explicitly targeted at PostgreSQL 18. New application-created
 
 ## 5. Server tray
 
-`ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. It uses Windows Service Control Manager for service state and control, so start/stop/restart still works when the API is stopped. Windows lets only an administrator start or stop a service, and the tray runs with the signed-in user's ordinary rights: when Windows refuses, **Start**, **Restart**, **Stop** and **Stop server and exit** do the action in an elevated copy of the tray, behind the same Windows permission prompt as Install. Answering No there leaves the service as it was.
+`ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. Only one tray runs per signed-in user: starting the exe again asks the one that is running to close, takes its place and opens the dashboard. It uses Windows Service Control Manager for service state and control, so start/stop/restart does not depend on the API answering. Windows lets only an administrator start or stop a service, and the tray runs with the signed-in user's ordinary rights: when Windows refuses, **Start**, **Restart**, **Stop** and **Stop server and exit** do the action in an elevated copy of the tray, behind the same Windows permission prompt as Install. Answering No there leaves the service as it was. The window stays usable while the service starts or stops; the three buttons are off until it has.
 
 The dashboard (double-click the tray icon, or **Open dashboard** in its menu) opens on one sentence: **Ready for billing**, or **Counters cannot bill** and why. Under it:
 
 - three health lines, each with a dot, a sentence and a chip: **Windows service** (with **Start** when it is stopped, **Restart** and **Stop** when it is running, **Install** when it is missing), **Server** (whether the API answers on this PC) and **Database** (answering, not answering, upgrade needed, or marked as another database)
 - **Address for the counters**, with **Copy**: what goes into Settings → Server on each counter
-- **Counters connected**: the workstations heard from in the last 2 minutes (counter, PC and user, address, last seen)
+- **Counters connected**: the workstations heard from in the last 2 minutes (PC and user, address, last seen)
 - **Database connection**: paste a new connection string, **Test**, then **Save**. This goes through localhost-only maintenance endpoints using `maintenance_token.txt`; it is the only place the connection is changed, and no screen shows the stored one. A saved connection is used once the service has been restarted
 - in the grey foot: **Logs**, **Data folder**, **Install log**, **Repair installation…**, and on the right **Stop server and exit**
 
@@ -329,7 +331,7 @@ Location: `C:\ProgramData\ShowroomBilling\logs` on the server (`api-*.log`). An 
 
 Every Desktop and the server tray poll `/api/runtime/health` every 15 seconds, and each answer comes from a real check of the database; the API keeps one check for 5 seconds, so they share it. (Builds up to 11 October 2026 skipped the database on the routine poll, a habit from a provider that billed for the time the database was awake: a counter could show `READY` for up to 30 minutes after the database had gone, and the tray's database line always read "idle".) Tally-company health and master freshness are requested on startup, on explicit System Health refreshes, and by a slower 30-minute probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
 
-When the server reports that it cannot reach its database, the Desktop's database pill turns red at once. The database is across the internet from the server, so one poll without an answer is not treated as an outage: the limited-mode screen, with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.", appears when the next poll agrees (within about 30 seconds of the database going), and at once at start-up or when the operator presses Refresh in System Health. It goes with the first poll that gets an answer. The Desktop does not open a settings screen by itself. The tray's database line reads `ready`, `not ready`, or `upgrade needed`.
+When the server reports that it cannot reach its database, the Desktop's database pill turns red at once. The database is across the internet from the server, so one poll without an answer is not treated as an outage: the limited-mode screen, with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.", appears when the next poll agrees (within about 30 seconds of the database going), and at once at start-up or when the operator presses Refresh in System Health. It goes with the first poll that gets an answer. The Desktop does not open a settings screen by itself. The tray's database line carries one of five chips: `OK`, `Not answering`, `Upgrade needed`, `Check` (it answers but is marked as another database) or `Unknown` (the server does not answer, or did not report on it).
 
 ### Tally reachability
 
@@ -374,7 +376,7 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 - **On production, nothing applies migrations by itself. Apply them by hand, as the role that owns the tables, before a new server or Desktop build is started.**
   - The server service does try at start-up (the tray installer sets `Database__AutoMigrateOnStartup=true`), but it connects as the restricted application role, which may not create or alter objects. As soon as a migration is pending its attempt is refused with SQLSTATE `42501`, logged as a warning, and the API carries on. A release with nothing pending never reaches that code, which is how this stayed hidden until 10 October 2026.
   - The Desktop has no API and migrates nothing.
-  - A build running against a database that has not had its migrations cannot read or save a bill, although PostgreSQL is reachable and settings and masters load. It says so in four places: bill and numbering requests answer `503 Database upgrade needed`; `/api/runtime/health` reports `pendingMigrationCount` (see [09_api_spec.md](09_api_spec.md)); the Desktop shows `DB BEHIND`, a banner, and the reason above the Bills list; the server tray's database line reads `upgrade needed: N migration(s) not applied`. Before 10 October 2026 none of this existed: those requests were a bare `500`, health read Healthy and the Bills tab was simply empty. The detailed reason for a refused start-up migration is in the server's log (`C:\ProgramData\ShowroomBilling\logs\api-*.log`, search for `migration`).
+  - A build running against a database that has not had its migrations cannot read or save a bill, although PostgreSQL is reachable and settings and masters load. It says so in four places: bill and numbering requests answer `503 Database upgrade needed`; `/api/runtime/health` reports `pendingMigrationCount` (see [09_api_spec.md](09_api_spec.md)); the Desktop shows `DB BEHIND`, a banner, and the reason above the Bills list; the server tray's database line reads "N migrations of this version have not been applied. Bills cannot be read or saved until the database owner applies them." with the chip `Upgrade needed`. Before 10 October 2026 none of this existed: those requests were a bare `500`, health read Healthy and the Bills tab was simply empty. The detailed reason for a refused start-up migration is in the server's log (`C:\ProgramData\ShowroomBilling\logs\api-*.log`, search for `migration`).
   - To apply them: first look at what the database has (`SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY 1 DESC LIMIT 3`); do not assume. Then either generate a script with `dotnet ef migrations script <last applied migration> --idempotent --output <file>` (no database connection needed) and run it with `psql -v ON_ERROR_STOP=1` as the owner role where the database is reachable, or run `dotnet ef database update --connection ...` with the owner role's connection string. The API service does not have to be restarted afterwards: the next health check, seconds later, finds nothing pending, the banner goes, and the stuck-posting sweeps, which hold off while the database is behind, resume. (Restarting it does no harm.)
   - A development or test database whose application role owns its tables does migrate itself; that is why this does not show up there.
 - preserve backward-compatibility window if desktop rollout is staged
@@ -382,6 +384,11 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 **A release that drops columns or tables cannot be staged.** An older build still maps what was dropped, so once the migrations are applied to the shared database, every older API pointed at it fails on its next bill read or write ("column does not exist"). That covers an older server service, and any counter still on an old Desktop build that runs its own embedded API. For such a release: close Billing on every counter and stop the server service, take the dump below, apply the migrations by hand as the owner role (see above), update every machine, then start them. The release of 10 October 2026 is one (`DropUnusedColumnsAndIndexes`, `DropDraftEditLeases`). Migrations that only add things do not have this limit.
 
 `DropInvoiceNumberReservations` (the release after 11 October 2026) is a narrower case. The table it drops was last written by the build of 10 October; the build of 11 October (`627ef1f`) still maps it but never touches it. So the migration can be applied while a server from 11 October is running, and the new server started afterwards. A server exe from 10 October or earlier cannot save a bill against the migrated database; to go back that far, run the migration's `Down` first, which restores the table and its rows.
+
+The release after 14 November 2026 carries two migrations:
+
+- `UniqueInvoiceCore` only changes an index (the number core becomes unique per fiscal year), so it does not tie the server to the database. On a database that already holds two bills of one year on one core it keeps the plain index and raises a `WARNING`; [10_database_schema.md §1.1](10_database_schema.md) has the query that finds them and the two statements that make the index unique afterwards.
+- `DropUnreadColumns` drops eleven columns, so **the server and the database change together**: stop the server service, take the dump below, apply the migrations as the owner role, install the new `TallyWrapper.Server.exe`, start the service. A server exe older than this release still maps those columns and cannot read or save a bill on the migrated database; to go back to one, run the migration's `Down` first, which restores the columns and their values from the `dropped_20261114_*` tables. The counters are not tied to it: a Desktop reads none of the removed fields, so counters can be updated before or after the server.
 
 **Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 
@@ -392,7 +399,7 @@ Remove-Item Env:PGPASSWORD
 pg_restore --list <the .dump file> | Select-Object -First 5   # proves the file is readable
 ```
 
-A migration that removes data must also protect itself, because that step can be forgotten: it copies what it is about to drop into a side table in the same transaction, and its `Down` restores from that copy. `DropUnusedColumnsAndIndexes` (10 October 2026) is the model; see [10_database_schema.md §1.10](10_database_schema.md) for the tables it leaves and how to remove them.
+A migration that removes data must also protect itself, because that step can be forgotten: it copies what it is about to drop into a side table in the same transaction, and its `Down` restores from that copy. `DropUnusedColumnsAndIndexes` (10 October 2026) is the model, and `DropUnreadColumns` (14 November 2026) the same with one copy per table; see [10_database_schema.md §1.10](10_database_schema.md) for the tables they leave and how to remove them.
 
 ### Desktop
 

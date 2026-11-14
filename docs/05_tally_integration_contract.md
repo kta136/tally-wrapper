@@ -238,7 +238,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 
 ### Allowed on desktop
 
-- the server address and the counter name
+- the server address
 - print preferences (last-used printer, last PDF directory)
 - admin unlock token cache (TTL-bounded)
 - logs

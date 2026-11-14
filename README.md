@@ -148,27 +148,13 @@ Development API defaults to:
 
 ### Database Connection
 
-Real connection strings are not committed. Keep them in one of these private locations:
+Real connection strings are not committed, and only the API holds one: the Desktop artifact contains none. The committed `src/ShowroomBilling.Api/appsettings.json` holds a placeholder. A connection string is in the Npgsql keyword form; a `postgres://` URL is refused.
 
-- OpenBao KV v2 at `kv/Postgres/apps/tally_wrapper/prod` (canonical production secret; authoritative structured fields plus a synchronized `connection_string`)
-- OpenBao KV v2 at `kv/Postgres/apps/tally_wrapper_test/dev`, key `connection_string` (persistent Coolify test environment)
-- `src/ShowroomBilling.Api/appsettings.Development.json`
-- `src/ShowroomBilling.Api/appsettings.Production.json`
-- user secrets
-- local environment variables (`SHOWROOM_BILLING_POSTGRES` is the API's explicit database override)
-- the DPAPI-protected database override the server tray writes (`database.<Environment>.local.json` in the API's data folder)
+- On the server it is set, tested and saved from the server tray, and nowhere else.
+- For development, see [DEV_SETUP.md](DEV_SETUP.md#database).
+- The production database, where its secret is kept and how it is retrieved and rotated: [Deployment and operations §4](docs/11_deployment_and_ops.md#4-postgresql-deployment).
 
-A connection string is always in the Npgsql keyword form; a `postgres://` URL is refused. The committed `src/ShowroomBilling.Api/appsettings.json` holds only a placeholder:
-
-```text
-Host=localhost;Port=5432;Database=tally_wrapper;Username=postgres;Password=postgres
-```
-
-Production uses PostgreSQL 18 hosted on an Oracle Cloud Infrastructure VPS. The OpenBao secret at `kv/Postgres/apps/tally_wrapper/prod` is the source of truth: its structured connection fields are authoritative and `connection_string` is the synchronized Npgsql form used for runtime injection and EF migrations. The application does not read OpenBao directly; an authorized operator retrieves the derived value with the native `bao` CLI and supplies it through the server tray or another private runtime configuration source. Never commit the credential. See [PostgreSQL deployment](docs/11_deployment_and_ops.md#4-postgresql-deployment) for the OpenBao workflow and the network, TLS, backup, and maintenance responsibilities of the self-hosted database.
-
-The persistent test deployment uses `tally_wrapper_test` inside the same Coolify `shared-postgres` PostgreSQL 18 cluster and connects through PgBouncer; it is not a separate database server. Its OpenBao path, network attachment, and role contract are documented in [Development Setup](DEV_SETUP.md#shared-persistent-test-database).
-
-Migrations are applied with `dotnet ef database update`. Always pass `--connection`; do not rely on environment-name resolution. On production they are applied by hand before a new build is started. The full command is in [Deployment and operations](docs/11_deployment_and_ops.md#openbao-production-secret) and the production procedure in its [§11](docs/11_deployment_and_ops.md#11-upgrade-flow).
+Migrations are applied with `dotnet ef database update`, always with `--connection`. On production they are applied by hand before a new build is started: [Deployment and operations §11](docs/11_deployment_and_ops.md#11-upgrade-flow).
 
 ### Database Identity Marker
 
@@ -258,61 +244,9 @@ This one-file EXE carries the API service binary and installs/repairs the API Wi
 
 ## Server Deployment
 
-One server PC runs TallyPrime and the Tally Wrapper API; every counter connects to it.
+One server PC runs TallyPrime and the Tally Wrapper API; every counter connects to it. In short: publish `TallyWrapper.Server.exe`, run it on the Tally server, give it the trusted LAN range, set the database connection in its tray dashboard, then enter the server's address on each workstation under **Settings → Server**.
 
-1. Publish the server installer:
-
-   ```powershell
-   .\tools\publish-server-tray.ps1
-   ```
-
-2. Copy `publish\server\TallyWrapper.Server.exe` to the Tally server.
-
-3. Run it on the Tally server.
-
-4. On first run, confirm the trusted LAN CIDR for billing workstations. The box starts with the server PC's own network, for example:
-
-   ```text
-   192.168.1.0/24
-   ```
-
-   Answering No at the Windows permission prompt that follows leaves nothing installed; run Install again from the tray's dashboard.
-
-5. The installer:
-
-   - extracts the API service binary to `C:\ProgramData\ShowroomBilling\bin`
-   - installs the Tally Wrapper API Windows Service
-   - configures the service for `http://0.0.0.0:5107`
-   - creates a firewall rule scoped to the trusted LAN CIDR
-   - creates `C:\ProgramData\ShowroomBilling\maintenance_token.txt`
-   - registers the tray companion at user login
-   - starts the API service
-
-6. On the server PC, set the database connection in the tray dashboard, under **Database connection**: paste it, **Test**, **Save**, then **Restart** on the Windows service line.
-
-7. On each workstation, open:
-
-   ```text
-   Billing -> Settings -> Server
-   ```
-
-8. Enter the server address, or click **Find server** to scan the workstation's own network for it:
-
-   ```text
-   http://<tally-server>:5107
-   ```
-
-9. Check it with **Test server**, then click **Save and restart Billing**.
-
-The server tray dashboard can install/repair, start/stop/restart the API service, test/save database settings, open logs, show connected clients, and copy the workstation URL. It is the only place the server's database connection is changed. Exiting the tray stops the API service first.
-
-To remove the server, exit the tray and run this elevated, signed in as the user whose tray starts at sign-in:
-
-```powershell
-.\tools\uninstall-server-api-service.ps1
-```
-
-It removes the Windows Service, the firewall rule and the tray's start-up entry. `C:\ProgramData\ShowroomBilling` (saved database connection, maintenance token, logs, API binary) is kept unless you add `-RemoveConfig`.
+The steps, what the install puts on the server, upgrading, going back and removing it are in [Deployment and operations](docs/11_deployment_and_ops.md): [§3 Server install](docs/11_deployment_and_ops.md#server-install), [§5 Server tray](docs/11_deployment_and_ops.md#5-server-tray), [§2 Server address](docs/11_deployment_and_ops.md#server-address) for the workstations, and [§11](docs/11_deployment_and_ops.md#11-upgrade-flow) for an upgrade.
 
 ## Security Model
 
@@ -338,47 +272,9 @@ Important deployment notes:
 
 ## Testing
 
-Run the full suite:
+`dotnet test --solution ShowroomBilling.sln` runs everything. The tests that touch the database run on PostgreSQL 18, the production version, each on its own freshly migrated database, and start the server themselves, so the full suite needs Docker (or a PostgreSQL 18 server named in `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`). They cover the bill state workflows, numbering, admin unlock, the API's contract, Tally XML, the tray's maintenance endpoints, the Desktop's view models and views, and printing.
 
-```powershell
-dotnet test --solution ShowroomBilling.sln
-```
-
-Run formatting, warning, dependency, and coverage gates:
-
-```powershell
-dotnet list ShowroomBilling.sln package --vulnerable --include-transitive
-dotnet format style ShowroomBilling.sln --verify-no-changes --no-restore
-dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserror
-.\tools\Test-Coverage.ps1 -NoBuild
-```
-
-Run API contract tests only:
-
-```powershell
-dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "FullyQualifiedName~Contracts"
-```
-
-The tests that touch the database run on PostgreSQL 18 and start it themselves, so the full suite needs Docker (a local engine, or a remote Docker context the `docker` command can reach) or `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION` pointing at a PostgreSQL 18 server. See [Development Setup](DEV_SETUP.md#database-tests). To run only the tests that need no database:
-
-```powershell
-dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "Category!=Postgres"
-```
-
-What the tests cover:
-
-- bill state workflows
-- numbering/idempotency shape
-- admin unlock behavior
-- API contract shape
-- Tally XML voucher generation
-- database configuration masking and the tray's maintenance endpoints
-- WPF ViewModel workflows
-- printing/rendering helpers
-
-Every database-backed test runs on PostgreSQL 18, matching production: each test gets its own freshly migrated database, so locking, unique indexes, set-based updates and real races are exercised rather than approximated. CI runs these tests on Linux (the container cannot run on a Windows runner) and the rest on Windows, then judges their coverage together.
-
-The persistent `tally_wrapper_test` deployment database is not the connection for this harness: the fixture requires permission to create and drop `tw_test_<guid>` databases, while the persistent API role is intentionally restricted to its one PgBouncer mapping. See [Development Setup](DEV_SETUP.md#shared-persistent-test-database).
+The quality gates CI runs, how to run only one half, and where the test database comes from are in [DEV_SETUP.md](DEV_SETUP.md#build).
 
 ## Troubleshooting
 
@@ -408,6 +304,7 @@ The detailed specs live in [docs/](docs/README.md):
 - [Settings storage contract](docs/14_settings_storage_contract.md)
 - [UI design reference](docs/15_ui_design_reference.md)
 - [Synthetic batch data](docs/17_synthetic_batch.md)
+- [Bill hand-over from another program](docs/18_bill_handover.md)
 
 ## Public Repo Hygiene
 

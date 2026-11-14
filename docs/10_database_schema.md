@@ -24,18 +24,15 @@ One row per bill.
 |---|---|---|
 | `Id` | uuid PK | |
 | `ShowroomId` | uuid | Always the default showroom |
-| `CounterId` | uuid, nullable | Originating counter, when the client sends one |
-| `BillType` | text | `sales` |
 | `CurrentRevisionId` | uuid, nullable | The bill's current `bill_revisions` row |
 | `State` | text | See [03_bill_state_machine.md](03_bill_state_machine.md) |
 | `InvoiceNumber` | text, nullable | Assigned when the bill is created (`CreateDraftAsync`), not at push |
 | `FiscalYear` | text, nullable | Indian fiscal year of the number (`YYYY-YY`) |
-| `InvoiceCore` | bigint, nullable | The integer behind `InvoiceNumber`. Numbering reads this, never the display text. Null only for legacy custom numbers |
+| `InvoiceCore` | bigint, nullable | The integer behind `InvoiceNumber`. Numbering reads this, never the display text. Null only for a legacy custom number, which holds no place in the sequence |
 | `SupersededByBillId` | uuid, nullable | Set on the old bill by revise |
 | `CreateOperationId` | uuid, nullable | Client id of the Save that created the bill; a repeated Save resolves to this row |
 | `EditedAfterPush` | boolean | True while Tally holds a voucher that an edit or renumber has made stale; the next push alters it. Cleared by a successful alter, Mark as Pushed and Mark as Pending |
 | `CreatedAtUtc`, `UpdatedAtUtc` | timestamptz | |
-| `VoidedAtUtc` | timestamptz, nullable | |
 | `xmin` | system column | Row version. Every tracked save checks it, so a writer that read the bill before another change committed gets 409 "Concurrent change" |
 
 Constraints and indexes:
@@ -43,13 +40,34 @@ Constraints and indexes:
 - check `"State" IN ('draft','pending','posting','posted','failed','reconciliation_required','revised','voided')`
 - unique `("ShowroomId", "FiscalYear", "InvoiceNumber")` where the number is not null: the duplicate-number guard
 - unique `("CreateOperationId")` where it is not null
-- `("ShowroomId", "FiscalYear", "InvoiceCore")` for the numbering skip window
+- unique `("ShowroomId", "FiscalYear", "InvoiceCore")` where the core is not null: two bills of a year cannot hold the same core, whatever their numbers' text says (the text depends on the prefix, suffix and padding in Settings). It also serves the numbering skip window
+
+The `UniqueInvoiceCore` migration (14 November 2026) makes that index unique. On a database that already holds two bills of one year on one core it does not fail: it keeps the plain index and raises a PostgreSQL `WARNING` naming how many cores are repeated. Find them with
+
+```sql
+SELECT "FiscalYear", "InvoiceCore", count(*), array_agg("InvoiceNumber")
+FROM public.bills
+WHERE "InvoiceCore" IS NOT NULL
+GROUP BY "ShowroomId", "FiscalYear", "InvoiceCore"
+HAVING count(*) > 1;
+```
+
+and, once each pair has been dealt with in the app (Change Bill Number, or Delete Local), make the index unique by hand as the role that owns the tables:
+
+```sql
+DROP INDEX IF EXISTS public."IX_bills_ShowroomId_FiscalYear_InvoiceCore";
+CREATE UNIQUE INDEX "IX_bills_ShowroomId_FiscalYear_InvoiceCore"
+    ON public.bills ("ShowroomId", "FiscalYear", "InvoiceCore") WHERE "InvoiceCore" IS NOT NULL;
+```
+
+Other indexes:
+
 - `("ShowroomId", "State", "CreatedAtUtc", "Id")` and `("ShowroomId", "CreatedAtUtc")` for the Bills list
 - GIN trigram index on `"InvoiceNumber"` for the Bills tab's contains search
 
 ### 1.2 `bill_revisions`
 
-Saved versions of a bill's contents. A row is written once; only its two push timestamps are set later.
+Saved versions of a bill's contents. A row is written once and not changed.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -60,8 +78,6 @@ Saved versions of a bill's contents. A row is written once; only its two push ti
 | `PartyName`, `BillDate`, `GrandTotal` | text, date, numeric(18,3) | Copies for search and lists |
 | `SupersedesRevisionId` | uuid, nullable | The revision this one replaced |
 | `CreatedAtUtc` | timestamptz | |
-| `SubmittedAtUtc` | timestamptz, nullable | First push of this revision |
-| `FinalizedAtUtc` | timestamptz, nullable | Latest push of this revision |
 
 Constraints and indexes: unique `("BillId", "RevisionNo")`; checks `"RevisionNo" > 0` and `"GrandTotal" >= 0`; `("BillId", "CreatedAtUtc")`; `("BillDate", "Id")`; GIN trigram index on `"PartyName"`.
 
@@ -122,9 +138,9 @@ Indexes: `("ShowroomId", "MasterType", "FetchedAtUtc")`, `("ShowroomId", "Master
 The rows are in four tables, each with `Id`, `BatchId` (FK → the batch, `ON DELETE CASCADE`), `ShowroomId`, `Name` and one index, `("BatchId", "Name")`:
 
 - `tally_company_snapshots` — `IsActive`
-- `tally_ledger_snapshots` — `Parent`, `PrimaryGroup`, `IsRevenue`, `Gstin`
+- `tally_ledger_snapshots` — the name only
 - `tally_stock_item_snapshots` — `Alias`, `BaseUnit`, `HsnCode`, `Karat`
-- `tally_voucher_type_snapshots` — `ParentType`, `IsDeemedPositive`
+- `tally_voucher_type_snapshots` — the name only
 
 A refresh inserts the new batch and deletes every earlier batch of that master type in the same transaction; their rows go by cascade. Nothing is written as `superseded`. A `superseded` batch left by an older build is deleted by the next refresh of its master type.
 
@@ -169,7 +185,7 @@ Logo, signature, and watermark images uploaded by the operator, stored inline.
 
 Index: `("ShowroomId", "AssetKind")`. Upload validation accepts only PNG/JPEG content whose file signature matches, with a 2 MiB decoded-byte cap.
 
-### 1.10 Columns and tables removed in October 2026
+### 1.10 Columns and tables removed since October 2026
 
 The `DropUnusedColumnsAndIndexes` migration removed six columns nothing read: `bills."CreatedBy"`, `bill_revisions."TotalsJson"` and `"RawJson"` on the four master snapshot tables. It also removed twelve indexes that were a prefix of another index or sat on a single-row table.
 
@@ -197,6 +213,18 @@ The `DropInvoiceNumberReservations` migration (11 October 2026) dropped `invoice
 DROP TABLE IF EXISTS public.dropped_20261011_invoice_number_reservations;
 ```
 
+The `DropUnreadColumns` migration (14 November 2026) removed eleven columns that were written and never read: `bills."CounterId"` (always null), `"BillType"` (always `sales`) and `"VoidedAtUtc"`; `bill_revisions."SubmittedAtUtc"` and `"FinalizedAtUtc"`; `"Parent"`, `"PrimaryGroup"`, `"IsRevenue"` and `"Gstin"` on `tally_ledger_snapshots`; `"ParentType"` and `"IsDeemedPositive"` on `tally_voucher_type_snapshots`. When a bill was voided or pushed is in its audit rows (`bill.voided`, `tally.posted`).
+
+Here the copy is one table per source table, `dropped_20261114_<table>`, holding `Id` and that table's dropped columns for the rows where one of them held something (a per-column name for the longest pair would not fit PostgreSQL's 63 characters). Rolling back restores the columns and their values. When the release has settled:
+
+```sql
+DROP TABLE IF EXISTS
+    public.dropped_20261114_bills,
+    public.dropped_20261114_bill_revisions,
+    public.dropped_20261114_tally_ledger_snapshots,
+    public.dropped_20261114_tally_voucher_type_snapshots;
+```
+
 These side tables are removed by hand and not by a migration on purpose: a migration that deleted them would also delete the copies a restored older database makes on its way up.
 
 ---
@@ -213,7 +241,7 @@ These side tables are removed by hand and not by a migration on purpose: a migra
 ### 2.2 Uniqueness
 
 - one revision number per bill
-- one invoice number per `("ShowroomId", "FiscalYear")` (partial unique index on `bills`)
+- one invoice number, and one number core, per `("ShowroomId", "FiscalYear")` (two partial unique indexes on `bills`)
 - one bill per `"CreateOperationId"`
 - one numbering row per `("ShowroomId", "FiscalYear", "DocumentType")`
 

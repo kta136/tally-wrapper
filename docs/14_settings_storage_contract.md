@@ -4,7 +4,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 
 ## Local storage is allowed only for
 
-- the startup config needed to launch the desktop: the server address and the counter name (`DesktopBootstrap` in `appsettings.json`)
+- the startup config needed to launch the desktop: the server address (`DesktopBootstrap` in `appsettings.json`)
 - `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json`: the server address this workstation saved in Settings → Server
 - a stable workstation identity used for client presence (`desktop-identity.local.json`)
 - the admin unlock token, held in memory only (TTL-bounded)
