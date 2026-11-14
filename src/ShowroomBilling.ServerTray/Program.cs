@@ -34,6 +34,29 @@ internal static class Program
             return;
         }
 
+        // The elevated copy the tray starts when Windows will not let it start
+        // or stop the service itself. It says nothing: the tray that started it
+        // reads the exit code and reports.
+        if (GetArgumentValue(args, ServerInstaller.ServiceControlArgument) is { } verb)
+        {
+            try
+            {
+                if (!ServiceCommands.TryParse(verb, out var action))
+                {
+                    throw new ArgumentException($"'{verb}' is not start, stop or restart.");
+                }
+
+                ServiceCommands.Apply(options.ServiceName, action);
+            }
+            catch (Exception ex)
+            {
+                ServerInstaller.Log(options, $"Service {verb} FAILED {ex}");
+                Environment.ExitCode = 1;
+            }
+
+            return;
+        }
+
         var installed = ServerInstaller.EnsureInstalledInteractive(options);
         if (!installed)
         {

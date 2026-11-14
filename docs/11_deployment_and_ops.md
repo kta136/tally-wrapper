@@ -91,6 +91,8 @@ Copy `publish\server\TallyWrapper.Server.exe` to the Tally server and run it. Th
 
 Running the same EXE again is idempotent. It checks the extracted API, service registration, service environment, firewall rule, maintenance token, tray startup registration, and service status, then repairs only missing or stale pieces.
 
+When the EXE carries a different API from the installed one (an upgrade), the service is stopped, the new `ShowroomBilling.Api.exe` is written beside the old one and swapped in, and the one it replaced is kept in the same folder as `ShowroomBilling.Api.exe.previous`. The installed API is never written over in place, so a copy that fails part-way leaves it as it was. If any step of setup fails on a server that was already installed, the service is started again with whichever API is in place, and the failure is in `server-install.log`. To go back by hand: stop the service, rename `.previous` over the exe, start the service. A database that the newer build's migrations have already changed may not suit the older API (§11).
+
 This EXE is the only server installer. The tray has no uninstall. To remove the server, exit the tray and run `tools\uninstall-server-api-service.ps1` elevated, as the user whose tray starts at sign-in: it removes the service, both firewall rule names and the start-up entry, and keeps `C:\ProgramData\ShowroomBilling` unless `-RemoveConfig` is given.
 
 The service install sets:
@@ -247,7 +249,7 @@ The EF provider is explicitly targeted at PostgreSQL 18. New application-created
 
 ## 5. Server tray
 
-`ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. It uses Windows Service Control Manager for service state and control, so start/stop/restart still works when the API is stopped.
+`ShowroomBilling.ServerTray` is installed only on the Tally server and started at user login. It is a companion UI and bootstrapper, not the long-running API host. It uses Windows Service Control Manager for service state and control, so start/stop/restart still works when the API is stopped. Windows lets only an administrator start or stop a service, and the tray runs with the signed-in user's ordinary rights: when Windows refuses, **Start**, **Restart**, **Stop** and **Stop server and exit** do the action in an elevated copy of the tray, behind the same Windows permission prompt as Install. Answering No there leaves the service as it was.
 
 The dashboard (double-click the tray icon, or **Open dashboard** in its menu) opens on one sentence: **Ready for billing**, or **Counters cannot bill** and why. Under it:
 

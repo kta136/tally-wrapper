@@ -122,27 +122,48 @@ public static class ServerInstaller
         Log(options, $"LAN CIDR: {lanCidr}");
 
         var apiChanged = ApiExecutableChanged(options.ApiExecutablePath);
-        if (apiChanged && IsServiceInstalled(options.ServiceName))
+        var wasInstalled = IsServiceInstalled(options.ServiceName);
+        try
         {
-            Log(options, "Embedded API differs; stopping service before replacement.");
-            StopService(options.ServiceName);
+            if (apiChanged && wasInstalled)
+            {
+                Log(options, "Embedded API differs; stopping service before replacement.");
+                StopService(options.ServiceName);
+                if (TryGetServiceStatus(options.ServiceName) is { } status and not ServiceControllerStatus.Stopped)
+                {
+                    // A running exe can be renamed, so the swap below would
+                    // go through and the old API would simply keep running.
+                    throw new InvalidOperationException(
+                        $"The service did not stop (it is {status}), so the API was not replaced. Run setup again.");
+                }
+            }
+            if (apiChanged)
+            {
+                Log(options, $"Writing embedded API executable; the one it replaces is kept as {Path.GetFileName(options.ApiExecutablePath)}{PreviousSuffix}.");
+                WriteApiExecutable(options.ApiExecutablePath);
+            }
+
+            Log(options, "Ensuring maintenance token.");
+            EnsureMaintenanceToken(options.ConfigRoot);
+            Log(options, "Ensuring Windows Service.");
+            EnsureService(options);
+            Log(options, "Ensuring service environment.");
+            EnsureServiceEnvironment(options, lanCidr);
+            Log(options, "Ensuring service recovery settings.");
+            EnsureServiceFailureRecovery(options.ServiceName);
+            Log(options, "Ensuring firewall rule.");
+            EnsureFirewallRule(options, lanCidr);
         }
-        if (apiChanged)
+        catch when (wasInstalled)
         {
-            Log(options, "Writing embedded API executable.");
-            WriteApiExecutable(options.ApiExecutablePath);
+            // The counters need the server more than they need this upgrade.
+            // Whatever failed, start it again with the API that is in place:
+            // the old one, unless the swap had already been made.
+            Log(options, "Install/repair failed; starting the service again with the API that is in place.");
+            EnsureServiceRunning(options.ServiceName);
+            throw;
         }
 
-        Log(options, "Ensuring maintenance token.");
-        EnsureMaintenanceToken(options.ConfigRoot);
-        Log(options, "Ensuring Windows Service.");
-        EnsureService(options);
-        Log(options, "Ensuring service environment.");
-        EnsureServiceEnvironment(options, lanCidr);
-        Log(options, "Ensuring service recovery settings.");
-        EnsureServiceFailureRecovery(options.ServiceName);
-        Log(options, "Ensuring firewall rule.");
-        EnsureFirewallRule(options, lanCidr);
         Log(options, "Starting service if needed.");
         EnsureServiceRunning(options.ServiceName);
         Log(options, "Install/repair completed.");
@@ -211,8 +232,45 @@ public static class ServerInstaller
     private static void WriteApiExecutable(string targetPath)
     {
         using var stream = OpenApiResource();
-        using var file = File.Create(targetPath);
-        stream.CopyTo(file);
+        ReplaceKeepingPrevious(stream, targetPath);
+    }
+
+    /// <summary>What the file an upgrade replaced is kept as, beside the new one.</summary>
+    internal const string PreviousSuffix = ".previous";
+
+    /// <summary>
+    /// Puts <paramref name="content"/> at <paramref name="path"/> without a
+    /// moment in which the file there is half-written. The content is written
+    /// beside it first and then swapped in, and the file it replaces is kept
+    /// as <c>.previous</c>. Writing straight over the file emptied it first,
+    /// so a copy that failed part-way (a full disk, a virus scanner holding
+    /// the file) left the server with no API to start.
+    /// </summary>
+    internal static void ReplaceKeepingPrevious(Stream content, string path)
+    {
+        var incoming = path + ".new";
+        try
+        {
+            using (var file = File.Create(incoming))
+            {
+                content.CopyTo(file);
+                file.Flush(flushToDisk: true);
+            }
+
+            if (File.Exists(path))
+            {
+                File.Replace(incoming, path, path + PreviousSuffix, ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(incoming, path);
+            }
+        }
+        catch
+        {
+            try { File.Delete(incoming); } catch { }
+            throw;
+        }
     }
 
     private static Stream OpenApiResource()
@@ -361,6 +419,17 @@ public static class ServerInstaller
             // Replacement will fail if the binary is still locked; that error is more useful.
         }
     }
+
+    /// <summary>The argument that makes an elevated copy start, stop or restart the service and exit.</summary>
+    internal const string ServiceControlArgument = "--service";
+
+    /// <summary>
+    /// Does a service action in an elevated copy of this exe. The exit code is
+    /// 0 when it worked; null when the copy never started, which is what
+    /// answering No at the Windows permission prompt gives.
+    /// </summary>
+    internal static int? ControlServiceElevated(ServiceCommand action) =>
+        RunSelfElevated(ServiceControlArgument, ServiceCommands.Verb(action));
 
     /// <summary>
     /// Runs this exe again as administrator and waits for it. Null when it

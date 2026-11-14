@@ -20,21 +20,11 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
         return installed;
     }
 
-    public bool StartService(IWin32Window? owner = null) =>
-        ControlService(ServiceControllerStatus.Running, "start", owner);
+    public bool StartService(IWin32Window? owner = null) => ControlService(ServiceCommand.Start, owner);
 
-    public bool StopService(IWin32Window? owner = null) =>
-        ControlService(ServiceControllerStatus.Stopped, "stop", owner);
+    public bool StopService(IWin32Window? owner = null) => ControlService(ServiceCommand.Stop, owner);
 
-    public bool RestartService(IWin32Window? owner = null)
-    {
-        if (!StopService(owner))
-        {
-            return false;
-        }
-
-        return StartService(owner);
-    }
+    public bool RestartService(IWin32Window? owner = null) => ControlService(ServiceCommand.Restart, owner);
 
     /// <summary>The API service's status, or null when it is not installed.</summary>
     public ServiceControllerStatus? GetServiceStatus() => ServerInstaller.TryGetServiceStatus(options.ServiceName);
@@ -71,41 +61,46 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
         Process.Start(new ProcessStartInfo { FileName = options.InstallLogPath, UseShellExecute = true });
     }
 
-    private bool ControlService(ServiceControllerStatus target, string verb, IWin32Window? owner)
+    private bool ControlService(ServiceCommand action, IWin32Window? owner)
     {
+        var problem = TryControlService(action);
+        StatusChanged?.Invoke(this, EventArgs.Empty);
+        if (problem is null)
+        {
+            return true;
+        }
+
+        CopyableMessageDialog.ShowMessage(owner, problem, MessageBoxIcon.Error);
+        return false;
+    }
+
+    /// <summary>
+    /// Starts, stops or restarts the service. Null when it worked, otherwise
+    /// what to tell the operator. The tray runs with the signed-in user's
+    /// ordinary rights, and Windows lets only an administrator do this, so a
+    /// refusal is answered by doing it in an elevated copy of the tray, behind
+    /// the same Windows permission prompt as Install.
+    /// </summary>
+    private string? TryControlService(ServiceCommand action)
+    {
+        var verb = ServiceCommands.Verb(action);
         try
         {
-            using var service = new ServiceController(options.ServiceName);
-            service.Refresh();
-
-            if (target == ServiceControllerStatus.Running && service.Status != ServiceControllerStatus.Running)
+            ServiceCommands.Apply(options.ServiceName, action);
+            return null;
+        }
+        catch (Exception ex) when (ServiceCommands.IsAccessDenied(ex))
+        {
+            return ServerInstaller.ControlServiceElevated(action) switch
             {
-                if (service.Status == ServiceControllerStatus.StopPending)
-                {
-                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
-                    service.Refresh();
-                }
-
-                service.Start();
-                service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
-            }
-            else if (target == ServiceControllerStatus.Stopped && service.Status != ServiceControllerStatus.Stopped)
-            {
-                service.Stop();
-                service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
-            }
-
-            StatusChanged?.Invoke(this, EventArgs.Empty);
-            return true;
+                0 => null,
+                null => $"The service did not {verb}.\n\nWindows asked for permission and it was not given.",
+                _ => $"The service did not {verb}.\n\nThe install log has the reason: {options.InstallLogPath}",
+            };
         }
         catch (Exception ex)
         {
-            CopyableMessageDialog.ShowMessage(
-                owner,
-                $"The service did not {verb}.\n\n{ex.Message}\n\nWindows lets an administrator start and stop services. Run Tally Wrapper Server as administrator, or give this user that right.",
-                MessageBoxIcon.Error);
-            StatusChanged?.Invoke(this, EventArgs.Empty);
-            return false;
+            return $"The service did not {verb}.\n\n{ex.Message}";
         }
     }
 

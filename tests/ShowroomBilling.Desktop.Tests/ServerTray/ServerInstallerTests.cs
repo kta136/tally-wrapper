@@ -139,6 +139,118 @@ public sealed class ServerInstallerTests
     }
 
     [Fact]
+    public void An_upgrade_swaps_the_api_in_and_keeps_the_one_it_replaced()
+    {
+        var folder = Directory.CreateTempSubdirectory("tw-installer-test-").FullName;
+        var path = Path.Combine(folder, "api.exe");
+        try
+        {
+            // A first install has nothing to keep.
+            ServerInstaller.ReplaceKeepingPrevious(new MemoryStream([1, 1, 1]), path);
+            Assert.Equal([1, 1, 1], File.ReadAllBytes(path));
+            Assert.Equal(["api.exe"], Directory.GetFiles(folder).Select(Path.GetFileName));
+
+            ServerInstaller.ReplaceKeepingPrevious(new MemoryStream([2, 2]), path);
+            Assert.Equal([2, 2], File.ReadAllBytes(path));
+            Assert.Equal([1, 1, 1], File.ReadAllBytes(path + ServerInstaller.PreviousSuffix));
+
+            // Only the last one replaced is kept.
+            ServerInstaller.ReplaceKeepingPrevious(new MemoryStream([3]), path);
+            Assert.Equal([3], File.ReadAllBytes(path));
+            Assert.Equal([2, 2], File.ReadAllBytes(path + ServerInstaller.PreviousSuffix));
+            Assert.Equal(2, Directory.GetFiles(folder).Length);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_copy_that_fails_part_way_leaves_the_installed_api_as_it_was()
+    {
+        var folder = Directory.CreateTempSubdirectory("tw-installer-test-").FullName;
+        var path = Path.Combine(folder, "api.exe");
+        try
+        {
+            File.WriteAllBytes(path, [1, 1, 1]);
+
+            Assert.Throws<IOException>(() =>
+                ServerInstaller.ReplaceKeepingPrevious(new FailsPartWay(), path));
+
+            Assert.Equal([1, 1, 1], File.ReadAllBytes(path));
+            Assert.Equal(["api.exe"], Directory.GetFiles(folder).Select(Path.GetFileName));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("start", ServiceCommand.Start)]
+    [InlineData(" Stop ", ServiceCommand.Stop)]
+    [InlineData("RESTART", ServiceCommand.Restart)]
+    public void The_elevated_copy_understands_the_verbs_the_tray_sends(string verb, object expected)
+    {
+        Assert.True(ServiceCommands.TryParse(verb, out var action));
+        Assert.Equal((ServiceCommand)expected, action);
+        Assert.True(ServiceCommands.TryParse(ServiceCommands.Verb(action), out var roundTrip));
+        Assert.Equal(action, roundTrip);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("delete")]
+    public void Anything_else_is_not_a_service_action(string? verb)
+    {
+        Assert.False(ServiceCommands.TryParse(verb, out _));
+    }
+
+    [Fact]
+    public void Only_a_refusal_for_lack_of_rights_is_answered_by_asking_for_them()
+    {
+        const int accessDenied = 5;
+        const int serviceDoesNotExist = 1060;
+        Exception Wrapped(int code) => new InvalidOperationException(
+            "Cannot open the service on computer '.'.", new System.ComponentModel.Win32Exception(code));
+
+        Assert.True(ServiceCommands.IsAccessDenied(Wrapped(accessDenied)));
+        Assert.False(ServiceCommands.IsAccessDenied(Wrapped(serviceDoesNotExist)));
+        Assert.False(ServiceCommands.IsAccessDenied(new System.ServiceProcess.TimeoutException("The service did not stop in time.")));
+    }
+
+    /// <summary>A source that gives a little and then fails, as a full disk or a held file would.</summary>
+    private sealed class FailsPartWay : Stream
+    {
+        private bool _gaveSome;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_gaveSome)
+            {
+                throw new IOException("There is not enough space on the disk.");
+            }
+
+            _gaveSome = true;
+            buffer[offset] = 9;
+            return 1;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
     public void The_workstation_address_comes_from_the_adapter_with_a_gateway()
     {
         var chosen = ServerUrlHelper.ChooseLanAddress(
