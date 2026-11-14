@@ -57,7 +57,7 @@ public sealed class ServerInstallerTests
     }
 
     [Theory]
-    [InlineData("192.168.1.24", 24, "192.168.1.0/24")]
+    [InlineData("192.168.1.9", 24, "192.168.1.0/24")]
     [InlineData("192.168.1.130", 25, "192.168.1.128/25")]
     [InlineData("10.20.30.40", 16, "10.20.0.0/16")]
     [InlineData("10.20.30.40", 8, "10.0.0.0/8")]
