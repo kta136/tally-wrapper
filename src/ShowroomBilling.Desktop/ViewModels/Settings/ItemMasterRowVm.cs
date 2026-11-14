@@ -75,6 +75,18 @@ public partial class ItemMasterRowVm : ObservableObject
         DefaultStockMappingLabel = e.DefaultStockMappingLabel ?? string.Empty,
     };
 
+    /// <summary>Takes another row's values, so that whatever holds this row keeps it across a reload.</summary>
+    public void CopyFrom(ItemMasterRowVm other)
+    {
+        Name = other.Name;
+        Unit = other.Unit;
+        WastagePercent = other.WastagePercent;
+        ItemCategory = other.ItemCategory;
+        PricingMode = other.PricingMode;
+        DefaultLabourPerGram = other.DefaultLabourPerGram;
+        DefaultStockMappingLabel = other.DefaultStockMappingLabel;
+    }
+
     public bool TryBuildEntry(out ItemMasterEntry entry, out string error)
     {
         entry = default!;

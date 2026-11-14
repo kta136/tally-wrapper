@@ -498,13 +498,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         // silently swallows the failure and the operator pays the full
         // cold-path cost on first SaveDraft instead.
         if (value == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync(waitForApi: true);
-        if (value == NavTab.Settings) _ = Settings.LoadAsync();
+        if (value == NavTab.Settings) _ = Settings.RefreshOnShownAsync();
     }
 
     partial void OnActiveDialogChanged(string? value)
     {
         _dialogCoordinator.OnActiveDialogChanged(value);
-        _printCoordinator.OnActiveDialogChanged(value);
         Handover?.OnActiveDialogChanged(value);
     }
 

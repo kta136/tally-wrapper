@@ -17,6 +17,14 @@ public partial class KaratMasterRowVm : ObservableObject
         TallyItem = e.TallyItem ?? string.Empty,
     };
 
+    /// <summary>Takes another row's values, so that whatever holds this row keeps it across a reload.</summary>
+    public void CopyFrom(KaratMasterRowVm other)
+    {
+        Label = other.Label;
+        PurityPercent = other.PurityPercent;
+        TallyItem = other.TallyItem;
+    }
+
     public bool TryBuildEntry(out KaratMasterEntry entry, out string error)
     {
         entry = default!;

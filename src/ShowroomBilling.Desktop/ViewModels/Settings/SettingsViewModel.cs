@@ -338,6 +338,14 @@ public partial class SettingsViewModel : ObservableObject,
         StatusMessage = string.Empty;
     }
 
+    /// <summary>
+    /// Called each time the Settings tab is shown: loads what the server has
+    /// now, unless an edit is in progress. A load replaces the draft, so it
+    /// used to throw away, without a word, whatever had been typed and not
+    /// yet saved when the operator looked at another tab and came back.
+    /// </summary>
+    public Task RefreshOnShownAsync() => IsEditing ? Task.CompletedTask : LoadAsync();
+
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)

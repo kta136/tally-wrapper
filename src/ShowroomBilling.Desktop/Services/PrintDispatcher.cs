@@ -99,6 +99,18 @@ public sealed class PrintDispatcher : IPrintDispatcher
         }
     }
 
+    public void RefreshPrinters()
+    {
+        // A read that fails keeps the last good list: better than showing none.
+        if (LoadPrinters() is { } loaded)
+        {
+            lock (_printerCacheGate)
+            {
+                (_availablePrinters, _defaultPrinter) = loaded;
+            }
+        }
+    }
+
     private void EnsurePrinterCache()
     {
         if (_availablePrinters is not null)
@@ -113,16 +125,21 @@ public sealed class PrintDispatcher : IPrintDispatcher
                 return;
             }
 
-            (_availablePrinters, _defaultPrinter) = LoadPrinters();
+            // A failed read is not kept, so the next call tries again. Kept, it
+            // meant "no printers" until the app was restarted.
+            if (LoadPrinters() is { } loaded)
+            {
+                (_availablePrinters, _defaultPrinter) = loaded;
+            }
         }
     }
 
-    private static (IReadOnlyList<string> Printers, string? DefaultPrinter) LoadPrinters()
+    /// <summary>The installed printers and the default one, or null when Windows could not list them.</summary>
+    private static (IReadOnlyList<string> Printers, string? DefaultPrinter)? LoadPrinters()
     {
         try
         {
             using var server = new LocalPrintServer();
-            using var defaultQueue = LocalPrintServer.GetDefaultPrintQueue();
             var queues = server.GetPrintQueues(new[]
             {
                 EnumeratedPrintQueueTypes.Local,
@@ -135,7 +152,7 @@ public sealed class PrintDispatcher : IPrintDispatcher
                     .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                return (names, defaultQueue?.FullName);
+                return (names, ReadDefaultPrinter());
             }
             finally
             {
@@ -147,7 +164,21 @@ public sealed class PrintDispatcher : IPrintDispatcher
         }
         catch
         {
-            return (Array.Empty<string>(), null);
+            return null;
+        }
+    }
+
+    // Read apart from the list: a PC with printers but no default one still has a list to show.
+    private static string? ReadDefaultPrinter()
+    {
+        try
+        {
+            using var defaultQueue = LocalPrintServer.GetDefaultPrintQueue();
+            return defaultQueue?.FullName;
+        }
+        catch
+        {
+            return null;
         }
     }
 

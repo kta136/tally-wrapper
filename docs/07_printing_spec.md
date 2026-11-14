@@ -59,10 +59,21 @@ Tally Wrapper implementation:
   the local `IPrintPreferencesStore`
 - when enabled and a printer is remembered (or a Windows default printer exists),
   post-save jobs go straight to the printer with the copy defaults and clamped
-  layout from the cloud settings plus the locally remembered printer settings;
-  the invoice screen clears immediately
+  layout from the cloud settings plus the locally remembered printer settings
+- the invoice screen clears as soon as the bill is saved, in both modes, and the
+  print is made from the bill as it was saved. The operator can start the next
+  bill while the first prints; nothing that happens to the print touches the form
+- post-save prints run one at a time, in the order the bills were saved: a bill
+  saved while another is printing is printed after it
 - when direct print fails (no remembered/default printer, or the print queue
-  rejects the job) the flow falls back to preview so the operator sees the issue
+  rejects the job) the flow falls back to preview so the operator sees the issue.
+  If the operator has another dialog open by then, the preview does not replace
+  it: the status line says the bill was saved but not printed, and to print it
+  from the Bills tab
+- the printer list and the Windows default printer are read again each time the
+  preview opens, so a printer added or made the default while the app runs
+  appears without a restart; a read that fails is not kept, and the next one
+  tries again
 
 ### 1.4 PDF export
 

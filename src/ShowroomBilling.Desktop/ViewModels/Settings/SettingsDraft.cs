@@ -104,8 +104,16 @@ public partial class SettingsDraft : ObservableObject
         DiscountLedger = dto.Ledgers.DiscountLedger;
         SalesVoucherType = dto.Ledgers.SalesVoucherType;
 
-        ReplaceRows(ItemMasterRows, MasterDataJson.ParseItemsOrEmpty(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry));
-        ReplaceRows(KaratRows, MasterDataJson.ParseKaratsOrEmpty(dto.Masters.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry));
+        SyncRows(
+            ItemMasterRows,
+            MasterDataJson.ParseItemsOrEmpty(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry).ToList(),
+            row => row.Name,
+            (kept, loaded) => kept.CopyFrom(loaded));
+        SyncRows(
+            KaratRows,
+            MasterDataJson.ParseKaratsOrEmpty(dto.Masters.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry).ToList(),
+            row => row.Label,
+            (kept, loaded) => kept.CopyFrom(loaded));
     }
 
     /// <summary>
@@ -233,14 +241,62 @@ public partial class SettingsDraft : ObservableObject
         return true;
     }
 
-    private void ReplaceRows<T>(ObservableCollection<T> target, IEnumerable<T> rows) where T : INotifyPropertyChanged
+    /// <summary>
+    /// Makes <paramref name="target"/> hold what was loaded while keeping the
+    /// row objects it already has: a row with the same name takes the loaded
+    /// values instead of being swapped for a new object. The Invoice tab's
+    /// lines point at these rows (a line's item and its karat). A line whose
+    /// row was swapped lost it, and the next change to that line picked the
+    /// item up again by name and put the item's default wastage and labour
+    /// over what had been typed. Every load comes through here: a reload,
+    /// Edit, Discard and Save. Rows are added to and taken from the list one
+    /// at a time, so <see cref="HandleRowsChanged"/> does the subscribing.
+    /// </summary>
+    private static void SyncRows<T>(
+        ObservableCollection<T> target,
+        IReadOnlyList<T> loaded,
+        Func<T, string?> nameOf,
+        Action<T, T> copyInto) where T : class
     {
-        foreach (var row in target) row.PropertyChanged -= OnRowPropertyChanged;
-        target.Clear();
-        foreach (var row in rows)
+        var unclaimed = target.ToList();
+        var wanted = new List<T>(loaded.Count);
+        foreach (var row in loaded)
         {
-            row.PropertyChanged += OnRowPropertyChanged;
-            target.Add(row);
+            var name = nameOf(row)?.Trim();
+            var kept = unclaimed.FirstOrDefault(candidate =>
+                string.Equals(nameOf(candidate)?.Trim(), name, StringComparison.OrdinalIgnoreCase));
+            if (kept is null)
+            {
+                wanted.Add(row);
+                continue;
+            }
+
+            unclaimed.Remove(kept);
+            copyInto(kept, row);
+            wanted.Add(kept);
+        }
+
+        foreach (var gone in unclaimed)
+        {
+            target.Remove(gone);
+        }
+
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            if (i < target.Count && ReferenceEquals(target[i], wanted[i]))
+            {
+                continue;
+            }
+
+            var at = target.IndexOf(wanted[i]);
+            if (at >= 0)
+            {
+                target.Move(at, i);
+            }
+            else
+            {
+                target.Insert(i, wanted[i]);
+            }
         }
     }
 

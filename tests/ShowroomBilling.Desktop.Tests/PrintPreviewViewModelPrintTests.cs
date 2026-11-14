@@ -50,6 +50,23 @@ public sealed class PrintPreviewViewModelPrintTests
     }
 
     [Fact]
+    public async Task Opening_the_preview_shows_a_printer_added_since_the_last_open()
+    {
+        var dispatcher = new FakePrintDispatcher("Counter Printer");
+        var vm = new PrintPreviewViewModel(dispatcher, new FakePrintPreferencesStore());
+        var copies = new CopyDefaults(Original: true, Duplicate: false, Triplicate: false);
+
+        vm.Initialize(new[] { Content("INV/001") }, PrintLayoutOptions.Default, copies);
+        await WaitForAsync(() => vm.Printers.Count == 1);
+
+        dispatcher.Installed.Add("Back Office Printer");
+        vm.Initialize(new[] { Content("INV/001") }, PrintLayoutOptions.Default, copies);
+        await WaitForAsync(() => vm.Printers.Count == 2);
+
+        Assert.Equal(new[] { "Counter Printer", "Back Office Printer" }, vm.Printers);
+    }
+
+    [Fact]
     public void Print_settings_selection_saves_local_preferences()
     {
         var preferences = new FakePrintPreferencesStore();
@@ -294,8 +311,13 @@ public sealed class PrintPreviewViewModelPrintTests
                 PrintCollationMode.Uncollated,
             ]);
 
-        public IReadOnlyList<string> AvailablePrinters() => new[] { printerName };
+        // What Windows has now, and what the dispatcher saw when it last read.
+        public List<string> Installed { get; } = [printerName];
+        private string[] _lastRead = [printerName];
+
+        public IReadOnlyList<string> AvailablePrinters() => _lastRead;
         public string? DefaultPrinter() => printerName;
+        public void RefreshPrinters() => _lastRead = [.. Installed];
         public PrintJobCapabilities GetPrinterCapabilities(string selectedPrinterName) => Capabilities;
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
 

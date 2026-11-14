@@ -27,8 +27,8 @@ internal sealed class ShellPrintCoordinator(
     IShellPrintHost host)
 {
     private PrintSettingsDto? _printDefaults;
-    private bool _invoiceAwaitingPostPrintReset;
-    private bool _postSavePrintInProgress;
+    // The post-save prints so far: each new one runs after it.
+    private Task _postSavePrints = Task.CompletedTask;
 
     public void ApplyPrintSettings(PrintSettingsDto print, MasterDataSettingsDto? masters = null)
     {
@@ -53,36 +53,52 @@ internal sealed class ShellPrintCoordinator(
         }
     }
 
-    public async Task HandleInvoiceSaveCompletedAsync()
+    /// <summary>
+    /// Called when the Invoice tab has saved a bill: frees the form for the
+    /// next bill at once, then prints the saved one.
+    /// </summary>
+    public Task HandleInvoiceSaveCompletedAsync()
     {
-        // A second Ctrl+S while the first save is still printing would
-        // otherwise print another "Original".
-        if (_postSavePrintInProgress)
-        {
-            return;
-        }
-
-        _postSavePrintInProgress = true;
-        try
-        {
-            await PrintSavedInvoiceAsync();
-        }
-        finally
-        {
-            _postSavePrintInProgress = false;
-        }
-    }
-
-    private async Task PrintSavedInvoiceAsync()
-    {
+        // What to print is taken now, from the bill as it was saved, because
+        // the form is emptied on the next line and the print may have to wait
+        // for the one before it.
         var content = host.Invoice.BuildSavedPrintContent(companyProfileProvider.Current);
+        var layout = printLayoutOptionsProvider.Current;
+
+        // The bill is saved, so nothing on the form is needed any more. The
+        // form used to be emptied only when the print had finished, which
+        // wiped whatever the operator had started on the next bill meanwhile.
+        host.Invoice.ClearCommand.Execute(null);
         if (content is null)
         {
-            host.Invoice.ClearCommand.Execute(null);
-            return;
+            return Task.CompletedTask;
         }
 
-        var layout = printLayoutOptionsProvider.Current;
+        // One print at a time, in the order the bills were saved. A bill
+        // saved while another is printing waits its turn; it used to be
+        // skipped without a word.
+        _postSavePrints = PrintAfterAsync(_postSavePrints, content, layout);
+        return _postSavePrints;
+    }
+
+    private async Task PrintAfterAsync(Task earlierPrints, BillPrintContent content, PrintLayoutOptions layout)
+    {
+        try
+        {
+            await earlierPrints;
+        }
+        catch
+        {
+            // An earlier bill's print failing is that bill's problem.
+        }
+
+        await PrintSavedInvoiceAsync(content, layout);
+    }
+
+    private async Task PrintSavedInvoiceAsync(BillPrintContent content, PrintLayoutOptions layout)
+    {
+        var number = content.InvoiceNumber;
+        var directPrintFailed = false;
 
         if (printPreferences.DirectPrintAfterSave)
         {
@@ -94,7 +110,7 @@ internal sealed class ShellPrintCoordinator(
                     BuildCopiesFromDefaults(),
                     layout);
 
-                host.Invoice.SaveStatus = $"Printing to {printer}…";
+                host.Invoice.SaveStatus = $"Saved · {number} · printing to {printer}…";
 
                 bool printed;
                 try
@@ -109,16 +125,26 @@ internal sealed class ShellPrintCoordinator(
 
                 if (printed)
                 {
-                    host.Invoice.SaveStatus = $"Printed · {printer}";
-                    host.Invoice.ClearCommand.Execute(null);
+                    host.Invoice.SaveStatus = $"Printed · {number} · {printer}";
                     return;
                 }
 
-                host.Invoice.SaveStatus = "Direct print failed — opening preview.";
+                directPrintFailed = true;
             }
         }
 
-        _invoiceAwaitingPostPrintReset = true;
+        // By now the operator may be in another dialog (a direct print takes
+        // seconds). Opening the preview would replace that dialog, so the
+        // status line says what to do instead.
+        if (host.ActiveDialog is not null)
+        {
+            host.Invoice.SaveStatus = $"{number} was saved but not printed. Print it from the Bills tab.";
+            return;
+        }
+
+        host.Invoice.SaveStatus = directPrintFailed
+            ? $"Saved · {number} · direct print failed, so the preview is open"
+            : $"Saved · {number}";
         OpenPreview([content], layout);
     }
 
@@ -233,15 +259,6 @@ internal sealed class ShellPrintCoordinator(
             // Best effort. The real print/preview path will surface failures.
         }
     });
-
-    public void OnActiveDialogChanged(string? value)
-    {
-        if (value is null && _invoiceAwaitingPostPrintReset)
-        {
-            _invoiceAwaitingPostPrintReset = false;
-            host.Invoice.ClearCommand.Execute(null);
-        }
-    }
 
     private IReadOnlyList<CopyLabel> BuildCopiesFromDefaults()
     {

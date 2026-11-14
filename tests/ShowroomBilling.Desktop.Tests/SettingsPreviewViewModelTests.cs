@@ -278,6 +278,7 @@ public class SettingsPreviewViewModelTests
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
         public IReadOnlyList<string> AvailablePrinters() => Array.Empty<string>();
         public string? DefaultPrinter() => null;
+        public void RefreshPrinters() { }
         public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
         public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options) => Array.Empty<byte[]>();
         public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null) => false;

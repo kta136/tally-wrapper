@@ -41,8 +41,107 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         Assert.Equal(1, dispatcher.PrintCount);
         Assert.Equal("Counter Printer", dispatcher.LastPrinterName);
         Assert.Equal(settings, dispatcher.LastPrintSettings);
-        Assert.Equal(string.Empty, host.Invoice.SaveStatus);
+        Assert.Equal("Printed · INV/005 · Counter Printer", host.Invoice.SaveStatus);
         Assert.Null(host.ActiveDialog);
+    }
+
+    [Fact]
+    public async Task The_form_is_free_for_the_next_bill_while_the_saved_one_prints()
+    {
+        var host = new FakePrintHost();
+        using var dispatcher = new FakePrintDispatcher { HoldPrints = true };
+        var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
+        PopulateInvoice(host.Invoice);
+
+        var printing = coordinator.HandleInvoiceSaveCompletedAsync();
+
+        // Emptied at save, not when the printer is done.
+        Assert.Equal(0, host.Invoice.ItemCount);
+        Assert.Equal(string.Empty, host.Invoice.PartyName);
+
+        // The operator starts the next bill while the first is still printing.
+        PopulateInvoice(host.Invoice, number: "INV/006", party: "Next Customer");
+        dispatcher.ReleasePrints();
+        await printing;
+
+        Assert.Equal(["INV/005"], dispatcher.Printed);
+        Assert.Equal("Next Customer", host.Invoice.PartyName);
+        Assert.Equal(1, host.Invoice.ItemCount);
+        Assert.Null(host.ActiveDialog);
+    }
+
+    [Fact]
+    public async Task A_bill_saved_while_another_prints_is_printed_after_it()
+    {
+        var host = new FakePrintHost();
+        using var dispatcher = new FakePrintDispatcher { HoldPrints = true };
+        var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
+
+        PopulateInvoice(host.Invoice);
+        var first = coordinator.HandleInvoiceSaveCompletedAsync();
+        PopulateInvoice(host.Invoice, number: "INV/006", party: "Next Customer");
+        var second = coordinator.HandleInvoiceSaveCompletedAsync();
+
+        dispatcher.ReleasePrints();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(["INV/005", "INV/006"], dispatcher.Printed);
+        Assert.Equal(0, host.Invoice.ItemCount);
+    }
+
+    [Fact]
+    public async Task A_failed_direct_print_opens_the_preview_without_touching_the_next_bill()
+    {
+        var host = new FakePrintHost();
+        using var dispatcher = new FakePrintDispatcher { HoldPrints = true, PrintSucceeds = false };
+        var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
+        PopulateInvoice(host.Invoice);
+
+        var printing = coordinator.HandleInvoiceSaveCompletedAsync();
+        PopulateInvoice(host.Invoice, number: "INV/006", party: "Next Customer");
+        dispatcher.ReleasePrints();
+        await printing;
+
+        Assert.Equal("printPreview", host.ActiveDialog);
+        Assert.Contains("INV/005", host.Invoice.SaveStatus);
+
+        // Closing the preview used to empty the form.
+        host.ActiveDialog = null;
+        Assert.Equal("Next Customer", host.Invoice.PartyName);
+        Assert.Equal(1, host.Invoice.ItemCount);
+    }
+
+    [Fact]
+    public async Task A_failed_direct_print_does_not_replace_a_dialog_the_operator_has_opened_meanwhile()
+    {
+        var host = new FakePrintHost();
+        using var dispatcher = new FakePrintDispatcher { HoldPrints = true, PrintSucceeds = false };
+        var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
+        PopulateInvoice(host.Invoice);
+
+        var printing = coordinator.HandleInvoiceSaveCompletedAsync();
+        host.ActiveDialog = "adminUnlock";
+        dispatcher.ReleasePrints();
+        await printing;
+
+        Assert.Equal("adminUnlock", host.ActiveDialog);
+        Assert.Equal("INV/005 was saved but not printed. Print it from the Bills tab.", host.Invoice.SaveStatus);
+    }
+
+    [Fact]
+    public async Task Without_direct_print_the_form_is_emptied_and_the_preview_opens()
+    {
+        var host = new FakePrintHost();
+        using var dispatcher = new FakePrintDispatcher();
+        var coordinator = CreateCoordinator(host, dispatcher, directPrint: false);
+        PopulateInvoice(host.Invoice);
+
+        await coordinator.HandleInvoiceSaveCompletedAsync();
+
+        Assert.Equal(0, host.Invoice.ItemCount);
+        Assert.Equal("printPreview", host.ActiveDialog);
+        Assert.Equal("Saved · INV/005", host.Invoice.SaveStatus);
+        Assert.Empty(dispatcher.Printed);
     }
 
     [Fact]
@@ -69,18 +168,28 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         Assert.Equal("Add a line before previewing the invoice.", host.Invoice.SaveStatus);
     }
 
-    private static ShellPrintCoordinator CreateCoordinator(FakePrintHost host) => new(
+    private static ShellPrintCoordinator CreateCoordinator(
+        FakePrintHost host,
+        FakePrintDispatcher? dispatcher = null,
+        bool directPrint = false) => new(
         billsApiClient: null!,
         companyProfileProvider: new FakeCompanyProfileProvider(),
         printLayoutOptionsProvider: new FakePrintLayoutOptionsProvider(),
-        printDispatcher: new FakePrintDispatcher(),
-        printPreferences: new FakePrintPreferencesStore(),
+        printDispatcher: dispatcher ?? new FakePrintDispatcher(),
+        printPreferences: new FakePrintPreferencesStore
+        {
+            DirectPrintAfterSave = directPrint,
+            LastPrinterName = directPrint ? "Counter Printer" : null,
+        },
         host: host);
 
-    private static void PopulateInvoice(InvoiceViewModel invoice)
+    private static void PopulateInvoice(
+        InvoiceViewModel invoice,
+        string number = "INV/005",
+        string party = "Walk-in Customer")
     {
-        invoice.InvoiceNumber = "INV/005";
-        invoice.PartyName = "Walk-in Customer";
+        invoice.InvoiceNumber = number;
+        invoice.PartyName = party;
         invoice.Rate24Kt = 6000m;
         invoice.Lines[0].ItemName = "Gold Chain";
         invoice.Lines[0].GrossWeight = 10m;
@@ -127,14 +236,37 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         }
     }
 
-    private sealed class FakePrintDispatcher : IPrintDispatcher
+    private sealed class FakePrintDispatcher : IPrintDispatcher, IDisposable
     {
+        private readonly ManualResetEventSlim _released = new(initialState: false);
+        private readonly List<string> _printed = [];
+
         public int PrintCount { get; private set; }
         public string? LastPrinterName { get; private set; }
         public PrintJobSettings? LastPrintSettings { get; private set; }
 
+        /// <summary>A print waits, as a real one does for the printer, until <see cref="ReleasePrints"/>.</summary>
+        public bool HoldPrints { get; init; }
+        public bool PrintSucceeds { get; init; } = true;
+
+        /// <summary>The invoice numbers sent to the printer, in order.</summary>
+        public IReadOnlyList<string> Printed
+        {
+            get
+            {
+                lock (_printed)
+                {
+                    return _printed.ToArray();
+                }
+            }
+        }
+
+        public void ReleasePrints() => _released.Set();
+        public void Dispose() => _released.Dispose();
+
         public IReadOnlyList<string> AvailablePrinters() => ["Counter Printer"];
         public string? DefaultPrinter() => "Counter Printer";
+        public void RefreshPrinters() { }
         public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
         public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => Array.Empty<byte[]>();
@@ -145,10 +277,23 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
             string printerName,
             PrintJobSettings? settings = null)
         {
+            if (HoldPrints && !_released.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new TimeoutException("The test never released the print.");
+            }
+
             PrintCount++;
             LastPrinterName = printerName;
             LastPrintSettings = settings;
-            return true;
+            if (PrintSucceeds)
+            {
+                lock (_printed)
+                {
+                    _printed.Add(options.Content.InvoiceNumber);
+                }
+            }
+
+            return PrintSucceeds;
         }
 
         public bool PrintToPrinter(

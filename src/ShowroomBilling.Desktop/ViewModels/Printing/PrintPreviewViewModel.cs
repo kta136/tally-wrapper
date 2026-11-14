@@ -238,8 +238,13 @@ public partial class PrintPreviewViewModel : ObservableObject
 
         try
         {
+            // Read from Windows on every open: a printer added or made the
+            // default since the app started has to show up here.
             var (printers, defaultPrinter) = await Task.Run(() =>
-                (_dispatcher.AvailablePrinters(), _dispatcher.DefaultPrinter()));
+            {
+                _dispatcher.RefreshPrinters();
+                return (_dispatcher.AvailablePrinters(), _dispatcher.DefaultPrinter());
+            });
 
             if (version != _printerLoadVersion)
             {
