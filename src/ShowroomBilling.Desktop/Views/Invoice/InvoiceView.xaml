@@ -9,6 +9,7 @@
              xmlns:conv="clr-namespace:ShowroomBilling.Desktop.Converters"
              mc:Ignorable="d"
              Background="{StaticResource BgPanelBrush}"
+             shell:InputLock.IsLocked="{Binding IsSaving}"
              d:DataContext="{d:DesignInstance Type=vm:InvoiceViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />

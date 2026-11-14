@@ -142,9 +142,15 @@ internal sealed class ShellPrintCoordinator(
             return;
         }
 
-        host.Invoice.SaveStatus = directPrintFailed
-            ? $"Saved · {number} · direct print failed, so the preview is open"
-            : $"Saved · {number}";
+        if (directPrintFailed)
+        {
+            host.Invoice.ShowStatus($"Saved · {number} · direct print failed, so the preview is open", "warn");
+        }
+        else
+        {
+            host.Invoice.SaveStatus = $"Saved · {number}";
+        }
+
         OpenPreview([content], layout);
     }
 

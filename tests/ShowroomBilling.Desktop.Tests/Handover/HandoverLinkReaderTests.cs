@@ -155,6 +155,7 @@ public sealed class HandoverLinkReaderTests
         "no lines",
         "a missing line total",
         "a line total in tenths of paise",
+        "a discount in tenths of paise",
         "a weight with four decimals",
         "a negative weight",
         "a wastage below -100",
@@ -304,6 +305,7 @@ public sealed class HandoverLinkReaderTests
             case "no lines": bill["lines"] = new JsonArray(); break;
             case "a missing line total": line.Remove("lineTotal"); break;
             case "a line total in tenths of paise": line["lineTotal"] = 72569.305m; break;
+            case "a discount in tenths of paise": line["discountAmount"] = 100.005m; break;
             case "a weight with four decimals": line["netWeight"] = 10.3001m; break;
             case "a negative weight": line["lessWeight"] = -0.2m; break;
             case "a wastage below -100": line["wastagePercent"] = -100.5m; break;

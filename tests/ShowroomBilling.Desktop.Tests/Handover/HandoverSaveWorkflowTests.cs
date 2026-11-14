@@ -265,6 +265,41 @@ public sealed class HandoverSaveWorkflowTests
     }
 
     [Fact]
+    public async Task A_save_whose_answer_was_lost_is_printed_when_the_bills_are_handed_over_afresh()
+    {
+        // The operator closes the result instead of pressing Try again, and
+        // the sender hands the same bills over once more: a new hand-over,
+        // with the app's one list of saves that got no answer.
+        var saveId = Guid.NewGuid();
+        var document = Document(null, saveId);
+        var unanswered = new Dictionary<Guid, HandoverBillResult>();
+        HandoverSaveWorkflow NewHandover() => new(
+            _api,
+            (_, _, _) => Task.FromResult(_adminToken),
+            bill =>
+            {
+                _printed.Add(bill);
+                return Task.FromResult(_printerWorks);
+            },
+            unanswered);
+        _api.FailNextCreates = 1;
+
+        await RunAsync(document, NewHandover());
+        _api.ByOperation[saveId] = Stored(BillStates.Pending, _api.Creates[0].Payload);
+        var afresh = await RunAsync(document, NewHandover());
+
+        var outcome = Assert.Single(afresh.Outcomes);
+        Assert.Equal(HandoverBillResult.Saved, outcome.Result);
+        Assert.Equal(HandoverPrintResult.Printed, outcome.Print);
+        Assert.Single(_printed);
+
+        // Printed once: a third hand-over finds it unchanged.
+        var again = await RunAsync(document, NewHandover());
+        Assert.Equal(HandoverBillResult.Unchanged, Assert.Single(again.Outcomes).Result);
+        Assert.Single(_printed);
+    }
+
+    [Fact]
     public async Task A_bill_that_did_not_print_is_saved_and_says_so()
     {
         _printerWorks = false;

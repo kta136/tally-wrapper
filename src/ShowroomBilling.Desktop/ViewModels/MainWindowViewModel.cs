@@ -670,7 +670,19 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
     {
         if (_healthTimer is not null) return;
         _healthTimer = new DispatcherTimer { Interval = HealthPollInterval };
-        _healthTimer.Tick += async (_, _) => await RefreshHealthAsync();
+        _healthTimer.Tick += async (_, _) =>
+        {
+            try
+            {
+                await RefreshHealthAsync();
+            }
+            catch
+            {
+                // A poll that fails is repeated at the next tick. Nothing
+                // awaits this handler, so an error let out of it would
+                // reach the app as one nobody caught.
+            }
+        };
         _healthTimer.Start();
     }
 

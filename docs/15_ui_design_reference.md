@@ -131,7 +131,7 @@ Global (registered in the app shell):
 - `Esc` close the top-most dialog
 - `F9` print estimate (Invoice screen active)
 - `Ctrl+Shift+N` new bill (Invoice screen active; in the shortcuts list and on its button, not in the bottom bar)
-- `Ctrl+S` saves the active screen: Save Bill on Invoice, Save in Settings.
+- `Ctrl+S` saves the active screen: Save Bill on Invoice, Save in Settings. While a bill is being saved or loaded the Invoice form takes no keys or clicks (`shell:InputLock`): what is on the form at Save is what is saved, and the form then empties.
 
 The bottom bar lists the keys of the open screen:
 

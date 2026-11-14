@@ -38,7 +38,8 @@ internal sealed class ShellHealthCoordinator(
         $"Database upgrade needed — this version expects {pendingMigrations} schema migration(s) the database has not had. "
         + "Bills cannot be loaded or saved until the administrator applies them.";
 
-    private int _healthPollInFlight;
+    // The poll that is out now, if any. Only ever touched on the UI thread.
+    private Task? _healthPoll;
     private bool _databaseAnsweredLastPoll;
     private DateTimeOffset? _lastMasterFreshnessCheckedAtUtc;
     private DateTimeOffset? _lastTallyHealthCheckedAtUtc;
@@ -80,50 +81,72 @@ internal sealed class ShellHealthCoordinator(
         bool forceTallyCompany = false,
         CancellationToken cancellationToken = default)
     {
-        if (Interlocked.Exchange(ref _healthPollInFlight, 1) == 1) return;
-        try
+        while (_healthPoll is { IsCompleted: false } pollInFlight)
         {
-            SystemHealthSnapshot snapshot;
-            var checkTallyCompany = forceTallyCompany || IsDue(_lastTallyHealthCheckedAtUtc);
-            var checkMasterFreshness = forceTallyCompany || IsDue(_lastMasterFreshnessCheckedAtUtc);
+            // A timer tick that finds a poll already out adds nothing.
+            if (!forceTallyCompany)
+            {
+                return;
+            }
+
+            // The operator asked (Refresh, a push, the health dialog). The
+            // poll that is out was started before they asked and may not
+            // include the Tally check, so its answer is not theirs: wait for
+            // it and then ask again. This call used to return at once, and
+            // the Bills tab acted on the old answer.
             try
             {
-                snapshot = await healthApiClient.GetSnapshotAsync(
-                    checkTallyCompany,
-                    checkMasterFreshness,
-                    cancellationToken);
+                await pollInFlight;
             }
             catch
             {
-                snapshot = SystemHealthSnapshot.Unreachable();
+                // That poll's failure was its own caller's.
             }
-
-            if (snapshot.ApiReachable && !checkMasterFreshness && host.LastHealthSnapshot?.Masters is { } previousMasters)
-            {
-                snapshot = snapshot with { Masters = previousMasters };
-            }
-            else if (snapshot.Masters is not null)
-            {
-                _lastMasterFreshnessCheckedAtUtc = DateTimeOffset.UtcNow;
-            }
-
-            if (snapshot.ApiReachable && !checkTallyCompany && host.LastHealthSnapshot?.TallyCompany is { } previousTally)
-            {
-                snapshot = snapshot with { TallyCompany = previousTally };
-            }
-            else if (snapshot.TallyCompany is not null)
-            {
-                _lastTallyHealthCheckedAtUtc = DateTimeOffset.UtcNow;
-            }
-
-            host.LastHealthSnapshot = snapshot;
-            host.LastHealthCheckedAtUtc = DateTimeOffset.UtcNow;
-            ApplyHealthSnapshot(snapshot, operatorAsked: forceTallyCompany);
         }
-        finally
+
+        var poll = PollAsync(forceTallyCompany, cancellationToken);
+        _healthPoll = poll;
+        await poll;
+    }
+
+    private async Task PollAsync(bool forceTallyCompany, CancellationToken cancellationToken)
+    {
+        SystemHealthSnapshot snapshot;
+        var checkTallyCompany = forceTallyCompany || IsDue(_lastTallyHealthCheckedAtUtc);
+        var checkMasterFreshness = forceTallyCompany || IsDue(_lastMasterFreshnessCheckedAtUtc);
+        try
         {
-            Interlocked.Exchange(ref _healthPollInFlight, 0);
+            snapshot = await healthApiClient.GetSnapshotAsync(
+                checkTallyCompany,
+                checkMasterFreshness,
+                cancellationToken);
         }
+        catch
+        {
+            snapshot = SystemHealthSnapshot.Unreachable();
+        }
+
+        if (snapshot.ApiReachable && !checkMasterFreshness && host.LastHealthSnapshot?.Masters is { } previousMasters)
+        {
+            snapshot = snapshot with { Masters = previousMasters };
+        }
+        else if (snapshot.Masters is not null)
+        {
+            _lastMasterFreshnessCheckedAtUtc = DateTimeOffset.UtcNow;
+        }
+
+        if (snapshot.ApiReachable && !checkTallyCompany && host.LastHealthSnapshot?.TallyCompany is { } previousTally)
+        {
+            snapshot = snapshot with { TallyCompany = previousTally };
+        }
+        else if (snapshot.TallyCompany is not null)
+        {
+            _lastTallyHealthCheckedAtUtc = DateTimeOffset.UtcNow;
+        }
+
+        host.LastHealthSnapshot = snapshot;
+        host.LastHealthCheckedAtUtc = DateTimeOffset.UtcNow;
+        ApplyHealthSnapshot(snapshot, operatorAsked: forceTallyCompany);
     }
 
     private void ApplyHealthSnapshot(SystemHealthSnapshot snapshot, bool operatorAsked)

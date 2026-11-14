@@ -112,6 +112,25 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
     }
 
     [Fact]
+    public async Task A_failed_direct_print_is_not_shown_in_the_colour_of_success()
+    {
+        var host = new FakePrintHost();
+        using var dispatcher = new FakePrintDispatcher { PrintSucceeds = false };
+        var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
+        PopulateInvoice(host.Invoice);
+
+        await coordinator.HandleInvoiceSaveCompletedAsync();
+
+        // The message opens with "Saved", which on its own reads as green.
+        Assert.StartsWith("Saved · INV/005", host.Invoice.StatusText);
+        Assert.Equal("warn", host.Invoice.StatusTone);
+
+        // A plain status after it goes back to being judged by its wording.
+        host.Invoice.SaveStatus = "Saved · INV/006";
+        Assert.Equal("ok", host.Invoice.StatusTone);
+    }
+
+    [Fact]
     public async Task A_failed_direct_print_does_not_replace_a_dialog_the_operator_has_opened_meanwhile()
     {
         var host = new FakePrintHost();

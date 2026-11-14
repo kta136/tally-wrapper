@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -213,7 +214,34 @@ public partial class InvoiceViewModel : ObservableObject
     public bool IsInvoiceNumberAssigned => InvoiceNumber != InvoiceNumberPlaceholder;
 
     partial void OnInvoiceNumberChanged(string value) => OnPropertyChanged(nameof(IsInvoiceNumberAssigned));
-    partial void OnSaveStatusChanged(string value) => UpdateStatus();
+    // The colour that came with the status text (ShowStatus). Null when the
+    // text was set on its own and the colour is worked out from its wording.
+    private string? _saveStatusTone;
+    private string? _toneForNextStatus;
+
+    /// <summary>
+    /// Sets the status line's text together with its colour ("ok", "warn",
+    /// "err" or "neutral"), for a message whose opening word does not say
+    /// which it is: "Saved · … · direct print failed" is not a green message.
+    /// </summary>
+    public void ShowStatus(string text, string tone)
+    {
+        _toneForNextStatus = tone;
+        SaveStatus = text;
+        _toneForNextStatus = null;
+        if (_saveStatusTone != tone)
+        {
+            // The text was already this one, so no change was raised for it.
+            _saveStatusTone = tone;
+            UpdateStatus();
+        }
+    }
+
+    partial void OnSaveStatusChanged(string value)
+    {
+        _saveStatusTone = _toneForNextStatus;
+        UpdateStatus();
+    }
     partial void OnPartyNameChanged(string value)
     {
         MarkChanged();
@@ -470,7 +498,7 @@ public partial class InvoiceViewModel : ObservableObject
         }
         else if (!string.IsNullOrWhiteSpace(SaveStatus) && !(_hasUnsavedChanges && IsSavedMessage(SaveStatus)))
         {
-            (StatusText, StatusTone) = (SaveStatus, ToneOf(SaveStatus));
+            (StatusText, StatusTone) = (SaveStatus, _saveStatusTone ?? ToneOf(SaveStatus));
         }
         else if (_hasUnsavedChanges && (_draftBillId is not null || ItemCount > 0 || !string.IsNullOrWhiteSpace(PartyName)))
         {
@@ -680,10 +708,42 @@ public partial class InvoiceViewModel : ObservableObject
             BillResponse bill;
             if (_draftBillId is null)
             {
+                // An id left from an earlier Save means that Save got no usable
+                // answer: it may or may not have reached the server.
+                var earlierSaveMayHaveLanded = _createOperationId is not null;
                 _createOperationId ??= Guid.NewGuid();
-                bill = await _billsApi.CreateDraftAsync(
-                    new CreateBillDraftRequest(null, payload, _createOperationId),
-                    cancellationToken);
+                try
+                {
+                    bill = await _billsApi.CreateDraftAsync(
+                        new CreateBillDraftRequest(null, payload, _createOperationId),
+                        cancellationToken);
+                }
+                catch (ApiException ex) when (earlierSaveMayHaveLanded && ex.StatusCode == HttpStatusCode.Conflict)
+                {
+                    // It had landed: the bill exists, holding what the form held
+                    // then, and the form has been changed since. The server
+                    // will not create it again with other contents, so every
+                    // later Save was refused until the form was emptied. Take
+                    // that bill as the one being edited and save onto it.
+                    var earlier = await _billsApi.GetByOperationAsync(_createOperationId.Value, cancellationToken);
+                    if (earlier is null)
+                    {
+                        throw;
+                    }
+
+                    _draftBillId = earlier.Id;
+                    _draftRevisionId = earlier.CurrentRevisionId;
+                    _createOperationId = null;
+                    CurrentBillState = earlier.State;
+                    if (!string.IsNullOrWhiteSpace(earlier.InvoiceNumber))
+                        InvoiceNumber = earlier.InvoiceNumber!;
+                    bill = await _billsApi.UpdateDraftAsync(
+                        earlier.Id,
+                        new UpdateBillDraftRequest(payload, earlier.CurrentRevisionId),
+                        adminToken,
+                        cancellationToken);
+                }
+
                 _draftBillId = bill.Id;
                 _createOperationId = null;
             }

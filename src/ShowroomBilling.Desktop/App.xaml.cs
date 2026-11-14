@@ -34,6 +34,9 @@ public partial class App : System.Windows.Application
     private ILogger<App>? _logger;
     private HandoverPipe.Server? _handoverPipe;
     private ToastWindow? _handoverToast;
+    private readonly UnhandledErrorPolicy _unhandledErrors = UnhandledErrorPolicy.Default();
+    private bool _startedUp;
+    private bool _reportingError;
 
     public App()
     {
@@ -182,6 +185,8 @@ public partial class App : System.Windows.Application
         phaseTimer.Restart();
         StartHandover(_host.Services.GetRequiredService<MainWindowViewModel>(), handoverLink);
         window.Show();
+        // From here an unexpected error is reported and survived; before it, there was no app to keep.
+        _startedUp = true;
         var showWindowMs = phaseTimer.ElapsedMilliseconds;
         var windowVisibleMs = totalTimer.ElapsedMilliseconds;
 
@@ -255,7 +260,37 @@ public partial class App : System.Windows.Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
-        ReportFatal("Billing encountered an unexpected error and must close.", e.Exception);
+        if (!_unhandledErrors.ShouldKeepRunning(_startedUp, DateTimeOffset.UtcNow))
+        {
+            ReportFatal("Billing encountered an unexpected error and must close.", e.Exception);
+            return;
+        }
+
+        _logger?.LogError(e.Exception, "Unhandled error on the UI thread; the app stays open.");
+        if (_reportingError)
+        {
+            // Raised while the message below is already on screen: it is in the log, and one box is enough.
+            return;
+        }
+
+        // A message box and not an overlay: whatever failed may be the shell
+        // itself, and the box does not depend on it.
+        _reportingError = true;
+        try
+        {
+            MessageBox.Show(
+                "Something went wrong, and what you were doing may not have finished.\n\n"
+                + $"{e.Exception.Message}\n\n"
+                + "Billing is still open and your bill is still on screen. Check it before you save. "
+                + "Details were written to the application log.",
+                "Tally Wrapper",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _reportingError = false;
+        }
     }
 
     private void OnAppDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)

@@ -30,7 +30,14 @@ public static class HandoverLinkReader
     public const int MaxNotSent = 100;
     public const int MaxPartyNameLength = 200;
 
-    /// <summary>A link longer than this is refused before it is decoded. Windows passes at most 32 767 characters anyway.</summary>
+    /// <summary>
+    /// A link longer than this is refused before it is decoded. It is only a guard on what this
+    /// reader will look at, not the size a hand-over may be: the link reaches the app as an
+    /// argument on its command line, and a Windows command line holds 32,767 characters, the
+    /// app's own path included. A longer link never gets here at all (Windows does not start
+    /// the app, and nothing tells the operator), so the sender has to keep under that itself
+    /// (docs/18 §1), and <see cref="MaxBills"/> and <see cref="MaxLines"/> cannot both be reached.
+    /// </summary>
     public const int MaxLinkLength = 1024 * 1024;
 
     public static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(10);
@@ -326,6 +333,8 @@ public static class HandoverLinkReader
            && IsMoney(line.StoneValue)
            && IsMoney(line.HallmarkAmount)
            && IsMoney(line.DiscountAmount)
+           // Added to the line's total and to the bill's discount, so whole paise too.
+           && decimal.Round(line.DiscountAmount, 2) == line.DiscountAmount
            && IsMoney(line.LineTotal)
            // Kept exactly, so it must be whole paise.
            && decimal.Round(line.LineTotal, 2) == line.LineTotal

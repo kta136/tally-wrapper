@@ -16,6 +16,7 @@ tallywrapper:handover?d=<D>&s=<S>
 - `S`: HMAC-SHA256 over the ASCII bytes of the `D` string exactly as it appears in the link, keyed with the hand-over key, base64url without padding (43 characters).
 - The hand-over key: 32 random bytes, written as base64url without padding (43 characters). The same string is set on the sender's server and in Tally Wrapper (Settings → Hand-over), which decodes it to the 32 bytes before use.
 - Accepted forms: `tallywrapper:handover?…`, `tallywrapper://handover?…` and `tallywrapper:handover/?…`, the scheme and `handover` in any case, with exactly the two parameters `d` and `s`. Anything else is refused.
+- **Length: the sender must keep the whole link under 32,000 characters, and check that itself.** Windows hands the link to Tally Wrapper on a command line, which holds 32,767 characters with the app's own path. A longer link is not refused with a message: Windows does not start the app at all, so nothing happens on the counter. That is about 24,000 bytes of JSON, of the order of 80 to 100 lines over all the bills of one hand-over; the counts in §2 (20 bills, 100 lines a bill) are upper bounds that cannot both be reached. A sender with more than fits sends it as several hand-overs. A browser or other program on the way may cut links off sooner; that has not been measured.
 
 ## 2. The JSON, versions 1 and 2
 
@@ -74,7 +75,7 @@ Version 2 is version 1 with one more field, a bill's `finalAmount`. A sender use
 | `grossWeight`, `lessWeight`, `netWeight` | Grams, at most 3 decimals. `lessWeight` is what came off gross (stones). |
 | `wastagePercent` | The line's wastage, −100 to 1,000. Below zero for an item sold under its purity. |
 | `rate` | Rupees a gram of fine (a 24K rate): the line's metal rupees divided by the sender's fine weight. Null for a line priced by the piece or with no fine weight. |
-| `labourAmount`, `stoneValue`, `hallmarkAmount`, `discountAmount` | Rupees for the whole line. The discount goes in the bill's Discount box (§4). |
+| `labourAmount`, `stoneValue`, `hallmarkAmount`, `discountAmount` | Rupees for the whole line. The discount, whole paise, goes in the bill's Discount box (§4). |
 | `lineTotal` | Rupees, what the line comes to: GST inside, discount already off. Whole paise. Tally Wrapper keeps it, with the discount added back, exactly, unless the line is billed as typed (§4). |
 | `diamondCarats`, `diamondValue` | Optional, 0 when left out: the line's diamonds, in carats (at most 3 decimals) and what they are worth without setting them (whole paise, at most `lineTotal`). The value is also in `stoneValue` and `lineTotal`. A gold line's diamonds are billed as a line of their own (§4). |
 | `roundingAllowance` | Optional, 0 when left out: how far the sender's own rounding can have moved `lineTotal` (a fine weight rounded to the milligram, amounts rounded to the rupee), in rupees, whole paise, at most `lineTotal`. Above 0, the line is billed as typed when that comes within it (§4). |
@@ -131,7 +132,7 @@ One after another, in the hand-over's order (`HandoverSaveWorkflow`):
 - Found, different, and its push to Tally not settled (`posting`, `reconciliation_required`): reported and left alone.
 - Found and different: updated with `expectedRevisionId` = the revision it was found at, then printed. A `posted` bill needs an admin session: with none active, the window comes to the front with the administrator unlock, which then says "[No.] · [Party] is in Tally. Updating it needs the admin passcode.", offers **Unlock and update** and, on Esc, **Skip this bill** ("Not updated").
 - A refusal from the server is that bill's reason; the next bill is still tried.
-- When the server cannot be reached (no answer, or a timeout), nothing more is tried: the rest are "Not saved". A create or update that was sent without an answer is remembered, and when Try again finds the bill saved with the same content it is printed as saved.
+- When the server cannot be reached (no answer, or a timeout), nothing more is tried: the rest are "Not saved". A create or update that was sent without an answer is remembered for as long as the app runs, and when the bill is next found saved with the same content it is printed as saved: on Try again, and equally when the operator closed the result and the sender handed the bills over afresh.
 - `notSent`: each is looked up; one that exists and is not voided is reported "Not in this hand-over", with "Void it in Bills if it’s no longer wanted." Nothing is changed.
 
 The Bills list reloads afterwards if it is open.

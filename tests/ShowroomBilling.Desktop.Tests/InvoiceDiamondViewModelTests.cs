@@ -73,6 +73,44 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
+    public async Task Save_after_a_lost_answer_and_an_edit_updates_the_bill_the_first_save_made()
+    {
+        var api = new FakeBillsApi { FailNextCreates = 1 };
+        var vm = new InvoiceViewModel(api, null, null);
+        var line = vm.Lines[0];
+        line.ItemMaster = DiamondMaster();
+        line.GrossWeight = 2m;
+        line.DiamondRate = 3500m;
+
+        // The first Save reached the server, but its answer did not come back.
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+        var first = api.Creates.Single();
+        var landed = FakeBillsApi.Bill(Guid.NewGuid(), BillStates.Pending, first.Payload, "SR/25-26/0007");
+        api.ByOperation[first.ClientOperationId!.Value] = landed;
+
+        // The operator corrects a figure and saves again.
+        line.GrossWeight = 3m;
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        // The server refused to create it again with other contents; the
+        // change went onto the bill it already had, at the revision found.
+        Assert.Equal(2, api.Creates.Count);
+        var update = Assert.Single(api.Updates);
+        Assert.Equal(landed.Id, update.BillId);
+        Assert.Equal(landed.CurrentRevisionId, update.Request.ExpectedRevisionId);
+        Assert.Equal(3m, update.Request.Payload.Lines.Single().Quantity);
+        Assert.StartsWith("Saved", vm.SaveStatus);
+
+        // From here it is an ordinary saved bill: the next Save updates it.
+        line.GrossWeight = 4m;
+        await vm.SaveDraftCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, api.Creates.Count);
+        Assert.Equal(2, api.Updates.Count);
+        Assert.Equal(landed.Id, api.Updates[1].BillId);
+    }
+
+    [Fact]
     public async Task Clear_after_editing_an_old_bill_resets_date_and_payment()
     {
         var billId = Guid.NewGuid();

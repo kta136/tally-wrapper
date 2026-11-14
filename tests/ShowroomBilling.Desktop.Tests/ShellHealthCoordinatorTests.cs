@@ -64,6 +64,37 @@ public sealed class ShellHealthCoordinatorTests
     }
 
     [Fact]
+    public async Task RefreshHealthAsync_AskedForWhileAPollIsOut_GetsItsOwnAnswerAndIsNotDropped()
+    {
+        var host = new FakeShellHealthHost();
+        var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, null, null, Runtime(pending: 0)));
+        var coordinator = new ShellHealthCoordinator(client, new FakeMastersApiClient(), host);
+        await coordinator.RefreshHealthAsync();
+
+        // The timer's poll is out and has not come back.
+        var hold = new TaskCompletionSource();
+        client.HoldNextPoll = hold;
+        var timerPoll = coordinator.RefreshHealthAsync();
+
+        // The operator presses Refresh meanwhile; another timer tick adds nothing.
+        var asked = coordinator.RefreshHealthAsync(forceTallyCompany: true);
+        await coordinator.RefreshHealthAsync();
+        Assert.False(asked.IsCompleted);
+        Assert.Equal(2, client.Polls);
+
+        client.Snapshot = new SystemHealthSnapshot(true, null, null, DatabaseDown());
+        hold.SetResult();
+        await Task.WhenAll(timerPoll, asked);
+
+        // The timer's answer alone would have been one missed answer, which
+        // leaves the screen as it was. The operator's own check came after it
+        // and is acted on at once.
+        Assert.Equal(3, client.Polls);
+        Assert.Equal(SystemState.Limited, host.SystemState);
+        Assert.Equal("DB DOWN", host.StatusBar.StatusText);
+    }
+
+    [Fact]
     public async Task RefreshHealthAsync_KeepsTheBillOnScreenThroughOneMissedAnswerFromTheDatabase()
     {
         var host = new FakeShellHealthHost();
@@ -159,11 +190,26 @@ public sealed class ShellHealthCoordinatorTests
     {
         public SystemHealthSnapshot Snapshot { get; set; } = snapshot;
 
-        public Task<SystemHealthSnapshot> GetSnapshotAsync(
+        /// <summary>How many polls reached the server.</summary>
+        public int Polls { get; private set; }
+
+        /// <summary>When set, the next poll does not come back until it is completed.</summary>
+        public TaskCompletionSource? HoldNextPoll { get; set; }
+
+        public async Task<SystemHealthSnapshot> GetSnapshotAsync(
             bool includeTallyCompany,
             bool includeMasterFreshness = true,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Snapshot);
+            CancellationToken cancellationToken = default)
+        {
+            Polls++;
+            if (HoldNextPoll is { } hold)
+            {
+                HoldNextPoll = null;
+                await hold.Task;
+            }
+
+            return Snapshot;
+        }
     }
 
     private sealed class FakeMastersApiClient : IMastersApiClient

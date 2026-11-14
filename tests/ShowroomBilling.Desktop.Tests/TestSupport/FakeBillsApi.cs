@@ -114,6 +114,23 @@ internal sealed class FakeBillsApi : IBillsApiClient
             throw new System.Net.Http.HttpRequestException("connection reset");
         }
 
+        // A save the server already has: the same bill for the same contents,
+        // and a refusal for other contents, as the real server answers.
+        if (request.ClientOperationId is Guid operationId && ByOperation.TryGetValue(operationId, out var landed))
+        {
+            if (landed.CurrentRevision?.Payload is { } stored
+                && ViewModels.Handover.HandoverPayloads.SameContent(stored, request.Payload))
+            {
+                return Task.FromResult(landed);
+            }
+
+            throw new ApiException(
+                System.Net.HttpStatusCode.Conflict,
+                "Bill state conflict",
+                $"This save was already recorded as invoice {landed.InvoiceNumber} with different contents. Open that bill from Bills to change it.",
+                rawBody: null);
+        }
+
         return Task.FromResult(Bill(Guid.NewGuid(), BillStates.Pending, request.Payload));
     }
 

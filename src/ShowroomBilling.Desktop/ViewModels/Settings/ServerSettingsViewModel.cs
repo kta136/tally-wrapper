@@ -201,13 +201,15 @@ public partial class ServerSettingsViewModel : ObservableObject
         var addresses = GetCandidateAddresses().Take(254).ToArray();
         var found = new List<string>();
         using var gate = new SemaphoreSlim(32);
+        // One client for the whole sweep: a client apiece was up to 254 of them, each with its own connection pool.
+        using var client = new HttpClient { Timeout = TimeSpan.FromMilliseconds(900) };
         var tasks = addresses.Select(async address =>
         {
             await gate.WaitAsync(cancellationToken);
             try
             {
                 var url = $"http://{address}:{ServerPort}";
-                if (await LooksLikeServerAsync(url, cancellationToken))
+                if (await LooksLikeServerAsync(client, url, cancellationToken))
                 {
                     lock (found)
                     {
@@ -225,12 +227,11 @@ public partial class ServerSettingsViewModel : ObservableObject
         return found.OrderBy(static url => url, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static async Task<bool> LooksLikeServerAsync(string baseUrl, CancellationToken cancellationToken)
+    private static async Task<bool> LooksLikeServerAsync(HttpClient client, string baseUrl, CancellationToken cancellationToken)
     {
         try
         {
-            using var client = new HttpClient { BaseAddress = new Uri(baseUrl), Timeout = TimeSpan.FromMilliseconds(900) };
-            using var live = await client.GetAsync("/api/health/live", cancellationToken);
+            using var live = await client.GetAsync($"{baseUrl}/api/health/live", cancellationToken);
             if (!live.IsSuccessStatusCode)
             {
                 return false;

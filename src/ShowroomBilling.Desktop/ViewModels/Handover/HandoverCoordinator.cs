@@ -49,6 +49,9 @@ public sealed class HandoverCoordinator
     private TaskCompletionSource<HandoverResultChoice>? _resultChoice;
     private bool _running;
 
+    // Saves sent without an answer, remembered across hand-overs (see HandoverSaveWorkflow).
+    private readonly Dictionary<Guid, HandoverBillResult> _unanswered = [];
+
     internal HandoverCoordinator(IBillsApiClient? bills, IHandoverHost host, TimeProvider? time = null)
     {
         _bills = bills;
@@ -128,7 +131,7 @@ public sealed class HandoverCoordinator
             return;
         }
 
-        var workflow = new HandoverSaveWorkflow(_bills!, RequestAdminTokenAsync, _host.PrintSavedBillAsync);
+        var workflow = new HandoverSaveWorkflow(_bills!, RequestAdminTokenAsync, _host.PrintSavedBillAsync, _unanswered);
         while (true)
         {
             var run = await RunAsync(workflow, document);

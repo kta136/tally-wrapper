@@ -59,15 +59,19 @@ internal sealed record HandoverRun(IReadOnlyList<HandoverBillOutcome> Outcomes, 
 internal sealed class HandoverSaveWorkflow(
     IBillsApiClient bills,
     Func<BillResponse, string, CancellationToken, Task<string?>> requestAdminToken,
-    Func<BillResponse, Task<bool>> print)
+    Func<BillResponse, Task<bool>> print,
+    Dictionary<Guid, HandoverBillResult>? unanswered = null)
 {
     public const string ServerUnreachableReason = "The server can't be reached.";
 
     /// <summary>
     /// Save IDs whose create or update was sent without an answer. Found again with the same
-    /// content on Try again, such a bill was saved by that attempt and still needs printing.
+    /// content, such a bill was saved by that attempt and still needs printing. The coordinator
+    /// hands in one list for the whole run of the app, so that this holds not only for Try again
+    /// but also when the operator closes the result and the sender hands the bills over afresh:
+    /// kept per hand-over, the bill was then reported "Unchanged" and never printed.
     /// </summary>
-    private readonly Dictionary<Guid, HandoverBillResult> _unanswered = [];
+    private readonly Dictionary<Guid, HandoverBillResult> _unanswered = unanswered ?? [];
 
     public async Task<HandoverRun> RunAsync(HandoverDocument document, HandoverMasters masters, CancellationToken cancellationToken)
     {
