@@ -140,8 +140,17 @@ internal sealed class FakeBillsApi : IBillsApiClient
         return Write($"update:{billId}", () => Bill(billId, BillStates.Pending, request.Payload));
     }
 
+    /// <summary>
+    /// The state a push, retry or repost leaves the bill in. The server answers these calls with
+    /// the bill also when Tally refused the voucher (failed) or never answered (reconciliation required).
+    /// </summary>
+    public string PostingLeaves { get; set; } = BillStates.Posted;
+
+    /// <summary>The reason a retry or repost reports when <see cref="PostingLeaves"/> is failed.</summary>
+    public string? PostingError { get; set; }
+
     public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
-        => Write($"push:{billId}", () => Bill(billId, BillStates.Posted));
+        => Write($"push:{billId}", () => Bill(billId, PostingLeaves));
 
     public Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default)
         => Write("push-selected", () => new BillBatchPushResponse(request.BillIds.Count, request.BillIds.Count, 0, false, null, null, []));
@@ -150,10 +159,10 @@ internal sealed class FakeBillsApi : IBillsApiClient
         => Write("push-pending", () => new BillBatchPushResponse(0, 0, 0, false, null, null, []));
 
     public Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default)
-        => Write($"retry:{billId}", () => new BillPostingStatusResponse(billId, BillStates.Posted, null, null));
+        => Write($"retry:{billId}", () => new BillPostingStatusResponse(billId, PostingLeaves, null, PostingError));
 
     public Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default)
-        => Write($"repost:{billId}", () => new BillPostingStatusResponse(billId, BillStates.Posted, null, null));
+        => Write($"repost:{billId}", () => new BillPostingStatusResponse(billId, PostingLeaves, null, PostingError));
 
     public Task<BillResponse> VoidAsync(Guid billId, VoidBillRequest request, CancellationToken cancellationToken = default)
         => Write($"void:{billId}", () => Bill(billId, BillStates.Voided));

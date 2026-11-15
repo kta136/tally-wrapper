@@ -60,9 +60,11 @@ internal sealed class BillActions(
             $"Pushing {bill.Name}…",
             "Push failed",
             busy,
-            async () => new BillActionResult(
-                $"Pushed {bill.Name}.",
-                Bill: await api.PushAsync(bill.Id, new PushBillRequest(note), cancellationToken)));
+            async () =>
+            {
+                var pushed = await api.PushAsync(bill.Id, new PushBillRequest(note), cancellationToken);
+                return new BillActionResult(Outcome("Pushed", bill.Name, pushed.State), Bill: pushed);
+            });
     }
 
     public async Task<BillActionResult?> PushSelectedAsync(IReadOnlyList<Guid> billIds, Action<string> busy, CancellationToken cancellationToken)
@@ -115,7 +117,7 @@ internal sealed class BillActions(
             "Retry",
             busy,
             bill => api.RetryAsync(bill.Id, new RetryBillPostingRequest(note), cancellationToken),
-            count => count == 1 ? $"Retried {bills[0].Name}." : $"Retried {count} bill(s).");
+            sent => PostingOutcome("Retried", bills, sent));
     }
 
     public async Task<BillActionResult?> RepostAsync(IReadOnlyList<BillRef> bills, string? note, Action<string> busy, CancellationToken cancellationToken)
@@ -133,7 +135,36 @@ internal sealed class BillActions(
             "Repost",
             busy,
             bill => api.RepostAsync(bill.Id, new RepostBillRequest(Guid.NewGuid().ToString("N"), note), cancellationToken),
-            count => count == 1 ? $"Reposted {bills[0].Name}." : $"Reposted {count} bill(s).");
+            sent => PostingOutcome("Reposted", bills, sent));
+    }
+
+    /// <summary>
+    /// What a push, retry or repost came to, read from the state the server left the bill in. The
+    /// server answers such a call with the bill also when Tally refused the voucher or never
+    /// answered, so that the call returned does not mean the bill is in Tally.
+    /// </summary>
+    private static string Outcome(string done, string name, string? state, string? reason = null) => state switch
+    {
+        BillStates.Posted => $"{done} {name}.",
+        BillStates.Failed => string.IsNullOrWhiteSpace(reason)
+            ? $"Tally did not accept {name}. Its timeline has the reason."
+            : $"Tally did not accept {name}: {reason}",
+        BillStates.ReconciliationRequired =>
+            $"Tally did not answer for {name}. Check in Tally whether its voucher is there before doing anything else to this bill.",
+        _ => $"{name} is now {BillStateDisplay.Label(state, editedAfterPush: false).ToLowerInvariant()}.",
+    };
+
+    private static string PostingOutcome(string done, IReadOnlyList<BillRef> bills, IReadOnlyList<BillPostingStatusResponse> sent)
+    {
+        if (bills.Count == 1)
+        {
+            return Outcome(done, bills[0].Name, sent[0].BillState, sent[0].LastErrorMessage);
+        }
+
+        var posted = sent.Count(status => status.BillState == BillStates.Posted);
+        return posted == sent.Count
+            ? $"{done} {sent.Count} bill(s)."
+            : $"{done} {sent.Count} bill(s): {posted} went to Tally, {sent.Count - posted} did not. The list shows which.";
     }
 
     public async Task<BillActionResult?> VoidAsync(BillRef bill, Action<string> busy, CancellationToken cancellationToken)
@@ -226,7 +257,7 @@ internal sealed class BillActions(
         string Effect,
         string Check,
         Func<BillListRowViewModel, bool> Allowed,
-        Func<IBillsApiClient, Guid, MarkBillStateRequest, string, CancellationToken, Task> Call);
+        Func<IBillsApiClient, Guid, MarkBillStateRequest, string, CancellationToken, Task<BillResponse>> Call);
 
     private static readonly MarkAction MarkPushed = new(
         "pushed",
@@ -281,9 +312,9 @@ internal sealed class BillActions(
             $"Mark {mark.Word}",
             busy,
             row => mark.Call(api, row.Id, new MarkBillStateRequest(reason), token, cancellationToken),
-            count => count == 1
+            marked => marked.Count == 1
                 ? $"Marked {rows[0].InvoiceNumberDisplay} as {mark.Word}."
-                : $"Marked {count} bill(s) as {mark.Word}.");
+                : $"Marked {marked.Count} bill(s) as {mark.Word}.");
     }
 
     /// <summary>Deletes one bill, after a dry run that says whether Tally holds its voucher.</summary>
@@ -384,14 +415,14 @@ internal sealed class BillActions(
     /// ("<paramref name="verb"/> SR/1…", "<paramref name="what"/> failed"); several are counted
     /// ("<paramref name="verb"/> 2 of 5…", "<paramref name="what"/> stopped").
     /// </summary>
-    private static Task<BillActionResult> ForEachAsync<T>(
+    private static Task<BillActionResult> ForEachAsync<T, TSent>(
         IReadOnlyList<T> bills,
         Func<T, string> name,
         string verb,
         string what,
         Action<string> busy,
-        Func<T, Task> send,
-        Func<int, string> done)
+        Func<T, Task<TSent>> send,
+        Func<IReadOnlyList<TSent>, string> done)
     {
         string Progress(int index) => bills.Count == 1 ? $"{verb} {name(bills[0])}…" : $"{verb} {index + 1} of {bills.Count}…";
 
@@ -401,13 +432,14 @@ internal sealed class BillActions(
             busy,
             async () =>
             {
+                var sent = new List<TSent>(bills.Count);
                 for (var index = 0; index < bills.Count; index++)
                 {
                     busy(Progress(index));
-                    await send(bills[index]);
+                    sent.Add(await send(bills[index]));
                 }
 
-                return new BillActionResult(done(bills.Count));
+                return new BillActionResult(done(sent));
             });
     }
 }

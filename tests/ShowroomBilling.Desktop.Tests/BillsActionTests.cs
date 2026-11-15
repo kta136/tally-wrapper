@@ -463,6 +463,42 @@ public sealed class BillsActionTests
     }
 
     [Fact]
+    public async Task A_push_tally_refused_or_did_not_answer_is_not_reported_as_pushed()
+    {
+        // The server answers a push with the bill whatever Tally did with the voucher.
+        var (details, api, _) = await DetailsLoadedAsync(answer: true);
+        api.PostingLeaves = BillStates.ReconciliationRequired;
+
+        await details.PushCommand.ExecuteAsync(null);
+
+        Assert.Equal(BillStates.ReconciliationRequired, details.Bill?.State);
+        Assert.StartsWith("Tally did not answer for invoice SR/25-26/0001.", details.StatusMessage);
+        Assert.False(details.PushCommand.CanExecute(null));
+
+        api.PostingLeaves = BillStates.Failed;
+        api.PostingError = "Ledger 'Sales' does not exist.";
+        api.GetResponse = FakeBillsApi.Bill(details.Bill!.Id, BillStates.Failed);
+        await details.RetryCommand.ExecuteAsync(null);
+
+        Assert.Equal("Tally did not accept invoice SR/25-26/0001: Ledger 'Sales' does not exist.", details.StatusMessage);
+
+        // The Bills tab says the same of a row, and counts how many of several went through.
+        var (vm, rowsApi, _) = await LoadedAsync(
+            answer: true,
+            Summary("SR/25-26/0001", BillStates.Failed),
+            Summary("SR/25-26/0002", BillStates.Failed));
+        rowsApi.PostingLeaves = BillStates.Failed;
+        var statuses = Statuses(vm);
+
+        await vm.RetryRowCommand.ExecuteAsync(vm.Items.Single(row => row.InvoiceNumber == "SR/25-26/0001"));
+        Assert.Contains("Tally did not accept SR/25-26/0001. Its timeline has the reason.", statuses);
+
+        vm.ToggleVisibleSelection(true);
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
+        Assert.Contains("Retried 2 bill(s): 0 went to Tally, 2 did not. The list shows which.", statuses);
+    }
+
+    [Fact]
     public async Task Details_retry_and_repost_are_the_row_menus_actions_on_the_bill_shown()
     {
         var (details, api, asked) = await DetailsLoadedAsync(answer: true);
