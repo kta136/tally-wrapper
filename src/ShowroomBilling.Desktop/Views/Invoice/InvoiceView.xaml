@@ -556,32 +556,25 @@
                                             <Border Grid.Column="1">
                                                 <shell:FillCell>
                                                 <Grid>
-                                                    <ComboBox x:Name="ItemCombo"
-                                                              FontWeight="Medium"
-                                                              IsEditable="True"
-                                                              IsTextSearchEnabled="False"
-                                                              ItemTemplate="{StaticResource ItemPickerRow}"
-                                                              ItemsSource="{Binding DataContext.ItemMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                              SelectedItem="{Binding ItemMaster, Mode=TwoWay}"
-                                                              StaysOpenOnEdit="True"
-                                                              Text="{Binding ItemName, UpdateSourceTrigger=LostFocus}"
-                                                              TextSearch.TextPath="Name"
-                                                              shell:ComboExtras.DropDownFooter="{StaticResource ItemPickerFooter}"
-                                                              shell:ComboExtras.DropDownMinWidth="420"
-                                                              shell:TypeAhead.Footer="{StaticResource ItemPickerFooter}"
-                                                              shell:TypeAhead.IsEnabled="True"
-                                                              shell:TypeAhead.MinWidth="420"
-                                                              shell:TypeAhead.Path="Name">
-                                                        <ComboBox.Style>
-                                                            <Style BasedOn="{StaticResource TableCellCombo}" TargetType="ComboBox">
+                                                    <shell:SuggestBox x:Name="ItemBox"
+                                                                      FontWeight="Medium"
+                                                                      Footer="{StaticResource ItemPickerFooter}"
+                                                                      ItemTemplate="{StaticResource ItemPickerRow}"
+                                                                      ItemsSource="{Binding DataContext.ItemMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                      ListMinWidth="420"
+                                                                      SelectedItem="{Binding ItemMaster, Mode=TwoWay}"
+                                                                      Text="{Binding ItemName, UpdateSourceTrigger=LostFocus}"
+                                                                      TextPath="Name">
+                                                        <shell:SuggestBox.Style>
+                                                            <Style BasedOn="{StaticResource TableCellSuggest}" TargetType="shell:SuggestBox">
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsDiamond}" Value="True">
                                                                         <Setter Property="Padding" Value="10,0,78,0" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
-                                                        </ComboBox.Style>
-                                                    </ComboBox>
+                                                        </shell:SuggestBox.Style>
+                                                    </shell:SuggestBox>
                                                     <TextBlock Margin="10,0,0,0"
                                                                HorizontalAlignment="Left"
                                                                VerticalAlignment="Center"
@@ -597,7 +590,7 @@
                                                                     <MultiDataTrigger>
                                                                         <MultiDataTrigger.Conditions>
                                                                             <Condition Binding="{Binding IsEmpty}" Value="True" />
-                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=ItemCombo}" Value="False" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=ItemBox}" Value="False" />
                                                                         </MultiDataTrigger.Conditions>
                                                                         <Setter Property="Visibility" Value="Visible" />
                                                                     </MultiDataTrigger>
@@ -622,7 +615,7 @@
                                                                         <MultiDataTrigger.Conditions>
                                                                             <Condition Binding="{Binding IsDiamond}" Value="True" />
                                                                             <Condition Binding="{Binding IsEmpty}" Value="False" />
-                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=ItemCombo}" Value="False" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=ItemBox}" Value="False" />
                                                                         </MultiDataTrigger.Conditions>
                                                                         <Setter Property="Visibility" Value="Visible" />
                                                                     </MultiDataTrigger>
@@ -652,17 +645,12 @@
                                                     </Style>
                                                 </Border.Style>
                                                 <Grid>
-                                                    <ComboBox x:Name="KaratCombo"
-                                                              DisplayMemberPath="Label"
-                                                              IsEditable="True"
-                                                              IsTextSearchEnabled="False"
-                                                              ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                              SelectedItem="{Binding KaratMaster, Mode=TwoWay}"
-                                                              Style="{StaticResource TableCellCombo}"
-                                                              Text="{Binding Karat, UpdateSourceTrigger=LostFocus}"
-                                                              TextSearch.TextPath="Label"
-                                                              shell:TypeAhead.IsEnabled="True"
-                                                              shell:TypeAhead.Path="Label" />
+                                                    <shell:SuggestBox x:Name="KaratBox"
+                                                                      ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                      SelectedItem="{Binding KaratMaster, Mode=TwoWay}"
+                                                                      Style="{StaticResource TableCellSuggest}"
+                                                                      Text="{Binding Karat, UpdateSourceTrigger=LostFocus}"
+                                                                      TextPath="Label" />
                                                     <Border Background="{StaticResource ErrWashBrush}"
                                                             BorderBrush="{StaticResource ErrTextBrush}"
                                                             BorderThickness="2"
@@ -675,7 +663,7 @@
                                                                     <MultiDataTrigger>
                                                                         <MultiDataTrigger.Conditions>
                                                                             <Condition Binding="{Binding NeedsKarat}" Value="True" />
-                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=KaratCombo}" Value="False" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=KaratBox}" Value="False" />
                                                                         </MultiDataTrigger.Conditions>
                                                                         <Setter Property="Visibility" Value="Visible" />
                                                                     </MultiDataTrigger>

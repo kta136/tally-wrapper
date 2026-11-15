@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Desktop.Views.Invoice;
@@ -8,9 +9,10 @@ using ShowroomBilling.Desktop.Views.Invoice;
 namespace ShowroomBilling.Desktop.Tests.Views;
 
 /// <summary>
-/// The real Invoice screen when settings are saved or loaded under an open bill. The item and
-/// karat cells are combo boxes: one drops its selection, and its text, when what it had selected
-/// is no longer in its list, and writes that back to the line. A view-model test cannot see that.
+/// The real Invoice screen when settings are saved or loaded under an open bill: every cell must
+/// go on showing what its line holds. The item and karat cells were editable combo boxes, which
+/// drop a selection that has left their list, blank the text with it and write both back to the
+/// line; a view-model test cannot see that, so this drives the screen.
 /// </summary>
 [Collection(WpfApplicationCollection.Name)]
 public sealed class InvoiceCatalogViewTests
@@ -48,7 +50,7 @@ public sealed class InvoiceCatalogViewTests
             {
                 Rate24Kt = 10_000m,
             };
-            var view = new InvoiceView { DataContext = invoice };
+            var view = Hosted(invoice);
             Layout(view);
 
             var ring = invoice.Lines[0];
@@ -62,7 +64,7 @@ public sealed class InvoiceCatalogViewTests
             chain.GrossWeight = 4m;
             chain.WastagePercent = 4m;
             Layout(view);
-            var itemBefore = CellOf(Combos(view, "ItemCombo")[0]);
+            var itemBefore = CellOf(Cells(view, "ItemBox")[0]);
 
             // Settings saved: the ring's default wastage and the karat's purity changed, the chain is gone.
             settings.Publish(
@@ -70,8 +72,8 @@ public sealed class InvoiceCatalogViewTests
                 karats: [TestMasters.Karat("22K", 92m)]);
             Layout(view);
 
-            var items = Combos(view, "ItemCombo");
-            var karats = Combos(view, "KaratCombo");
+            var items = Cells(view, "ItemBox");
+            var karats = Cells(view, "KaratBox");
             var item = CellOf(items[0]);
             var karat = CellOf(karats[0]);
             var goneItem = CellOf(items[1]);
@@ -79,8 +81,8 @@ public sealed class InvoiceCatalogViewTests
             var (goneName, goneWastage) = (chain.ItemName, chain.WastagePercent);
 
             // The cells write their text to the line when the cursor leaves them.
-            items[0].GetBindingExpression(ComboBox.TextProperty)!.UpdateSource();
-            items[1].GetBindingExpression(ComboBox.TextProperty)!.UpdateSource();
+            items[0].CommitText();
+            items[1].CommitText();
             WpfTestHost.DrainDispatcher();
 
             return new Seen(
@@ -121,6 +123,126 @@ public sealed class InvoiceCatalogViewTests
     }
 
     [Fact]
+    public void A_bill_that_is_there_before_the_screen_is_built_shows_its_items_and_karats_by_name()
+    {
+        // The cells get their selection, their text and the property that names an entry's text in
+        // the order the markup lists them. A cell that showed its selection before it knew that
+        // property showed "ItemMasterEntry { Name = … }", and would have written it to the line.
+        var seen = WpfTestHost.Run(() =>
+        {
+            var settings = OfflineApi.Settings();
+            settings.Publish(
+                items: [TestMasters.Item("Gold Ring", wastage: 8m)],
+                karats: [TestMasters.Karat("22K", 91.6m)]);
+            var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings)
+            {
+                Rate24Kt = 10_000m,
+            };
+            var line = invoice.Lines[0];
+            line.ItemMaster = settings.Catalog.Items[0];
+            line.KaratMaster = settings.Catalog.Karats[0];
+            line.GrossWeight = 10m;
+
+            var view = Hosted(invoice);
+            Layout(view);
+            var item = Cells(view, "ItemBox")[0];
+            var karat = Cells(view, "KaratBox")[0];
+            var shown = (Item: CellOf(item), ItemBox: BoxOf(item).Text, Karat: CellOf(karat), KaratBox: BoxOf(karat).Text);
+
+            // Nothing was typed, so passing through the cells writes nothing new to the line.
+            item.CommitText();
+            karat.CommitText();
+            WpfTestHost.DrainDispatcher();
+            return (shown, line.ItemName, line.Karat);
+        });
+
+        Assert.Equal(new Cell("Gold Ring", "Gold Ring"), seen.shown.Item);
+        Assert.Equal("Gold Ring", seen.shown.ItemBox);
+        Assert.Equal(new Cell("22K", "22K"), seen.shown.Karat);
+        Assert.Equal("22K", seen.shown.KaratBox);
+        Assert.Equal(("Gold Ring", "22K"), (seen.ItemName, seen.Karat));
+    }
+
+    [Fact]
+    public void The_sample_bill_shows_every_item_and_karat_by_name()
+    {
+        // The same thing on the sample the screen pictures are taken from, where it first showed.
+        var seen = WpfTestHost.Run(() =>
+        {
+            var shell = DesignSample.CreateShell();
+            var view = Hosted(shell.Invoice);
+            Layout(view);
+            var lines = shell.Invoice.Lines.Where(line => !line.IsEmpty).ToList();
+            var items = Cells(view, "ItemBox");
+            var karats = Cells(view, "KaratBox");
+            return lines.Select((line, index) => (
+                Line: (line.ItemName, line.Karat),
+                // The cell's own text: a diamond line's karat cell is hidden and has no inner box yet.
+                Cells: (items[index].Text, karats[index].Text))).ToList();
+        });
+
+        Assert.NotEmpty(seen);
+        Assert.All(seen, row => Assert.Equal(row.Line, row.Cells));
+    }
+
+    [Fact]
+    public void The_item_cells_list_draws_each_item_with_its_summary_and_the_karat_cells_shows_the_label()
+    {
+        var seen = WpfTestHost.Run(() =>
+        {
+            var shell = DesignSample.CreateShell();
+            var view = Hosted(shell.Invoice);
+            Layout(view);
+            var itemList = (ListBox)Cells(view, "ItemBox")[0].Template.FindName("PART_List", Cells(view, "ItemBox")[0]);
+            var karatList = (ListBox)Cells(view, "KaratBox")[0].Template.FindName("PART_List", Cells(view, "KaratBox")[0]);
+            return (
+                ItemRow: itemList.ItemTemplate is not null && ReferenceEquals(itemList.ItemTemplate, view.FindResource("ItemPickerRow")),
+                KaratPath: karatList.DisplayMemberPath);
+        });
+
+        Assert.True(seen.ItemRow);
+        Assert.Equal("Label", seen.KaratPath);
+    }
+
+    private static TextBox BoxOf(SuggestBox cell) => (TextBox)cell.Template.FindName("PART_TextBox", cell);
+
+    /// <summary>
+    /// The screen as the app has it: inside a window (never shown). In no window at all, a row's
+    /// cells receive their values in another order, and what went wrong on the real screen did not
+    /// go wrong in the test.
+    /// </summary>
+    private static InvoiceView Hosted(InvoiceViewModel invoice)
+    {
+        var view = new InvoiceView { DataContext = invoice };
+        _ = new Window { Content = view };
+        return view;
+    }
+
+    [Fact]
+    public void A_long_item_name_stays_inside_its_cell()
+    {
+        // A name longer than the column: the cell must stay the column's width and scroll its text,
+        // or its chevron and the end of the name end up out of sight under the next column.
+        var (cell, column, otherRow) = WpfTestHost.Run(() =>
+        {
+            var settings = OfflineApi.Settings();
+            var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings);
+            invoice.Lines[0].ItemName = "Repair of an old chain with a new clasp, a new hook and a length of new links";
+            invoice.Lines[1].ItemName = "Ring";
+            var view = Hosted(invoice);
+            Layout(view);
+
+            var cells = Cells(view, "ItemBox");
+            var border = (FrameworkElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(cells[0])));
+            return (cells[0].ActualWidth, border.ActualWidth, cells[1].ActualWidth);
+        });
+
+        Assert.True(column > 0);
+        Assert.True(cell <= column, $"the cell is {cell} wide in a column of {column}");
+        Assert.Equal(otherRow, cell);
+    }
+
+    [Fact]
     public void Tab_reaches_the_karat_cell_straight_after_the_item_cell()
     {
         // Tab follows the order the cells are written in the line's template, not their columns.
@@ -129,16 +251,16 @@ public sealed class InvoiceCatalogViewTests
         {
             var settings = OfflineApi.Settings();
             var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings);
-            var view = new InvoiceView { DataContext = invoice };
+            var view = Hosted(invoice);
             Layout(view);
 
             var inOrder = Descendants(view).ToList();
-            var itemAt = inOrder.FindIndex(element => element is ComboBox { Name: "ItemCombo" });
-            var karatAt = inOrder.FindIndex(element => element is ComboBox { Name: "KaratCombo" });
-            // The first text box after the item cell that is a cell of its own, not a combo box's inner box.
+            var itemAt = inOrder.FindIndex(element => element is SuggestBox { Name: "ItemBox" });
+            var karatAt = inOrder.FindIndex(element => element is SuggestBox { Name: "KaratBox" });
+            // The first text box after the item cell that is a cell of its own, not a suggest box's inner box.
             var grossAt = inOrder.FindIndex(
                 itemAt + 1,
-                element => element is TextBox box && !IsInsideComboBox(box));
+                element => element is TextBox box && !IsInsideSuggestBox(box));
             return (itemAt, karatAt, grossAt);
         });
 
@@ -147,11 +269,11 @@ public sealed class InvoiceCatalogViewTests
         Assert.True(karat < gross, "the karat cell comes before the gross cell");
     }
 
-    private static bool IsInsideComboBox(DependencyObject element)
+    private static bool IsInsideSuggestBox(DependencyObject element)
     {
         for (var parent = VisualTreeHelper.GetParent(element); parent is not null; parent = VisualTreeHelper.GetParent(parent))
         {
-            if (parent is ComboBox)
+            if (parent is SuggestBox)
             {
                 return true;
             }
@@ -160,7 +282,7 @@ public sealed class InvoiceCatalogViewTests
         return false;
     }
 
-    private static Cell CellOf(ComboBox combo)
+    private static Cell CellOf(SuggestBox combo)
         => new(
             combo.SelectedItem switch
             {
@@ -171,8 +293,8 @@ public sealed class InvoiceCatalogViewTests
             combo.Text);
 
     /// <summary>The cells of that name, one a line, from the first line down.</summary>
-    private static List<ComboBox> Combos(DependencyObject root, string name)
-        => Descendants(root).OfType<ComboBox>().Where(combo => combo.Name == name).ToList();
+    private static List<SuggestBox> Cells(DependencyObject root, string name)
+        => Descendants(root).OfType<SuggestBox>().Where(cell => cell.Name == name).ToList();
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {

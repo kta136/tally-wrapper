@@ -100,8 +100,8 @@
 
     <Style TargetType="{x:Type ComboBoxItem}" BasedOn="{StaticResource ComboItem}" />
 
-    <!--  A row of the type-ahead list: the same look as a row of the drop-down, but it never takes the focus,
-          so the cell keeps it while the list is open.  -->
+    <!--  A row of a SuggestBox's list: the same look as a row of a combo box's drop-down, but it never takes
+          the focus, so the box keeps it while the list is open.  -->
     <Style x:Key="SuggestItem" TargetType="{x:Type ListBoxItem}">
         <Setter Property="OverridesDefaultStyle" Value="True" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -228,15 +228,12 @@
                                   MinWidth="{Binding ActualWidth, ElementName=root, Converter={StaticResource AddDouble}, ConverterParameter=24}"
                                   SnapsToDevicePixels="True">
                                 <Border Margin="12,6,12,20"
-                                        MinWidth="{Binding Path=(shell:ComboExtras.DropDownMinWidth), RelativeSource={RelativeSource TemplatedParent}}"
                                         Background="{StaticResource BgPanelBrush}"
                                         BorderBrush="{StaticResource BorderStrongBrush}"
                                         BorderThickness="1"
                                         CornerRadius="{StaticResource RadiusLg}"
                                         Effect="{StaticResource PopupShadow}">
                                     <DockPanel>
-                                        <!--  shell:ComboExtras.DropDownFooter, such as the keys that work in the list  -->
-                                        <ContentPresenter DockPanel.Dock="Bottom" Content="{Binding Path=(shell:ComboExtras.DropDownFooter), RelativeSource={RelativeSource TemplatedParent}}" />
                                         <ScrollViewer x:Name="DropDownScrollViewer" Margin="4" SnapsToDevicePixels="True">
                                             <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
                                         </ScrollViewer>
@@ -345,55 +342,15 @@
                                   MinWidth="{Binding ActualWidth, ElementName=root, Converter={StaticResource AddDouble}, ConverterParameter=24}"
                                   SnapsToDevicePixels="True">
                                 <Border Margin="12,6,12,20"
-                                        MinWidth="{Binding Path=(shell:ComboExtras.DropDownMinWidth), RelativeSource={RelativeSource TemplatedParent}}"
                                         Background="{StaticResource BgPanelBrush}"
                                         BorderBrush="{StaticResource BorderStrongBrush}"
                                         BorderThickness="1"
                                         CornerRadius="{StaticResource RadiusLg}"
                                         Effect="{StaticResource PopupShadow}">
                                     <DockPanel>
-                                        <ContentPresenter DockPanel.Dock="Bottom" Content="{Binding Path=(shell:ComboExtras.DropDownFooter), RelativeSource={RelativeSource TemplatedParent}}" />
                                         <ScrollViewer Margin="4" SnapsToDevicePixels="True">
                                             <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
                                         </ScrollViewer>
-                                    </DockPanel>
-                                </Border>
-                            </Grid>
-                        </Popup>
-
-                        <!--  shell:TypeAhead: the short list that opens under the cell while the operator types.
-                              It is a list of its own, apart from the drop-down above, so moving in it selects nothing.
-                              It has no fade: typing and Enter are quick, and a list that fades in late and out slowly lags behind them.  -->
-                        <Popup x:Name="PART_Suggest"
-                               AllowsTransparency="True"
-                               Focusable="False"
-                               HorizontalOffset="-12"
-                               IsOpen="{Binding Path=(shell:TypeAhead.IsOpen), RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
-                               Placement="Bottom"
-                               PopupAnimation="None"
-                               VerticalOffset="-2">
-                            <Grid MaxHeight="{TemplateBinding MaxDropDownHeight}"
-                                  MinWidth="{Binding ActualWidth, ElementName=root, Converter={StaticResource AddDouble}, ConverterParameter=24}"
-                                  SnapsToDevicePixels="True">
-                                <Border Margin="12,6,12,20"
-                                        MinWidth="{Binding Path=(shell:TypeAhead.MinWidth), RelativeSource={RelativeSource TemplatedParent}}"
-                                        Background="{StaticResource BgPanelBrush}"
-                                        BorderBrush="{StaticResource BorderStrongBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="{StaticResource RadiusLg}"
-                                        Effect="{StaticResource PopupShadow}">
-                                    <DockPanel>
-                                        <ContentPresenter DockPanel.Dock="Bottom" Content="{Binding Path=(shell:TypeAhead.Footer), RelativeSource={RelativeSource TemplatedParent}}" />
-                                        <ListBox x:Name="PART_SuggestList"
-                                                 Margin="4"
-                                                 Background="Transparent"
-                                                 BorderThickness="0"
-                                                 DisplayMemberPath="{Binding DisplayMemberPath, RelativeSource={RelativeSource TemplatedParent}}"
-                                                 Focusable="False"
-                                                 ItemContainerStyle="{StaticResource SuggestItem}"
-                                                 ItemTemplate="{Binding ItemTemplate, RelativeSource={RelativeSource TemplatedParent}}"
-                                                 ItemsSource="{Binding Path=(shell:TypeAhead.Suggestions), RelativeSource={RelativeSource TemplatedParent}}"
-                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
                                     </DockPanel>
                                 </Border>
                             </Grid>
@@ -412,6 +369,105 @@
                             <Setter TargetName="bd" Property="Background" Value="{StaticResource BgPanelBrush}" />
                             <Setter TargetName="edge" Property="BorderThickness" Value="2" />
                             <Setter TargetName="toggle" Property="Opacity" Value="1" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  shell:SuggestBox inside a table cell (item, karat): the same cell the combo box above draws, with a
+          text box in it and one list under it. The list opens with the entries that match what is typed,
+          or with every entry from the chevron. It has no fade: typing and Enter are quick, and a list that
+          fades in late and out slowly lags behind them.  -->
+    <Style x:Key="TableCellSuggest" TargetType="{x:Type shell:SuggestBox}">
+        <Setter Property="Padding" Value="{DynamicResource CellPadding}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+        <Setter Property="FontSize" Value="{DynamicResource FontSizeUi}" />
+        <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type shell:SuggestBox}">
+                    <Grid x:Name="root" SnapsToDevicePixels="True">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" />
+                        <Grid>
+                            <TextBox x:Name="PART_TextBox"
+                                     Margin="{TemplateBinding Padding}"
+                                     HorizontalAlignment="Stretch"
+                                     VerticalAlignment="Center"
+                                     Foreground="{TemplateBinding Foreground}"
+                                     Style="{StaticResource ComboBoxEditableTextBox}" />
+                            <!--  Over the end of the text box, so that a click on the chevron reaches it. Under
+                                  the text box, as in the combo box above, only the cell's last few pixels did.  -->
+                            <ToggleButton x:Name="toggle"
+                                          Width="30"
+                                          HorizontalAlignment="Right"
+                                          IsChecked="{Binding IsListOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Opacity="0"
+                                          Style="{StaticResource ComboBoxToggle}" />
+                        </Grid>
+                        <Border x:Name="edge"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="0"
+                                IsHitTestVisible="False" />
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               HorizontalOffset="-12"
+                               IsOpen="{Binding IsListOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}"
+                               Placement="Bottom"
+                               PopupAnimation="None"
+                               VerticalOffset="-2">
+                            <Grid MaxHeight="{TemplateBinding MaxListHeight}"
+                                  MinWidth="{Binding ActualWidth, ElementName=root, Converter={StaticResource AddDouble}, ConverterParameter=24}"
+                                  SnapsToDevicePixels="True">
+                                <Border Margin="12,6,12,20"
+                                        MinWidth="{TemplateBinding ListMinWidth}"
+                                        Background="{StaticResource BgPanelBrush}"
+                                        BorderBrush="{StaticResource BorderStrongBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource RadiusLg}"
+                                        Effect="{StaticResource PopupShadow}">
+                                    <DockPanel>
+                                        <!--  Footer, such as the keys that work in the list  -->
+                                        <ContentPresenter DockPanel.Dock="Bottom" Content="{TemplateBinding Footer}" />
+                                        <ListBox x:Name="PART_List"
+                                                 Margin="4"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 Focusable="False"
+                                                 ItemContainerStyle="{StaticResource SuggestItem}"
+                                                 ItemTemplate="{TemplateBinding ItemTemplate}"
+                                                 ItemsSource="{TemplateBinding Suggestions}"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                                    </DockPanel>
+                                </Border>
+                            </Grid>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{StaticResource BgHoverBrush}" />
+                            <Setter TargetName="toggle" Property="Opacity" Value="1" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="bd" Property="Background" Value="{StaticResource BgPanelBrush}" />
+                            <Setter TargetName="edge" Property="BorderThickness" Value="2" />
+                            <Setter TargetName="toggle" Property="Opacity" Value="1" />
+                        </Trigger>
+                        <!--  A row is drawn by the box's template, or shows the entry's text.  -->
+                        <Trigger Property="ItemTemplate" Value="{x:Null}">
+                            <Setter TargetName="PART_List" Property="DisplayMemberPath" Value="{Binding TextPath, RelativeSource={RelativeSource TemplatedParent}}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />

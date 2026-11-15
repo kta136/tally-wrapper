@@ -137,11 +137,11 @@ public partial class InvoiceView : UserControl, IHomeFocus
     {
         if (Keyboard.FocusedElement is not DependencyObject focused) return;
 
-        // Editable ComboBox: focus is on the inner TextBox; flush the ComboBox.Text binding
-        // (LostFocus doesn't fire reliably when an ancestor goes Visibility=Collapsed).
-        if (FindAncestor<ComboBox>(focused) is { } combo)
+        // The item or karat cell: the cursor is in its inner text box, and its text is written to
+        // the line when the cell is left, which has not happened yet.
+        if (FindAncestor<SuggestBox>(focused) is { } suggest)
         {
-            combo.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+            suggest.CommitText();
             return;
         }
 
@@ -174,8 +174,7 @@ public partial class InvoiceView : UserControl, IHomeFocus
         if (LinesItems.Items.Count == 0) return false;
         var container = GetLineContainer(0);
         if (container is null) return false;
-        var combo = FindItemCellComboBox(container);
-        return combo?.Focus() == true;
+        return FocusLineCell(container, EditableLineColumns[0]);
     }
 
     private DependencyObject? GetLineContainer(int index)
@@ -188,22 +187,6 @@ public partial class InvoiceView : UserControl, IHomeFocus
         LinesItems.ScrollIntoView(LinesItems.Items[index]);
         LinesItems.UpdateLayout();
         return LinesItems.ItemContainerGenerator.ContainerFromIndex(index) as DependencyObject;
-    }
-
-    private static ComboBox? FindItemCellComboBox(DependencyObject root)
-    {
-        // Item cell is the Border at Grid.Column=1 in the row template.
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            var child = VisualTreeHelper.GetChild(root, i);
-            if (child is Border b && Grid.GetColumn(b) == 1)
-            {
-                return FindDescendant<ComboBox>(b);
-            }
-            var nested = FindItemCellComboBox(child);
-            if (nested is not null) return nested;
-        }
-        return null;
     }
 
     private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
@@ -295,13 +278,11 @@ public partial class InvoiceView : UserControl, IHomeFocus
         if (e.Key != Key.Enter) return;
         if (e.OriginalSource is not UIElement source) return;
 
-        // Let an open ComboBox consume Enter for selection first.
-        var combo = FindAncestor<ComboBox>(source as DependencyObject);
-        if (combo is { IsDropDownOpen: true }) return;
+        // Let an open ComboBox (the unit cell) consume Enter for selection first.
+        if (FindAncestor<ComboBox>(source as DependencyObject) is { IsDropDownOpen: true }) return;
 
         // A suggestion list that is open: Enter picks the highlighted entry and goes on to the next cell.
-        if (combo is not null)
-            TypeAhead.TryPick(combo);
+        FindAncestor<SuggestBox>(source as DependencyObject)?.TryPick();
 
         var reverse = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
         if (TryMoveLineFocus(source, reverse))
@@ -318,8 +299,11 @@ public partial class InvoiceView : UserControl, IHomeFocus
     {
         if (Keyboard.Modifiers != ModifierKeys.None || e.OriginalSource is not DependencyObject source) return;
 
-        var combo = FindAncestor<ComboBox>(source);
-        if (combo is { IsDropDownOpen: true } || (combo is not null && TypeAhead.GetIsOpen(combo))) return;
+        if (FindAncestor<ComboBox>(source) is { IsDropDownOpen: true }
+            || FindAncestor<SuggestBox>(source) is { IsListOpen: true })
+        {
+            return;
+        }
 
         var cellBorder = FindLineCellBorder(source);
         var rowContainer = FindAncestor<ListBoxItem>(source);
@@ -345,9 +329,7 @@ public partial class InvoiceView : UserControl, IHomeFocus
         var cellBorder = FindLineCellBorder(sourceNode);
         if (cellBorder is null) return false;
 
-        var combo = FindAncestor<ComboBox>(sourceNode);
-        if (combo is not null)
-            combo.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+        FindAncestor<SuggestBox>(sourceNode)?.CommitText();
 
         // If Enter lands on the Item cell of an empty row, jump to Save.
         if (!reverse && Grid.GetColumn(cellBorder) == 1)
@@ -433,19 +415,18 @@ public partial class InvoiceView : UserControl, IHomeFocus
         var cell = FindLineCellBorderByColumn(rowContainer, column);
         if (cell is null) return false;
 
+        // The item and the karat cell.
+        var suggest = FindDescendant<SuggestBox>(cell);
+        if (suggest is not null && suggest.IsVisible && suggest.IsEnabled)
+        {
+            return suggest.FocusBox();
+        }
+
+        // The unit cell.
         var combo = FindDescendant<ComboBox>(cell);
         if (combo is not null && combo.IsVisible && combo.IsEnabled && combo.Focusable)
         {
             combo.Focus();
-            if (combo.IsEditable)
-            {
-                combo.ApplyTemplate();
-                if (combo.Template.FindName("PART_EditableTextBox", combo) is TextBox editableTextBox)
-                {
-                    editableTextBox.Focus();
-                    editableTextBox.SelectAll();
-                }
-            }
             return true;
         }
 
