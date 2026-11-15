@@ -373,7 +373,9 @@ public partial class InvoiceViewModel : ObservableObject
             OnPropertyChanged(nameof(KaratMasters));
             foreach (var (line, item, karat) in held)
             {
-                line.RebindMasters(catalog.FindItem(item), catalog.FindKarat(karat));
+                // A karat is also found by the line's own text: a bill opened before the karats
+                // had loaded has the text and no entry yet, and would count as an unknown karat.
+                line.RebindMasters(catalog.FindItem(item), catalog.FindKarat(karat ?? line.Karat));
             }
         }
         finally
@@ -441,7 +443,53 @@ public partial class InvoiceViewModel : ObservableObject
     {
         if (_suspendDirtyTracking) return;
         _hasUnsavedChanges = true;
+        RecheckRefusal();
         UpdateStatus();
+    }
+
+    // The check a refused Save or Print estimate failed, while its sentence stands beside Save.
+    private Func<string?>? _refusedBy;
+
+    /// <summary>
+    /// Says beside Save why Save or Print estimate did not go ahead. The sentence is then kept true:
+    /// each edit runs <paramref name="check"/> again, so it goes when the fault is corrected (it
+    /// used to stand there until the next Save) and changes if another fault is next.
+    /// </summary>
+    private void Refuse(string why, Func<string?> check)
+    {
+        _refusedBy = check;
+        SaveStatus = why;
+    }
+
+    private void RecheckRefusal()
+    {
+        if (_refusedBy is null)
+        {
+            return;
+        }
+
+        var still = _refusedBy();
+        if (still is null)
+        {
+            _refusedBy = null;
+        }
+
+        SaveStatus = still ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Print estimate asks this first: true when the estimate must not be made, and the reason is
+    /// then beside Save. An estimate with a line priced with no gold in it must not reach a customer.
+    /// </summary>
+    public bool RefuseEstimateIfNotPriceable()
+    {
+        if (UnknownKaratProblem() is not { } problem)
+        {
+            return false;
+        }
+
+        Refuse(problem, UnknownKaratProblem);
+        return true;
     }
 
     private void UpdateStatus()
@@ -522,8 +570,18 @@ public partial class InvoiceViewModel : ObservableObject
         {
             line.EffectiveRate = 0m;
             line.LineTotal = 0m;
+            line.KaratUnknown = false;
             return;
         }
+
+        // A karat that is typed but is none of the saved ones has no purity: the line would be
+        // priced, and saved, with no gold in it. With no karats saved at all there is nothing to
+        // hold the text against.
+        line.KaratUnknown = line.IsGoldLine
+            && !string.IsNullOrWhiteSpace(line.Karat)
+            && KaratMasters.Count > 0
+            && line.KaratMaster is null
+            && Catalog.FindKarat(line.Karat.Trim()) is null;
 
         var result = BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(
             line,
@@ -634,9 +692,10 @@ public partial class InvoiceViewModel : ObservableObject
         var validationError = ValidateForSave();
         if (validationError is not null)
         {
-            SaveStatus = validationError;
+            Refuse(validationError, ValidateForSave);
             return;
         }
+        _refusedBy = null;
         RateMissing = false;
 
         // The server refuses an edit to a posted bill without an admin session.
@@ -842,6 +901,7 @@ public partial class InvoiceViewModel : ObservableObject
 
     private void ResetForNewBill()
     {
+        _refusedBy = null;
         _draftBillId = null;
         _draftRevisionId = null;
         _createOperationId = null;
@@ -903,6 +963,7 @@ public partial class InvoiceViewModel : ObservableObject
             }
             var payload = bill.CurrentRevision.Payload;
 
+            _refusedBy = null;
             _suspendDirtyTracking = true;
             PartyName = payload.PartyName ?? string.Empty;
             Payment = InvoiceEditMapper.ResolvePayment(payload.Payment, PaymentOptions, Payment);
@@ -975,10 +1036,20 @@ public partial class InvoiceViewModel : ObservableObject
     private IReadOnlyList<KaratMasterEntry>? BuildKaratMappings()
         => KaratMasters.Count == 0 ? null : KaratMasters;
 
+    /// <summary>
+    /// Why the bill cannot be priced as it stands: a line's karat is not one of the saved karats.
+    /// Null when every karat is known. Print estimate asks this too, so that an estimate with a
+    /// line priced with no gold in it does not reach a customer.
+    /// </summary>
+    public string? UnknownKaratProblem()
+        => Lines.FirstOrDefault(line => !line.IsEmpty && line.KaratUnknown) is { } line
+            ? $"Line {line.RowNumber}: {line.UnknownKaratMessage}"
+            : null;
+
     private string? ValidateForSave()
     {
         var error = InvoicePayloadMapper.ValidateForSave(Lines, Rate24Kt, out var rateMissing);
         RateMissing = rateMissing;
-        return error;
+        return error ?? UnknownKaratProblem();
     }
 }

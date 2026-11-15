@@ -675,6 +675,26 @@
                                                                    Foreground="{StaticResource InkSoftBrush}"
                                                                    Text="Karat" />
                                                     </Border>
+                                                    <!--  A karat that is not one of the saved karats: the same red edge, with nothing over
+                                                          the text, so what was typed can be read and corrected.  -->
+                                                    <Border BorderBrush="{StaticResource ErrTextBrush}"
+                                                            BorderThickness="2"
+                                                            IsHitTestVisible="False">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding KaratUnknown}" Value="True" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=KaratBox}" Value="False" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
                                                 </Grid>
                                             </Border>
 

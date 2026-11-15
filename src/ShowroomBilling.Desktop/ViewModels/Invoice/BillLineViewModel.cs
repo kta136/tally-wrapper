@@ -33,6 +33,16 @@ public partial class BillLineViewModel : ObservableObject
     [ObservableProperty] private decimal effectiveRate;
     [ObservableProperty] private decimal lineTotal;
 
+    /// <summary>
+    /// The karat typed on this gold line is not one of the saved karats ("20K" for "22K"), so the
+    /// line has no purity and is priced with no gold in it. The invoice sets this each time it
+    /// prices the line, because it knows the karats; the cell is marked and the bill cannot be saved.
+    /// </summary>
+    [ObservableProperty] private bool karatUnknown;
+
+    /// <summary>What Save, Print estimate and the line's explanation say of <see cref="KaratUnknown"/>.</summary>
+    public string UnknownKaratMessage => $"“{Karat.Trim()}” is not one of the karats. Pick one from the list.";
+
     public int RowNumber
     {
         get => rowNumber;

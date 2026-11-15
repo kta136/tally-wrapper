@@ -200,6 +200,11 @@ internal sealed class ShellPrintCoordinator(
 
     public void OpenInvoicePreview()
     {
+        if (host.Invoice.RefuseEstimateIfNotPriceable())
+        {
+            return;
+        }
+
         var content = host.Invoice.BuildPrintContent(companyProfileProvider.Current);
         if (content is null)
         {

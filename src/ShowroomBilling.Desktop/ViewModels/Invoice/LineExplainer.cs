@@ -67,6 +67,11 @@ internal static class LineExplainer
             return line.DiamondRate is > 0m ? null : "Enter the flat rate per carat to price this line.";
         }
 
+        if (line.KaratUnknown)
+        {
+            return line.UnknownKaratMessage;
+        }
+
         if (string.IsNullOrWhiteSpace(line.Karat) || purityPercent <= 0m)
         {
             return "Pick a karat to price this line.";
