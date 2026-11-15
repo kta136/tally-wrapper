@@ -21,17 +21,18 @@ public sealed class InvoiceQuickAddTests
     }
 
     [Fact]
-    public void Results_follow_the_item_master_list_as_it_changes()
+    public void Results_follow_the_saved_items_and_not_what_is_being_typed_in_Settings()
     {
         var (vm, settings) = InvoiceWith("22K Ring");
 
+        // Typed into Settings, not saved: not an item yet.
         settings.Draft.ItemMasterRows.Add(new ItemMasterRowVm { Name = "Silver Coin" });
-        Assert.Equal(["22K Ring", "Silver Coin"], vm.QuickAddResults.Select(x => x.Name));
+        Assert.Equal(["22K Ring"], vm.QuickAddResults.Select(x => x.Name));
 
-        settings.Draft.ItemMasterRows[0].Name = "22K Bangle";
+        settings.Publish(items: [TestMasters.Item("22K Bangle"), TestMasters.Item("Silver Coin")]);
         Assert.Equal(["22K Bangle", "Silver Coin"], vm.QuickAddResults.Select(x => x.Name));
 
-        settings.Draft.ItemMasterRows.RemoveAt(1);
+        settings.Publish(items: [TestMasters.Item("22K Bangle")]);
         Assert.Equal(["22K Bangle"], vm.QuickAddResults.Select(x => x.Name));
     }
 
@@ -45,7 +46,7 @@ public sealed class InvoiceQuickAddTests
 
         vm.QuickAddCommitCommand.Execute(null);
 
-        Assert.Same(settings.Draft.ItemMasterRows[1], vm.Lines[0].ItemMaster);
+        Assert.Same(settings.Catalog.Items[1], vm.Lines[0].ItemMaster);
         Assert.Equal("Silver Coin", vm.Lines[0].ItemName);
         Assert.Same(vm.Lines[0], announced);
         Assert.Equal(string.Empty, vm.QuickAddQuery);
@@ -71,8 +72,8 @@ public sealed class InvoiceQuickAddTests
     public void Removing_a_row_keeps_one_blank_row_at_the_end_and_focus_in_place()
     {
         var (vm, settings) = InvoiceWith("22K Ring", "Silver Coin");
-        vm.QuickAddCommitCommand.Execute(settings.Draft.ItemMasterRows[0]);
-        vm.QuickAddCommitCommand.Execute(settings.Draft.ItemMasterRows[1]);
+        vm.QuickAddCommitCommand.Execute(settings.Catalog.Items[0]);
+        vm.QuickAddCommitCommand.Execute(settings.Catalog.Items[1]);
         Assert.Equal(3, vm.Lines.Count);
 
         vm.RemoveLineCommand.Execute(vm.Lines[0]);
@@ -90,10 +91,7 @@ public sealed class InvoiceQuickAddTests
     private static (InvoiceViewModel Vm, SettingsViewModel Settings) InvoiceWith(params string[] itemNames)
     {
         var settings = OfflineApi.Settings();
-        foreach (var name in itemNames)
-        {
-            settings.Draft.ItemMasterRows.Add(new ItemMasterRowVm { Name = name });
-        }
+        settings.Publish(items: itemNames.Select(name => TestMasters.Item(name)));
 
         return (new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings), settings);
     }

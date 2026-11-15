@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Handover;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -123,7 +124,7 @@ internal static class HandoverTestMasters
 
     public static MasterDataSettingsDto Dto => new(JsonSerializer.Serialize(Items), JsonSerializer.Serialize(Karats));
 
-    public static HandoverMasters Masters => HandoverMasters.From(Dto);
+    public static MasterCatalog Masters => MasterCatalog.From(Dto);
 
     /// <summary>Settings as the server would send them, with these masters, for tests that need a whole settings view model.</summary>
     public static SettingsViewModel Settings(HandoverKeyStore? keys = null)

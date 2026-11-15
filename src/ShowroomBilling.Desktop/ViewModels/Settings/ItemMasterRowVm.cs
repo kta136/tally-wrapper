@@ -1,68 +1,19 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
+/// <summary>One item as Settings → Masters edits it, every field as typed. Nothing outside Settings holds one: a bill reads the saved items from <see cref="MasterCatalog"/>.</summary>
 public partial class ItemMasterRowVm : ObservableObject
 {
     [ObservableProperty] private string name = string.Empty;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PickerSummary), nameof(QuickSummary))]
-    private string unit = ItemUnits.Gram;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PickerSummary), nameof(QuickSummary))]
-    private string wastagePercent = "0";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PickerSummary), nameof(QuickSummary))]
-    private string itemCategory = ItemCategories.GoldBased;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PickerSummary), nameof(QuickSummary))]
-    private string pricingMode = PricingModes.Wastage;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PickerSummary), nameof(QuickSummary))]
-    private string defaultLabourPerGram = "0";
+    [ObservableProperty] private string unit = ItemUnits.Gram;
+    [ObservableProperty] private string wastagePercent = "0";
+    [ObservableProperty] private string itemCategory = ItemCategories.GoldBased;
+    [ObservableProperty] private string pricingMode = PricingModes.Wastage;
+    [ObservableProperty] private string defaultLabourPerGram = "0";
     [ObservableProperty] private string defaultStockMappingLabel = string.Empty;
-
-    /// <summary>What the item list under a line's item cell shows beneath the name: "gm · 8% wastage · ₹320/g labour".</summary>
-    public string PickerSummary => Summarise(withUnit: true, labourWord: " labour");
-
-    /// <summary>The shorter line of the Quick add list: "8% wastage · ₹320/g".</summary>
-    public string QuickSummary => Summarise(withUnit: false, labourWord: string.Empty);
-
-    private string Summarise(bool withUnit, string labourWord)
-    {
-        var parts = new List<string>();
-        if (withUnit && !string.IsNullOrWhiteSpace(Unit))
-        {
-            parts.Add(Unit);
-        }
-
-        if (string.Equals(ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase))
-        {
-            parts.Add($"flat rate per {(string.IsNullOrWhiteSpace(Unit) ? ItemUnits.Carat : Unit)}");
-            return string.Join(" · ", parts);
-        }
-
-        var mode = string.IsNullOrWhiteSpace(PricingMode) ? PricingModes.Wastage : PricingMode;
-        if (mode != PricingModes.Labour)
-        {
-            parts.Add($"{WastagePercent}% wastage");
-        }
-
-        if (mode == PricingModes.Labour || mode == PricingModes.Both)
-        {
-            parts.Add($"₹{DefaultLabourPerGram}/g{labourWord}");
-        }
-
-        return string.Join(" · ", parts);
-    }
 
     public static ItemMasterRowVm FromEntry(ItemMasterEntry e) => new()
     {
@@ -74,18 +25,6 @@ public partial class ItemMasterRowVm : ObservableObject
         DefaultLabourPerGram = e.DefaultLabourPerGram.ToString(CultureInfo.InvariantCulture),
         DefaultStockMappingLabel = e.DefaultStockMappingLabel ?? string.Empty,
     };
-
-    /// <summary>Takes another row's values, so that whatever holds this row keeps it across a reload.</summary>
-    public void CopyFrom(ItemMasterRowVm other)
-    {
-        Name = other.Name;
-        Unit = other.Unit;
-        WastagePercent = other.WastagePercent;
-        ItemCategory = other.ItemCategory;
-        PricingMode = other.PricingMode;
-        DefaultLabourPerGram = other.DefaultLabourPerGram;
-        DefaultStockMappingLabel = other.DefaultStockMappingLabel;
-    }
 
     public bool TryBuildEntry(out ItemMasterEntry entry, out string error)
     {

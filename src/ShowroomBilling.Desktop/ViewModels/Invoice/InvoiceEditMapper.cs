@@ -1,6 +1,5 @@
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 
@@ -8,21 +7,21 @@ internal static class InvoiceEditMapper
 {
     public static IReadOnlyList<BillLineViewModel> CreateRows(
         BillPayloadDto payload,
-        IEnumerable<ItemMasterRowVm>? itemMasters,
-        IEnumerable<KaratMasterRowVm>? karatMasters)
+        IEnumerable<ItemMasterEntry>? itemMasters,
+        IEnumerable<KaratMasterEntry>? karatMasters)
     {
         var rows = new List<BillLineViewModel>(payload.Lines.Count);
         foreach (var line in payload.Lines)
         {
             var row = new BillLineViewModel();
-            ItemMasterRowVm? itemMaster = null;
+            ItemMasterEntry? itemMaster = null;
             if (itemMasters is not null)
             {
                 itemMaster = itemMasters.FirstOrDefault(m =>
                     string.Equals(m.Name, line.ItemName, StringComparison.OrdinalIgnoreCase));
             }
 
-            KaratMasterRowVm? karatMaster = null;
+            KaratMasterEntry? karatMaster = null;
             if (karatMasters is not null && !string.IsNullOrWhiteSpace(line.Karat))
             {
                 karatMaster = karatMasters.FirstOrDefault(k =>

@@ -1,6 +1,5 @@
-using System.Globalization;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Shell;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 
@@ -16,7 +15,7 @@ public sealed record RateLadder(string Rate24Kt, string Rate22Kt, string Rate18K
     private const decimal Default18KtPurity = 75.0m;
 
     /// <summary>The ladder for a typed 24K rate, or null while no rate has been typed.</summary>
-    public static RateLadder? For(decimal? rate24Kt, IEnumerable<KaratMasterRowVm>? karatMasters)
+    public static RateLadder? For(decimal? rate24Kt, IEnumerable<KaratMasterEntry>? karatMasters)
     {
         if (rate24Kt is not { } rate24 || rate24 <= 0m)
         {
@@ -33,7 +32,7 @@ public sealed record RateLadder(string Rate24Kt, string Rate22Kt, string Rate18K
     private static string Format(decimal value)
         => Math.Round(value, 0, MidpointRounding.AwayFromZero).ToString("N0", UiCulture.Culture);
 
-    private static (decimal Purity22, decimal Purity18) ResolvePurities(IEnumerable<KaratMasterRowVm>? karatMasters)
+    private static (decimal Purity22, decimal Purity18) ResolvePurities(IEnumerable<KaratMasterEntry>? karatMasters)
     {
         var purity22 = Default22KtPurity;
         var purity18 = Default18KtPurity;
@@ -44,8 +43,8 @@ public sealed record RateLadder(string Rate24Kt, string Rate22Kt, string Rate18K
 
         foreach (var row in karatMasters)
         {
-            if (!decimal.TryParse(row.PurityPercent, NumberStyles.Number, CultureInfo.InvariantCulture, out var purity)
-                || purity is <= 0m or > 100m)
+            var purity = row.PurityPercent;
+            if (purity is <= 0m or > 100m)
             {
                 continue;
             }

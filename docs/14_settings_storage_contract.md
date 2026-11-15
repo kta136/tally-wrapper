@@ -34,6 +34,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 - **there is no separate bridge process**. Tally connection details (host, port, active company) live in cloud settings and are read by the API on each Tally call.
 - API serves the shared settings through `/api/settings`; which setting lives where is this document, not an endpoint
 - shared settings are represented as API-owned, not as local files or a local settings database
+- a bill is made from the saved settings only. The Invoice tab, a hand-over and the batch scheduler read the items and karats that were last loaded from the server or saved to it (`MasterCatalog`, published by `SettingsViewModel.Catalog`), never the rows being edited in Settings → Masters, so an item or a wastage typed there takes effect on Save and not before. A bill that is open when they change keeps what was typed on its lines
 - tests verify that desktop appsettings files do not introduce shared/business settings sections (see `ConfigFilesTests`)
 
 ## Server-service local files

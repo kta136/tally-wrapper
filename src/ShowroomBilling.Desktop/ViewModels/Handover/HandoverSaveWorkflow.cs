@@ -73,7 +73,7 @@ internal sealed class HandoverSaveWorkflow(
     /// </summary>
     private readonly Dictionary<Guid, HandoverBillResult> _unanswered = unanswered ?? [];
 
-    public async Task<HandoverRun> RunAsync(HandoverDocument document, HandoverMasters masters, CancellationToken cancellationToken)
+    public async Task<HandoverRun> RunAsync(HandoverDocument document, MasterCatalog masters, CancellationToken cancellationToken)
     {
         var outcomes = new List<HandoverBillOutcome>(document.Bills.Count);
         var unreachable = false;
@@ -124,7 +124,7 @@ internal sealed class HandoverSaveWorkflow(
 
     private async Task<(HandoverBillOutcome Outcome, bool Unreachable)> SaveAsync(
         HandoverBill bill,
-        HandoverMasters masters,
+        MasterCatalog masters,
         CancellationToken cancellationToken)
     {
         BillResponse? existing;

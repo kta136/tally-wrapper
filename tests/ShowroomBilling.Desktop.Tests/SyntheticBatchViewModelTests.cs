@@ -41,24 +41,25 @@ public sealed class SyntheticBatchViewModelTests
     }
 
     [Fact]
-    public void KaratOptions_FollowKaratRowsAddedAndEditedInSettings()
+    public void KaratOptions_follow_the_saved_karats_and_not_what_is_being_typed_in_Settings()
     {
         var settings = OfflineApi.Settings();
         var vm = new SyntheticBatchViewModel(new FakeBillsApi(), new FakeDialogs(), adminTokens: null, settings);
         Assert.Empty(vm.KaratOptions);
 
-        var row = new ShowroomBilling.Desktop.ViewModels.Settings.KaratMasterRowVm
-        {
-            Label = "22K",
-            PurityPercent = "91.6",
-            TallyItem = "Hallmarked 22KT",
-        };
-        settings.Draft.KaratRows.Add(row);
+        settings.Publish(karats: [TestMasters.Karat("22K", 91.6m, "Hallmarked 22KT")]);
         Assert.Equal(["22K"], vm.KaratOptions.Select(option => option.Label));
 
-        // An edit to an existing row was announced under the item-master
-        // collection's name, so the list here kept the old label.
-        row.Label = "22KT";
+        // A row typed into Settings and not saved is not a karat yet.
+        settings.Draft.KaratRows.Add(new ShowroomBilling.Desktop.ViewModels.Settings.KaratMasterRowVm
+        {
+            Label = "18K",
+            PurityPercent = "75",
+            TallyItem = "Hallmarked 18KT",
+        });
+        Assert.Equal(["22K"], vm.KaratOptions.Select(option => option.Label));
+
+        settings.Publish(karats: [TestMasters.Karat("22KT", 91.6m, "Hallmarked 22KT")]);
         Assert.Equal(["22KT"], vm.KaratOptions.Select(option => option.Label));
     }
 

@@ -104,16 +104,8 @@ public partial class SettingsDraft : ObservableObject
         DiscountLedger = dto.Ledgers.DiscountLedger;
         SalesVoucherType = dto.Ledgers.SalesVoucherType;
 
-        SyncRows(
-            ItemMasterRows,
-            MasterDataJson.ParseItemsOrEmpty(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry).ToList(),
-            row => row.Name,
-            (kept, loaded) => kept.CopyFrom(loaded));
-        SyncRows(
-            KaratRows,
-            MasterDataJson.ParseKaratsOrEmpty(dto.Masters.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry).ToList(),
-            row => row.Label,
-            (kept, loaded) => kept.CopyFrom(loaded));
+        ReplaceRows(ItemMasterRows, MasterDataJson.ParseItemsOrEmpty(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry));
+        ReplaceRows(KaratRows, MasterDataJson.ParseKaratsOrEmpty(dto.Masters.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry));
     }
 
     /// <summary>
@@ -242,61 +234,22 @@ public partial class SettingsDraft : ObservableObject
     }
 
     /// <summary>
-    /// Makes <paramref name="target"/> hold what was loaded while keeping the
-    /// row objects it already has: a row with the same name takes the loaded
-    /// values instead of being swapped for a new object. The Invoice tab's
-    /// lines point at these rows (a line's item and its karat). A line whose
-    /// row was swapped lost it, and the next change to that line picked the
-    /// item up again by name and put the item's default wastage and labour
-    /// over what had been typed. Every load comes through here: a reload,
-    /// Edit, Discard and Save. Rows are added to and taken from the list one
-    /// at a time, so <see cref="HandleRowsChanged"/> does the subscribing.
+    /// Makes <paramref name="target"/> hold the loaded rows. These rows are the Settings
+    /// screen's own, so new ones may take the place of the old: a bill reads the saved
+    /// items and karats from <see cref="MasterCatalog"/>. Rows go and come one at a time,
+    /// not by <c>Clear</c>, which does not say which rows left, so
+    /// <see cref="HandleRowsChanged"/> does the subscribing.
     /// </summary>
-    private static void SyncRows<T>(
-        ObservableCollection<T> target,
-        IReadOnlyList<T> loaded,
-        Func<T, string?> nameOf,
-        Action<T, T> copyInto) where T : class
+    private static void ReplaceRows<T>(ObservableCollection<T> target, IEnumerable<T> loaded)
     {
-        var unclaimed = target.ToList();
-        var wanted = new List<T>(loaded.Count);
+        while (target.Count > 0)
+        {
+            target.RemoveAt(target.Count - 1);
+        }
+
         foreach (var row in loaded)
         {
-            var name = nameOf(row)?.Trim();
-            var kept = unclaimed.FirstOrDefault(candidate =>
-                string.Equals(nameOf(candidate)?.Trim(), name, StringComparison.OrdinalIgnoreCase));
-            if (kept is null)
-            {
-                wanted.Add(row);
-                continue;
-            }
-
-            unclaimed.Remove(kept);
-            copyInto(kept, row);
-            wanted.Add(kept);
-        }
-
-        foreach (var gone in unclaimed)
-        {
-            target.Remove(gone);
-        }
-
-        for (var i = 0; i < wanted.Count; i++)
-        {
-            if (i < target.Count && ReferenceEquals(target[i], wanted[i]))
-            {
-                continue;
-            }
-
-            var at = target.IndexOf(wanted[i]);
-            if (at >= 0)
-            {
-                target.Move(at, i);
-            }
-            else
-            {
-                target.Insert(i, wanted[i]);
-            }
+            target.Add(row);
         }
     }
 
@@ -315,9 +268,8 @@ public partial class SettingsDraft : ObservableObject
         OnPropertyChanged(collectionName);
     }
 
-    // Name the collection the row belongs to. Every row change used to be
-    // announced as ItemMasterRows, so a listener waiting for karat changes
-    // (the batch scheduler's karat list) never heard one.
+    // Name the collection the row belongs to: every row change used to be
+    // announced as ItemMasterRows, a karat's too.
     private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
         => OnPropertyChanged(sender is KaratMasterRowVm ? nameof(KaratRows) : nameof(ItemMasterRows));
 

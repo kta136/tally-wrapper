@@ -153,8 +153,8 @@ internal static class DesignSample
         void Gold(string item, decimal gross, decimal less)
         {
             var line = invoice.Lines[^1];
-            line.ItemMaster = settings.Draft.ItemMasterRows.First(master => master.Name == item);
-            line.KaratMaster = settings.Draft.KaratRows.First(karat => karat.Label == "22kt");
+            line.ItemMaster = settings.Catalog.Items.First(master => master.Name == item);
+            line.KaratMaster = settings.Catalog.Karats.First(karat => karat.Label == "22kt");
             line.GrossWeight = gross;
             line.LessWeight = less;
         }
@@ -164,7 +164,7 @@ internal static class DesignSample
         Gold("22kt Mangalsutra", 16.240m, 1.120m);
 
         var diamond = invoice.Lines[^1];
-        diamond.ItemMaster = settings.Draft.ItemMasterRows.First(master => master.Name == "Diamond Solitaire Ring");
+        diamond.ItemMaster = settings.Catalog.Items.First(master => master.Name == "Diamond Solitaire Ring");
         diamond.GrossWeight = 0.500m;
         diamond.DiamondRate = 77000m;
 

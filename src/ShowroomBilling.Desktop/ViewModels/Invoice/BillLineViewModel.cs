@@ -1,9 +1,7 @@
 using System;
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 
@@ -11,7 +9,9 @@ public partial class BillLineViewModel : ObservableObject
 {
     private int rowNumber;
     private bool _restoringPayloadValues;
-    private ItemMasterRowVm? _payloadItemMaster;
+    // The item a saved bill's line was loaded with, by name: the catalogue's entry of that
+    // name may be a newer one by the time the line is pointed at it again.
+    private string? _payloadItemMasterName;
     private string? _payloadItemName;
 
     [ObservableProperty] private string itemName = string.Empty;
@@ -27,8 +27,8 @@ public partial class BillLineViewModel : ObservableObject
     [ObservableProperty] private string pricingMode = PricingModes.Wastage;
     [ObservableProperty] private string? stockName;
 
-    [ObservableProperty] private ItemMasterRowVm? itemMaster;
-    [ObservableProperty] private KaratMasterRowVm? karatMaster;
+    [ObservableProperty] private ItemMasterEntry? itemMaster;
+    [ObservableProperty] private KaratMasterEntry? karatMaster;
 
     [ObservableProperty] private decimal effectiveRate;
     [ObservableProperty] private decimal lineTotal;
@@ -93,10 +93,10 @@ public partial class BillLineViewModel : ObservableObject
         BillLineItemDto line,
         string itemCategory,
         string pricingMode,
-        ItemMasterRowVm? itemMaster,
-        KaratMasterRowVm? karatMaster)
+        ItemMasterEntry? itemMaster,
+        KaratMasterEntry? karatMaster)
     {
-        _payloadItemMaster = itemMaster;
+        _payloadItemMasterName = itemMaster?.Name;
         _payloadItemName = line.ItemName;
         _restoringPayloadValues = true;
         try
@@ -121,6 +121,30 @@ public partial class BillLineViewModel : ObservableObject
             _restoringPayloadValues = false;
         }
 
+        RaiseDerived();
+    }
+
+    /// <summary>
+    /// Points the line at the catalogue's entries after a new catalogue was published, and changes
+    /// nothing else: the name, the wastage and the labour stay as they are on the line, whatever the
+    /// item's defaults are now. Null where the catalogue no longer has that item or karat. The name
+    /// and karat are announced again so that a cell whose selection the swap cleared shows them.
+    /// </summary>
+    public void RebindMasters(ItemMasterEntry? item, KaratMasterEntry? karat)
+    {
+        _restoringPayloadValues = true;
+        try
+        {
+            ItemMaster = item;
+            KaratMaster = karat;
+        }
+        finally
+        {
+            _restoringPayloadValues = false;
+        }
+
+        OnPropertyChanged(nameof(ItemName));
+        OnPropertyChanged(nameof(Karat));
         RaiseDerived();
     }
 
@@ -168,7 +192,7 @@ public partial class BillLineViewModel : ObservableObject
         Raise();
     }
 
-    partial void OnItemMasterChanged(ItemMasterRowVm? value)
+    partial void OnItemMasterChanged(ItemMasterEntry? value)
     {
         var preservePayloadValues = IsPayloadMasterRebind(value);
         if (value is not null && !_restoringPayloadValues && !preservePayloadValues)
@@ -179,10 +203,8 @@ public partial class BillLineViewModel : ObservableObject
             PricingMode = string.IsNullOrWhiteSpace(value.PricingMode) ? PricingModes.Wastage : value.PricingMode;
             if (!IsDiamond)
             {
-                if (decimal.TryParse(value.WastagePercent, NumberStyles.Number, CultureInfo.InvariantCulture, out var w))
-                    WastagePercent = w;
-                if (decimal.TryParse(value.DefaultLabourPerGram, NumberStyles.Number, CultureInfo.InvariantCulture, out var l))
-                    LabourPerUnit = l;
+                WastagePercent = value.WastagePercent;
+                LabourPerUnit = value.DefaultLabourPerGram;
             }
         }
         if (!_restoringPayloadValues && !preservePayloadValues)
@@ -201,16 +223,16 @@ public partial class BillLineViewModel : ObservableObject
         Raise();
     }
 
-    private bool IsPayloadMasterRebind(ItemMasterRowVm? value)
+    private bool IsPayloadMasterRebind(ItemMasterEntry? value)
     {
-        if (value is null || _payloadItemMaster is null) return false;
-        if (!ReferenceEquals(value, _payloadItemMaster)) return false;
+        if (value is null || _payloadItemMasterName is null) return false;
+        if (!string.Equals(value.Name, _payloadItemMasterName, StringComparison.OrdinalIgnoreCase)) return false;
         if (string.IsNullOrWhiteSpace(_payloadItemName)) return true;
 
         return string.Equals(ItemName, _payloadItemName, StringComparison.OrdinalIgnoreCase);
     }
 
-    partial void OnKaratMasterChanged(KaratMasterRowVm? value)
+    partial void OnKaratMasterChanged(KaratMasterEntry? value)
     {
         if (_restoringPayloadValues)
         {

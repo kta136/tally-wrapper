@@ -189,6 +189,13 @@ public partial class SettingsViewModel : ObservableObject,
     [NotifyCanExecuteChangedFor(nameof(BeginEditCommand))]
     private EffectiveCloudSettingsDto? settings;
 
+    /// <summary>
+    /// The items and karats of <see cref="Settings"/>, which is what was last loaded or saved.
+    /// The Invoice tab, the batch scheduler and a hand-over read these, never the
+    /// <see cref="Draft"/>'s rows, so an edit reaches a bill only once it is saved.
+    /// </summary>
+    [ObservableProperty] private MasterCatalog catalog = MasterCatalog.Empty;
+
     [ObservableProperty] private string uiDensity = UiDensityManager.Standard;
 
     public IReadOnlyList<string> CloudOwnedCategories { get; private set; } = Array.Empty<string>();
@@ -284,7 +291,18 @@ public partial class SettingsViewModel : ObservableObject,
     partial void OnUpdatedAtUtcChanged(DateTimeOffset? value) => RaiseSectionHeader();
     partial void OnUiDensityChanged(string value) => UiDensityManager.ApplyDensity(value);
 
-    partial void OnSettingsChanged(EffectiveCloudSettingsDto? value) => MasterData.NotifyShellStateChanged();
+    partial void OnSettingsChanged(EffectiveCloudSettingsDto? value)
+    {
+        // A visit to the Settings tab loads again; a load that brought the same
+        // items and karats publishes nothing, so an open bill is left alone.
+        var loaded = MasterCatalog.From(value?.Masters);
+        if (!loaded.HasSameEntriesAs(Catalog))
+        {
+            Catalog = loaded;
+        }
+
+        MasterData.NotifyShellStateChanged();
+    }
 
     public void NotifySectionPropertiesChanged()
     {

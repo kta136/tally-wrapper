@@ -29,7 +29,9 @@ public partial class InvoiceViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly BillsAdminTokenGate _adminTokenGate;
     private readonly InvoiceLineCollectionObserver _lineCollectionObserver;
-    private readonly HashSet<ItemMasterRowVm> _observedItemMasters = new();
+    // True while a newly published catalogue is being put under the lines: what the
+    // item and karat cells do to a line meanwhile is not the operator's doing.
+    private bool _rebindingMasters;
     private bool _deferLineCollectionRecompute;
     private bool _syncingLinkedTotals;
     private Guid? _draftBillId;
@@ -65,8 +67,16 @@ public partial class InvoiceViewModel : ObservableObject
             Lines,
             OnLineMutated,
             OnLineCollectionChanged);
-        QuickAddResults = new ObservableCollection<ItemMasterRowVm>();
-        AttachItemMasterObservers();
+        QuickAddResults = new ObservableCollection<ItemMasterEntry>();
+        if (_settings is not null)
+        {
+            _settings.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(SettingsViewModel.Catalog))
+                    OnCatalogPublished();
+            };
+        }
+
         RefreshQuickAddResults();
 
         Recompute();
@@ -76,13 +86,13 @@ public partial class InvoiceViewModel : ObservableObject
 
     public bool HasMultipleRows => Lines.Count > 1;
 
-    public ObservableCollection<ItemMasterRowVm> QuickAddResults { get; }
+    public ObservableCollection<ItemMasterEntry> QuickAddResults { get; }
 
     [ObservableProperty] private string quickAddQuery = string.Empty;
 
     /// <summary>"10 items" while the search box is empty, "6 matches for “22kt”" once it is not.</summary>
     [ObservableProperty] private string quickAddCountText = string.Empty;
-    [ObservableProperty] private ItemMasterRowVm? quickAddSelection;
+    [ObservableProperty] private ItemMasterEntry? quickAddSelection;
 
     partial void OnQuickAddQueryChanged(string value) => RefreshQuickAddResults();
 
@@ -103,8 +113,10 @@ public partial class InvoiceViewModel : ObservableObject
     /// <summary>Raised when <see cref="NewBillCommand"/> has emptied the form, so the view can put the cursor back at the top.</summary>
     public event EventHandler? NewBillStarted;
 
-    public ObservableCollection<ItemMasterRowVm>? ItemMasters => _settings?.Draft.ItemMasterRows;
-    public ObservableCollection<KaratMasterRowVm>? KaratMasters => _settings?.Draft.KaratRows;
+    /// <summary>The saved items and karats. A line never sees the Settings tab's own rows, which may be half typed.</summary>
+    private MasterCatalog Catalog => _settings?.Catalog ?? MasterCatalog.Empty;
+    public IReadOnlyList<ItemMasterEntry> ItemMasters => Catalog.Items;
+    public IReadOnlyList<KaratMasterEntry> KaratMasters => Catalog.Karats;
     public IReadOnlyList<string> UnitOptions { get; } = ItemUnits.All;
     public IReadOnlyList<string> PaymentOptions { get; } = [PaymentMode.CreditDebit, PaymentMode.Cash];
 
@@ -305,6 +317,9 @@ public partial class InvoiceViewModel : ObservableObject
 
     private void OnLineMutated(object? sender, EventArgs e)
     {
+        // OnCatalogPublished recomputes once it has every line where it should be.
+        if (_rebindingMasters) return;
+
         if (sender is not BillLineViewModel line)
         {
             SaveDraftCommand.NotifyCanExecuteChanged();
@@ -331,71 +346,45 @@ public partial class InvoiceViewModel : ObservableObject
         if (line.ItemMaster is not null) return;
         if (string.IsNullOrWhiteSpace(line.ItemName)) return;
 
-        var typed = line.ItemName.Trim();
-        var master = ItemMasters?.FirstOrDefault(
-            candidate => string.Equals(candidate.Name?.Trim(), typed, StringComparison.OrdinalIgnoreCase));
-        if (master is not null)
+        if (Catalog.FindItem(line.ItemName) is { } master)
         {
             line.ItemMaster = master;
         }
     }
 
-    private void AttachItemMasterObservers()
+    /// <summary>
+    /// Settings were loaded or saved and the items or karats are not what they were. Each line is
+    /// pointed at the new entry of the item and karat it had, by name, and keeps everything on it:
+    /// an item whose default wastage was changed in Settings does not put that over what was typed
+    /// on an open bill. The lists are swapped first, because the item and karat cells drop a
+    /// selection that is no longer in their list; the lines are put right after that.
+    /// </summary>
+    private void OnCatalogPublished()
     {
-        if (ItemMasters is not { } masters) return;
+        var catalog = Catalog;
+        var held = Lines
+            .Select(line => (Line: line, Item: line.ItemMaster?.Name, Karat: line.KaratMaster?.Label))
+            .ToList();
 
-        if (masters is INotifyCollectionChanged itemMasterCollection)
-            itemMasterCollection.CollectionChanged += OnItemMastersCollectionChanged;
-
-        foreach (var master in masters)
-            AttachItemMaster(master);
-    }
-
-    private void OnItemMastersCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (e.Action == NotifyCollectionChangedAction.Reset)
+        _rebindingMasters = true;
+        try
         {
-            foreach (var master in _observedItemMasters.ToArray())
-                DetachItemMaster(master);
+            OnPropertyChanged(nameof(ItemMasters));
+            OnPropertyChanged(nameof(KaratMasters));
+            foreach (var (line, item, karat) in held)
+            {
+                line.RebindMasters(catalog.FindItem(item), catalog.FindKarat(karat));
+            }
         }
-
-        if (e.OldItems is not null)
+        finally
         {
-            foreach (ItemMasterRowVm master in e.OldItems)
-                DetachItemMaster(master);
-        }
-
-        if (e.NewItems is not null)
-        {
-            foreach (ItemMasterRowVm master in e.NewItems)
-                AttachItemMaster(master);
-        }
-
-        if (ItemMasters is not null)
-        {
-            foreach (var master in ItemMasters)
-                AttachItemMaster(master);
+            _rebindingMasters = false;
         }
 
         RefreshQuickAddResults();
-    }
-
-    private void AttachItemMaster(ItemMasterRowVm master)
-    {
-        if (_observedItemMasters.Add(master))
-            master.PropertyChanged += OnItemMasterPropertyChanged;
-    }
-
-    private void DetachItemMaster(ItemMasterRowVm master)
-    {
-        if (_observedItemMasters.Remove(master))
-            master.PropertyChanged -= OnItemMasterPropertyChanged;
-    }
-
-    private void OnItemMasterPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(ItemMasterRowVm.Name))
-            RefreshQuickAddResults();
+        RefreshRates();
+        // A karat's purity may be another now.
+        Recompute();
     }
 
     private void AddTrailingBlankRow(bool deferCollectionRecompute = false)
@@ -762,7 +751,7 @@ public partial class InvoiceViewModel : ObservableObject
     private void RefreshQuickAddResults()
     {
         var query = (QuickAddQuery ?? string.Empty).Trim();
-        var matches = (ItemMasters ?? [])
+        var matches = ItemMasters
             .Where(master => !string.IsNullOrWhiteSpace(master.Name)
                 && (query.Length == 0 || master.Name.Contains(query, StringComparison.OrdinalIgnoreCase)))
             .Take(50)
@@ -772,7 +761,7 @@ public partial class InvoiceViewModel : ObservableObject
         foreach (var match in matches)
             QuickAddResults.Add(match);
 
-        var total = (ItemMasters ?? []).Count(master => !string.IsNullOrWhiteSpace(master.Name));
+        var total = ItemMasters.Count(master => !string.IsNullOrWhiteSpace(master.Name));
         QuickAddCountText = query.Length == 0
             ? (total == 1 ? "1 item" : $"{total} items")
             : $"{matches.Count} {(matches.Count == 1 ? "match" : "matches")} for “{query}”";
@@ -788,7 +777,7 @@ public partial class InvoiceViewModel : ObservableObject
     private void CloseQuickAdd() => IsQuickAddOpen = false;
 
     [RelayCommand]
-    private void QuickAddCommit(ItemMasterRowVm? master)
+    private void QuickAddCommit(ItemMasterEntry? master)
     {
         master ??= QuickAddSelection ?? QuickAddResults.FirstOrDefault();
         if (master is null) return;
@@ -984,18 +973,7 @@ public partial class InvoiceViewModel : ObservableObject
     }
 
     private IReadOnlyList<KaratMasterEntry>? BuildKaratMappings()
-    {
-        if (KaratMasters is null || KaratMasters.Count == 0) return null;
-        var entries = new List<KaratMasterEntry>(KaratMasters.Count);
-        foreach (var row in KaratMasters)
-        {
-            if (row.TryBuildEntry(out var entry, out _))
-            {
-                entries.Add(entry);
-            }
-        }
-        return entries;
-    }
+        => KaratMasters.Count == 0 ? null : KaratMasters;
 
     private string? ValidateForSave()
     {

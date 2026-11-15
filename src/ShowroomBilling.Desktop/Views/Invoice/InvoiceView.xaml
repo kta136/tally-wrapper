@@ -5,7 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Invoice"
-             xmlns:vmSettings="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             xmlns:contracts="clr-namespace:ShowroomBilling.Contracts.Settings;assembly=ShowroomBilling.Contracts"
              xmlns:conv="clr-namespace:ShowroomBilling.Desktop.Converters"
              mc:Ignorable="d"
              Background="{StaticResource BgPanelBrush}"
@@ -13,6 +13,7 @@
              d:DataContext="{d:DesignInstance Type=vm:InvoiceViewModel, IsDesignTimeCreatable=False}">
     <UserControl.Resources>
         <conv:DecimalIsPositiveConverter x:Key="DecimalIsPositive" />
+        <conv:ItemSummaryConverter x:Key="ItemSummary" />
 
         <!--  The 13 columns of the line table, in four zones: the item, the weights, the pricing
               inputs and the two results. Header, rows, totals and the tinted backdrop all use these
@@ -142,10 +143,10 @@
         </Style>
 
         <!--  The item cell's drop-down lists each item with its unit, wastage and labour under the name.  -->
-        <DataTemplate x:Key="ItemPickerRow" DataType="{x:Type vmSettings:ItemMasterRowVm}">
+        <DataTemplate x:Key="ItemPickerRow" DataType="{x:Type contracts:ItemMasterEntry}">
             <StackPanel Margin="6,5">
                 <TextBlock FontWeight="Medium" Text="{Binding Name}" />
-                <TextBlock Margin="0,1,0,0" Style="{StaticResource TxtHint}" Text="{Binding PickerSummary}" />
+                <TextBlock Margin="0,1,0,0" Style="{StaticResource TxtHint}" Text="{Binding Converter={StaticResource ItemSummary}}" />
             </StackPanel>
         </DataTemplate>
 
@@ -1136,7 +1137,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
                                         <TextBlock FontWeight="Medium" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Margin="0,1,0,0" Style="{StaticResource TxtHint}" Text="{Binding QuickSummary}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Margin="0,1,0,0" Style="{StaticResource TxtHint}" Text="{Binding Converter={StaticResource ItemSummary}, ConverterParameter=quick}" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                     <Border Grid.Column="1"
                                             Width="24"

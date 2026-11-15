@@ -5,9 +5,9 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Views.Invoice;
 
@@ -262,7 +262,7 @@ public partial class InvoiceView : UserControl
         if (DataContext is not InvoiceViewModel vm) return;
 
         var item = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
-        if (item?.DataContext is not ItemMasterRowVm master) return;
+        if (item?.DataContext is not ItemMasterEntry master) return;
 
         vm.QuickAddCommitCommand.Execute(master);
         e.Handled = true;

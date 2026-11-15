@@ -1,5 +1,5 @@
+using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests;
 
@@ -25,9 +25,9 @@ public sealed class RateLadderTests
     {
         var masters = new[]
         {
-            new KaratMasterRowVm { Label = "22KT", PurityPercent = "91.7", TallyItem = "x" },
-            new KaratMasterRowVm { Label = "18kt", PurityPercent = "75.0", TallyItem = "y" },
-            new KaratMasterRowVm { Label = "14KT", PurityPercent = "58.5", TallyItem = "z" },
+            new KaratMasterEntry("22KT", 91.7m, "x"),
+            new KaratMasterEntry("18kt", 75.0m, "y"),
+            new KaratMasterEntry("14KT", 58.5m, "z"),
         };
 
         var ladder = RateLadder.For(8000m, masters);
@@ -36,12 +36,12 @@ public sealed class RateLadderTests
     }
 
     [Fact]
-    public void An_unreadable_or_out_of_range_purity_falls_back_to_the_standard_one()
+    public void A_purity_of_nothing_or_over_a_hundred_falls_back_to_the_standard_one()
     {
         var masters = new[]
         {
-            new KaratMasterRowVm { Label = "22KT", PurityPercent = "abc", TallyItem = "x" },
-            new KaratMasterRowVm { Label = "18KT", PurityPercent = "150", TallyItem = "y" },
+            new KaratMasterEntry("22KT", 0m, "x"),
+            new KaratMasterEntry("18KT", 150m, "y"),
         };
 
         var ladder = RateLadder.For(10000m, masters);

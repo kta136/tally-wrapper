@@ -215,7 +215,7 @@ public sealed class HandoverCoordinator
                 ServerUnreachable: true);
         }
 
-        return await workflow.RunAsync(document, HandoverMasters.From(loaded.Masters), CancellationToken.None);
+        return await workflow.RunAsync(document, MasterCatalog.From(loaded.Masters), CancellationToken.None);
     }
 
     private async Task<string?> RequestAdminTokenAsync(BillResponse bill, string context, CancellationToken cancellationToken)

@@ -3,9 +3,9 @@ using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Tests.TestSupport;
+using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Handover;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests.Handover;
 
@@ -267,9 +267,9 @@ public sealed class HandoverBillMapperTests
         var noCarats = HandoverBillMapper.Map(Bill(Line(stones: 28_500m, lineTotal: 99_569.3m, diamondValue: 27_000m)), HandoverTestMasters.Masters);
         var rows = HandoverTestMasters.Masters.Items;
         var karats = HandoverTestMasters.Masters.Karats;
-        var none = HandoverBillMapper.Map(Bill(Studded()), new HandoverMasters(rows.Where(item => item.Unit != ItemUnits.Carat).ToList(), karats));
-        var twoOthers = HandoverBillMapper.Map(Bill(Studded()), new HandoverMasters(rows.Where(item => item.Name != "Diamond").Append(Solitaire()).ToList(), karats));
-        var oneOther = HandoverBillMapper.Map(Bill(Studded()), new HandoverMasters(rows.Where(item => item.Name != "Diamond").ToList(), karats));
+        var none = HandoverBillMapper.Map(Bill(Studded()), new MasterCatalog(rows.Where(item => item.Unit != ItemUnits.Carat).ToList(), karats));
+        var twoOthers = HandoverBillMapper.Map(Bill(Studded()), new MasterCatalog(rows.Where(item => item.Name != "Diamond").Append(Solitaire()).ToList(), karats));
+        var oneOther = HandoverBillMapper.Map(Bill(Studded()), new MasterCatalog(rows.Where(item => item.Name != "Diamond").ToList(), karats));
 
         Assert.Equal("The diamonds on a line of “Gold Ornaments” have no carats.", noCarats.Problem);
         Assert.Equal("A line has diamonds. Tally Wrapper bills them on its Diamond item: one item in the Diamond category counted in ct, or of several, the one named Diamond.", none.Problem);
@@ -277,7 +277,7 @@ public sealed class HandoverBillMapperTests
         // The one Diamond item counted in ct, whatever its name.
         Assert.Equal("Diamond Ring", oneOther.Payload!.Lines[1].ItemName);
 
-        static ItemMasterRowVm Solitaire() => ItemMasterRowVm.FromEntry(new("Solitaire", ItemUnits.Carat, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, "Solitaire"));
+        static ItemMasterEntry Solitaire() => new("Solitaire", ItemUnits.Carat, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, "Solitaire");
     }
 
     /// <summary>
@@ -609,10 +609,10 @@ public sealed class HandoverBillMapperTests
         foreach (var typed in handedOver.Lines)
         {
             var line = invoice.Lines[^1];
-            line.ItemMaster = settings.Draft.ItemMasterRows.First(item => item.Name == typed.ItemName);
+            line.ItemMaster = settings.Catalog.Items.First(item => item.Name == typed.ItemName);
             if (!string.IsNullOrEmpty(typed.Karat))
             {
-                line.KaratMaster = settings.Draft.KaratRows.First(karat => karat.Label == typed.Karat);
+                line.KaratMaster = settings.Catalog.Karats.First(karat => karat.Label == typed.Karat);
             }
 
             line.GrossWeight = typed.GrossWeight;

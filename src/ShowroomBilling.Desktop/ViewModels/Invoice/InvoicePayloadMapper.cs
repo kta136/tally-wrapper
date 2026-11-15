@@ -1,8 +1,6 @@
-using System.Globalization;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop.ViewModels.Invoice;
@@ -134,25 +132,23 @@ internal static class InvoicePayloadMapper
 
     public static decimal ResolvePurityPercent(
         BillLineViewModel line,
-        IEnumerable<KaratMasterRowVm>? karatMasters)
+        IEnumerable<KaratMasterEntry>? karatMasters)
     {
-        if (line.KaratMaster is not null
-            && decimal.TryParse(line.KaratMaster.PurityPercent, NumberStyles.Number, CultureInfo.InvariantCulture, out var p))
-            return p;
+        if (line.KaratMaster is not null)
+            return line.KaratMaster.PurityPercent;
 
         if (karatMasters is not null && !string.IsNullOrWhiteSpace(line.Karat))
         {
             var match = karatMasters.FirstOrDefault(k =>
                 string.Equals(k.Label, line.Karat, StringComparison.OrdinalIgnoreCase));
-            if (match is not null
-                && decimal.TryParse(match.PurityPercent, NumberStyles.Number, CultureInfo.InvariantCulture, out var mappedPurity))
-                return mappedPurity;
+            if (match is not null)
+                return match.PurityPercent;
         }
 
         return 0m;
     }
 
-    public static string ResolveLineItemCategory(BillLineItemDto line, ItemMasterRowVm? itemMaster)
+    public static string ResolveLineItemCategory(BillLineItemDto line, ItemMasterEntry? itemMaster)
     {
         if (HasGoldMakingFields(line))
             return ItemCategories.GoldBased;
@@ -163,7 +159,7 @@ internal static class InvoicePayloadMapper
             ItemCategories.GoldBased)!;
     }
 
-    public static string ResolveLinePricingMode(BillLineItemDto line, ItemMasterRowVm? itemMaster)
+    public static string ResolveLinePricingMode(BillLineItemDto line, ItemMasterEntry? itemMaster)
         => FirstNonBlank(
             line.PricingMode,
             itemMaster?.PricingMode,

@@ -1,20 +1,10 @@
-using System.Globalization;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Handover;
-
-/// <summary>The item and karat masters a hand-over is matched against: the ones in the saved settings.</summary>
-internal sealed record HandoverMasters(IReadOnlyList<ItemMasterRowVm> Items, IReadOnlyList<KaratMasterRowVm> Karats)
-{
-    public static HandoverMasters From(MasterDataSettingsDto? masters) => new(
-        MasterDataJson.ParseItemsOrEmpty(masters?.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry).ToList(),
-        MasterDataJson.ParseKaratsOrEmpty(masters?.KaratMappingDataJson).Select(KaratMasterRowVm.FromEntry).ToList());
-}
 
 /// <summary>A handed-over bill as the payload the Invoice tab would have saved, or why it cannot be one.</summary>
 internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Problem)
@@ -56,7 +46,7 @@ internal sealed record HandoverMapResult(BillPayloadDto? Payload, string? Proble
 /// </summary>
 internal static class HandoverBillMapper
 {
-    public static HandoverMapResult Map(HandoverBill bill, HandoverMasters masters)
+    public static HandoverMapResult Map(HandoverBill bill, MasterCatalog masters)
     {
         ArgumentNullException.ThrowIfNull(bill);
         ArgumentNullException.ThrowIfNull(masters);
@@ -65,15 +55,14 @@ internal static class HandoverBillMapper
         foreach (var line in bill.Lines)
         {
             var itemName = line.ItemName.Trim();
-            var item = masters.Items.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name?.Trim(), itemName, StringComparison.OrdinalIgnoreCase));
+            var item = masters.FindItem(itemName);
             if (item is null)
             {
                 return HandoverMapResult.Refused($"No item named “{itemName}” in Tally Wrapper’s items.");
             }
 
             var isDiamond = string.Equals(item.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase);
-            KaratMasterRowVm? karat = null;
+            KaratMasterEntry? karat = null;
             var purity = 0m;
             if (!isDiamond)
             {
@@ -94,7 +83,7 @@ internal static class HandoverBillMapper
                     }
                 }
 
-                purity = ParsePercent(karat.PurityPercent);
+                purity = karat.PurityPercent;
             }
 
             // The Invoice tab's quantity is the net weight, whatever the item's unit says. The hand-over's
@@ -204,7 +193,7 @@ internal static class HandoverBillMapper
     /// no more than its total. Lowering it can take a line out of its rounding allowance, so the lines
     /// are gone through again until none lowers it.
     /// </summary>
-    private static decimal? ChooseRate(IReadOnlyList<ResolvedLine> lines, IReadOnlyList<KaratMasterRowVm> karats)
+    private static decimal? ChooseRate(IReadOnlyList<ResolvedLine> lines, IReadOnlyList<KaratMasterEntry> karats)
     {
         var gold = lines.Where(line => !line.IsDiamond).ToList();
         var rate = gold.Select(line => line.Source.Rate).FirstOrDefault(value => value is > 0m);
@@ -240,7 +229,7 @@ internal static class HandoverBillMapper
     /// The line as the counter would type it (see the class summary), or null when the hand-over gives
     /// it no rounding allowance or it does not come within the allowance of its total.
     /// </summary>
-    private static BillLineViewModel? AsTyped(ResolvedLine line, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
+    private static BillLineViewModel? AsTyped(ResolvedLine line, decimal? rate24Kt, IReadOnlyList<KaratMasterEntry> karats)
     {
         var source = line.Source;
         if (source.RoundingAllowance <= 0m)
@@ -324,7 +313,7 @@ internal static class HandoverBillMapper
     }
 
     /// <summary>Works the line out as the Invoice tab does, then puts what is left of the hand-over's total in Extra.</summary>
-    private static void Price(BillLineViewModel row, decimal target, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
+    private static void Price(BillLineViewModel row, decimal target, decimal? rate24Kt, IReadOnlyList<KaratMasterEntry> karats)
     {
         row.Extra = null;
         var withoutExtra = Compute(row, rate24Kt, karats);
@@ -336,19 +325,19 @@ internal static class HandoverBillMapper
         row.LineTotal = result.LineTotalInclusive;
     }
 
-    private static BillCalculator.LineResult Compute(BillLineViewModel row, decimal? rate24Kt, IReadOnlyList<KaratMasterRowVm> karats)
+    private static BillCalculator.LineResult Compute(BillLineViewModel row, decimal? rate24Kt, IReadOnlyList<KaratMasterEntry> karats)
         => BillCalculator.ComputeLine(InvoicePayloadMapper.BuildCalculatorInputs(
             row,
             rate24Kt ?? 0m,
             InvoicePayloadMapper.ResolvePurityPercent(row, karats)));
 
-    private static string PricingModeOf(ItemMasterRowVm item)
+    private static string PricingModeOf(ItemMasterEntry item)
         => string.IsNullOrWhiteSpace(item.PricingMode) ? PricingModes.Wastage : item.PricingMode;
 
     private static bool TakesLabour(string mode) => mode is PricingModes.Labour or PricingModes.Both;
 
     /// <summary>Opens the payload the way Bills → Edit does and recomputes each line with the Invoice tab's calculator.</summary>
-    internal static bool ReopensToSameTotals(BillPayloadDto payload, HandoverMasters masters)
+    internal static bool ReopensToSameTotals(BillPayloadDto payload, MasterCatalog masters)
     {
         var rows = InvoiceEditMapper.CreateRows(payload, masters.Items, masters.Karats);
         for (var index = 0; index < rows.Count; index++)
@@ -376,7 +365,7 @@ internal static class HandoverBillMapper
     /// The item a gold line's diamonds are billed on: the one Diamond item counted in carats, or of
     /// several, the one named Diamond.
     /// </summary>
-    private static ItemMasterRowVm? DiamondItemOf(IReadOnlyList<ItemMasterRowVm> items)
+    private static ItemMasterEntry? DiamondItemOf(IReadOnlyList<ItemMasterEntry> items)
     {
         var diamonds = items
             .Where(item => string.Equals(item.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase)
@@ -395,7 +384,7 @@ internal static class HandoverBillMapper
     /// A line with no stamp takes the item's own karat. Tally Wrapper's items have no karat field,
     /// so the item's karat is the one karat whose Tally stock item is the item's Tally stock item.
     /// </summary>
-    private static KaratMasterRowVm? DefaultKaratOf(ItemMasterRowVm item, IReadOnlyList<KaratMasterRowVm> karats)
+    private static KaratMasterEntry? DefaultKaratOf(ItemMasterEntry item, IReadOnlyList<KaratMasterEntry> karats)
     {
         var stock = item.DefaultStockMappingLabel?.Trim();
         if (string.IsNullOrEmpty(stock))
@@ -416,16 +405,13 @@ internal static class HandoverBillMapper
     private static string WithoutSpaces(string? value)
         => string.Concat((value ?? string.Empty).Where(c => !char.IsWhiteSpace(c)));
 
-    private static decimal ParsePercent(string? value)
-        => decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0m;
-
     private static decimal Paise(decimal value) => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>A bill row to make: a hand-over line, or the gold or the diamond part of one, priced to <paramref name="Total"/>.</summary>
     private sealed record ResolvedLine(
         HandoverLine Source,
-        ItemMasterRowVm Item,
-        KaratMasterRowVm? Karat,
+        ItemMasterEntry Item,
+        KaratMasterEntry? Karat,
         bool IsDiamond,
         decimal Purity,
         decimal Quantity,

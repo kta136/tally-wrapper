@@ -305,23 +305,27 @@ public sealed class InvoiceDiamondViewModelTests
     }
 
     [Fact]
-    public void Typed_item_name_attaches_matching_master_after_master_name_changes()
+    public void Typed_item_name_attaches_the_saved_item_of_that_name_also_after_it_was_renamed()
     {
         var settings = OfflineApi.Settings();
         var master = GoldMaster();
-        settings.Draft.ItemMasterRows.Add(master);
+        settings.Publish(items: [master]);
         var vm = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings);
 
         vm.Lines[0].ItemName = " 22k ring ";
 
         Assert.Same(master, vm.Lines[0].ItemMaster);
 
-        master.Name = "Renamed Gold Ring";
+        var renamed = master with { Name = "Renamed Gold Ring" };
+        settings.Publish(items: [renamed]);
         var nextLine = vm.Lines.Single(l => l.IsEmpty);
 
         nextLine.ItemName = "renamed gold ring";
 
-        Assert.Same(master, nextLine.ItemMaster);
+        Assert.Same(renamed, nextLine.ItemMaster);
+        // The first line was typed under the old name, which is no longer an item.
+        Assert.Null(vm.Lines[0].ItemMaster);
+        Assert.Equal("22K Ring", vm.Lines[0].ItemName);
     }
 
     [Fact]
@@ -367,22 +371,8 @@ public sealed class InvoiceDiamondViewModelTests
     {
         var billId = Guid.NewGuid();
         var settings = OfflineApi.Settings();
-        var master = new ItemMasterRowVm
-        {
-            Name = "22K Ring",
-            Unit = ItemUnits.Gram,
-            ItemCategory = ItemCategories.GoldBased,
-            PricingMode = PricingModes.Both,
-            WastagePercent = "10",
-            DefaultLabourPerGram = "500"
-        };
-        settings.Draft.ItemMasterRows.Add(master);
-        settings.Draft.KaratRows.Add(new KaratMasterRowVm
-        {
-            Label = "22K",
-            PurityPercent = "91.6",
-            TallyItem = "Gold 22K"
-        });
+        var master = TestMasters.Item("22K Ring", wastage: 10m, pricing: PricingModes.Both, labour: 500m);
+        settings.Publish(items: [master], karats: [TestMasters.Karat("22K", 91.6m, "Gold 22K")]);
         var payload = new BillPayloadDto(
             PartyName: "Customer",
             PartyGstin: null,
@@ -434,16 +424,8 @@ public sealed class InvoiceDiamondViewModelTests
     {
         var billId = Guid.NewGuid();
         var settings = OfflineApi.Settings();
-        var master = new ItemMasterRowVm
-        {
-            Name = "22K Ring",
-            Unit = ItemUnits.Gram,
-            ItemCategory = ItemCategories.GoldBased,
-            PricingMode = PricingModes.Both,
-            WastagePercent = "10",
-            DefaultLabourPerGram = "500"
-        };
-        settings.Draft.ItemMasterRows.Add(master);
+        var master = TestMasters.Item("22K Ring", wastage: 10m, pricing: PricingModes.Both, labour: 500m);
+        settings.Publish(items: [master]);
         var payload = new BillPayloadDto(
             PartyName: "Customer",
             PartyGstin: null,
@@ -506,22 +488,8 @@ public sealed class InvoiceDiamondViewModelTests
     {
         var billId = Guid.NewGuid();
         var settings = OfflineApi.Settings();
-        var master = new ItemMasterRowVm
-        {
-            Name = "Diamond Jewellery",
-            Unit = ItemUnits.Gram,
-            ItemCategory = ItemCategories.Diamond,
-            PricingMode = PricingModes.Wastage,
-            WastagePercent = "0",
-            DefaultLabourPerGram = "0"
-        };
-        settings.Draft.ItemMasterRows.Add(master);
-        settings.Draft.KaratRows.Add(new KaratMasterRowVm
-        {
-            Label = "18K",
-            PurityPercent = "75",
-            TallyItem = "Diamond Jewellery 18K"
-        });
+        var master = TestMasters.Item("Diamond Jewellery", category: ItemCategories.Diamond);
+        settings.Publish(items: [master], karats: [TestMasters.Karat("18K", 75m, "Diamond Jewellery 18K")]);
         var payload = new BillPayloadDto(
             PartyName: "Customer",
             PartyGstin: null,
@@ -585,15 +553,7 @@ public sealed class InvoiceDiamondViewModelTests
     [Fact]
     public void Selecting_item_master_applies_defaults_for_new_rows()
     {
-        var master = new ItemMasterRowVm
-        {
-            Name = "22K Ring",
-            Unit = ItemUnits.Gram,
-            ItemCategory = ItemCategories.GoldBased,
-            PricingMode = PricingModes.Both,
-            WastagePercent = "10",
-            DefaultLabourPerGram = "500"
-        };
+        var master = TestMasters.Item("22K Ring", wastage: 10m, pricing: PricingModes.Both, labour: 500m);
         var line = new BillLineViewModel
         {
             WastagePercent = 8m,
@@ -647,26 +607,10 @@ public sealed class InvoiceDiamondViewModelTests
         Assert.Contains("cannot exceed", vm.SaveStatus, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ItemMasterRowVm DiamondMaster(string defaultStockMappingLabel = "") => new()
-    {
-        Name = "Diamond Ring",
-        Unit = ItemUnits.Carat,
-        ItemCategory = ItemCategories.Diamond,
-        PricingMode = PricingModes.Wastage,
-        WastagePercent = "12",
-        DefaultLabourPerGram = "500",
-        DefaultStockMappingLabel = defaultStockMappingLabel
-    };
+    private static ItemMasterEntry DiamondMaster(string defaultStockMappingLabel = "")
+        => TestMasters.Item("Diamond Ring", ItemUnits.Carat, wastage: 12m, category: ItemCategories.Diamond, labour: 500m, stock: defaultStockMappingLabel);
 
-    private static ItemMasterRowVm GoldMaster() => new()
-    {
-        Name = "22K Ring",
-        Unit = ItemUnits.Gram,
-        ItemCategory = ItemCategories.GoldBased,
-        PricingMode = PricingModes.Wastage,
-        WastagePercent = "8",
-        DefaultLabourPerGram = "0"
-    };
+    private static ItemMasterEntry GoldMaster() => TestMasters.Item("22K Ring", wastage: 8m);
 
     private static InvoiceViewModel InvoiceWithDiamondLine()
     {

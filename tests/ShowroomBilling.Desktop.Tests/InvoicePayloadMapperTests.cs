@@ -1,6 +1,6 @@
 using ShowroomBilling.Contracts.Settings;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Invoice;
-using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.Tests;
 
@@ -11,14 +11,7 @@ public sealed class InvoicePayloadMapperTests
     {
         var line = new BillLineViewModel
         {
-            ItemMaster = new ItemMasterRowVm
-            {
-                Name = "Diamond Ring",
-                Unit = ItemUnits.Carat,
-                ItemCategory = ItemCategories.Diamond,
-                PricingMode = PricingModes.Wastage,
-                DefaultStockMappingLabel = "Diamond Stock"
-            },
+            ItemMaster = TestMasters.Item("Diamond Ring", ItemUnits.Carat, category: ItemCategories.Diamond, stock: "Diamond Stock"),
             GrossWeight = 2m,
             DiamondRate = 3500m,
             EffectiveRate = 3500m,

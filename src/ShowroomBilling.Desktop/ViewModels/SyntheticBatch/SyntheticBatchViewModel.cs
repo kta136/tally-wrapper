@@ -49,8 +49,6 @@ public partial class SyntheticBatchViewModel : ObservableObject
         if (_settings is not null)
         {
             _settings.PropertyChanged += OnSettingsPropertyChanged;
-            if (_settings.Draft is not null)
-                _settings.Draft.PropertyChanged += OnSettingsDraftPropertyChanged;
             RefreshKaratOptions();
         }
 
@@ -125,19 +123,14 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SettingsViewModel.Settings) or nameof(SettingsViewModel.Draft))
+        if (e.PropertyName == nameof(SettingsViewModel.Catalog))
             RefreshKaratOptions();
     }
 
-    private void OnSettingsDraftPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(SettingsDraft.KaratRows))
-            RefreshKaratOptions();
-    }
-
+    /// <summary>The saved karats that name a Tally stock item, keeping the ticks of those still there.</summary>
     public void RefreshKaratOptions()
     {
-        var rows = _settings?.Draft?.KaratRows;
+        var rows = _settings?.Catalog.Karats;
         if (rows is null) return;
         var previouslySelected = KaratOptions
             .Where(k => k.IsSelected)
