@@ -9,15 +9,15 @@ using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
-public partial class BillDetailsViewModel : ObservableObject, IBillDetailsActionHost
+public partial class BillDetailsViewModel : ObservableObject
 {
     private readonly IBillsApiClient _billsApi;
-    private readonly BillDetailsActionWorkflow _actions;
+    private readonly BillActions _actions;
 
     public BillDetailsViewModel(IBillsApiClient billsApi, IDialogService dialogs)
     {
         _billsApi = billsApi;
-        _actions = new BillDetailsActionWorkflow(_billsApi, this, dialogs);
+        _actions = new BillActions(_billsApi, dialogs);
         AuditTrail = new ObservableCollection<BillAuditTrailItemViewModel>();
         AuditTrail.CollectionChanged += (_, _) => OnPropertyChanged(nameof(Timeline));
     }
@@ -113,19 +113,86 @@ public partial class BillDetailsViewModel : ObservableObject, IBillDetailsAction
     private bool CanRevise => CanAct(BillStateCapabilities.CanRevise);
 
     [RelayCommand(CanExecute = nameof(CanPush))]
-    private Task PushAsync(CancellationToken cancellationToken) => _actions.PushAsync(cancellationToken);
+    private Task PushAsync(CancellationToken cancellationToken)
+        => RunAsync((bill, busy) => _actions.PushAsync(bill, null, busy, cancellationToken), cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanRetry))]
-    private Task RetryAsync(CancellationToken cancellationToken) => _actions.RetryAsync(cancellationToken);
+    private Task RetryAsync(CancellationToken cancellationToken)
+        => RunAsync((bill, busy) => _actions.RetryAsync([bill], null, busy, cancellationToken), cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanRepost))]
-    private Task RepostAsync(CancellationToken cancellationToken) => _actions.RepostAsync(cancellationToken);
+    private Task RepostAsync(CancellationToken cancellationToken)
+        => RunAsync((bill, busy) => _actions.RepostAsync([bill], null, busy, cancellationToken), cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanVoid))]
-    private Task VoidAsync(CancellationToken cancellationToken) => _actions.VoidAsync(cancellationToken);
+    private Task VoidAsync(CancellationToken cancellationToken)
+        => RunAsync((bill, busy) => _actions.VoidAsync(bill, busy, cancellationToken), cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanRevise))]
-    private Task ReviseAsync(CancellationToken cancellationToken) => _actions.ReviseAsync(cancellationToken);
+    private Task ReviseAsync(CancellationToken cancellationToken)
+        => RunAsync((bill, busy) => _actions.ReviseAsync(bill, busy, cancellationToken), cancellationToken);
+
+    /// <summary>
+    /// One action on the bill shown, as this dialog shows it: busy with the action's own text from
+    /// the moment it starts sending, then the bill as it now is, then what the action came to.
+    /// The bill is read again after a call the server refused as well, because a push that failed
+    /// has still moved the bill to another state. An action that comes to nothing (the operator
+    /// said no) leaves the dialog as it is.
+    /// </summary>
+    private async Task RunAsync(
+        Func<BillRef, Action<string>, Task<BillActionResult?>> action,
+        CancellationToken cancellationToken)
+    {
+        if (Bill is not { } bill) return;
+
+        try
+        {
+            var result = await action(BillRef.Of(bill), status =>
+            {
+                IsActing = true;
+                StatusMessage = status;
+            });
+            if (result is null) return;
+
+            if (result.Sent)
+            {
+                await ShowAfterActionAsync(bill.Id, result.Bill, cancellationToken);
+                BillMutated?.Invoke();
+            }
+
+            StatusMessage = result.Message;
+        }
+        finally
+        {
+            IsActing = false;
+        }
+    }
+
+    /// <summary>
+    /// Shows the bill an action left: the one the server returned, else the bill read again, with
+    /// its timeline. Nothing on screen is cleared first, and a read that fails leaves what was shown.
+    /// </summary>
+    private async Task ShowAfterActionAsync(Guid billId, BillResponse? returned, CancellationToken cancellationToken)
+    {
+        var timeline = ReloadSupportingStateAsync(returned?.Id ?? billId, cancellationToken);
+        if (returned is not null)
+        {
+            Bill = returned;
+        }
+        else
+        {
+            try
+            {
+                Bill = await _billsApi.GetAsync(billId, cancellationToken) ?? Bill;
+            }
+            catch (Exception)
+            {
+                // The action's own result is what the status line says; the bill stays as it was shown.
+            }
+        }
+
+        await timeline;
+    }
 
     public async Task LoadAsync(Guid billId, CancellationToken cancellationToken = default)
     {

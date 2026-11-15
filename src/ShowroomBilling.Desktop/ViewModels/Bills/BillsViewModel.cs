@@ -11,7 +11,7 @@ using ShowroomBilling.Desktop.ViewModels.Settings;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
 
-public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
+public partial class BillsViewModel : ObservableObject
 {
     private const int PageSize = 50;
     private const string SortWorkflow = "workflow";
@@ -19,6 +19,7 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
     private readonly IBillsApiClient _billsApi;
     private readonly AdminTokenStore? _adminTokens;
     private readonly BillsAdminTokenGate _adminTokenGate;
+    private readonly BillActions _actions;
     private int _loadGeneration;
 
     // True while many rows are being ticked at once, so the list is not
@@ -57,11 +58,8 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         _billsApi = billsApi;
         _adminTokens = adminTokens;
         _adminTokenGate = new BillsAdminTokenGate(_adminTokens, dialogs);
-        var runner = new BillsActionRunner(this, dialogs);
-        var batch = new BillsBatchActionWorkflow(_billsApi, this, runner);
-        var rows = new BillsRowActionWorkflow(_billsApi, _adminTokenGate, this, runner);
-        var admin = new BillsAdminActionWorkflow(
-            _billsApi, _adminTokenGate, this, runner, dialogs, () => settings?.Settings?.Numbering);
+        _actions = new BillActions(
+            _billsApi, dialogs, _adminTokens, EnsureTallyPushAllowedAsync, () => settings?.Settings?.Numbering);
 
         // Re-publish admin state to XAML so admin-only actions
         // (Change Bill Number, Mark Posted/Pending, Delete, Delete Selected)
@@ -106,27 +104,39 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
             BillStates.Voided,
         ];
 
-        // These run a workflow's method. The commands this class implements itself are the
-        // [RelayCommand] methods further down.
-        PushSelectedCommand = new AsyncRelayCommand(batch.PushSelectedAsync, () => CanActOnSelection(x => x.IsPendingLike, needsTally: true));
-        PushAllPendingCommand = new AsyncRelayCommand(batch.PushAllPendingAsync, () => CanAct && IsTallyPushAllowed);
-        RetrySelectedCommand = new AsyncRelayCommand(batch.RetrySelectedAsync, () => CanActOnSelection(x => x.IsRetryable, needsTally: true));
-        RepostSelectedCommand = new AsyncRelayCommand(batch.RepostSelectedAsync, () => CanActOnSelection(x => x.CanBeReposted, needsTally: true));
+        // Each of these is one BillActions call on the rows it applies to, run through RunAsync.
+        // The commands this class implements itself are the [RelayCommand] methods further down.
+        PushSelectedCommand = SelectionCommand(
+            (rows, busy, ct) => _actions.PushSelectedAsync(rows.Select(row => row.Id).ToArray(), busy, ct), x => x.IsPendingLike, needsTally: true);
+        PushAllPendingCommand = new AsyncRelayCommand(
+            ct => RunAsync(busy => _actions.PushAllPendingAsync(busy, ct), ct), () => CanAct && IsTallyPushAllowed);
+        RetrySelectedCommand = SelectionCommand(
+            (rows, busy, ct) => _actions.RetryAsync(Refs(rows), "Retry selected from Bills tab", busy, ct), x => x.IsRetryable, needsTally: true);
+        RepostSelectedCommand = SelectionCommand(
+            (rows, busy, ct) => _actions.RepostAsync(Refs(rows), "Batch repost from Bills tab", busy, ct), x => x.CanBeReposted, needsTally: true);
 
-        PushRowCommand = RowCommand(rows.PushRowAsync, x => x.CanBePushed, needsTally: true);
-        RetryRowCommand = RowCommand(rows.RetryRowAsync, x => x.CanBeRetried, needsTally: true);
-        RepostRowCommand = RowCommand(rows.RepostRowAsync, x => x.CanBeReposted, needsTally: true);
-        EditRowCommand = RowCommand(rows.EditRowAsync, x => x.CanBeEdited);
-        CopyInvoiceNumberCommand = new RelayCommand<BillListRowViewModel?>(rows.CopyInvoiceNumber, row => row?.CanCopyInvoiceNumber == true);
+        PushRowCommand = RowCommand(
+            (row, busy, ct) => _actions.PushAsync(BillRef.Of(row), "Context menu push", busy, ct), x => x.CanBePushed, needsTally: true);
+        RetryRowCommand = RowCommand(
+            (row, busy, ct) => _actions.RetryAsync([BillRef.Of(row)], "Context menu retry", busy, ct), x => x.CanBeRetried, needsTally: true);
+        RepostRowCommand = RowCommand(
+            (row, busy, ct) => _actions.RepostAsync([BillRef.Of(row)], "Context menu repost", busy, ct), x => x.CanBeReposted, needsTally: true);
+        EditRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(EditRowAsync, row => row is not null && row.CanBeEdited && CanAct);
+        CopyInvoiceNumberCommand = new RelayCommand<BillListRowViewModel?>(CopyInvoiceNumber, row => row?.CanCopyInvoiceNumber == true);
 
-        ChangeNumberRowCommand = RowCommand(admin.ChangeNumberRowAsync, x => x.CanChangeNumber);
-        MarkPostedRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.MarkPostedRowAsync, row => CanActOnContextRows(row, x => x.CanMarkPosted));
-        MarkPostedSelectedCommand = new AsyncRelayCommand(admin.MarkPostedSelectedAsync, () => CanActOnSelection(x => x.CanMarkPosted));
-        MarkPendingRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.MarkPendingRowAsync, row => CanActOnContextRows(row, x => x.CanMarkPending));
-        MarkPendingSelectedCommand = new AsyncRelayCommand(admin.MarkPendingSelectedAsync, () => CanActOnSelection(x => x.CanMarkPending));
-        DeleteRowCommand = new AsyncRelayCommand<BillListRowViewModel?>(admin.DeleteRowAsync, row => CanActOnContextRows(row, x => x.CanBeDeleted));
-        DeleteSelectedCommand = new AsyncRelayCommand(admin.DeleteSelectedAsync, () => CanActOnSelection(x => x.CanBeDeleted));
+        ChangeNumberRowCommand = RowCommand(_actions.ChangeNumberAsync, x => x.CanChangeNumber);
+        MarkPostedRowCommand = ContextRowsCommand(_actions.MarkPushedAsync, x => x.CanMarkPosted);
+        MarkPostedSelectedCommand = SelectionCommand(_actions.MarkPushedAsync, x => x.CanMarkPosted);
+        MarkPendingRowCommand = ContextRowsCommand(_actions.MarkPendingAsync, x => x.CanMarkPending);
+        MarkPendingSelectedCommand = SelectionCommand(_actions.MarkPendingAsync, x => x.CanMarkPending);
+        // One bill is deleted after a dry run that says what Tally holds; several go in one call.
+        DeleteRowCommand = ContextRowsCommand(
+            (rows, busy, ct) => rows.Count == 1 ? _actions.DeleteAsync(rows[0], busy, ct) : _actions.DeleteSelectedAsync(rows, busy, ct),
+            x => x.CanBeDeleted);
+        DeleteSelectedCommand = SelectionCommand(_actions.DeleteSelectedAsync, x => x.CanBeDeleted);
     }
+
+    private static BillRef[] Refs(IReadOnlyList<BillListRowViewModel> rows) => rows.Select(BillRef.Of).ToArray();
 
     public ObservableCollection<BillListRowViewModel> Items { get; }
 
@@ -579,24 +589,118 @@ public partial class BillsViewModel : ObservableObject, IBillsActionWorkflowHost
         => CanAct && HasSelection && (!needsTally || IsTallyPushAllowed) && SelectedRows.All(allowed);
 
     /// <summary>
-    /// A context-menu action applies to the whole selection when the clicked
-    /// row is part of a multi-row selection, otherwise to that row alone.
+    /// The rows a context-menu action applies to: the whole selection when the clicked
+    /// row is part of a multi-row selection, otherwise that row alone.
     /// </summary>
-    private bool CanActOnContextRows(BillListRowViewModel? row, Func<BillListRowViewModel, bool> allowed)
+    private IReadOnlyList<BillListRowViewModel> ContextRows(BillListRowViewModel? row)
     {
-        if (!CanAct || row is null)
+        if (row is null)
         {
-            return false;
+            return [];
         }
 
-        return row.IsSelected && SelectedCount > 1 ? SelectedRows.All(allowed) : allowed(row);
+        return row.IsSelected && SelectedCount > 1 ? SelectedRows.ToArray() : [row];
     }
 
-    private AsyncRelayCommand<BillListRowViewModel?> RowCommand(
-        Func<BillListRowViewModel?, CancellationToken, Task> action,
+    /// <summary>
+    /// One action as this screen shows it: busy with the action's own text from the moment it
+    /// starts sending, then what it came to, then the list again if anything was sent. An action
+    /// that comes to nothing (the operator said no) leaves the screen as it is.
+    /// </summary>
+    private async Task RunAsync(Func<Action<string>, Task<BillActionResult?>> action, CancellationToken cancellationToken)
+    {
+        BillActionResult? result;
+        try
+        {
+            result = await action(status =>
+            {
+                IsActing = true;
+                StatusMessage = status;
+            });
+        }
+        finally
+        {
+            IsActing = false;
+        }
+
+        if (result is null)
+        {
+            return;
+        }
+
+        StatusMessage = result.Message;
+        if (result.Sent)
+        {
+            await LoadAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>A toolbar command: the action on every ticked row, offered while each of them allows it.</summary>
+    private AsyncRelayCommand SelectionCommand(
+        Func<IReadOnlyList<BillListRowViewModel>, Action<string>, CancellationToken, Task<BillActionResult?>> action,
         Func<BillListRowViewModel, bool> allowed,
         bool needsTally = false)
-        => new(action, row => row is not null && allowed(row) && !IsLoading && !IsActing && (!needsTally || IsTallyPushAllowed));
+        => new(
+            ct => RunAsync(busy => action(SelectedRows.ToArray(), busy, ct), ct),
+            () => CanActOnSelection(allowed, needsTally));
+
+    /// <summary>A row-menu command that takes the whole selection when the clicked row is part of one.</summary>
+    private AsyncRelayCommand<BillListRowViewModel?> ContextRowsCommand(
+        Func<IReadOnlyList<BillListRowViewModel>, Action<string>, CancellationToken, Task<BillActionResult?>> action,
+        Func<BillListRowViewModel, bool> allowed)
+        => new(
+            (row, ct) => row is null ? Task.CompletedTask : RunAsync(busy => action(ContextRows(row), busy, ct), ct),
+            row => CanAct && row is not null && ContextRows(row).All(allowed));
+
+    /// <summary>A row-menu command on the clicked row alone.</summary>
+    private AsyncRelayCommand<BillListRowViewModel?> RowCommand(
+        Func<BillListRowViewModel, Action<string>, CancellationToken, Task<BillActionResult?>> action,
+        Func<BillListRowViewModel, bool> allowed,
+        bool needsTally = false)
+        => new(
+            (row, ct) => row is null ? Task.CompletedTask : RunAsync(busy => action(row, busy, ct), ct),
+            row => row is not null && allowed(row) && CanAct && (!needsTally || IsTallyPushAllowed));
+
+    private async Task EditRowAsync(BillListRowViewModel? row, CancellationToken cancellationToken)
+    {
+        if (row is null || EditBillHandler is null) return;
+
+        // Saving an edit to a posted bill needs admin, so ask before the
+        // operator has retyped anything rather than at Save.
+        if (BillStateCapabilities.IsPosted(row.State))
+        {
+            var (token, _) = await _adminTokenGate.EnsureAsync(cancellationToken);
+            if (token is null)
+            {
+                StatusMessage = $"{row.InvoiceNumberDisplay} is posted; editing it needs admin unlock.";
+                return;
+            }
+        }
+
+        try
+        {
+            await EditBillHandler(row.Id, cancellationToken);
+            StatusMessage = $"Editing {row.InvoiceNumberDisplay} in the Invoice tab.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Edit failed: {ApiResponseReader.FormatError(ex)}";
+        }
+    }
+
+    private void CopyInvoiceNumber(BillListRowViewModel? row)
+    {
+        if (row is null || string.IsNullOrWhiteSpace(row.InvoiceNumber)) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(row.InvoiceNumber!);
+            StatusMessage = $"Copied invoice number: {row.InvoiceNumber}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Copy failed: {ex.Message}";
+        }
+    }
 
     private bool CanGoToNextPage => HasNext && CanAct;
 

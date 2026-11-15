@@ -368,6 +368,155 @@ public sealed class BillsActionTests
         Assert.False(details.PushCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task One_bill_is_named_on_the_status_line_and_several_are_counted()
+    {
+        var (vm, api, _) = await LoadedAsync(
+            answer: true,
+            Summary("SR/25-26/0001", BillStates.Failed),
+            Summary("SR/25-26/0002", BillStates.Failed));
+        var statuses = Statuses(vm);
+
+        // The toolbar with one bill ticked says what the row menu says.
+        vm.Items.Single(row => row.InvoiceNumber == "SR/25-26/0001").IsSelected = true;
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
+
+        Assert.Contains("Retrying SR/25-26/0001…", statuses);
+        Assert.Contains("Retried SR/25-26/0001.", statuses);
+
+        statuses.Clear();
+        vm.ToggleVisibleSelection(true);
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
+
+        Assert.Contains("Retrying 2 of 2…", statuses);
+        Assert.Contains("Retried 2 bill(s).", statuses);
+
+        statuses.Clear();
+        api.FailWith = new ApiException(HttpStatusCode.Conflict, null, "Bill is already posted.", null);
+        vm.ToggleVisibleSelection(true);
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
+
+        Assert.Contains("Retry stopped: Bill is already posted.", statuses);
+    }
+
+    [Fact]
+    public async Task An_action_stopped_by_a_check_says_why_and_leaves_the_list_as_it_is()
+    {
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001", BillStates.Posted));
+        var loads = api.SearchCount;
+
+        // A posted bill cannot be marked as pushed.
+        vm.ToggleVisibleSelection(true);
+        await vm.MarkPostedSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Mark pushed blocked: every selected bill must be pending, draft, or failed.", vm.StatusMessage);
+        Assert.Empty(api.Calls);
+
+        // The dry run before a delete could not be made.
+        api.FailWith = new ApiException(HttpStatusCode.ServiceUnavailable, null, "The server is not answering.", null);
+        vm.ClearSelection();
+        await vm.DeleteRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal("Delete check failed: The server is not answering.", vm.StatusMessage);
+        Assert.Equal(loads, api.SearchCount);
+        Assert.False(vm.IsActing);
+    }
+
+    [Fact]
+    public async Task Details_push_names_the_bill_and_shows_it_as_the_server_returned_it()
+    {
+        var (details, api, _) = await DetailsLoadedAsync(answer: true);
+        var billId = details.Bill!.Id;
+        var statuses = Statuses(details);
+        var toldTheList = 0;
+        details.BillMutated = () => toldTheList++;
+
+        await details.PushCommand.ExecuteAsync(null);
+
+        // The push returned the bill, so it is not read a second time; its timeline is.
+        Assert.Equal([$"push:{billId}", $"audit:{billId}"], api.Calls);
+        Assert.Contains("Pushing invoice SR/25-26/0001…", statuses);
+        Assert.Equal("Pushed invoice SR/25-26/0001.", details.StatusMessage);
+        Assert.Equal(BillStates.Posted, details.Bill?.State);
+        Assert.Equal(1, toldTheList);
+        Assert.False(details.IsActing);
+    }
+
+    [Fact]
+    public async Task Details_reads_the_bill_again_after_a_push_the_server_could_not_finish()
+    {
+        var (details, api, _) = await DetailsLoadedAsync(answer: true);
+        var billId = details.Bill!.Id;
+        var toldTheList = 0;
+        details.BillMutated = () => toldTheList++;
+        // Tally did not answer: the push is refused, and the server has moved the bill on.
+        api.GetResponse = FakeBillsApi.Bill(billId, BillStates.ReconciliationRequired);
+        api.FailWith = new ApiException(HttpStatusCode.BadGateway, null, "Tally did not answer.", null);
+
+        await details.PushCommand.ExecuteAsync(null);
+
+        Assert.Equal("Push failed: Tally did not answer.", details.StatusMessage);
+        Assert.Equal(BillStates.ReconciliationRequired, details.Bill?.State);
+        Assert.False(details.PushCommand.CanExecute(null));
+        Assert.Equal(1, toldTheList);
+        Assert.False(details.IsActing);
+    }
+
+    [Fact]
+    public async Task Details_retry_and_repost_are_the_row_menus_actions_on_the_bill_shown()
+    {
+        var (details, api, asked) = await DetailsLoadedAsync(answer: true);
+        var billId = details.Bill!.Id;
+
+        await details.RetryCommand.ExecuteAsync(null);
+
+        // The retry, then the bill and its timeline read again (those two side by side).
+        Assert.Equal($"retry:{billId}", api.Calls[0]);
+        Assert.Equal([$"audit:{billId}", $"get:{billId}"], api.Calls.Skip(1).Order());
+        Assert.Equal("Retried invoice SR/25-26/0001.", details.StatusMessage);
+
+        api.Calls.Clear();
+        await details.RepostCommand.ExecuteAsync(null);
+
+        Assert.Equal("Repost invoice SR/25-26/0001?", Assert.Single(asked).Title);
+        Assert.Contains($"repost:{billId}", api.Calls);
+        Assert.Equal("Reposted invoice SR/25-26/0001.", details.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Details_follows_the_new_bill_a_revision_makes()
+    {
+        var (details, api, _) = await DetailsLoadedAsync(answer: true);
+        var billId = details.Bill!.Id;
+
+        await details.ReviseCommand.ExecuteAsync(null);
+
+        Assert.NotEqual(billId, details.Bill!.Id);
+        Assert.Equal("SR/25-26/0002", details.Bill.InvoiceNumber);
+        Assert.Equal([$"revise:{billId}", $"audit:{details.Bill.Id}"], api.Calls);
+        Assert.Equal("Revision created.", details.StatusMessage);
+    }
+
+    private static List<string> Statuses(BillsViewModel vm)
+    {
+        var statuses = new List<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(BillsViewModel.StatusMessage)) statuses.Add(vm.StatusMessage);
+        };
+        return statuses;
+    }
+
+    private static List<string> Statuses(BillDetailsViewModel details)
+    {
+        var statuses = new List<string>();
+        details.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(BillDetailsViewModel.StatusMessage)) statuses.Add(details.StatusMessage);
+        };
+        return statuses;
+    }
+
     private static async Task<(BillDetailsViewModel Details, FakeBillsApi Api, List<ConfirmRequest> Asked)> DetailsLoadedAsync(bool answer)
     {
         var billId = Guid.NewGuid();
