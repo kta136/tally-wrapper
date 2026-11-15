@@ -18,7 +18,6 @@ internal sealed class FakeNumberingApi : INumberingApiClient
     public static FakeNumberingApi Offline() => new() { Failure = new HttpRequestException(OfflineApi.Message) };
 
     public Task<NumberingPreviewResponse> GetPreviewAsync(
-        string? documentType = null,
         string? fiscalYear = null,
         CancellationToken cancellationToken = default)
     {
@@ -27,7 +26,6 @@ internal sealed class FakeNumberingApi : INumberingApiClient
             ? Task.FromException<NumberingPreviewResponse>(failure)
             : Task.FromResult(new NumberingPreviewResponse(
                 FiscalYear: "26-27",
-                DocumentType: documentType ?? "sales_invoice",
                 PreviewValue: 1,
                 FormattedNumber: "SR/26-27/0001",
                 Prefix: "SR/",

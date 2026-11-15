@@ -60,19 +60,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     }
 
     [Fact]
-    public async Task CreateDraft_StampsTheDefaultShowroomId_WhichMustNeverChange()
-    {
-        await using var db = CreateDbContext();
-        var service = BuildService(db);
-
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
-
-        // Every stored row carries this id: the MD5 of "default" read as a Guid.
-        var stored = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
-        Assert.Equal(new Guid("9b961fc2-035f-3dd3-43e0-4f8f136e7682"), stored.ShowroomId);
-    }
-
-    [Fact]
     public async Task CreateDraft_PersistsBillWithRevisionOneAndReservesSerial()
     {
         await using var db = CreateDbContext();
@@ -1417,7 +1404,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var issued = new List<string>();
         for (var i = 0; i < 3; i++)
         {
-            var preview = await new NumberingService(db).GetPreviewAsync("sales_invoice", null);
+            var preview = await new NumberingService(db).GetPreviewAsync(null);
             var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload($"N{i}", 100m)));
             Assert.Equal(preview.FormattedNumber, bill.InvoiceNumber);
             issued.Add(bill.InvoiceNumber![^5..]);

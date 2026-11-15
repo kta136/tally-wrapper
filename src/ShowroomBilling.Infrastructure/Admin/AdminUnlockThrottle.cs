@@ -17,7 +17,7 @@ public sealed class AdminUnlockThrottle
     private static readonly TimeSpan MaxCooldown = TimeSpan.FromSeconds(30);
 
     private readonly Lock _gate = new();
-    private readonly Dictionary<Guid, ThrottleState> _state = new();
+    private ThrottleState? _state;
 
     /// <summary>
     /// Checks the cooldown and, when none applies, counts this attempt before
@@ -26,28 +26,27 @@ public sealed class AdminUnlockThrottle
     /// remaining cooldown when the attempt is refused, or
     /// <see cref="TimeSpan.Zero"/> when it may proceed.
     /// </summary>
-    public TimeSpan TryBeginAttempt(Guid showroomId)
+    public TimeSpan TryBeginAttempt()
     {
         lock (_gate)
         {
             var now = DateTimeOffset.UtcNow;
-            _state.TryGetValue(showroomId, out var current);
-            if (current is not null && current.NextAllowedUtc > now)
+            if (_state is not null && _state.NextAllowedUtc > now)
             {
-                return current.NextAllowedUtc - now;
+                return _state.NextAllowedUtc - now;
             }
 
-            var attempts = (current?.FailedAttempts ?? 0) + 1;
-            _state[showroomId] = new ThrottleState(attempts, now + ComputeCooldown(attempts));
+            var attempts = (_state?.FailedAttempts ?? 0) + 1;
+            _state = new ThrottleState(attempts, now + ComputeCooldown(attempts));
             return TimeSpan.Zero;
         }
     }
 
-    public void Reset(Guid showroomId)
+    public void Reset()
     {
         lock (_gate)
         {
-            _state.Remove(showroomId);
+            _state = null;
         }
     }
 

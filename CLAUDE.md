@@ -172,6 +172,7 @@ How reservation, forward-skip and roll-back behave: [docs/04 §2.4–2.7](docs/0
 - **A path that removes a bill from the sequence's trailing slot, or moves it, calls `NumberingSequenceReclaimer.ReclaimAsync` inside its transaction**, as delete and change-number do. Do not re-invent the roll-back: it also raises `MinNextValue` past a core whose voucher Tally still holds. No roll-back goes below that floor, and `NumberingService` passes over the core just under it, which matters when that core is ahead of the sequence. Nothing reconciles a sequence at start-up.
 - **Change-number accepts digits only** and formats them with `InvoiceNumberFormatter`.
 - A repeated Save is recognised by `bills.CreateOperationId`. There is no reservation table: a bill's own row holds its number.
+- **One showroom, one kind of numbered document.** No table carries a showroom id or a document type (both were dropped on 15 November 2026 by `DropShowroomAndDocumentType`): a sequence is a row per fiscal year, and there is one admin passcode row, kept one by its fixed id (`AdminPasscodeEntity.FirstPasscodeId`). Do not add a scoping column "for later"; every query, key and index had to carry the last one.
 
 ## Master data refresh
 

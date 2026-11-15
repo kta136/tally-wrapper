@@ -22,7 +22,7 @@ public sealed class NumberingPostgresTests(PostgresFixture fixture)
                 var service = new NumberingService(db);
                 // As the bill workflows reserve: inside a transaction the caller saves and commits.
                 await using var transaction = await db.Database.BeginTransactionAsync();
-                var reserved = await service.ReserveAsync(NumberingService.DocumentTypeSalesInvoice, "2026-27");
+                var reserved = await service.ReserveAsync("2026-27");
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
                 return reserved;

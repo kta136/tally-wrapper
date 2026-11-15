@@ -16,7 +16,9 @@ namespace ShowroomBilling.Tests.Postgres;
 public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
 {
     private const string Previous = "20261011114506_DropInvoiceNumberReservations";
-    private const string Index = "IX_bills_ShowroomId_FiscalYear_InvoiceCore";
+    private const string Index = "IX_bills_FiscalYear_InvoiceCore";
+    // Its name until the showroom came out of it (DropShowroomAndDocumentType).
+    private const string IndexAtPrevious = "IX_bills_ShowroomId_FiscalYear_InvoiceCore";
 
     [Fact]
     public async Task A_second_bill_cannot_take_a_core_under_other_text()
@@ -55,6 +57,8 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         await ExecuteAsync(database, $"""UPDATE public.bills SET "InvoiceCore" = 1 WHERE "Id" = '{secondId}'""");
 
         // It must not fail: a migration that fails at start-up leaves the API in limited mode.
+        // (Two migrations meet the pair on the way: the one that makes the index unique, and the
+        // one that later builds it again without the showroom.)
         await MigrateAsync(database, target: null);
 
         Assert.False(await IndexIsUniqueAsync(database));
@@ -63,7 +67,7 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         await ExecuteAsync(database, $"""UPDATE public.bills SET "InvoiceCore" = 2 WHERE "Id" = '{secondId}'""");
         await ExecuteAsync(database, $"""
             DROP INDEX IF EXISTS public."{Index}";
-            CREATE UNIQUE INDEX "{Index}" ON public.bills ("ShowroomId", "FiscalYear", "InvoiceCore") WHERE "InvoiceCore" IS NOT NULL;
+            CREATE UNIQUE INDEX "{Index}" ON public.bills ("FiscalYear", "InvoiceCore") WHERE "InvoiceCore" IS NOT NULL;
             """);
         Assert.True(await IndexIsUniqueAsync(database));
     }
@@ -74,7 +78,7 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
 
         await MigrateAsync(database, Previous);
-        Assert.False(await IndexIsUniqueAsync(database));
+        Assert.False(await IndexIsUniqueAsync(database, IndexAtPrevious));
 
         await MigrateAsync(database, target: null);
         Assert.True(await IndexIsUniqueAsync(database));
@@ -87,7 +91,7 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         NpgsqlConnection.ClearAllPools();
     }
 
-    private static async Task<bool> IndexIsUniqueAsync(PostgresFixture.PostgresTestDatabase database)
+    private static async Task<bool> IndexIsUniqueAsync(PostgresFixture.PostgresTestDatabase database, string index = Index)
     {
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
@@ -96,7 +100,7 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
             SELECT i.indisunique
             FROM pg_index i
             JOIN pg_class c ON c.oid = i.indexrelid
-            WHERE c.relname = '{Index}'
+            WHERE c.relname = '{index}'
             """;
         return (bool)(await command.ExecuteScalarAsync())!;
     }

@@ -1,6 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using ShowroomBilling.Application;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
@@ -12,32 +10,23 @@ public sealed record ReservedNumber(string FiscalYear, long ReservedValue, strin
 
 public sealed class NumberingService(ShowroomBillingDbContext dbContext)
 {
-    public const string DocumentTypeSalesInvoice = "sales_invoice";
-
-
     public async Task<NumberingPreviewResponse> GetPreviewAsync(
-        string documentType,
         string? fiscalYear,
         CancellationToken cancellationToken = default)
     {
-        var normalizedType = NormalizeDocumentType(documentType);
         var year = NormalizeFiscalYear(fiscalYear);
-        var showroomId = Showrooms.DefaultId;
 
         var sequence = await dbContext.InvoiceSequences
             .AsNoTracking()
-            .FirstOrDefaultAsync(
-                x => x.ShowroomId == showroomId && x.FiscalYear == year && x.DocumentType == normalizedType,
-                cancellationToken);
+            .FirstOrDefaultAsync(x => x.FiscalYear == year, cancellationToken);
 
         var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
         var previewValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, sequence?.NextValue ?? 1L, CoreKeptForTally(sequence), cancellationToken);
+            year, sequence?.NextValue ?? 1L, CoreKeptForTally(sequence), cancellationToken);
         var formatted = InvoiceNumberFormatter.Format(prefix, suffix, previewValue, year, padding);
 
         return new NumberingPreviewResponse(
             FiscalYear: year,
-            DocumentType: normalizedType,
             PreviewValue: previewValue,
             FormattedNumber: formatted,
             Prefix: prefix,
@@ -53,13 +42,10 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
     /// its rows.
     /// </summary>
     public async Task<ReservedNumber> ReserveAsync(
-        string documentType,
         string? fiscalYear,
         CancellationToken cancellationToken = default)
     {
-        var normalizedType = NormalizeDocumentType(documentType);
         var year = NormalizeFiscalYear(fiscalYear);
-        var showroomId = Showrooms.DefaultId;
 
         // The number and the bill it is for have to commit together, and the
         // row lock below lasts only as long as a transaction does. This method
@@ -77,20 +63,17 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
         // primary key. So the row is made first. A second insert waits for the
         // first transaction to end and then does nothing, and the lock below
         // always has a row to hold.
-        await NumberingSequenceReclaimer.EnsureSequenceRowAsync(
-            dbContext, showroomId, year, normalizedType, cancellationToken);
+        await NumberingSequenceReclaimer.EnsureSequenceRowAsync(dbContext, year, cancellationToken);
 
-        var sequence = await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(
-                dbContext, showroomId, year, normalizedType, cancellationToken)
+        var sequence = await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(dbContext, year, cancellationToken)
             ?? throw new InvalidOperationException($"The invoice sequence for {year} could not be read back after it was created.");
 
         var (prefix, suffix, padding) = await GetEffectivePrefixSuffixAsync(cancellationToken);
 
-        // Forward-skip past any core a bill of this (showroom, fiscal year)
-        // already holds, so the next number never collides with a bill whose
+        // Forward-skip past any core a bill of this fiscal year already holds, so the next number never collides with a bill whose
         // number was moved by hand via change-number.
         var reservedValue = await ComputeNextFreeCoreAsync(
-            showroomId, year, sequence.NextValue, CoreKeptForTally(sequence), cancellationToken);
+            year, sequence.NextValue, CoreKeptForTally(sequence), cancellationToken);
 
         sequence.NextValue = reservedValue + 1;
         sequence.UpdatedAtUtc = DateTimeOffset.UtcNow;
@@ -129,11 +112,11 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
 
     /// <summary>
     /// Starting at <paramref name="startFrom"/>, advance until the candidate
-    /// core does not collide with an existing bill in the same
-    /// (showroom, fiscal-year) scope. Occupancy reads the stored
+    /// core does not collide with an existing bill of the same fiscal year.
+    /// Occupancy reads the stored
     /// <c>bills.InvoiceCore</c>, so a suffix (<c>-A</c>, <c>-A2</c>) or a
     /// change in padding never hides an occupied core. Only the cores inside
-    /// the skip window are fetched, through the (showroom, year, core) index,
+    /// the skip window are fetched, through the (year, core) index,
     /// instead of every invoice number in the year. A row without a stored
     /// core is a legacy custom number with no digits to it (the migration
     /// that added the column filled every other one) and occupies no core.
@@ -146,7 +129,6 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
     /// (<see cref="CoreKeptForTally"/>); it is passed over like an occupied one.
     /// </param>
     private async Task<long> ComputeNextFreeCoreAsync(
-        Guid showroomId,
         string fiscalYear,
         long startFrom,
         long? keptForTally,
@@ -158,8 +140,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
 
         var rows = await dbContext.Bills
             .AsNoTracking()
-            .Where(b => b.ShowroomId == showroomId
-                        && b.FiscalYear == fiscalYear
+            .Where(b => b.FiscalYear == fiscalYear
                         && b.InvoiceCore >= candidate
                         && b.InvoiceCore < windowEnd)
             .Select(b => b.InvoiceCore!.Value)
@@ -192,17 +173,6 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
     /// </summary>
     private static long? CoreKeptForTally(InvoiceSequenceEntity? sequence) =>
         sequence is { MinNextValue: > 1L } ? sequence.MinNextValue - 1L : null;
-
-    private static string NormalizeDocumentType(string documentType)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(documentType);
-        var normalized = documentType.Trim().ToLowerInvariant().Replace('-', '_');
-        return normalized switch
-        {
-            DocumentTypeSalesInvoice => DocumentTypeSalesInvoice,
-            _ => throw new RequestValidationException($"Unsupported document type '{documentType}'.")
-        };
-    }
 
     public static string NormalizeFiscalYear(string? fiscalYear)
     {

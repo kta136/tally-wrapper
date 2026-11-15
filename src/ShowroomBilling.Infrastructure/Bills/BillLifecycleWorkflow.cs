@@ -177,7 +177,7 @@ internal sealed class BillLifecycleWorkflow(
         // A reservation retry clears the change tracker; re-attach the prior bill.
         priorBill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
 
-        var newBill = NewPendingBill(newBillId, priorBill.ShowroomId, reservation, now);
+        var newBill = NewPendingBill(newBillId, reservation, now);
         var newRevision = BillSerialization.BuildRevision(newBill.Id, payload, revisionNo: 1, supersedes: priorBill.CurrentRevisionId, createdAt: now);
         newBill.CurrentRevisionId = newRevision.Id;
 
@@ -315,7 +315,6 @@ internal sealed class BillLifecycleWorkflow(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var showroomId = Showrooms.DefaultId;
         var billId = Guid.CreateVersion7();
 
         // The number and the bill/revision/audit share one transaction so a
@@ -324,7 +323,7 @@ internal sealed class BillLifecycleWorkflow(
 
         var reservation = await ReserveNumberAsync(request.Payload.BillDate, cancellationToken);
 
-        var bill = NewPendingBill(billId, showroomId, reservation, now);
+        var bill = NewPendingBill(billId, reservation, now);
         bill.CreateOperationId = request.ClientOperationId;
 
         var revision = BillSerialization.BuildRevision(bill.Id, request.Payload, revisionNo: 1, supersedes: null, createdAt: now);
@@ -356,19 +355,16 @@ internal sealed class BillLifecycleWorkflow(
     /// </summary>
     private Task<ReservedNumber> ReserveNumberAsync(DateOnly billDate, CancellationToken cancellationToken)
         => numberingService.ReserveAsync(
-            NumberingService.DocumentTypeSalesInvoice,
             InvoiceNumberFormatter.ComputeFiscalYear(billDate),
             cancellationToken);
 
     /// <summary>A new bill, pending, carrying the number just reserved for it.</summary>
     private static BillEntity NewPendingBill(
         Guid billId,
-        Guid showroomId,
         ReservedNumber reservation,
         DateTimeOffset now) => new()
         {
             Id = billId,
-            ShowroomId = showroomId,
             State = BillStates.Pending,
             InvoiceNumber = reservation.FormattedNumber,
             FiscalYear = reservation.FiscalYear,

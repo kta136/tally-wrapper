@@ -1,12 +1,9 @@
 namespace ShowroomBilling.Infrastructure.Persistence.Entities;
 
+/// <summary>The invoice numbers of one fiscal year: a row per year.</summary>
 public sealed class InvoiceSequenceEntity
 {
-    public Guid ShowroomId { get; set; }
-
     public string FiscalYear { get; set; } = string.Empty;
-
-    public string DocumentType { get; set; } = string.Empty;
 
     public long NextValue { get; set; }
 

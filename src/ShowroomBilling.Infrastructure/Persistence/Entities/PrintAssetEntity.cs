@@ -4,8 +4,6 @@ public sealed class PrintAssetEntity
 {
     public Guid Id { get; set; }
 
-    public Guid ShowroomId { get; set; }
-
     public string AssetKind { get; set; } = string.Empty;
 
     public string FileName { get; set; } = string.Empty;

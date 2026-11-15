@@ -149,7 +149,6 @@ public sealed class PrintLayoutViewModelTests
         var assetsApi = new FakePrintAssetApi();
         assetsApi.Add(new PrintAssetResponse(
             watermarkId,
-            Guid.NewGuid(),
             PrintAssetKinds.Watermark,
             "wm.png",
             "image/png",
@@ -214,7 +213,6 @@ public sealed class PrintLayoutViewModelTests
                 return Task.FromException<PrintAssetResponse>(UploadException);
             }
             var response = new PrintAssetResponse(
-                Guid.NewGuid(),
                 Guid.NewGuid(),
                 request.AssetKind,
                 request.FileName,

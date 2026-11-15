@@ -4,6 +4,7 @@ using ShowroomBilling.Application.Admin;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Infrastructure.Admin;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Infrastructure.Persistence.Entities;
 using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
@@ -31,6 +32,41 @@ public sealed class AdminAuthServiceTests(PostgresFixture postgres) : DatabaseTe
         var status = await service.GetPasscodeStatusAsync();
 
         Assert.True(status.IsConfigured);
+    }
+
+    /// <summary>
+    /// There is one passcode. Two first passcodes set at the same moment both find none, and the
+    /// database is what refuses the second: a first passcode always has the same id.
+    /// </summary>
+    [Fact]
+    public async Task A_second_first_passcode_is_refused_by_the_database_and_a_change_keeps_the_one_row()
+    {
+        await using var db = CreateDbContext();
+        await CreateService(db).SetPasscodeAsync(new AdminSetPasscodeRequest(null, "246810"));
+
+        await using (var racing = CreateDbContext())
+        {
+            racing.AdminPasscodes.Add(new AdminPasscodeEntity
+            {
+                Id = AdminPasscodeEntity.FirstPasscodeId,
+                PasscodeHash = "hash",
+                PasscodeSalt = "salt",
+                Iterations = 1,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            var refused = await Assert.ThrowsAsync<DbUpdateException>(() => racing.SaveChangesAsync());
+            Assert.Equal(
+                Npgsql.PostgresErrorCodes.UniqueViolation,
+                Assert.IsType<Npgsql.PostgresException>(refused.GetBaseException()).SqlState);
+        }
+
+        await CreateService(db).SetPasscodeAsync(new AdminSetPasscodeRequest("246810", "135790"));
+
+        await using var check = CreateDbContext();
+        Assert.Equal(
+            AdminPasscodeEntity.FirstPasscodeId,
+            (await check.AdminPasscodes.AsNoTracking().SingleAsync()).Id);
     }
 
     [Fact]
@@ -81,11 +117,10 @@ public sealed class AdminAuthServiceTests(PostgresFixture postgres) : DatabaseTe
     public void Throttle_CountsAttemptsBeforeVerification_SoConcurrentGuessesCannotSlipThrough()
     {
         var throttle = new AdminUnlockThrottle();
-        var showroomId = Guid.NewGuid();
 
         var allowed = Enumerable.Range(0, 20)
             .AsParallel()
-            .Count(_ => throttle.TryBeginAttempt(showroomId) == TimeSpan.Zero);
+            .Count(_ => throttle.TryBeginAttempt() == TimeSpan.Zero);
 
         Assert.Equal(5, allowed);
     }
@@ -113,10 +148,9 @@ public sealed class AdminAuthServiceTests(PostgresFixture postgres) : DatabaseTe
         Assert.Equal(2, remaining.Count);
     }
 
-    private static ShowroomBilling.Infrastructure.Persistence.Entities.AdminSessionEntity Session(Guid id, DateTimeOffset expiresAt) => new()
+    private static AdminSessionEntity Session(Guid id, DateTimeOffset expiresAt) => new()
     {
         Id = id,
-        ShowroomId = Guid.NewGuid(),
         TokenHash = Guid.NewGuid().ToString("N"),
         ActorLabel = "test",
         IssuedAtUtc = expiresAt.AddMinutes(-30),

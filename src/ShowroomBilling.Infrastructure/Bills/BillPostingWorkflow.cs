@@ -64,10 +64,9 @@ internal sealed class BillPostingWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var maxBills = Math.Clamp(request.MaxBills ?? 200, 1, 500);
-        var showroomId = Showrooms.DefaultId;
         var targetIds = await dbContext.Bills
             .AsNoTracking()
-            .Where(x => x.ShowroomId == showroomId && (x.State == BillStates.Pending || x.State == BillStates.Draft))
+            .Where(x => x.State == BillStates.Pending || x.State == BillStates.Draft)
             .OrderBy(x => x.CreatedAtUtc)
             .Select(x => x.Id)
             .Take(maxBills)

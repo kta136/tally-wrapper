@@ -39,8 +39,11 @@ public sealed class MigratedIndexesPostgresTests(PostgresFixture fixture)
         }
 
         Assert.Empty(expected.Except(actual).Order());
-        // One the model cannot vouch for: it is made by a migration's own SQL.
-        Assert.Contains("IX_bills_ShowroomId_FiscalYear_InvoiceCore", actual);
+        // Made by a migration's own SQL, so the list above alone would not say they are missing.
+        Assert.Contains("IX_bills_FiscalYear_InvoiceCore", actual);
         Assert.Contains("PK_tally_masters", actual);
+        Assert.Contains("PK_invoice_sequences", actual);
+        // And nothing still begins with the showroom that no row has any more.
+        Assert.DoesNotContain(actual, name => name.Contains("ShowroomId", StringComparison.Ordinal));
     }
 }

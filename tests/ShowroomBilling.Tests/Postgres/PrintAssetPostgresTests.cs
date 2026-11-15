@@ -30,7 +30,6 @@ public sealed class PrintAssetPostgresTests(PostgresFixture fixture)
         rejectedContext.PrintAssets.Add(new PrintAssetEntity
         {
             Id = Guid.NewGuid(),
-            ShowroomId = Guid.NewGuid(),
             AssetKind = "poster",
             FileName = "poster.png",
             ContentType = "image/png",

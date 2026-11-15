@@ -214,10 +214,10 @@ public sealed class InvoiceDiamondViewModelTests
     {
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async Task<NumberingPreviewResponse> GetPreviewAsync(string? documentType = null, string? fiscalYear = null, CancellationToken cancellationToken = default)
+        public async Task<NumberingPreviewResponse> GetPreviewAsync(string? fiscalYear = null, CancellationToken cancellationToken = default)
         {
             await Release.Task;
-            return new NumberingPreviewResponse("2026-27", "sales_invoice", 9, "SR/26-27/0009", "SR/", null);
+            return new NumberingPreviewResponse("2026-27", 9, "SR/26-27/0009", "SR/", null);
         }
     }
 

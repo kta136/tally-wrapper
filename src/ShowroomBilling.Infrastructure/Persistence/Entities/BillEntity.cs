@@ -4,8 +4,6 @@ public sealed class BillEntity
 {
     public Guid Id { get; set; }
 
-    public Guid ShowroomId { get; set; }
-
     public Guid? CurrentRevisionId { get; set; }
 
     public string State { get; set; } = "pending";

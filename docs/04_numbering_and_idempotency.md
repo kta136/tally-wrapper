@@ -8,7 +8,7 @@ This document describes invoice numbering, renumbering, Tally posting identity, 
 
 - The API owns numbering. A bill gets its invoice number when it is first saved, in the same transaction as the bill. Push never issues a number.
 - The preview on the Invoice tab reserves nothing.
-- Numbers are unique per showroom and fiscal year. Numbering is not gapless: a number in the middle of the series that loses its bill stays unused while later numbers exist; a number freed at the end of the series is handed out again.
+- Numbers are unique per fiscal year. Numbering is not gapless: a number in the middle of the series that loses its bill stays unused while later numbers exist; a number freed at the end of the series is handed out again.
 - A repeated Save is recognised by its client operation id and returns the bill it already created.
 - A voucher write is sent to Tally once per operator action. An uncertain outcome is resolved by a person, never by a resend.
 
@@ -20,7 +20,7 @@ This document describes invoice numbering, renumbering, Tally posting identity, 
 
 Numbering is server-side only.
 
-- `CreateDraftAsync` (and `ReviseAsync`, for the new bill it creates) calls `NumberingService.ReserveAsync(documentType, fiscalYear)` inside the transaction that inserts the bill. It returns `ReservedNumber(FiscalYear, ReservedValue, FormattedNumber)`; the bill stores the formatted number in `InvoiceNumber` and the integer in `InvoiceCore`. If the bill cannot be saved the transaction rolls back and the number is not used up. `ReserveAsync` refuses to run outside a transaction, and leaves the save to its caller, so that the number and the bill are one commit.
+- `CreateDraftAsync` (and `ReviseAsync`, for the new bill it creates) calls `NumberingService.ReserveAsync(fiscalYear)` inside the transaction that inserts the bill. It returns `ReservedNumber(FiscalYear, ReservedValue, FormattedNumber)`; the bill stores the formatted number in `InvoiceNumber` and the integer in `InvoiceCore`. If the bill cannot be saved the transaction rolls back and the number is not used up. `ReserveAsync` refuses to run outside a transaction, and leaves the save to its caller, so that the number and the bill are one commit.
 - The sequence row in `invoice_sequences` is read `FOR UPDATE`, so two saves cannot take the same value. A row lock holds nothing when the row is not there yet, so the reservation first creates it if missing (`INSERT … ON CONFLICT DO NOTHING`): the first two saves of a fiscal year queue on that insert instead of both inserting the row.
 - `InvoiceNumberFormatter.Format` gives `{prefix}{fiscalYear}/{core}{suffix}`, the core zero-padded to `Numbering.InvoicePadding` digits (default 4): prefix `SR/` in fiscal year `2026-27` gives `SR/2026-27/0145`. When the prefix or suffix already carries the fiscal year (`DDAJR/26-27/`), the year is not repeated.
 - Save is replay-safe through a client operation id: the Desktop generates `CreateBillDraftRequest.ClientOperationId` once per unsaved bill and reuses it on every retry. `bills.CreateOperationId` is unique, so a retry whose first attempt committed (response lost) returns that same bill and number; reusing the id with different contents is `409`. Requests without the id create a new bill every time. Draft updates carry `expectedRevisionId`, so a replayed update that already landed returns the stored bill instead of adding a revision.
@@ -29,7 +29,7 @@ Numbering is server-side only.
 
 ### 2.2 Sequence scope
 
-There is one sequence per `(ShowroomId, FiscalYear, DocumentType)`, the primary key of `invoice_sequences`. The app has one showroom (`Showrooms.DefaultId`) and one document type (`sales_invoice`).
+There is one sequence per fiscal year: `FiscalYear` is the primary key of `invoice_sequences`. (Until 15 November 2026 the key also held a showroom id and a document type, each with one value.)
 
 **Which fiscal year.** A bill is numbered in the fiscal year of its **bill date** (`InvoiceNumberFormatter.ComputeFiscalYear(DateOnly)`), not the server clock: a 31 March bill entered on 1 April gets a number in the year that is closing. Where a "current" year is needed (preview without a date, status bar), it is read on the IST calendar, so the year turns over at 00:00 IST on 1 April rather than 05:30 IST. An edit that moves a bill's date into another fiscal year is rejected with 409; the operator keeps a date in the original year or creates a new bill.
 
@@ -52,7 +52,7 @@ There is one sequence per `(ShowroomId, FiscalYear, DocumentType)`, the primary 
 
 ### 2.5 Forward-skip at reservation time
 
-`NumberingService.ReserveAsync` starts at `InvoiceSequences.NextValue` but **skips forward** past any core value already stored in **`bills.InvoiceCore`** for the same `(ShowroomId, FiscalYear)`. Only the cores inside the 1000-value skip window are read, in one query through the `(ShowroomId, FiscalYear, InvoiceCore)` index. `InvoiceCore` is written by every path that sets a number (create, revise, change-number) and was backfilled by the `InvoiceCoreAndSequenceFloor` migration: reservation value when the bill still carried its reserved number, else the digits before the current suffix, else the trailing digits. A row with no core is a legacy custom number with no digits to it; it occupies no core, and nothing parses a number's text any more. This protects against collisions when an admin has moved a bill's number ahead via change-number (e.g. `0003 → 0010`); the allocator advances past `0010` rather than failing on the unique index when it reaches that core. Comparing numeric cores (rather than freshly-formatted strings) means a scope with mixed formatting — e.g. `DDAJR/26-27/49` beside `DDAJR/26-27/0049` — collapses both to the same core (`49`), so the allocator never re-issues an occupied number because its formatting differs from what `InvoiceNumberFormatter` produces today.
+`NumberingService.ReserveAsync` starts at `InvoiceSequences.NextValue` but **skips forward** past any core value already stored in **`bills.InvoiceCore`** for the same fiscal year. Only the cores inside the 1000-value skip window are read, in one query through the `(FiscalYear, InvoiceCore)` index. `InvoiceCore` is written by every path that sets a number (create, revise, change-number) and was backfilled by the `InvoiceCoreAndSequenceFloor` migration: reservation value when the bill still carried its reserved number, else the digits before the current suffix, else the trailing digits. A row with no core is a legacy custom number with no digits to it; it occupies no core, and nothing parses a number's text any more. This protects against collisions when an admin has moved a bill's number ahead via change-number (e.g. `0003 → 0010`); the allocator advances past `0010` rather than failing on the unique index when it reaches that core. Comparing numeric cores (rather than freshly-formatted strings) means a scope with mixed formatting — e.g. `DDAJR/26-27/49` beside `DDAJR/26-27/0049` — collapses both to the same core (`49`), so the allocator never re-issues an occupied number because its formatting differs from what `InvoiceNumberFormatter` produces today.
 
 Properties:
 
@@ -74,7 +74,7 @@ Properties:
 - **Format-tolerant.** The check compares stored numeric cores (`bills.InvoiceCore`) rather than formatted strings, so suffixes and padding changes never hide an occupied core. A row without a stored core occupies none.
 - **Anchors a stale `NextValue`.** If `NextValue` sits higher than the occupied range (a sequence bump that no bill ever used), the next delete or rename in the scope pulls it down to the highest core + 1.
 - **Atomic with the delete or rename.** Both run inside the same transaction, with a `FOR UPDATE` lock on the `invoice_sequences` row so a concurrent reservation cannot allocate a core the rollback is about to free.
-- **Audit-logged.** A `numbering.sales_invoice.rolled_back` event is written each time `NextValue` moves, recording `fiscalYear`, `from`, `to`, `maxOccupiedCore` and `trigger` (`delete:{billId}` or `rename:{billId}`).
+- **Audit-logged.** A `numbering.sales_invoice.rolled_back` event is written each time `NextValue` moves (entity type `numbering`, entity id the fiscal year), recording `fiscalYear`, `from`, `to`, `maxOccupiedCore` and `trigger` (`delete:{billId}` or `rename:{billId}`).
 - **Only then.** Nothing reconciles the sequence at start-up: a number and its bill commit together, so `NextValue` can only run ahead of the bills after a delete or a rename, and both reclaim at once.
 
 ### 2.7 Numbers kept for Tally
@@ -94,8 +94,8 @@ Limits, all from the floor being one value per sequence:
 
 ## 3. Uniqueness and gaps
 
-- `bills` has a unique index on `(ShowroomId, FiscalYear, InvoiceNumber)` for rows that have a number: two bills cannot hold the same number in one fiscal year.
-- `bills` has a unique index on `(ShowroomId, FiscalYear, InvoiceCore)` for rows that have a core. The number's text depends on the prefix, suffix and padding in Settings, so after one of them changes the same core formats to other text; this index is what stops two bills from holding one core then. A database that held such a pair before the index became unique keeps a plain index until the pair is dealt with ([docs/10 §1.1](10_database_schema.md)).
+- `bills` has a unique index on `(FiscalYear, InvoiceNumber)` for rows that have a number: two bills cannot hold the same number in one fiscal year.
+- `bills` has a unique index on `(FiscalYear, InvoiceCore)` for rows that have a core. The number's text depends on the prefix, suffix and padding in Settings, so after one of them changes the same core formats to other text; this index is what stops two bills from holding one core then. A database that held such a pair before the index became unique keeps a plain index until the pair is dealt with ([docs/10 §1.1](10_database_schema.md)).
 - `bills.CreateOperationId` is unique for rows that have one: one Save creates one bill.
 - Numbering is not gapless. A voided or revised bill keeps its row and its number. A deleted bill leaves a gap, unless it was at the end of the series (§2.6); its audit trail, ending in `bill.deleted`, stays readable by bill id.
 

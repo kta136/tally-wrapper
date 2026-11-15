@@ -4,8 +4,6 @@ public sealed class AdminSessionEntity
 {
     public Guid Id { get; set; }
 
-    public Guid ShowroomId { get; set; }
-
     public string TokenHash { get; set; } = string.Empty;
 
     public string ActorLabel { get; set; } = string.Empty;

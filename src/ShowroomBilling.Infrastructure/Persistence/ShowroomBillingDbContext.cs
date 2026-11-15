@@ -102,9 +102,8 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
         {
             entity.ToTable("invoice_sequences", table =>
                 table.HasCheckConstraint("CK_invoice_sequences_next_value", "\"NextValue\" > 0"));
-            entity.HasKey(x => new { x.ShowroomId, x.FiscalYear, x.DocumentType });
+            entity.HasKey(x => x.FiscalYear);
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
-            entity.Property(x => x.DocumentType).HasMaxLength(32);
         });
 
         modelBuilder.Entity<BillEntity>(entity =>
@@ -118,15 +117,15 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.InvoiceNumber).HasMaxLength(128);
             entity.Property(x => x.FiscalYear).HasMaxLength(16);
             entity.Property(x => x.RowVersion).IsRowVersion();
-            entity.HasIndex(x => new { x.ShowroomId, x.State, x.CreatedAtUtc, x.Id });
-            entity.HasIndex(x => new { x.ShowroomId, x.CreatedAtUtc });
-            entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceNumber })
+            entity.HasIndex(x => new { x.State, x.CreatedAtUtc, x.Id });
+            entity.HasIndex(x => x.CreatedAtUtc);
+            entity.HasIndex(x => new { x.FiscalYear, x.InvoiceNumber })
                 .IsUnique()
                 .HasFilter("\"InvoiceNumber\" IS NOT NULL");
             // Unique: the number's text alone does not keep two bills off one
             // core, because the prefix, suffix and padding are settings and
             // the same core formats to other text once one of them changes.
-            entity.HasIndex(x => new { x.ShowroomId, x.FiscalYear, x.InvoiceCore })
+            entity.HasIndex(x => new { x.FiscalYear, x.InvoiceCore })
                 .IsUnique()
                 .HasFilter("\"InvoiceCore\" IS NOT NULL");
             entity.HasIndex(x => x.CreateOperationId)
@@ -168,7 +167,6 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.HasKey(x => x.Id);
             entity.Property(x => x.PasscodeHash).HasMaxLength(256);
             entity.Property(x => x.PasscodeSalt).HasMaxLength(128);
-            entity.HasIndex(x => x.ShowroomId).IsUnique();
         });
 
         modelBuilder.Entity<AdminSessionEntity>(entity =>
@@ -180,7 +178,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.ActorLabel).HasMaxLength(128);
             entity.Property(x => x.RevokedReason).HasMaxLength(256);
             entity.HasIndex(x => x.TokenHash).IsUnique();
-            entity.HasIndex(x => new { x.ShowroomId, x.ExpiresAtUtc });
+            entity.HasIndex(x => x.ExpiresAtUtc);
         });
 
         modelBuilder.Entity<PrintAssetEntity>(entity =>
@@ -194,7 +192,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.AssetKind).HasMaxLength(32);
             entity.Property(x => x.FileName).HasMaxLength(256);
             entity.Property(x => x.ContentType).HasMaxLength(128);
-            entity.HasIndex(x => new { x.ShowroomId, x.AssetKind });
+            entity.HasIndex(x => x.AssetKind);
         });
 
         base.OnModelCreating(modelBuilder);

@@ -109,13 +109,11 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         var skip = Math.Max(0, filter.Skip ?? 0);
         var take = Math.Clamp(filter.Take ?? 50, 1, 200);
         var sort = NormalizeSort(filter.Sort);
-        var showroomId = Showrooms.DefaultId;
 
         var query = from bill in dbContext.Bills.AsNoTracking()
                     join rev in dbContext.BillRevisions.AsNoTracking()
                         on bill.CurrentRevisionId equals rev.Id into revs
                     from rev in revs.DefaultIfEmpty()
-                    where bill.ShowroomId == showroomId
                     select new { bill, rev };
 
         if (!string.IsNullOrWhiteSpace(filter.State))

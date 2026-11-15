@@ -23,7 +23,6 @@ One row per bill.
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `ShowroomId` | uuid | Always the default showroom |
 | `CurrentRevisionId` | uuid, nullable | The bill's current `bill_revisions` row |
 | `State` | text | See [03_bill_state_machine.md](03_bill_state_machine.md) |
 | `InvoiceNumber` | text, nullable | Assigned when the bill is created (`CreateDraftAsync`), not at push |
@@ -38,31 +37,33 @@ One row per bill.
 Constraints and indexes:
 
 - check `"State" IN ('draft','pending','posting','posted','failed','reconciliation_required','revised','voided')`
-- unique `("ShowroomId", "FiscalYear", "InvoiceNumber")` where the number is not null: the duplicate-number guard
+- unique `("FiscalYear", "InvoiceNumber")` where the number is not null: the duplicate-number guard
 - unique `("CreateOperationId")` where it is not null
-- unique `("ShowroomId", "FiscalYear", "InvoiceCore")` where the core is not null: two bills of a year cannot hold the same core, whatever their numbers' text says (the text depends on the prefix, suffix and padding in Settings). It also serves the numbering skip window
+- unique `("FiscalYear", "InvoiceCore")` where the core is not null: two bills of a year cannot hold the same core, whatever their numbers' text says (the text depends on the prefix, suffix and padding in Settings). It also serves the numbering skip window
 
-The `UniqueInvoiceCore` migration (14 November 2026) makes that index unique. On a database that already holds two bills of one year on one core it does not fail: it keeps the plain index and raises a PostgreSQL `WARNING` naming how many cores are repeated. Find them with
+The `UniqueInvoiceCore` migration (14 November 2026) made that index unique, and `DropShowroomAndDocumentType` (15 November 2026) builds both again without the showroom (§1.10). On a database that already holds two bills of one year on one core or one number, neither fails: the index is left a plain one and a PostgreSQL `WARNING` says how many values are repeated. Find them with
 
 ```sql
 SELECT "FiscalYear", "InvoiceCore", count(*), array_agg("InvoiceNumber")
 FROM public.bills
 WHERE "InvoiceCore" IS NOT NULL
-GROUP BY "ShowroomId", "FiscalYear", "InvoiceCore"
+GROUP BY "FiscalYear", "InvoiceCore"
 HAVING count(*) > 1;
 ```
 
 and, once each pair has been dealt with in the app (Change Bill Number, or Delete Local), make the index unique by hand as the role that owns the tables:
 
 ```sql
-DROP INDEX IF EXISTS public."IX_bills_ShowroomId_FiscalYear_InvoiceCore";
-CREATE UNIQUE INDEX "IX_bills_ShowroomId_FiscalYear_InvoiceCore"
-    ON public.bills ("ShowroomId", "FiscalYear", "InvoiceCore") WHERE "InvoiceCore" IS NOT NULL;
+DROP INDEX IF EXISTS public."IX_bills_FiscalYear_InvoiceCore";
+CREATE UNIQUE INDEX "IX_bills_FiscalYear_InvoiceCore"
+    ON public.bills ("FiscalYear", "InvoiceCore") WHERE "InvoiceCore" IS NOT NULL;
 ```
+
+(The number's index is `IX_bills_FiscalYear_InvoiceNumber`, on `("FiscalYear", "InvoiceNumber") WHERE "InvoiceNumber" IS NOT NULL`.)
 
 Other indexes:
 
-- `("ShowroomId", "State", "CreatedAtUtc", "Id")` and `("ShowroomId", "CreatedAtUtc")` for the Bills list
+- `("State", "CreatedAtUtc", "Id")` and `("CreatedAtUtc")` for the Bills list
 - GIN trigram index on `"InvoiceNumber"` for the Bills tab's contains search
 
 ### 1.2 `bill_revisions`
@@ -83,10 +84,11 @@ Constraints and indexes: unique `("BillId", "RevisionNo")`; checks `"RevisionNo"
 
 ### 1.3 `invoice_sequences`
 
-Numbering state, one row per `("ShowroomId", "FiscalYear", "DocumentType")` (the primary key). `DocumentType` is `sales_invoice`; `FiscalYear` is `YYYY-YY`.
+Numbering state, one row per fiscal year.
 
 | Column | Type | Notes |
 |---|---|---|
+| `FiscalYear` | text PK | `YYYY-YY` |
 | `NextValue` | bigint | Where the next allocation starts; check `> 0` |
 | `MinNextValue` | bigint | One past the highest core kept for Tally: raised when a bill whose voucher Tally holds is deleted or renumbered. Roll-back stops at it, and a reservation passes over the core just under it ([docs/04 §2.7](04_numbering_and_idempotency.md)) |
 | `UpdatedAtUtc` | timestamptz | |
@@ -143,21 +145,20 @@ Until 14 November 2026 this was five tables: `tally_master_snapshot_batches` and
 
 ### 1.8 `admin_passcodes` and `admin_sessions`
 
-`admin_passcodes` has one row per showroom (unique `"ShowroomId"`): `PasscodeSalt` (base64, 16 bytes), `PasscodeHash` (base64, 32-byte PBKDF2-SHA256), `Iterations` (120 000), `CreatedAtUtc`, `UpdatedAtUtc`. Configured via `POST /api/admin/passcode`; verified via `POST /api/admin/unlock`.
+`admin_passcodes` has one row. A first passcode is stored under a fixed `Id` (`AdminPasscodeEntity.FirstPasscodeId`), so the primary key refuses a second; a passcode set by a build before 15 November 2026 has an id of its own and is changed in place. Its columns: `PasscodeSalt` (base64, 16 bytes), `PasscodeHash` (base64, 32-byte PBKDF2-SHA256), `Iterations` (120 000), `CreatedAtUtc`, `UpdatedAtUtc`. Configured via `POST /api/admin/passcode`; verified via `POST /api/admin/unlock`.
 
 `admin_sessions` has one row per admin unlock. The token is returned once at unlock time; the table stores only its SHA-256 hash.
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `ShowroomId` | uuid | |
 | `TokenHash` | text | Unique index |
 | `ActorLabel` | text | Who unlocked; becomes the `ActorId` of that session's audit rows |
 | `IssuedAtUtc` | timestamptz | |
 | `ExpiresAtUtc` | timestamptz | 30 minutes after issue; check `"ExpiresAtUtc" > "IssuedAtUtc"` |
 | `RevokedAtUtc`, `RevokedReason` | timestamptz, text; nullable | Set by `/api/admin/logout` |
 
-Index: `("ShowroomId", "ExpiresAtUtc")`.
+Index: `("ExpiresAtUtc")`.
 
 ### 1.9 `print_assets`
 
@@ -166,7 +167,6 @@ Logo, signature, and watermark images uploaded by the operator, stored inline.
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `ShowroomId` | uuid | |
 | `AssetKind` | text | check `IN ('logo','signature','watermark')` |
 | `FileName` | text | |
 | `ContentType` | text | e.g. `image/png` |
@@ -174,7 +174,7 @@ Logo, signature, and watermark images uploaded by the operator, stored inline.
 | `ByteLength` | bigint | check `> 0` |
 | `CreatedAtUtc` | timestamptz | |
 
-Index: `("ShowroomId", "AssetKind")`. Upload validation accepts only PNG/JPEG content whose file signature matches, with a 2 MiB decoded-byte cap.
+Index: `("AssetKind")`. Upload validation accepts only PNG/JPEG content whose file signature matches, with a 2 MiB decoded-byte cap.
 
 ### 1.10 Columns and tables removed since October 2026
 
@@ -227,6 +227,19 @@ DROP TABLE IF EXISTS
     public.dropped_20261114_tally_master_snapshot_batches_rows;
 ```
 
+The `DropShowroomAndDocumentType` migration (15 November 2026) removed `"ShowroomId"` from `bills`, `invoice_sequences`, `admin_passcodes`, `admin_sessions` and `print_assets`, and `"DocumentType"` from `invoice_sequences`. The application runs for one showroom and numbers one kind of document, so every row held the same two values (the showroom id `9b961fc2-035f-3dd3-43e0-4f8f136e7682`, which admin audit rows still carry as their `EntityId`, and `sales_invoice`). The key of `invoice_sequences` became the fiscal year, and the indexes that began with the showroom were built again without it.
+
+The copy is one table per source table, `dropped_20261115_<table>`. For the four tables with an `Id` it holds `Id` and `ShowroomId` of the rows that held another showroom's id; the application never wrote one, so the copies are empty, and a row that did hold one is from then on a row like any other (the migration raises a `WARNING` with the count). `dropped_20261115_invoice_sequences` holds the whole table as it was if any of its rows held another showroom or document type; the rows of one fiscal year then become one row, standing where the furthest of them stood. Rolling back restores the columns, their values, the key and the indexes. When the release has settled:
+
+```sql
+DROP TABLE IF EXISTS
+    public.dropped_20261115_bills,
+    public.dropped_20261115_admin_passcodes,
+    public.dropped_20261115_admin_sessions,
+    public.dropped_20261115_print_assets,
+    public.dropped_20261115_invoice_sequences;
+```
+
 These side tables are removed by hand and not by a migration on purpose: a migration that deleted them would also delete the copies a restored older database makes on its way up.
 
 ---
@@ -242,9 +255,10 @@ These side tables are removed by hand and not by a migration on purpose: a migra
 ### 2.2 Uniqueness
 
 - one revision number per bill
-- one invoice number, and one number core, per `("ShowroomId", "FiscalYear")` (two partial unique indexes on `bills`)
+- one invoice number, and one number core, per fiscal year (two partial unique indexes on `bills`)
 - one bill per `"CreateOperationId"`
-- one numbering row per `("ShowroomId", "FiscalYear", "DocumentType")`
+- one numbering row per fiscal year
+- one admin passcode
 
 ### 2.3 Concurrency
 

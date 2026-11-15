@@ -16,7 +16,6 @@ public static class PrintAssetKinds
 
 public sealed record PrintAssetResponse(
     Guid Id,
-    Guid ShowroomId,
     string AssetKind,
     string FileName,
     string ContentType,

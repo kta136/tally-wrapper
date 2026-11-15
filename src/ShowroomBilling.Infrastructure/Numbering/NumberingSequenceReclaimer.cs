@@ -7,13 +7,13 @@ namespace ShowroomBilling.Infrastructure.Numbering;
 
 /// <summary>
 /// Rolls <c>InvoiceSequences.NextValue</c> back to one past the highest core a
-/// bill of the scope still holds, never below <c>MinNextValue</c>, so a number
+/// bill of the fiscal year still holds, never below <c>MinNextValue</c>, so a number
 /// freed at the end of the series is issued again. Called after a bill is
 /// deleted (<c>BillAdminWorkflow.DeleteAsync</c>) and after one is renumbered
 /// (<c>BillAdminWorkflow.ChangeInvoiceNumberAsync</c>, e.g. 94 → 92).
 ///
 /// Occupancy is read from the stored <c>bills.InvoiceCore</c>; rows without
-/// one (legacy custom numbers) are read by their trailing digits.
+/// one (legacy custom numbers) hold no place in the sequence.
 ///
 /// The sequence row is locked <c>FOR UPDATE</c>, which only holds inside a
 /// transaction: the caller opens one around its own save and this call, so a
@@ -21,6 +21,12 @@ namespace ShowroomBilling.Infrastructure.Numbering;
 /// </summary>
 internal static class NumberingSequenceReclaimer
 {
+    /// <summary>
+    /// The audit event of a roll-back. The name is the one the rows have had
+    /// from the start, from when a sequence was also keyed by a document type.
+    /// </summary>
+    internal const string RolledBackEvent = "numbering.sales_invoice.rolled_back";
+
     /// <param name="trigger">
     /// Why it ran, for the audit row: <c>"delete:{billId}"</c> or
     /// <c>"rename:{billId}"</c>.
@@ -33,15 +39,12 @@ internal static class NumberingSequenceReclaimer
     /// <returns>True if NextValue moved; false otherwise.</returns>
     internal static async Task<bool> ReclaimAsync(
         ShowroomBillingDbContext dbContext,
-        Guid showroomId,
         string fiscalYear,
         string trigger,
         CancellationToken cancellationToken,
         long? keepCoreReserved = null)
     {
-        const string documentType = NumberingService.DocumentTypeSalesInvoice;
-        var sequence = await LoadSequenceForUpdateAsync(
-            dbContext, showroomId, fiscalYear, documentType, cancellationToken);
+        var sequence = await LoadSequenceForUpdateAsync(dbContext, fiscalYear, cancellationToken);
 
         if (sequence is null)
         {
@@ -64,7 +67,7 @@ internal static class NumberingSequenceReclaimer
         // digits to it, and holds no place in the sequence.
         long maxOccupiedCore = await dbContext.Bills
             .AsNoTracking()
-            .Where(b => b.ShowroomId == showroomId && b.FiscalYear == fiscalYear && b.InvoiceCore != null)
+            .Where(b => b.FiscalYear == fiscalYear && b.InvoiceCore != null)
             .MaxAsync(b => (long?)b.InvoiceCore, cancellationToken) ?? 0L;
 
         var startedAt = sequence.NextValue;
@@ -79,8 +82,8 @@ internal static class NumberingSequenceReclaimer
 
         dbContext.AuditEvents.Add(AuditRow.Create(
             "numbering",
-            $"{showroomId}|{fiscalYear}|{documentType}",
-            $"numbering.{documentType}.rolled_back",
+            fiscalYear,
+            RolledBackEvent,
             AuditRow.System,
             sequence.UpdatedAtUtc,
             new
@@ -97,7 +100,7 @@ internal static class NumberingSequenceReclaimer
     }
 
     /// <summary>
-    /// Makes sure the sequence row for a scope exists, so that
+    /// Makes sure the sequence row of a fiscal year exists, so that
     /// <see cref="LoadSequenceForUpdateAsync"/> has a row to lock. FOR UPDATE
     /// locks nothing when the row is not there yet, which is the first bill of
     /// a fiscal year: two callers would both find no row. A second insert
@@ -105,33 +108,27 @@ internal static class NumberingSequenceReclaimer
     /// </summary>
     internal static Task EnsureSequenceRowAsync(
         ShowroomBillingDbContext dbContext,
-        Guid showroomId,
         string fiscalYear,
-        string documentType,
         CancellationToken cancellationToken) =>
         dbContext.Database.ExecuteSqlInterpolatedAsync($@"
-INSERT INTO public.invoice_sequences (""ShowroomId"", ""FiscalYear"", ""DocumentType"", ""NextValue"", ""MinNextValue"", ""UpdatedAtUtc"")
-VALUES ({showroomId}, {fiscalYear}, {documentType}, 1, 0, {DateTimeOffset.UtcNow})
+INSERT INTO public.invoice_sequences (""FiscalYear"", ""NextValue"", ""MinNextValue"", ""UpdatedAtUtc"")
+VALUES ({fiscalYear}, 1, 0, {DateTimeOffset.UtcNow})
 ON CONFLICT DO NOTHING", cancellationToken);
 
     /// <summary>
-    /// Loads the sequence row for a scope and locks it with <c>FOR UPDATE</c>
+    /// Loads the sequence row of a fiscal year and locks it with <c>FOR UPDATE</c>
     /// until the surrounding transaction ends, so two reservations (or a
     /// reservation and a rollback) cannot read the same <c>NextValue</c>.
     /// </summary>
     internal static async Task<InvoiceSequenceEntity?> LoadSequenceForUpdateAsync(
         ShowroomBillingDbContext dbContext,
-        Guid showroomId,
         string fiscalYear,
-        string documentType,
         CancellationToken cancellationToken)
     {
         var locked = await dbContext.InvoiceSequences
             .FromSqlInterpolated($@"
 SELECT * FROM public.invoice_sequences
-WHERE ""ShowroomId"" = {showroomId}
-  AND ""FiscalYear"" = {fiscalYear}
-  AND ""DocumentType"" = {documentType}
+WHERE ""FiscalYear"" = {fiscalYear}
 FOR UPDATE")
             .ToListAsync(cancellationToken);
         return locked.FirstOrDefault();

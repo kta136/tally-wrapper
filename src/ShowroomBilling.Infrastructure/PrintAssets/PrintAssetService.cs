@@ -18,14 +18,11 @@ public sealed class PrintAssetService(
 
     public async Task<PrintAssetListResponse> ListAsync(CancellationToken cancellationToken = default)
     {
-        var showroomId = Showrooms.DefaultId;
         var rows = await dbContext.PrintAssets
             .AsNoTracking()
-            .Where(x => x.ShowroomId == showroomId)
             .OrderByDescending(x => x.CreatedAtUtc)
             .Select(x => new PrintAssetResponse(
                 x.Id,
-                x.ShowroomId,
                 x.AssetKind,
                 x.FileName,
                 x.ContentType,
@@ -90,12 +87,10 @@ public sealed class PrintAssetService(
         var contentType = ImageSignature.DetectContentType(bytes)
             ?? throw new RequestValidationException("Asset must be a valid PNG or JPEG image.");
 
-        var showroomId = Showrooms.DefaultId;
         var now = DateTimeOffset.UtcNow;
         var entity = new PrintAssetEntity
         {
             Id = Guid.CreateVersion7(),
-            ShowroomId = showroomId,
             AssetKind = request.AssetKind,
             FileName = fileName,
             ContentType = contentType,
@@ -122,7 +117,6 @@ public sealed class PrintAssetService(
 
     private static PrintAssetResponse ToResponse(PrintAssetEntity entity) => new(
         entity.Id,
-        entity.ShowroomId,
         entity.AssetKind,
         entity.FileName,
         entity.ContentType,

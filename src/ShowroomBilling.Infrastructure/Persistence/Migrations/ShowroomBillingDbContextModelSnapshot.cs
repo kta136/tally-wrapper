@@ -46,16 +46,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ShowroomId")
-                        .IsUnique();
 
                     b.ToTable("admin_passcodes", "public");
                 });
@@ -84,9 +78,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -94,10 +85,10 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExpiresAtUtc");
+
                     b.HasIndex("TokenHash")
                         .IsUnique();
-
-                    b.HasIndex("ShowroomId", "ExpiresAtUtc");
 
                     b.ToTable("admin_sessions", "public", t =>
                         {
@@ -188,9 +179,6 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -208,23 +196,23 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"CreateOperationId\" IS NOT NULL");
 
+                    b.HasIndex("CreatedAtUtc");
+
                     b.HasIndex("InvoiceNumber")
                         .HasAnnotation("Npgsql:CreatedConcurrently", true);
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("InvoiceNumber"), "gin");
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("InvoiceNumber"), new[] { "gin_trgm_ops" });
 
-                    b.HasIndex("ShowroomId", "CreatedAtUtc");
-
-                    b.HasIndex("ShowroomId", "FiscalYear", "InvoiceCore")
+                    b.HasIndex("FiscalYear", "InvoiceCore")
                         .IsUnique()
                         .HasFilter("\"InvoiceCore\" IS NOT NULL");
 
-                    b.HasIndex("ShowroomId", "FiscalYear", "InvoiceNumber")
+                    b.HasIndex("FiscalYear", "InvoiceNumber")
                         .IsUnique()
                         .HasFilter("\"InvoiceNumber\" IS NOT NULL");
 
-                    b.HasIndex("ShowroomId", "State", "CreatedAtUtc", "Id");
+                    b.HasIndex("State", "CreatedAtUtc", "Id");
 
                     b.ToTable("bills", "public", t =>
                         {
@@ -468,16 +456,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("ShowroomBilling.Infrastructure.Persistence.Entities.InvoiceSequenceEntity", b =>
                 {
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("FiscalYear")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
-
-                    b.Property<string>("DocumentType")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
 
                     b.Property<long>("MinNextValue")
                         .HasColumnType("bigint");
@@ -488,7 +469,7 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("ShowroomId", "FiscalYear", "DocumentType");
+                    b.HasKey("FiscalYear");
 
                     b.ToTable("invoice_sequences", "public", t =>
                         {
@@ -527,12 +508,9 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<Guid>("ShowroomId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("ShowroomId", "AssetKind");
+                    b.HasIndex("AssetKind");
 
                     b.ToTable("print_assets", "public", t =>
                         {

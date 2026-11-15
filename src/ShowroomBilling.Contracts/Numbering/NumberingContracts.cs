@@ -2,7 +2,6 @@ namespace ShowroomBilling.Contracts.Numbering;
 
 public sealed record NumberingPreviewResponse(
     string FiscalYear,
-    string DocumentType,
     long PreviewValue,
     string FormattedNumber,
     string? Prefix,

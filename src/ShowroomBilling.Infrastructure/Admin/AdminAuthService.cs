@@ -26,11 +26,14 @@ public sealed class AdminAuthService(
     // How long an expired session row is kept before an unlock removes it.
     private static readonly TimeSpan ExpiredSessionRetention = TimeSpan.FromDays(30);
     private const string DefaultActorLabel = "admin";
+    // Every admin audit row is filed under this id and always has been (it was
+    // the id of the one showroom, from when rows carried one). Kept so that the
+    // rows before and after read as one history.
+    private const string AuditEntityId = "9b961fc2-035f-3dd3-43e0-4f8f136e7682";
 
     public async Task<AdminPasscodeStatusResponse> GetPasscodeStatusAsync(CancellationToken cancellationToken = default)
     {
-        var showroomId = Showrooms.DefaultId;
-        var exists = await dbContext.AdminPasscodes.AnyAsync(x => x.ShowroomId == showroomId, cancellationToken);
+        var exists = await dbContext.AdminPasscodes.AnyAsync(cancellationToken);
         return new AdminPasscodeStatusResponse(exists);
     }
 
@@ -44,23 +47,21 @@ public sealed class AdminAuthService(
         }
 
         var now = DateTimeOffset.UtcNow;
-        var showroomId = Showrooms.DefaultId;
-        var existing = await dbContext.AdminPasscodes
-            .FirstOrDefaultAsync(x => x.ShowroomId == showroomId, cancellationToken);
+        var existing = await CurrentPasscodeAsync(cancellationToken);
 
         if (existing is not null)
         {
             // Changing the passcode verifies the current one, so it is a
             // passcode guess like unlock and gets the same throttle and audit.
-            BeginThrottledAttempt(showroomId);
+            BeginThrottledAttempt();
             if (string.IsNullOrEmpty(request.CurrentPasscode) || !VerifyPasscode(request.CurrentPasscode, existing))
             {
-                logger.LogWarning("Admin passcode change rejected for showroom {ShowroomId}: current passcode invalid.", showroomId);
+                logger.LogWarning("Admin passcode change rejected: current passcode invalid.");
                 WriteAudit("admin.passcode.change.failed", now, actorLabel: null);
                 await dbContext.SaveChangesAsync(cancellationToken);
                 throw new AdminPasscodeInvalidException();
             }
-            unlockThrottle.Reset(showroomId);
+            unlockThrottle.Reset();
 
             (existing.PasscodeSalt, existing.PasscodeHash, existing.Iterations) = HashPasscode(request.NewPasscode);
             existing.UpdatedAtUtc = now;
@@ -70,8 +71,7 @@ public sealed class AdminAuthService(
             var (salt, hash, iter) = HashPasscode(request.NewPasscode);
             dbContext.AdminPasscodes.Add(new AdminPasscodeEntity
             {
-                Id = Guid.CreateVersion7(),
-                ShowroomId = showroomId,
+                Id = AdminPasscodeEntity.FirstPasscodeId,
                 PasscodeSalt = salt,
                 PasscodeHash = hash,
                 Iterations = iter,
@@ -87,26 +87,24 @@ public sealed class AdminAuthService(
     public async Task<AdminUnlockResponse> UnlockAsync(AdminUnlockRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var showroomId = Showrooms.DefaultId;
 
         // Throttle BEFORE we touch the DB so that a hammering caller can't
         // even cause repeated PBKDF2 work, and a 4xx is returned cheaply.
-        BeginThrottledAttempt(showroomId);
+        BeginThrottledAttempt();
 
-        var passcode = await dbContext.AdminPasscodes
-            .FirstOrDefaultAsync(x => x.ShowroomId == showroomId, cancellationToken)
+        var passcode = await CurrentPasscodeAsync(cancellationToken)
             ?? throw new AdminPasscodeNotConfiguredException();
 
         if (string.IsNullOrEmpty(request.Passcode) || !VerifyPasscode(request.Passcode, passcode))
         {
             var failedAt = DateTimeOffset.UtcNow;
-            logger.LogWarning("Admin unlock failed for showroom {ShowroomId}.", showroomId);
+            logger.LogWarning("Admin unlock failed.");
             WriteAudit("admin.unlock.failed", failedAt, actorLabel: null);
             await dbContext.SaveChangesAsync(cancellationToken);
             throw new AdminPasscodeInvalidException();
         }
 
-        unlockThrottle.Reset(showroomId);
+        unlockThrottle.Reset();
 
         var now = DateTimeOffset.UtcNow;
 
@@ -124,7 +122,6 @@ public sealed class AdminAuthService(
         var session = new AdminSessionEntity
         {
             Id = Guid.CreateVersion7(),
-            ShowroomId = showroomId,
             TokenHash = tokenHash,
             ActorLabel = actorLabel,
             IssuedAtUtc = now,
@@ -173,14 +170,24 @@ public sealed class AdminAuthService(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private void BeginThrottledAttempt(Guid showroomId)
+    /// <summary>
+    /// The passcode. There is one row; the oldest is read so that the answer
+    /// is the same every time even on a database that somehow holds two.
+    /// </summary>
+    private Task<AdminPasscodeEntity?> CurrentPasscodeAsync(CancellationToken cancellationToken) =>
+        dbContext.AdminPasscodes
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    private void BeginThrottledAttempt()
     {
-        var cooldown = unlockThrottle.TryBeginAttempt(showroomId);
+        var cooldown = unlockThrottle.TryBeginAttempt();
         if (cooldown > TimeSpan.Zero)
         {
             logger.LogWarning(
-                "Admin passcode attempt throttled for showroom {ShowroomId}: {SecondsRemaining}s remaining.",
-                showroomId, (int)Math.Ceiling(cooldown.TotalSeconds));
+                "Admin passcode attempt throttled: {SecondsRemaining}s remaining.",
+                (int)Math.Ceiling(cooldown.TotalSeconds));
             throw new AdminUnlockThrottledException(cooldown);
         }
     }
@@ -226,7 +233,7 @@ public sealed class AdminAuthService(
     private void WriteAudit(string eventType, DateTimeOffset at, string? actorLabel)
     {
         dbContext.AuditEvents.Add(AuditRow.Create(
-            "admin", Showrooms.DefaultId.ToString(), eventType, new AuditActor("admin", actorLabel), at));
+            "admin", AuditEntityId, eventType, new AuditActor("admin", actorLabel), at));
     }
 
 }

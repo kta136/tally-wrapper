@@ -111,7 +111,7 @@ The flip is deliberately **not** wrapped in a transaction with the Tally call â€
 |---|---|---|---|
 | `GET` | `/api/numbering/preview` | Show next visible number without reservation | preview number, scope metadata |
 
-`GET /api/numbering/preview` accepts optional `documentType` (default `sales_invoice`) and `fiscalYear` (default = current Indian fiscal year `YYYY-YY`). Returns `{ fiscalYear, documentType, previewValue, formattedNumber, prefix, suffix }`.
+`GET /api/numbering/preview` accepts an optional `fiscalYear` (default = current Indian fiscal year `YYYY-YY`). Returns `{ fiscalYear, previewValue, formattedNumber, prefix, suffix }`. (A `documentType` an older Desktop sends is ignored; there is one kind of document.)
 
 There is no endpoint that reserves a number by itself. A number is taken by `CreateDraftAsync` (and by revise, for the new bill) when a bill is created, not by push, in the same transaction as the bill. Format: `{prefix}{fiscalYear}/{value}{suffix}`, the value zero-padded to the configured width (default 4). See [`04_numbering_and_idempotency.md`](04_numbering_and_idempotency.md).
 
@@ -182,7 +182,7 @@ Implementation: `AdminAuthenticationHandler` reads `X-Admin-Token`, validates vi
 | `POST` | `/api/admin/unlock` | Exchange the passcode for a session token | `{ token, expiresAtUtc }`; 401 invalid, 409 not configured, **429 throttled** (with `Retry-After` header) |
 | `POST` | `/api/admin/logout` | Revoke the current token | 204 |
 
-After 4 consecutive failed unlock attempts, the API enters an exponential cooldown (2s, 4s, 8s, 16s, capped at 30s) per showroom. Subsequent attempts during the cooldown return `429 Too Many Requests` with a `Retry-After` header. A successful unlock resets the counter; the counter is in-memory only and resets on API restart. Failed attempts are recorded as `admin.unlock.failed` audit events.
+After 4 consecutive failed unlock attempts, the API enters an exponential cooldown (2s, 4s, 8s, 16s, capped at 30s). Subsequent attempts during the cooldown return `429 Too Many Requests` with a `Retry-After` header. A successful unlock resets the counter; the counter is in-memory only and resets on API restart. Failed attempts are recorded as `admin.unlock.failed` audit events.
 
 When `DeviceAuth:Mode=TrustedLan` (the server install) and no admin passcode exists yet, the initial `POST /api/admin/passcode` setup is loopback-only: the first passcode has to be set on the server PC itself, for example from a Desktop running there. Later passcode rotations require both an unlocked admin session (`X-Admin-Token`) and the current passcode; wrong current passcodes share the unlock throttle and write `admin.passcode.change.failed` audit rows.
 

@@ -64,16 +64,13 @@ internal sealed class BillAdminWorkflow(
         // this core between the check and the save. (Without the lock the
         // check was a plain read, and the two could both go through.)
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        await NumberingSequenceReclaimer.EnsureSequenceRowAsync(
-            dbContext, bill.ShowroomId, fiscalYear, NumberingService.DocumentTypeSalesInvoice, cancellationToken);
-        await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(
-            dbContext, bill.ShowroomId, fiscalYear, NumberingService.DocumentTypeSalesInvoice, cancellationToken);
+        await NumberingSequenceReclaimer.EnsureSequenceRowAsync(dbContext, fiscalYear, cancellationToken);
+        await NumberingSequenceReclaimer.LoadSequenceForUpdateAsync(dbContext, fiscalYear, cancellationToken);
 
         var conflict = await dbContext.Bills
             .AsNoTracking()
             .AnyAsync(
-                x => x.ShowroomId == bill.ShowroomId
-                     && x.FiscalYear == bill.FiscalYear
+                x => x.FiscalYear == bill.FiscalYear
                      && (x.InvoiceNumber == newNumber || x.InvoiceCore == autoFormatCore)
                      && x.Id != bill.Id,
                 cancellationToken);
@@ -83,14 +80,9 @@ internal sealed class BillAdminWorkflow(
                 $"Invoice number '{newNumber}' is already used by another bill in fiscal year '{bill.FiscalYear ?? "(none)"}'.");
         }
 
-        var showroomId = bill.ShowroomId;
         var sequence = await dbContext.InvoiceSequences
             .AsNoTracking()
-            .FirstOrDefaultAsync(
-                s => s.ShowroomId == showroomId
-                     && s.FiscalYear == fiscalYear
-                     && s.DocumentType == NumberingService.DocumentTypeSalesInvoice,
-                cancellationToken);
+            .FirstOrDefaultAsync(s => s.FiscalYear == fiscalYear, cancellationToken);
         long? seqNext = sequence?.NextValue;
 
         bool leavesGap = seqNext is { } next && autoFormatCore > next - 1;
@@ -182,7 +174,6 @@ internal sealed class BillAdminWorkflow(
         {
             await NumberingSequenceReclaimer.ReclaimAsync(
                 dbContext,
-                showroomId,
                 bill.FiscalYear,
                 $"rename:{bill.Id:N}",
                 cancellationToken,
@@ -195,9 +186,7 @@ internal sealed class BillAdminWorkflow(
         // when the rename freed the trailing core.
         var postSeqNext = await dbContext.InvoiceSequences
             .AsNoTracking()
-            .Where(s => s.ShowroomId == showroomId
-                        && s.FiscalYear == fiscalYear
-                        && s.DocumentType == NumberingService.DocumentTypeSalesInvoice)
+            .Where(s => s.FiscalYear == fiscalYear)
             .Select(s => (long?)s.NextValue)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -305,7 +294,6 @@ internal sealed class BillAdminWorkflow(
         var now = DateTimeOffset.UtcNow;
         var lastState = bill.State;
         var invoiceNumber = bill.InvoiceNumber;
-        var showroomId = bill.ShowroomId;
         var fiscalYear = bill.FiscalYear;
         var core = bill.InvoiceCore;
 
@@ -345,7 +333,6 @@ internal sealed class BillAdminWorkflow(
         {
             await NumberingSequenceReclaimer.ReclaimAsync(
                 dbContext,
-                showroomId,
                 fiscalYear,
                 $"delete:{billId:N}",
                 cancellationToken,

@@ -10,14 +10,10 @@ public sealed class NumberingController(NumberingService numberingService) : Con
 {
     [HttpGet("preview")]
     public async Task<ActionResult<NumberingPreviewResponse>> Preview(
-        [FromQuery] string? documentType,
         [FromQuery] string? fiscalYear,
         CancellationToken cancellationToken)
     {
-        var resolvedType = string.IsNullOrWhiteSpace(documentType)
-            ? NumberingService.DocumentTypeSalesInvoice
-            : documentType;
-        var response = await numberingService.GetPreviewAsync(resolvedType, fiscalYear, cancellationToken);
+        var response = await numberingService.GetPreviewAsync(fiscalYear, cancellationToken);
         return Ok(response);
     }
 }
