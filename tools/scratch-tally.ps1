@@ -28,7 +28,11 @@ $ErrorActionPreference = 'Stop'
 
 function Yes([bool]$value) { if ($value) { 'Yes' } else { 'No' } }
 
+# The first is the company a new database names as the active one. Push checks that the
+# active company is open in Tally, so without it nothing could be pushed in a fresh
+# scratch run until another company was picked in Settings.
 $companies = @(
+    @{ name = 'Development Company'; active = $true },
     @{ name = 'Scratch Jewellers (Test Books)'; active = $true },
     @{ name = 'Scratch Jewellers 2025-26'; active = $true }
 )

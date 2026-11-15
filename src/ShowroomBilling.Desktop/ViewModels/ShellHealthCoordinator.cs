@@ -75,6 +75,10 @@ internal sealed class ShellHealthCoordinator(
         {
             host.IsRefreshingAllMasters = false;
         }
+
+        // The dialog's table of lists is drawn from the health snapshot, so read that again:
+        // it went on saying "Not fetched" under a message that every list had been refreshed.
+        await RefreshHealthAsync(forceTallyCompany: true);
     }
 
     public async Task RefreshHealthAsync(

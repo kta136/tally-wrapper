@@ -639,6 +639,57 @@
                                                 </shell:FillCell>
                                             </Border>
 
+                                            <!--  2 · karat, a gold line, next to the item. The cell turns red when the weights are in and the karat is not.  -->
+                                            <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <ComboBox x:Name="KaratCombo"
+                                                              DisplayMemberPath="Label"
+                                                              IsEditable="True"
+                                                              IsTextSearchEnabled="False"
+                                                              ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              SelectedItem="{Binding KaratMaster, Mode=TwoWay}"
+                                                              Style="{StaticResource TableCellCombo}"
+                                                              Text="{Binding Karat, UpdateSourceTrigger=LostFocus}"
+                                                              TextSearch.TextPath="Label"
+                                                              shell:TypeAhead.IsEnabled="True"
+                                                              shell:TypeAhead.Path="Label" />
+                                                    <Border Background="{StaticResource ErrWashBrush}"
+                                                            BorderBrush="{StaticResource ErrTextBrush}"
+                                                            BorderThickness="2"
+                                                            IsHitTestVisible="False">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                <Style.Triggers>
+                                                                    <!--  It marks the empty cell; while the cell is being typed in, the typing must show.  -->
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding NeedsKarat}" Value="True" />
+                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=KaratCombo}" Value="False" />
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="Visibility" Value="Visible" />
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Margin="8,0,0,0"
+                                                                   VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource InkSoftBrush}"
+                                                                   Text="Karat" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
                                             <!--  3 · gross  -->
                                             <Border Grid.Column="3" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
                                                 <TextBox Style="{StaticResource CellNumBox}"
@@ -729,57 +780,6 @@
                                                 <ComboBox ItemsSource="{Binding DataContext.UnitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                           SelectedItem="{Binding Unit}"
                                                           Style="{StaticResource TableCellCombo}" />
-                                            </Border>
-
-                                            <!--  2 · karat, a gold line, next to the item. The cell turns red when the weights are in and the karat is not.  -->
-                                            <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
-                                                <Grid>
-                                                    <ComboBox x:Name="KaratCombo"
-                                                              DisplayMemberPath="Label"
-                                                              IsEditable="True"
-                                                              IsTextSearchEnabled="False"
-                                                              ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                              SelectedItem="{Binding KaratMaster, Mode=TwoWay}"
-                                                              Style="{StaticResource TableCellCombo}"
-                                                              Text="{Binding Karat, UpdateSourceTrigger=LostFocus}"
-                                                              TextSearch.TextPath="Label"
-                                                              shell:TypeAhead.IsEnabled="True"
-                                                              shell:TypeAhead.Path="Label" />
-                                                    <Border Background="{StaticResource ErrWashBrush}"
-                                                            BorderBrush="{StaticResource ErrTextBrush}"
-                                                            BorderThickness="2"
-                                                            IsHitTestVisible="False">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                                <Style.Triggers>
-                                                                    <!--  It marks the empty cell; while the cell is being typed in, the typing must show.  -->
-                                                                    <MultiDataTrigger>
-                                                                        <MultiDataTrigger.Conditions>
-                                                                            <Condition Binding="{Binding NeedsKarat}" Value="True" />
-                                                                            <Condition Binding="{Binding IsKeyboardFocusWithin, ElementName=KaratCombo}" Value="False" />
-                                                                        </MultiDataTrigger.Conditions>
-                                                                        <Setter Property="Visibility" Value="Visible" />
-                                                                    </MultiDataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock Margin="8,0,0,0"
-                                                                   VerticalAlignment="Center"
-                                                                   Foreground="{StaticResource InkSoftBrush}"
-                                                                   Text="Karat" />
-                                                    </Border>
-                                                </Grid>
                                             </Border>
 
                                             <!--  7 · wastage and 8 · labour, gold lines  -->

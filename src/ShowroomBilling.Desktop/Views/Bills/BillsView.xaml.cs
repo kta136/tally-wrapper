@@ -1,17 +1,42 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
+using ShowroomBilling.Desktop.Shell;
 using ShowroomBilling.Desktop.ViewModels;
 using ShowroomBilling.Desktop.ViewModels.Bills;
 
 namespace ShowroomBilling.Desktop.Views.Bills;
 
-public partial class BillsView : UserControl
+public partial class BillsView : UserControl, IHomeFocus
 {
     public BillsView()
     {
         InitializeComponent();
         PreviewKeyDown += OnPreviewKeyDown;
+        // The tab's keys (F5, Enter, Ctrl+R, …) are key bindings of this view, so they act only
+        // while the keyboard is somewhere inside it. The rows of the list cannot take it, so the
+        // view takes it itself: when the tab is shown, and when anything in it is clicked.
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible)
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(FocusHome));
+            }
+        };
+        PreviewMouseDown += (_, _) =>
+        {
+            if (!IsKeyboardFocusWithin)
+            {
+                FocusHome();
+            }
+        };
+    }
+
+    public void FocusHome()
+    {
+        Focus();
+        Keyboard.Focus(this);
     }
 
     private BillsViewModel? ViewModel => DataContext as BillsViewModel;

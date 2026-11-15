@@ -19,6 +19,7 @@
     <conv:SentenceCaseConverter x:Key="SentenceCase" />
     <conv:StringEqualsToVisibilityConverter x:Key="StringEqualsVis" />
     <conv:CountWordConverter x:Key="CountWord" />
+    <conv:BillStateLabelConverter x:Key="BillStateLabel" />
     <conv:GroupedNumberConverter x:Key="GroupedNumber" />
     <conv:DotToStatusWordConverter x:Key="DotToStatusWord" />
     <conv:MasterTypeLabelConverter x:Key="MasterTypeLabel" />

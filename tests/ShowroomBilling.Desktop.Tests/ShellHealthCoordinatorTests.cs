@@ -61,6 +61,29 @@ public sealed class ShellHealthCoordinatorTests
     }
 
     [Fact]
+    public async Task RefreshAllMastersAsync_ReadsTheListsAgain_SoTheHealthDialogShowsThemRefreshed()
+    {
+        var host = new FakeShellHealthHost();
+        var never = new MasterFreshnessSummaryResponse("missing", [new MasterSnapshotMetadata("ledgers", null, 0, "missing")]);
+        var fresh = new MasterFreshnessSummaryResponse("fresh", [new MasterSnapshotMetadata("ledgers", DateTimeOffset.UtcNow, 9, "fresh")]);
+        var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, never, null, Runtime(pending: 0)));
+        var masters = new FakeMastersApiClient
+        {
+            Refreshed = () => client.Snapshot = new SystemHealthSnapshot(true, fresh, null, Runtime(pending: 0)),
+        };
+        var coordinator = new ShellHealthCoordinator(client, masters, host);
+        await coordinator.RefreshHealthAsync();
+        Assert.Same(never, host.LastHealthSnapshot?.Masters);
+
+        await coordinator.RefreshAllMastersAsync();
+
+        Assert.True(client.LastPollAskedForMasters);
+        Assert.Same(fresh, host.LastHealthSnapshot?.Masters);
+        Assert.False(host.IsRefreshingAllMasters);
+        Assert.Contains("ledgers", host.MastersRefreshMessage);
+    }
+
+    [Fact]
     public async Task RefreshHealthAsync_AskedForWhileAPollIsOut_GetsItsOwnAnswerAndIsNotDropped()
     {
         var host = new FakeShellHealthHost();
@@ -184,6 +207,8 @@ public sealed class ShellHealthCoordinatorTests
         /// <summary>How many polls reached the server.</summary>
         public int Polls { get; private set; }
 
+        public bool LastPollAskedForMasters { get; private set; }
+
         /// <summary>When set, the next poll does not come back until it is completed.</summary>
         public TaskCompletionSource? HoldNextPoll { get; set; }
 
@@ -193,6 +218,7 @@ public sealed class ShellHealthCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             Polls++;
+            LastPollAskedForMasters = includeMasterFreshness;
             if (HoldNextPoll is { } hold)
             {
                 HoldNextPoll = null;
@@ -217,9 +243,16 @@ public sealed class ShellHealthCoordinatorTests
         public Task<StockItemSnapshotResponse> GetStockItemsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        /// <summary>What the server makes of the lists once they have been refreshed, for the health poll that follows.</summary>
+        public Action? Refreshed { get; set; }
+
         public Task<IReadOnlyList<TallyMasterRefreshResult>> RequestRefreshAsync(
             MasterRefreshRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+            CancellationToken cancellationToken = default)
+        {
+            Refreshed?.Invoke();
+            return Task.FromResult<IReadOnlyList<TallyMasterRefreshResult>>(
+                [new TallyMasterRefreshResult("ledgers", Succeeded: true, ItemCount: 9, ErrorMessage: null)]);
+        }
     }
 }

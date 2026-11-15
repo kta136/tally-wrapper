@@ -146,6 +146,48 @@ public sealed class BillsActionTests
         Assert.Equal(expected, BillsStatusFormatter.FormatBatchPushStatus(response));
     }
 
+    [Fact]
+    public async Task The_toolbars_push_says_of_a_bill_what_the_row_menus_push_says()
+    {
+        var (vm, api, _) = await LoadedAsync(
+            answer: true,
+            Summary("SR/25-26/0001"),
+            Summary("SR/25-26/0002"),
+            Summary("SR/25-26/0003"));
+        var ids = vm.Items.Select(row => row.Id).ToArray();
+
+        // One bill ticked, and it went through: named, not counted.
+        api.PushSelectedResponse = new BillBatchPushResponse(
+            1, 1, 0, false, null, null, [new BillBatchPushItemResult(ids[0], true, BillStates.Posted, "SR/25-26/0001", null)]);
+        vm.Items[0].IsSelected = true;
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+        Assert.Equal(("Pushed SR/25-26/0001.", "ok"), (vm.FooterNotice, vm.FooterNoticeTone));
+
+        // Tally refused the only one: its number and the reason.
+        api.PushSelectedResponse = new BillBatchPushResponse(
+            1, 0, 1, true, ids[0], "Ledger 'Sales' does not exist.",
+            [new BillBatchPushItemResult(ids[0], false, BillStates.Failed, "SR/25-26/0001", "Ledger 'Sales' does not exist.")]);
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+        Assert.Equal(
+            ("Tally did not accept SR/25-26/0001: Ledger 'Sales' does not exist.", "err"),
+            (vm.FooterNotice, vm.FooterNoticeTone));
+
+        // Two went through and Tally never answered for the third: what the server made of the
+        // transport is not the operator's concern, what to do next is.
+        api.PushSelectedResponse = new BillBatchPushResponse(
+            3, 2, 1, true, ids[2], "Tally may have processed the voucher before the transport failed: 500",
+            [
+                new BillBatchPushItemResult(ids[0], true, BillStates.Posted, "SR/25-26/0001", null),
+                new BillBatchPushItemResult(ids[1], true, BillStates.Posted, "SR/25-26/0002", null),
+                new BillBatchPushItemResult(ids[2], false, BillStates.ReconciliationRequired, "SR/25-26/0003", "Tally may have processed the voucher before the transport failed: 500"),
+            ]);
+        vm.ToggleVisibleSelection(true);
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+        Assert.Equal(
+            "Pushed 2 bill(s), then stopped. Tally did not answer for SR/25-26/0003. Check its voucher in Tally before anything else.",
+            vm.FooterNotice);
+    }
+
     /// <summary>
     /// 10 October 2026: the server answered every bill request with an error
     /// and the Bills tab showed an empty list, with nothing to say why.
@@ -366,6 +408,79 @@ public sealed class BillsActionTests
         Assert.Equal(string.Empty, details.StatusMessage);
         Assert.True(details.RetryCommand.CanExecute(null));
         Assert.False(details.PushCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task What_an_action_came_to_stays_on_the_status_line_after_the_list_reloads()
+    {
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001", BillStates.Failed));
+        Assert.False(vm.HasFooterNotice);
+
+        await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
+
+        // The reload wrote its own summary to StatusMessage; the line the operator sees keeps the result.
+        Assert.StartsWith("Showing", vm.StatusMessage);
+        Assert.Equal(("Retried SR/25-26/0001.", "ok"), (vm.FooterNotice, vm.FooterNoticeTone));
+
+        api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Bill is already posted.", null);
+        await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
+        Assert.Equal(("Retry failed: Bill is already posted.", "err"), (vm.FooterNotice, vm.FooterNoticeTone));
+
+        // A number already in use: the check refuses it, and the operator is told why.
+        api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Invoice number SR/25-26/0009 is already in use.", null);
+        var dialogs = new FakeDialogs { ChangeNumber = _ => Task.FromResult((true, "9", (string?)null)) };
+        var tokens = new AdminTokenStore();
+        tokens.Set(new AdminUnlockResponse("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "test"));
+        var numbered = new BillsViewModel(api, dialogs, tokens);
+        await numbered.LoadAsync();
+        await numbered.ChangeNumberRowCommand.ExecuteAsync(numbered.Items[0]);
+        Assert.Equal(
+            ("Change number check failed: Invoice number SR/25-26/0009 is already in use.", "err"),
+            (numbered.FooterNotice, numbered.FooterNoticeTone));
+    }
+
+    [Fact]
+    public async Task While_tally_cannot_be_reached_the_status_line_says_why_push_is_greyed_out()
+    {
+        var api = new FakeBillsApi { Response = new BillListResponse(1, 0, 50, [Summary("SR/25-26/0001")]) };
+        var vm = new BillsViewModel(api, new FakeDialogs());
+        await vm.LoadAsync();
+
+        Assert.Equal(("Tally connection has not been checked yet.", "warn"), (vm.FooterNotice, vm.FooterNoticeTone));
+
+        vm.ApplyTallyHealthSnapshot(new SystemHealthSnapshot(
+            ApiReachable: true,
+            Masters: null,
+            TallyCompany: new TallyCompanyHealthResponse(
+                TallyHealthStatuses.Unhealthy, true, "Test Company", false, 1, DateTimeOffset.UtcNow, "Company 'Test Company' is not open in Tally."),
+            Runtime: null));
+        Assert.Equal("Tally push blocked: Company 'Test Company' is not open in Tally.", vm.FooterNotice);
+        Assert.False(vm.PushRowCommand.CanExecute(vm.Items[0]));
+
+        vm.ApplyTallyHealthSnapshot(new SystemHealthSnapshot(
+            ApiReachable: true,
+            Masters: null,
+            TallyCompany: new TallyCompanyHealthResponse(
+                TallyHealthStatuses.Healthy, true, "Test Company", true, 1, DateTimeOffset.UtcNow, "ok"),
+            Runtime: null));
+        Assert.False(vm.HasFooterNotice);
+    }
+
+    [Fact]
+    public async Task Ticking_a_row_announces_the_row_the_toolbars_edit_and_change_number_act_on()
+    {
+        var (vm, _, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"));
+        var announced = 0;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(BillsViewModel.SelectedRow)) announced++;
+        };
+
+        vm.Items[0].IsSelected = true;
+
+        Assert.True(announced > 0);
+        Assert.Same(vm.Items[0], vm.SelectedRow);
+        Assert.True(vm.EditRowCommand.CanExecute(vm.SelectedRow));
     }
 
     [Fact]

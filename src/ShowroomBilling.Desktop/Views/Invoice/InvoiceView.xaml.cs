@@ -11,7 +11,7 @@ using ShowroomBilling.Desktop.ViewModels.Invoice;
 
 namespace ShowroomBilling.Desktop.Views.Invoice;
 
-public partial class InvoiceView : UserControl
+public partial class InvoiceView : UserControl, IHomeFocus
 {
     private const string LineEntryGridName = "LineEntryGrid";
     // Item, Karat, Gross, Less, Net, Unit, Wastage (a diamond line has its flat rate here, over Labour too), Labour, Extra.
@@ -33,37 +33,45 @@ public partial class InvoiceView : UserControl
         {
             oldVm.QuickAddCommitted -= OnQuickAddCommitted;
             oldVm.NewBillStarted -= OnNewBillStarted;
+            oldVm.SaveCompletedReadyForPrint -= OnBillSaved;
         }
         if (e.NewValue is InvoiceViewModel newVm)
         {
             newVm.QuickAddCommitted += OnQuickAddCommitted;
             newVm.NewBillStarted += OnNewBillStarted;
+            newVm.SaveCompletedReadyForPrint += OnBillSaved;
         }
     }
 
     private void OnQuickAddCommitted(object? sender, BillLineViewModel target)
         => FocusGrossWeightForLine(target);
 
-    /// <summary>
-    /// The 24K rate is the day's and stays on a new bill, so the cursor goes to the party;
-    /// to the rate only while it is still empty.
-    /// </summary>
     private void OnNewBillStarted(object? sender, EventArgs e)
-    {
-        if (sender is not InvoiceViewModel vm) return;
+        => Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(FocusHome));
 
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+    /// <summary>
+    /// A saved bill leaves an empty form for the next one, so the cursor goes where a new bill
+    /// starts. Queued, because the form is emptied by the shell's handler of the same event; the
+    /// print preview that may then open takes the cursor, and gives it back here when it closes.
+    /// </summary>
+    private void OnBillSaved(object? sender, Guid billId)
+        => Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(FocusHome));
+
+    /// <summary>
+    /// Where a new bill starts. The 24K rate is the day's and stays on a new bill, so the cursor
+    /// goes to the party; to the rate only while it is still empty.
+    /// </summary>
+    public void FocusHome()
+    {
+        if (DataContext is InvoiceViewModel { Rate24Kt: > 0m })
         {
-            if (vm.Rate24Kt is > 0m)
-            {
-                PartyBox.Focus();
-                PartyBox.SelectAll();
-            }
-            else
-            {
-                FocusRate24Kt();
-            }
-        }));
+            PartyBox.Focus();
+            PartyBox.SelectAll();
+        }
+        else
+        {
+            FocusRate24Kt();
+        }
     }
 
     private void FocusGrossWeightForLine(BillLineViewModel target)

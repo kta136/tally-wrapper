@@ -152,8 +152,12 @@ internal sealed class FakeBillsApi : IBillsApiClient
     public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
         => Write($"push:{billId}", () => Bill(billId, PostingLeaves));
 
+    /// <summary>What a push of the ticked bills answers, when a test wants something other than "all pushed".</summary>
+    public BillBatchPushResponse? PushSelectedResponse { get; set; }
+
     public Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default)
-        => Write("push-selected", () => new BillBatchPushResponse(request.BillIds.Count, request.BillIds.Count, 0, false, null, null, []));
+        => Write("push-selected", () => PushSelectedResponse
+            ?? new BillBatchPushResponse(request.BillIds.Count, request.BillIds.Count, 0, false, null, null, []));
 
     public Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default)
         => Write("push-pending", () => new BillBatchPushResponse(0, 0, 0, false, null, null, []));

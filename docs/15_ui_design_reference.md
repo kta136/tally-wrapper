@@ -94,7 +94,7 @@ Each screen has a picture; compare against it, not against the prototype.
 - **Estimate table.** The row that holds keyboard focus is `ResultTintActive` with an indigo zone line; the strip under the table says how that line was priced (`LineExplainer`) and which rate it used (`RateLadder`). A gold line with no karat says so in its karat cell.
 - **Totals.** Subtotal before GST, CGST, SGST, discount (with its percentage of the total), round off and the grand total at 32 px; discount and final amount are linked inputs.
 - **New bill.** The button beside Print estimate reads **Clear** while the form holds a bill not saved yet and **New bill** while it holds a saved one (opened with Edit from Bills); either way it empties the form for a new bill and leaves any saved bill as it is. Its key is `Ctrl+Shift+N`, not the picture's `Esc Esc` (`Esc` already closes dialogs and suggestion lists, and `Ctrl+N` is New row). It asks first, with Cancel focused, when the form has changes not saved.
-- **Bills.** Counts of each state across the top, a chip per row (shape plus word), a note per row, and a footer that names what the selection can do. Admin-only actions stay hidden while locked (see [CLAUDE.md](../CLAUDE.md)).
+- **Bills.** Counts of each state across the top, a chip per row (shape plus word), a note per row, and a footer that names what the selection can do. The footer's last part is the tab's status line: a dot in the result's tone and one sentence saying what the last action came to ("Pushed SR/1.", "Tally did not accept SR/2: reason"), which stays until the next action; while nothing has been said it shows the hint "Right-click a row for more actions", or, when Tally cannot be reached, why the push buttons are greyed out. Admin-only actions stay hidden while locked (see [CLAUDE.md](../CLAUDE.md)).
 - **Settings.** Each section says whether it is shared by every counter or this PC only. A section is read-only until **Edit**; then a band offers **Discard** and **Save all**. Showing the Settings tab loads what the server has now, except while an edit is open: an edit stays as typed when the operator looks at another tab and comes back. A ledger field says whether Tally has that ledger.
 - **First-launch setup.** A rail of three steps (done, current, to come), three sections with a chip each, and a foot that says what is missing. **Finish setup** stays off until all three are done.
 
@@ -126,8 +126,8 @@ A dialog is a `UserControl` overlay hosted once in `MainWindow.xaml`; it is neve
 Global (registered in the app shell):
 
 - `Ctrl+1` Invoice tab · `Ctrl+2` Bills tab · `Ctrl+3` Settings tab
-- `?` open the shortcuts list (not while typing in a text box)
-- `` ` `` open the admin unlock
+- `?` open the shortcuts list, and `` ` `` the admin unlock: only while no text box has the cursor and no dialog is open. In a text box both are ordinary characters and are typed.
+- When the last dialog closes, the cursor goes back to where it was on the screen behind it (`Shell/DialogFocusReturn`); if that control has gone, to the tab's own place: Party on Invoice (the 24K rate while that is empty), the list on Bills. After a bill is saved the cursor is in Party, ready for the next bill, whether or not a print preview opened in between. The Bills tab takes the keyboard as soon as it is shown, so its keys work without a click.
 - `Esc` close the top-most dialog
 - `F9` print estimate (Invoice screen active)
 - `Ctrl+Shift+N` new bill (Invoice screen active; in the shortcuts list and on its button, not in the bottom bar)

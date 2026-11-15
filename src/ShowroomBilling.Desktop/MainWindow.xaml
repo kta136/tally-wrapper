@@ -48,12 +48,10 @@
             </KeyBinding.CommandParameter>
         </KeyBinding>
         <!--
-            Bare ` and ? are gated (OpenShortcutsKeyCommand / OpenAdminUnlockKeyCommand):
-            they do nothing while a dialog is open or a text box has focus, so
-            "?" and "`" can be typed and a pending prompt is never replaced.
+            Bare ` and ? are not here: a KeyBinding marks its key handled even while its
+            command cannot run, and then the character cannot be typed into a text box.
+            MainWindow.OnKeyDown runs them through Shell/BareKeyShortcuts.
         -->
-        <KeyBinding Key="OemQuestion" Modifiers="Shift" Command="{Binding OpenShortcutsKeyCommand}" />
-        <KeyBinding Key="OemTilde" Command="{Binding OpenAdminUnlockKeyCommand}" />
         <KeyBinding Key="Escape" Command="{Binding CloseDialogCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddInvoiceRowCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl+Shift" Command="{Binding NewInvoiceBillCommand}" />
@@ -86,8 +84,8 @@
         <!--  Row 1: the one banner. Healthy shows none; a note can be dismissed, a problem cannot.  -->
         <views:BannerView Grid.Row="1" />
 
-        <!--  Row 2: Screen region  -->
-        <Grid Grid.Row="2">
+        <!--  Row 2: Screen region. DialogFocusReturn puts the cursor back in here when a dialog closes.  -->
+        <Grid x:Name="ScreenRegion" Grid.Row="2">
             <shell:LazyViewHost ViewType="{x:Type views:LimitedModeView}"
                                 Visibility="{Binding IsLimitedVisible, Converter={StaticResource BoolToVis}}" />
             <shell:LazyViewHost ViewType="{x:Type invoiceViews:InvoiceView}"

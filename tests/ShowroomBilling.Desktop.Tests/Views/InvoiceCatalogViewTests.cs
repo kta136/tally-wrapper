@@ -120,6 +120,46 @@ public sealed class InvoiceCatalogViewTests
         Assert.Equal("Gold Chain", seen.GoneItemNameAfterLeavingTheCell);
     }
 
+    [Fact]
+    public void Tab_reaches_the_karat_cell_straight_after_the_item_cell()
+    {
+        // Tab follows the order the cells are written in the line's template, not their columns.
+        // The karat cell was written after the unit cell, so Tab went Item, Gross, Less, Net, Unit, Karat.
+        var (item, karat, gross) = WpfTestHost.Run(() =>
+        {
+            var settings = OfflineApi.Settings();
+            var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings);
+            var view = new InvoiceView { DataContext = invoice };
+            Layout(view);
+
+            var inOrder = Descendants(view).ToList();
+            var itemAt = inOrder.FindIndex(element => element is ComboBox { Name: "ItemCombo" });
+            var karatAt = inOrder.FindIndex(element => element is ComboBox { Name: "KaratCombo" });
+            // The first text box after the item cell that is a cell of its own, not a combo box's inner box.
+            var grossAt = inOrder.FindIndex(
+                itemAt + 1,
+                element => element is TextBox box && !IsInsideComboBox(box));
+            return (itemAt, karatAt, grossAt);
+        });
+
+        Assert.True(item >= 0 && karat >= 0 && gross >= 0);
+        Assert.True(item < karat, "the karat cell comes after the item cell");
+        Assert.True(karat < gross, "the karat cell comes before the gross cell");
+    }
+
+    private static bool IsInsideComboBox(DependencyObject element)
+    {
+        for (var parent = VisualTreeHelper.GetParent(element); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+        {
+            if (parent is ComboBox)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static Cell CellOf(ComboBox combo)
         => new(
             combo.SelectedItem switch

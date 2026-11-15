@@ -7,6 +7,9 @@
              xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Bills"
              mc:Ignorable="d"
              Background="{StaticResource BgPanelBrush}"
+             Focusable="True"
+             FocusVisualStyle="{x:Null}"
+             IsTabStop="False"
              d:DataContext="{d:DesignInstance Type=vm:BillsViewModel, IsDesignTimeCreatable=False}">
     <UserControl.InputBindings>
         <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
@@ -150,7 +153,13 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Style="{StaticResource FieldLabel}" Text="State" />
-                <ComboBox ItemsSource="{Binding StateFilterOptions}" SelectedItem="{Binding StateFilter}" />
+                <ComboBox ItemsSource="{Binding StateFilterOptions}" SelectedItem="{Binding StateFilter}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource BillStateLabel}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </StackPanel>
             <StackPanel Grid.Column="1" Width="184" Margin="14,0,0,0">
                 <TextBlock Style="{StaticResource FieldLabel}" Text="From" />
@@ -643,16 +652,41 @@
                 BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" TextTrimming="CharacterEllipsis">
+                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}">
                     <Run Text="Showing " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding Showing, Mode=OneWay}" />
                     <Run Text=" of " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding TotalDisplay, Mode=OneWay}" />
                     <Run Text=" bills · " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding HiddenByPostedDaysCount, Mode=OneWay}" />
-                    <Run Text=" hidden by the posted-day filter · Right-click a row for more actions" />
+                    <Run Text=" hidden by the posted-day filter · " />
                 </TextBlock>
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <!--  What the last action came to, or why Push is greyed out; the hint while there is nothing to say.  -->
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource InkMutedBrush}"
+                           Text="Right-click a row for more actions"
+                           TextTrimming="CharacterEllipsis"
+                           Visibility="{Binding HasFooterNotice, Converter={StaticResource InverseBoolToVis}}" />
+                <DockPanel Grid.Column="1"
+                           Margin="0,0,12,0"
+                           VerticalAlignment="Center"
+                           Visibility="{Binding HasFooterNotice, Converter={StaticResource BoolToVis}}">
+                    <Ellipse Width="8"
+                             Height="8"
+                             VerticalAlignment="Center"
+                             DockPanel.Dock="Left"
+                             Fill="{Binding FooterNoticeTone, Converter={StaticResource DotToBrushConverter}}" />
+                    <TextBlock x:Name="FooterNoticeText"
+                               Margin="7,0,0,0"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource InkBrush}"
+                               Text="{Binding FooterNotice}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding FooterNotice}" />
+                </DockPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
                     <Button Command="{Binding PrevPageCommand}" Content="‹ Prev" />
                     <Button Margin="8,0,0,0" Command="{Binding NextPageCommand}" Content="Next ›" />
                     <Button Margin="8,0,0,0"

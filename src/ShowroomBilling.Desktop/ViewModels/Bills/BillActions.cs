@@ -26,7 +26,22 @@ internal sealed record BillRef(Guid Id, string Name, string? State)
 /// so the screen has nothing to reload.
 /// </param>
 /// <param name="Bill">The bill as the server returned it, when the call returns one. After Revise it is the new bill.</param>
-internal sealed record BillActionResult(string Message, bool Sent = true, BillResponse? Bill = null);
+/// <param name="Tone">
+/// How the message is to be read, as a <see cref="BillStateDisplay"/> tone: "ok" for done, "err" for
+/// refused or failed, "warn" for stopped before it began. The Bills tab colours its status dot with it.
+/// </param>
+internal sealed record BillActionResult(
+    string Message,
+    bool Sent = true,
+    BillResponse? Bill = null,
+    string Tone = BillStateDisplay.ToneOk)
+{
+    /// <summary>The action did not go through: the server refused it, or could not be reached.</summary>
+    public static BillActionResult Failed(string message, bool sent = true) => new(message, sent, Tone: BillStateDisplay.ToneErr);
+
+    /// <summary>The action stopped before it sent anything, for a reason the operator can do something about.</summary>
+    public static BillActionResult Stopped(string message) => new(message, Sent: false, Tone: BillStateDisplay.ToneWarn);
+}
 
 /// <summary>
 /// Everything the Bills tab and the Bill Details dialog do to a bill. Each method asks what has to
@@ -63,7 +78,7 @@ internal sealed class BillActions(
             async () =>
             {
                 var pushed = await api.PushAsync(bill.Id, new PushBillRequest(note), cancellationToken);
-                return new BillActionResult(Outcome("Pushed", bill.Name, pushed.State), Bill: pushed);
+                return Outcome("Pushed", bill.Name, pushed.State) with { Bill = pushed };
             });
     }
 
@@ -76,9 +91,36 @@ internal sealed class BillActions(
             $"Pushing {billIds.Count} selected bill(s)…",
             "Push selected failed",
             busy,
-            async () => new BillActionResult(BillsStatusFormatter.FormatBatchPushStatus(await api.PushSelectedAsync(
+            async () => BatchPushOutcome(await api.PushSelectedAsync(
                 new PushSelectedBillsRequest(billIds.ToArray(), "Selected push from Bills tab"),
-                cancellationToken))));
+                cancellationToken)));
+    }
+
+    /// <summary>
+    /// What a push of several bills in one call came to. The run stops at the first bill Tally
+    /// does not take, and that bill is said as a push of it alone is said, by its number, so the
+    /// toolbar and the row menu do not word one outcome two ways.
+    /// </summary>
+    private static BillActionResult BatchPushOutcome(BillBatchPushResponse response)
+    {
+        var stoppedAt = response.Failed > 0 ? response.Items.LastOrDefault(item => !item.Succeeded) : null;
+        if (stoppedAt is null)
+        {
+            var only = response is { Matched: 1, Succeeded: 1 } ? response.Items.FirstOrDefault()?.InvoiceNumber : null;
+            return new BillActionResult(
+                only is null ? BillsStatusFormatter.FormatBatchPushStatus(response) : $"Pushed {only}.",
+                Tone: response.Failed > 0 ? BillStateDisplay.ToneErr
+                    : response.Cancelled || response.Succeeded == 0 ? BillStateDisplay.ToneWarn
+                    : BillStateDisplay.ToneOk);
+        }
+
+        var name = stoppedAt.InvoiceNumber ?? "a bill";
+        var why = stoppedAt.BillState is BillStates.Failed or BillStates.ReconciliationRequired
+            ? Outcome("Pushed", name, stoppedAt.BillState, stoppedAt.ErrorMessage).Message
+            : $"{name} could not be pushed: {stoppedAt.ErrorMessage ?? response.FailureMessage}";
+        return BillActionResult.Failed(response.Succeeded == 0
+            ? why
+            : $"Pushed {response.Succeeded} bill(s), then stopped. {why}");
     }
 
     public async Task<BillActionResult?> PushAllPendingAsync(Action<string> busy, CancellationToken cancellationToken)
@@ -99,9 +141,9 @@ internal sealed class BillActions(
                 var response = await api.PushPendingAsync(
                     new PushPendingBillsRequest("Push all pending from Bills tab", null),
                     cancellationToken);
-                return new BillActionResult(response.Matched == 0
-                    ? "No pending bills to push."
-                    : BillsStatusFormatter.FormatBatchPushStatus(response));
+                return response.Matched == 0
+                    ? new BillActionResult("No pending bills to push.", Tone: BillStateDisplay.ToneWarn)
+                    : BatchPushOutcome(response);
             });
     }
 
@@ -143,18 +185,20 @@ internal sealed class BillActions(
     /// server answers such a call with the bill also when Tally refused the voucher or never
     /// answered, so that the call returned does not mean the bill is in Tally.
     /// </summary>
-    private static string Outcome(string done, string name, string? state, string? reason = null) => state switch
+    private static BillActionResult Outcome(string done, string name, string? state, string? reason = null) => state switch
     {
-        BillStates.Posted => $"{done} {name}.",
-        BillStates.Failed => string.IsNullOrWhiteSpace(reason)
+        BillStates.Posted => new BillActionResult($"{done} {name}."),
+        BillStates.Failed => BillActionResult.Failed(string.IsNullOrWhiteSpace(reason)
             ? $"Tally did not accept {name}. Its timeline has the reason."
-            : $"Tally did not accept {name}: {reason}",
-        BillStates.ReconciliationRequired =>
-            $"Tally did not answer for {name}. Check in Tally whether its voucher is there before doing anything else to this bill.",
-        _ => $"{name} is now {BillStateDisplay.Label(state, editedAfterPush: false).ToLowerInvariant()}.",
+            : $"Tally did not accept {name}: {reason}"),
+        BillStates.ReconciliationRequired => BillActionResult.Failed(
+            $"Tally did not answer for {name}. Check its voucher in Tally before anything else."),
+        _ => new BillActionResult(
+            $"{name} is now {BillStateDisplay.Label(state, editedAfterPush: false).ToLowerInvariant()}.",
+            Tone: BillStateDisplay.ToneWarn),
     };
 
-    private static string PostingOutcome(string done, IReadOnlyList<BillRef> bills, IReadOnlyList<BillPostingStatusResponse> sent)
+    private static BillActionResult PostingOutcome(string done, IReadOnlyList<BillRef> bills, IReadOnlyList<BillPostingStatusResponse> sent)
     {
         if (bills.Count == 1)
         {
@@ -163,8 +207,8 @@ internal sealed class BillActions(
 
         var posted = sent.Count(status => status.BillState == BillStates.Posted);
         return posted == sent.Count
-            ? $"{done} {sent.Count} bill(s)."
-            : $"{done} {sent.Count} bill(s): {posted} went to Tally, {sent.Count - posted} did not. The list shows which.";
+            ? new BillActionResult($"{done} {sent.Count} bill(s).")
+            : BillActionResult.Failed($"{done} {sent.Count} bill(s): {posted} went to Tally, {sent.Count - posted} did not. The list shows which.");
     }
 
     public async Task<BillActionResult?> VoidAsync(BillRef bill, Action<string> busy, CancellationToken cancellationToken)
@@ -231,7 +275,7 @@ internal sealed class BillActions(
         }
         catch (Exception ex)
         {
-            return new BillActionResult($"Change number check failed: {ApiResponseReader.FormatError(ex)}", Sent: false);
+            return BillActionResult.Failed($"Change number check failed: {ApiResponseReader.FormatError(ex)}", sent: false);
         }
 
         return await SendAsync(
@@ -290,7 +334,7 @@ internal sealed class BillActions(
         CancellationToken cancellationToken)
     {
         if (rows.Count == 0) return null;
-        if (!rows.All(mark.Allowed)) return new BillActionResult(mark.Blocked, Sent: false);
+        if (!rows.All(mark.Allowed)) return BillActionResult.Stopped(mark.Blocked);
 
         var (token, stopped) = await AdminTokenAsync(cancellationToken);
         if (token is null) return stopped;
@@ -312,9 +356,9 @@ internal sealed class BillActions(
             $"Mark {mark.Word}",
             busy,
             row => mark.Call(api, row.Id, new MarkBillStateRequest(reason), token, cancellationToken),
-            marked => marked.Count == 1
+            marked => new BillActionResult(marked.Count == 1
                 ? $"Marked {rows[0].InvoiceNumberDisplay} as {mark.Word}."
-                : $"Marked {marked.Count} bill(s) as {mark.Word}.");
+                : $"Marked {marked.Count} bill(s) as {mark.Word}."));
     }
 
     /// <summary>Deletes one bill, after a dry run that says whether Tally holds its voucher.</summary>
@@ -330,11 +374,11 @@ internal sealed class BillActions(
         }
         catch (Exception ex)
         {
-            return new BillActionResult($"Delete check failed: {ApiResponseReader.FormatError(ex)}", Sent: false);
+            return BillActionResult.Failed($"Delete check failed: {ApiResponseReader.FormatError(ex)}", sent: false);
         }
 
         var question = dry.TallyDiverges
-            ? $"{row.InvoiceNumberDisplay} was posted to Tally ({row.State}). Deleting it here does not remove it from Tally; reconcile it there by hand."
+            ? $"{row.InvoiceNumberDisplay} was posted to Tally ({row.StateChipLabel}). Deleting it here does not remove it from Tally; reconcile it there by hand."
             : "This removes the bill from this database and frees its number if it was the latest. Its history stays in the audit log. Nothing is deleted in Tally.";
         if (!await dialogs.ConfirmAsync(new ConfirmRequest(
                 $"Delete {row.InvoiceNumberDisplay}?", question, "Delete bill", IsDestructive: true, Note: "This cannot be undone."))) return null;
@@ -373,9 +417,11 @@ internal sealed class BillActions(
                     new DeleteSelectedBillsRequest(rows.Select(row => row.Id).ToArray(), "Batch delete from Bills tab"),
                     token,
                     cancellationToken);
-                return new BillActionResult(result.Skipped == 0
-                    ? $"Deleted {result.Deleted} bill(s)."
-                    : $"Deleted {result.Deleted}; skipped {result.Skipped}. See details in the audit log.");
+                return result.Skipped == 0
+                    ? new BillActionResult($"Deleted {result.Deleted} bill(s).")
+                    : new BillActionResult(
+                        $"Deleted {result.Deleted}; skipped {result.Skipped}. See details in the audit log.",
+                        Tone: BillStateDisplay.ToneWarn);
             });
     }
 
@@ -386,7 +432,7 @@ internal sealed class BillActions(
     private async Task<(string? Token, BillActionResult? Stopped)> AdminTokenAsync(CancellationToken cancellationToken)
     {
         var (token, message) = await _adminGate.EnsureAsync(cancellationToken);
-        return (token, string.IsNullOrWhiteSpace(message) ? null : new BillActionResult(message, Sent: false));
+        return (token, string.IsNullOrWhiteSpace(message) ? null : BillActionResult.Stopped(message));
     }
 
     /// <summary>
@@ -406,7 +452,7 @@ internal sealed class BillActions(
         }
         catch (Exception ex)
         {
-            return new BillActionResult($"{failure}: {ApiResponseReader.FormatError(ex)}");
+            return BillActionResult.Failed($"{failure}: {ApiResponseReader.FormatError(ex)}");
         }
     }
 
@@ -422,7 +468,7 @@ internal sealed class BillActions(
         string what,
         Action<string> busy,
         Func<T, Task<TSent>> send,
-        Func<IReadOnlyList<TSent>, string> done)
+        Func<IReadOnlyList<TSent>, BillActionResult> done)
     {
         string Progress(int index) => bills.Count == 1 ? $"{verb} {name(bills[0])}…" : $"{verb} {index + 1} of {bills.Count}…";
 
@@ -439,7 +485,7 @@ internal sealed class BillActions(
                     sent.Add(await send(bills[index]));
                 }
 
-                return new BillActionResult(done(sent));
+                return done(sent);
             });
     }
 }

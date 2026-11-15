@@ -478,7 +478,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
         catch (Exception ex)
         {
-            Bills.StatusMessage = $"Print preview failed: {ex.Message}";
+            Bills.ReportProblem($"Print preview failed: {ex.Message}");
         }
     }
 

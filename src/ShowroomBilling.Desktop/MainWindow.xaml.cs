@@ -21,6 +21,41 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         _viewModel.Handover.BringToFront = () => WindowActivation.BringToFront(this);
         Loaded += OnLoaded;
+
+        // The cursor goes back to the screen when the last dialog closes.
+        var focusReturn = new DialogFocusReturn(this, ScreenRegion, () => _viewModel.IsAnyDialogOpen);
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.ActiveDialog) && !_viewModel.IsAnyDialogOpen)
+            {
+                focusReturn.Restore();
+            }
+        };
+        _viewModel.ConfirmDialog.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ConfirmDialogViewModel.IsOpen) && !_viewModel.IsAnyDialogOpen)
+            {
+                focusReturn.Restore();
+            }
+        };
+    }
+
+    /// <summary>
+    /// <c>?</c> and the backtick are shortcuts only where they are not text, so they are not
+    /// key bindings (see <see cref="BareKeyShortcuts"/>): the key is taken only when its shortcut ran.
+    /// </summary>
+    protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        if (!e.Handled && BareKeyShortcuts.TryRun(
+                e.Key,
+                System.Windows.Input.Keyboard.Modifiers,
+                _viewModel.OpenShortcutsKeyCommand,
+                _viewModel.OpenAdminUnlockKeyCommand))
+        {
+            e.Handled = true;
+        }
+
+        base.OnKeyDown(e);
     }
 
     protected override void OnSourceInitialized(EventArgs e)

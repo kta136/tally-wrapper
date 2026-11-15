@@ -177,9 +177,34 @@ public partial class BillsViewModel : ObservableObject
     [ObservableProperty] private int total;
     [ObservableProperty] private bool isLoading;
     [ObservableProperty] private bool isActing;
-    [ObservableProperty] private bool isTallyPushAllowed;
-    [ObservableProperty] private string tallyPushBlockReason = "Tally connection has not been checked yet.";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FooterNotice), nameof(FooterNoticeTone), nameof(HasFooterNotice))]
+    private bool isTallyPushAllowed;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FooterNotice), nameof(FooterNoticeTone), nameof(HasFooterNotice))]
+    private string tallyPushBlockReason = "Tally connection has not been checked yet.";
+
     [ObservableProperty] private string statusMessage = string.Empty;
+
+    /// <summary>What the last action said, with its tone; see <see cref="Say"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FooterNotice), nameof(FooterNoticeTone), nameof(HasFooterNotice))]
+    private string notice = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FooterNoticeTone))]
+    private string noticeTone = BillStateDisplay.ToneNeutral;
+
+    /// <summary>
+    /// The status line at the foot of the tab: what the last action said, or, while nothing has
+    /// been said, why the push buttons are greyed out when Tally cannot be reached.
+    /// </summary>
+    public string FooterNotice => Notice.Length > 0 ? Notice : IsTallyPushAllowed ? string.Empty : TallyPushBlockReason;
+
+    public string FooterNoticeTone => Notice.Length > 0 ? NoticeTone : BillStateDisplay.ToneWarn;
+
+    public bool HasFooterNotice => FooterNotice.Length > 0;
     [ObservableProperty] private BillSummaryItem? selectedBill;
 
     /// <summary>
@@ -304,7 +329,7 @@ public partial class BillsViewModel : ObservableObject
         {
             try
             {
-                StatusMessage = "Checking Tally connection…";
+                Say("Checking Tally connection…");
                 ApplyTallyHealthSnapshot(await RefreshTallyHealthHandler(cancellationToken));
             }
             catch (OperationCanceledException)
@@ -323,7 +348,7 @@ public partial class BillsViewModel : ObservableObject
             return true;
         }
 
-        StatusMessage = TallyPushBlockReason;
+        Say(TallyPushBlockReason, BillStateDisplay.ToneWarn);
         return false;
     }
 
@@ -566,6 +591,9 @@ public partial class BillsViewModel : ObservableObject
         OnPropertyChanged(nameof(AreAllVisibleSelected));
         OnPropertyChanged(nameof(SelectionSummaryText));
         OnPropertyChanged(nameof(SelectedBillIds));
+        // The toolbar's Edit and Change bill number, and Ctrl+Shift+E, take this row as their
+        // parameter. It was never announced, so they were handed nothing and stayed disabled.
+        OnPropertyChanged(nameof(SelectedRow));
         PushSelectedCommand.NotifyCanExecuteChanged();
         RetrySelectedCommand.NotifyCanExecuteChanged();
         RepostSelectedCommand.NotifyCanExecuteChanged();
@@ -615,7 +643,7 @@ public partial class BillsViewModel : ObservableObject
             result = await action(status =>
             {
                 IsActing = true;
-                StatusMessage = status;
+                Say(status);
             });
         }
         finally
@@ -628,12 +656,27 @@ public partial class BillsViewModel : ObservableObject
             return;
         }
 
-        StatusMessage = result.Message;
+        Say(result.Message, result.Tone);
         if (result.Sent)
         {
             await LoadAsync(cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Says something on the status line at the foot of the tab, where it stays until the next
+    /// thing is said. <see cref="StatusMessage"/> is not that line: a load writes its own
+    /// summary there straight after an action, and nothing on screen shows it.
+    /// </summary>
+    private void Say(string message, string tone = BillStateDisplay.ToneNeutral)
+    {
+        StatusMessage = message;
+        Notice = message;
+        NoticeTone = tone;
+    }
+
+    /// <summary>For the shell, when something it does for this tab goes wrong (opening the print preview).</summary>
+    public void ReportProblem(string message) => Say(message, BillStateDisplay.ToneErr);
 
     /// <summary>A toolbar command: the action on every ticked row, offered while each of them allows it.</summary>
     private AsyncRelayCommand SelectionCommand(
@@ -672,7 +715,7 @@ public partial class BillsViewModel : ObservableObject
             var (token, _) = await _adminTokenGate.EnsureAsync(cancellationToken);
             if (token is null)
             {
-                StatusMessage = $"{row.InvoiceNumberDisplay} is posted; editing it needs admin unlock.";
+                Say($"{row.InvoiceNumberDisplay} is posted; editing it needs admin unlock.", BillStateDisplay.ToneWarn);
                 return;
             }
         }
@@ -680,11 +723,11 @@ public partial class BillsViewModel : ObservableObject
         try
         {
             await EditBillHandler(row.Id, cancellationToken);
-            StatusMessage = $"Editing {row.InvoiceNumberDisplay} in the Invoice tab.";
+            Say($"Editing {row.InvoiceNumberDisplay} in the Invoice tab.");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Edit failed: {ApiResponseReader.FormatError(ex)}";
+            Say($"Edit failed: {ApiResponseReader.FormatError(ex)}", BillStateDisplay.ToneErr);
         }
     }
 
@@ -694,11 +737,11 @@ public partial class BillsViewModel : ObservableObject
         try
         {
             System.Windows.Clipboard.SetText(row.InvoiceNumber!);
-            StatusMessage = $"Copied invoice number: {row.InvoiceNumber}";
+            Say($"Copied invoice number: {row.InvoiceNumber}", BillStateDisplay.ToneOk);
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Copy failed: {ex.Message}";
+            Say($"Copy failed: {ex.Message}", BillStateDisplay.ToneErr);
         }
     }
 

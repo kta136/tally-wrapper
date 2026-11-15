@@ -64,7 +64,7 @@ internal static class BillAuditTrailMapper
         if ((TryGetNestedString(audit.Payload, "details", "reason") ?? TryGetString(audit.Payload, "reason"))
             is { Length: > 0 } reason)
         {
-            return reason;
+            return PlainReason(reason);
         }
 
         if (TryGetNestedString(audit.Payload, "details", "invoiceNumber") is { Length: > 0 } invoiceNumber)
@@ -79,11 +79,24 @@ internal static class BillAuditTrailMapper
 
         if (TryGetString(audit.Payload, "state") is { Length: > 0 } state)
         {
-            return $"State: {state}";
+            return $"State: {BillStateDisplay.Label(state, editedAfterPush: false)}";
         }
 
         return "System event";
     }
+
+    /// <summary>
+    /// The server writes one of these words as the reason when the operator was not asked for one
+    /// (a push, retry, repost or void from Bill Details). The timeline says them in plain words.
+    /// </summary>
+    private static string PlainReason(string reason) => reason switch
+    {
+        "manual-push" => "Pushed by the operator",
+        "retry" => "Retried by the operator",
+        "repost" => "Reposted by the operator",
+        "unspecified" => "No reason given",
+        _ => reason,
+    };
 
     private static string HumanizeEvent(string eventType)
     {
