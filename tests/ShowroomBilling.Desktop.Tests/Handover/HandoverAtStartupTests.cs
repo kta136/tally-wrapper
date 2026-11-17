@@ -201,6 +201,7 @@ public sealed class HandoverAtStartupTests
         public string? DefaultPrinter() => null;
         public void RefreshPrinters() { }
         public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
+        public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null) => false;
         public byte[] GeneratePdf(PrintDocumentOptions options) => [];
         public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => [];
         public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options) => [];

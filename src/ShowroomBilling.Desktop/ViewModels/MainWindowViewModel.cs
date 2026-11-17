@@ -163,7 +163,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
     Task IHandoverHost.RequestAdminUnlockAsync(CancellationToken cancellationToken) => _dialogs.RequestAdminUnlockAsync(cancellationToken);
 
-    Task<bool> IHandoverHost.PrintSavedBillAsync(BillResponse bill) => _printCoordinator.PrintSavedBillAsync(bill);
+    Task<IReadOnlyList<bool>> IHandoverHost.PrintSavedBillsAsync(IReadOnlyList<BillResponse> bills) => _printCoordinator.PrintSavedBillsAsync(bills);
 
     void IHandoverHost.OpenSavedBillsPreview(IReadOnlyList<BillResponse> bills) => _printCoordinator.OpenSavedBillsPreview(bills);
 

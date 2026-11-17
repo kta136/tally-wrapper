@@ -288,6 +288,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         public string? DefaultPrinter() => "Counter Printer";
         public void RefreshPrinters() { }
         public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
+        public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null) => false;
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
         public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => Array.Empty<byte[]>();
         public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options) => Array.Empty<byte[]>();

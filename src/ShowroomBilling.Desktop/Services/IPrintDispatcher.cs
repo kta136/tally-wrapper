@@ -15,6 +15,14 @@ public interface IPrintDispatcher
     /// </summary>
     void RefreshPrinters();
     PrintJobCapabilities GetPrinterCapabilities(string printerName);
+
+    /// <summary>
+    /// Whether a job sent to this printer with these settings is printed on both sides of the
+    /// paper: by the settings when they say, else by what the printer is set to in Windows.
+    /// True also when that cannot be read. Several bills go as one job only when this is false:
+    /// printed two-sided, one bill would start on the back of another's last page.
+    /// </summary>
+    bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null);
     byte[] GeneratePdf(PrintDocumentOptions options);
     IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150);
     IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options);

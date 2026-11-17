@@ -155,30 +155,83 @@ internal sealed class ShellPrintCoordinator(
     }
 
     /// <summary>
-    /// Prints a saved bill straight to the printer, as a direct print after save does: the
+    /// Prints saved bills straight to the printer, as a direct print after save does: the
     /// remembered printer, else the Windows default, with the copy defaults of the settings.
-    /// False when there is no printer or the print failed; the caller then opens the preview.
+    /// Several bills go as one print job, in the order given, each with its copies. Printed on
+    /// both sides of the paper they go as a job each instead, or one bill would start on the
+    /// back of another's last page. The answer says for each bill whether it was sent: false
+    /// when there is no printer or its job failed; the caller then opens the preview.
     /// </summary>
-    public async Task<bool> PrintSavedBillAsync(BillResponse bill)
+    public async Task<IReadOnlyList<bool>> PrintSavedBillsAsync(IReadOnlyList<BillResponse> bills)
     {
-        var content = BillDetailsViewModel.CreatePrintContent(
-            bill,
-            companyProfileProvider.Current,
-            companyProfileProvider.KaratMappings);
+        var printed = new bool[bills.Count];
         var printer = printPreferences.LastPrinterName ?? printDispatcher.DefaultPrinter();
-        if (content is null || string.IsNullOrWhiteSpace(printer))
+        if (string.IsNullOrWhiteSpace(printer))
         {
-            return false;
+            return printed;
         }
 
-        var options = PrintDocumentOptions.ForInvoice(content, BuildCopiesFromDefaults(), printLayoutOptionsProvider.Current);
+        var copies = BuildCopiesFromDefaults();
+        var layout = printLayoutOptionsProvider.Current;
+        var settings = printPreferences.PrintJobSettings;
+        var jobs = new List<(int Bill, PrintDocumentOptions Options)>(bills.Count);
+        for (var i = 0; i < bills.Count; i++)
+        {
+            var content = BillDetailsViewModel.CreatePrintContent(
+                bills[i],
+                companyProfileProvider.Current,
+                companyProfileProvider.KaratMappings);
+            if (content is not null)
+            {
+                jobs.Add((i, PrintDocumentOptions.ForInvoice(content, copies, layout)));
+            }
+        }
+
+        await Task.Run(() =>
+        {
+            if (jobs.Count > 1 && !PrintsOnBothSides(printer, settings))
+            {
+                var sent = Sent(() => printDispatcher.PrintToPrinter(jobs.Select(job => job.Options).ToList(), printer, settings));
+                foreach (var job in jobs)
+                {
+                    printed[job.Bill] = sent;
+                }
+
+                return;
+            }
+
+            // One bill, or two-sided printing: a job for each, as every bill used to be printed.
+            foreach (var job in jobs)
+            {
+                printed[job.Bill] = Sent(() => printDispatcher.PrintToPrinter(job.Options, printer, settings));
+            }
+        });
+
+        return printed;
+
+        static bool Sent(Func<bool> print)
+        {
+            try
+            {
+                return print();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    private bool PrintsOnBothSides(string printer, PrintJobSettings settings)
+    {
         try
         {
-            return await Task.Run(() => printDispatcher.PrintToPrinter(options, printer, printPreferences.PrintJobSettings));
+            return printDispatcher.PrintsOnBothSides(printer, settings);
         }
         catch
         {
-            return false;
+            // Not knowing is treated as two-sided: a job for each bill is always right.
+            return true;
         }
     }
 
@@ -264,6 +317,14 @@ internal sealed class ShellPrintCoordinator(
                 printLayoutOptionsProvider.Current);
             _ = printDispatcher.GeneratePdf(options);
             _ = printDispatcher.AvailablePrinters();
+
+            // The first question to a printer in a run of the app is the slow one (most of a
+            // second, where later ones take about 10 ms). A hand-over of several bills asks
+            // this before it prints; asked here once, it does not wait for it then.
+            if ((printPreferences.LastPrinterName ?? printDispatcher.DefaultPrinter()) is { Length: > 0 } printer)
+            {
+                _ = printDispatcher.PrintsOnBothSides(printer, printPreferences.PrintJobSettings);
+            }
         }
         catch
         {

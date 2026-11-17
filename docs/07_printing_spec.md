@@ -122,6 +122,21 @@ Tally Wrapper rule:
 - keep merged preview behavior for batch print
 - merged output should avoid duplicate asset loading behavior where practical
 
+Tally Wrapper implementation:
+
+- several bills sent to the printer in one call are one print job, a page for each copy of
+  each bill, in the order given. That is the merged preview's Print and a bill hand-over of
+  several bills ([18 §6](18_bill_handover.md))
+- a hand-over does not put several bills into one job when the job would be printed on both
+  sides of the paper: `IPrintDispatcher.PrintsOnBothSides` answers from the Duplex setting
+  (§4), or, at "Printer default", from what the printer is set to in Windows; a printer that
+  cannot be asked counts as two-sided. The merged preview is the operator's own choice of
+  bills and settings and is sent as one job either way
+- a page that goes to the printer as a 600 DPI picture is read from its PNG only while that
+  page is written to the print queue. Unpacked beforehand, each page held about 140 MB for
+  the length of the job, so a job of six pages needed 1.7 GB; now a job needs about the
+  same memory whatever its number of pages
+
 ---
 
 ## 4. Printer selection persistence

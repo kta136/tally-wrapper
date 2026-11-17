@@ -10,23 +10,39 @@ namespace ShowroomBilling.Desktop.Tests.Handover;
 public sealed class HandoverSaveWorkflowTests
 {
     private readonly FakeBillsApi _api = new();
-    private readonly List<BillResponse> _printed = [];
+
+    /// <summary>Each time the printer was handed bills: which, and how far the saving and asking had got by then.</summary>
+    private readonly List<(IReadOnlyList<BillResponse> Bills, int SavedBefore, int AskedBefore)> _jobs = [];
     private readonly List<string> _adminAsked = [];
     private string? _adminToken;
+
+    /// <summary>An admin session is open already, so the operator is not asked.</summary>
+    private bool _adminAlreadyUnlocked;
     private bool _printerWorks = true;
 
-    private HandoverSaveWorkflow Workflow() => new(
+    /// <summary>Every bill handed to the printer, in order.</summary>
+    private List<BillResponse> Printed => _jobs.SelectMany(job => job.Bills).ToList();
+
+    private HandoverSaveWorkflow Workflow(Dictionary<Guid, HandoverBillResult>? unanswered = null) => new(
         _api,
-        (_, context, _) =>
+        async (_, context, beforeAsking, _) =>
         {
-            _adminAsked.Add(context);
-            return Task.FromResult(_adminToken);
+            if (!_adminAlreadyUnlocked)
+            {
+                await beforeAsking();
+                _adminAsked.Add(context);
+            }
+
+            return _adminToken;
         },
-        bill =>
+        bills =>
         {
-            _printed.Add(bill);
-            return Task.FromResult(_printerWorks);
-        });
+            _jobs.Add((bills, _api.Creates.Count + _api.Updates.Count, _adminAsked.Count));
+            return Task.FromResult<IReadOnlyList<bool>>(bills.Select(_ => _printerWorks).ToList());
+        },
+        unanswered);
+
+    private static string PartyOf(BillResponse bill) => bill.CurrentRevision!.Payload.PartyName!;
 
     private static HandoverDocument Document(IEnumerable<Guid>? notSent = null, params Guid[] saveIds)
         => HandoverTestLinks.Read(HandoverTestLinks.Document(
@@ -58,7 +74,7 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Equal(saveId, create.ClientOperationId);
         Assert.True(HandoverPayloads.SameContent(PayloadOf(document), create.Payload));
         Assert.Equal([$"by-operation:{saveId}"], _api.Calls);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
         Assert.False(run.ServerUnreachable);
     }
 
@@ -77,7 +93,7 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Equal(HandoverBillResult.Unchanged, Assert.Single(run.Outcomes).Result);
         Assert.Empty(_api.Creates);
         Assert.Empty(_api.Updates);
-        Assert.Empty(_printed);
+        Assert.Empty(Printed);
     }
 
     [Fact]
@@ -100,7 +116,7 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Null(update.AdminToken);
         Assert.Equal("Buyer A", update.Request.Payload.PartyName);
         Assert.Empty(_adminAsked);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
     }
 
     [Fact]
@@ -116,7 +132,7 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Equal(HandoverBillResult.Skipped, outcome.Result);
         Assert.Equal("SR/2026-27/12 · Buyer A is in Tally. Updating it needs the admin passcode.", Assert.Single(_adminAsked));
         Assert.Empty(_api.Updates);
-        Assert.Empty(_printed);
+        Assert.Empty(Printed);
     }
 
     [Fact]
@@ -131,7 +147,7 @@ public sealed class HandoverSaveWorkflowTests
 
         Assert.Equal(HandoverBillResult.Updated, Assert.Single(run.Outcomes).Result);
         Assert.Equal("admin-session", Assert.Single(_api.Updates).AdminToken);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
     }
 
     [Theory]
@@ -153,7 +169,7 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Equal("SR/2026-27/7", outcome.InvoiceNumber);
         Assert.Empty(_api.Creates);
         Assert.Empty(_api.Updates);
-        Assert.Empty(_printed);
+        Assert.Empty(Printed);
     }
 
     [Fact]
@@ -188,7 +204,7 @@ public sealed class HandoverSaveWorkflowTests
         Assert.Equal("Void it in Bills if it’s no longer wanted.", left.Reason);
         Assert.Single(_api.Creates);
         Assert.Empty(_api.Updates);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
     }
 
     [Fact]
@@ -260,7 +276,7 @@ public sealed class HandoverSaveWorkflowTests
         var outcome = Assert.Single(second.Outcomes);
         Assert.Equal(HandoverBillResult.Saved, outcome.Result);
         Assert.Equal(HandoverPrintResult.Printed, outcome.Print);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
     }
 
     [Fact]
@@ -272,15 +288,7 @@ public sealed class HandoverSaveWorkflowTests
         var saveId = Guid.NewGuid();
         var document = Document(null, saveId);
         var unanswered = new Dictionary<Guid, HandoverBillResult>();
-        HandoverSaveWorkflow NewHandover() => new(
-            _api,
-            (_, _, _) => Task.FromResult(_adminToken),
-            bill =>
-            {
-                _printed.Add(bill);
-                return Task.FromResult(_printerWorks);
-            },
-            unanswered);
+        HandoverSaveWorkflow NewHandover() => Workflow(unanswered);
         _api.FailNextCreates = 1;
 
         await RunAsync(document, NewHandover());
@@ -290,12 +298,12 @@ public sealed class HandoverSaveWorkflowTests
         var outcome = Assert.Single(afresh.Outcomes);
         Assert.Equal(HandoverBillResult.Saved, outcome.Result);
         Assert.Equal(HandoverPrintResult.Printed, outcome.Print);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
 
         // Printed once: a third hand-over finds it unchanged.
         var again = await RunAsync(document, NewHandover());
         Assert.Equal(HandoverBillResult.Unchanged, Assert.Single(again.Outcomes).Result);
-        Assert.Single(_printed);
+        Assert.Single(Printed);
     }
 
     [Fact]
@@ -320,5 +328,170 @@ public sealed class HandoverSaveWorkflowTests
 
         Assert.Equal(ids, _api.Creates.Select(create => create.ClientOperationId!.Value));
         Assert.Equal(["Buyer A", "Buyer B", "Buyer C"], run.Outcomes.Select(outcome => outcome.PartyName));
+    }
+
+    [Fact]
+    public async Task Every_bill_is_saved_before_any_is_printed_and_they_go_to_the_printer_together_in_order()
+    {
+        var run = await RunAsync(Document(null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+
+        // One hand to the printer, with all three, made when the third had been saved. Each
+        // bill used to be printed before the next was even looked up.
+        var job = Assert.Single(_jobs);
+        Assert.Equal(3, job.SavedBefore);
+        Assert.Equal(["Buyer A", "Buyer B", "Buyer C"], job.Bills.Select(PartyOf));
+        Assert.All(run.Outcomes, outcome =>
+        {
+            Assert.Equal(HandoverBillResult.Saved, outcome.Result);
+            Assert.Equal(HandoverPrintResult.Printed, outcome.Print);
+        });
+    }
+
+    [Fact]
+    public async Task A_hand_over_of_one_bill_hands_the_printer_that_one_bill()
+    {
+        await RunAsync(Document(null, Guid.NewGuid()));
+
+        Assert.Equal(["Buyer A"], Assert.Single(_jobs).Bills.Select(PartyOf));
+    }
+
+    [Fact]
+    public async Task When_the_print_fails_every_bill_handed_to_it_is_saved_and_not_printed()
+    {
+        _printerWorks = false;
+
+        var run = await RunAsync(Document(null, Guid.NewGuid(), Guid.NewGuid()));
+
+        Assert.Single(_jobs);
+        Assert.All(run.Outcomes, outcome =>
+        {
+            Assert.Equal(HandoverBillResult.Saved, outcome.Result);
+            Assert.Equal(HandoverPrintResult.Failed, outcome.Print);
+
+            // Kept, so that the bills can be opened together in Print preview.
+            Assert.NotNull(outcome.Bill);
+        });
+    }
+
+    [Fact]
+    public async Task Each_bill_keeps_its_own_print_result_when_the_printer_took_only_some()
+    {
+        // As when they go as a job each (two-sided printing) and one job fails, or the printer
+        // answers for fewer bills than it was handed, or the print throws.
+        async Task<HandoverRun> RunWithPrinterAsync(Func<IReadOnlyList<BillResponse>, Task<IReadOnlyList<bool>>> print)
+            => await new HandoverSaveWorkflow(new FakeBillsApi(), (_, _, _, _) => Task.FromResult<string?>(null), print)
+                .RunAsync(Document(null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()), HandoverTestMasters.Masters, TestContext.Current.CancellationToken);
+
+        var some = await RunWithPrinterAsync(_ => Task.FromResult<IReadOnlyList<bool>>([true, false, true]));
+        var fewer = await RunWithPrinterAsync(_ => Task.FromResult<IReadOnlyList<bool>>([true]));
+        var thrown = await RunWithPrinterAsync(_ => throw new InvalidOperationException("The printer is offline."));
+
+        HandoverPrintResult[] Prints(HandoverRun run) => run.Outcomes.Select(outcome => outcome.Print).ToArray();
+        Assert.Equal([HandoverPrintResult.Printed, HandoverPrintResult.Failed, HandoverPrintResult.Printed], Prints(some));
+        Assert.Equal([HandoverPrintResult.Printed, HandoverPrintResult.Failed, HandoverPrintResult.Failed], Prints(fewer));
+        Assert.Equal([HandoverPrintResult.Failed, HandoverPrintResult.Failed, HandoverPrintResult.Failed], Prints(thrown));
+        Assert.All(thrown.Outcomes, outcome => Assert.Equal(HandoverBillResult.Saved, outcome.Result));
+    }
+
+    [Fact]
+    public async Task Only_the_created_and_updated_bills_go_to_the_printer()
+    {
+        var ids = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToArray();
+        var document = Document(null, ids);
+        // A is new. B is there unchanged. C was voided. D's push is not settled. E is in Tally
+        // and the operator skips the passcode. F is there with other content.
+        _api.ByOperation[ids[1]] = Stored(BillStates.Pending, PayloadOf(document, 1));
+        _api.ByOperation[ids[2]] = Stored(BillStates.Voided, PayloadOf(document, 2) with { Notes = "older" });
+        _api.ByOperation[ids[3]] = Stored(BillStates.ReconciliationRequired, PayloadOf(document, 3) with { Notes = "older" });
+        _api.ByOperation[ids[4]] = Stored(BillStates.Posted, PayloadOf(document, 4) with { Notes = "older" });
+        _api.ByOperation[ids[5]] = Stored(BillStates.Failed, PayloadOf(document, 5) with { Notes = "older" });
+
+        var run = await RunAsync(document);
+
+        Assert.Equal(
+            [
+                HandoverBillResult.Saved, HandoverBillResult.Unchanged, HandoverBillResult.NotUpdated,
+                HandoverBillResult.NotUpdated, HandoverBillResult.Skipped, HandoverBillResult.Updated,
+            ],
+            run.Outcomes.Select(outcome => outcome.Result));
+        Assert.Equal(["Buyer A", "Buyer F"], Printed.Select(PartyOf));
+        Assert.Equal(
+            [
+                HandoverPrintResult.Printed, HandoverPrintResult.None, HandoverPrintResult.None,
+                HandoverPrintResult.None, HandoverPrintResult.None, HandoverPrintResult.Printed,
+            ],
+            run.Outcomes.Select(outcome => outcome.Print));
+    }
+
+    [Fact]
+    public async Task When_the_server_stops_answering_part_way_the_bills_saved_before_are_still_printed()
+    {
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var document = Document(null, ids);
+        // A is created. B is found and has to be updated, and that update gets no answer.
+        _api.ByOperation[ids[1]] = Stored(BillStates.Pending, PayloadOf(document, 1) with { Notes = "older" });
+        _api.FailWith = new HttpRequestException("No connection could be made");
+
+        var run = await RunAsync(document);
+
+        Assert.True(run.ServerUnreachable);
+        Assert.Equal(
+            [HandoverBillResult.Saved, HandoverBillResult.NotUpdated, HandoverBillResult.NotSaved],
+            run.Outcomes.Select(outcome => outcome.Result));
+        Assert.Equal(["Buyer A"], Assert.Single(_jobs).Bills.Select(PartyOf));
+        Assert.Equal(HandoverPrintResult.Printed, run.Outcomes[0].Print);
+    }
+
+    [Fact]
+    public async Task Bills_saved_before_the_passcode_is_asked_for_are_printed_before_the_question()
+    {
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var document = Document(null, ids);
+        // A and B are new; C is in Tally, so updating it asks for the passcode; D is new.
+        _api.ByOperation[ids[2]] = Stored(BillStates.Posted, PayloadOf(document, 2) with { Notes = "older" });
+        _adminToken = "admin-session";
+
+        var run = await RunAsync(document);
+
+        // A and B are at the printer while the operator is at the passcode: handed over when
+        // the question had not been put yet. C and D follow together once it is answered.
+        Assert.Equal(2, _jobs.Count);
+        Assert.Equal(["Buyer A", "Buyer B"], _jobs[0].Bills.Select(PartyOf));
+        Assert.Equal(0, _jobs[0].AskedBefore);
+        Assert.Equal(["Buyer C", "Buyer D"], _jobs[1].Bills.Select(PartyOf));
+        Assert.Equal(1, _jobs[1].AskedBefore);
+        Assert.All(run.Outcomes, outcome => Assert.Equal(HandoverPrintResult.Printed, outcome.Print));
+    }
+
+    [Fact]
+    public async Task With_an_admin_session_already_open_nobody_is_asked_and_the_bills_stay_together()
+    {
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var document = Document(null, ids);
+        _api.ByOperation[ids[1]] = Stored(BillStates.Posted, PayloadOf(document, 1) with { Notes = "older" });
+        _adminToken = "admin-session";
+        _adminAlreadyUnlocked = true;
+
+        await RunAsync(document);
+
+        Assert.Empty(_adminAsked);
+        Assert.Equal(["Buyer A", "Buyer B", "Buyer C"], Assert.Single(_jobs).Bills.Select(PartyOf));
+    }
+
+    [Fact]
+    public async Task A_save_whose_answer_was_lost_goes_to_the_printer_with_the_bills_saved_now()
+    {
+        var ids = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var document = Document(null, ids);
+        var workflow = Workflow();
+        _api.FailNextCreates = 1;
+
+        await RunAsync(document, workflow);
+        // A's create did land; the server now finds it. Try again saves B as well.
+        _api.ByOperation[ids[0]] = Stored(BillStates.Pending, _api.Creates[0].Payload);
+        var second = await RunAsync(document, workflow);
+
+        Assert.Equal(["Buyer A", "Buyer B"], Assert.Single(_jobs).Bills.Select(PartyOf));
+        Assert.All(second.Outcomes, outcome => Assert.Equal(HandoverPrintResult.Printed, outcome.Print));
     }
 }

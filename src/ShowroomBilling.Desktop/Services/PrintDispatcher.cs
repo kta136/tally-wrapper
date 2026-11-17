@@ -99,6 +99,42 @@ public sealed class PrintDispatcher : IPrintDispatcher
         }
     }
 
+    public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null)
+    {
+        switch ((settings ?? PrintJobSettings.Default).Duplex)
+        {
+            case PrintDuplexMode.OneSided:
+                return false;
+            case PrintDuplexMode.TwoSidedLongEdge:
+            case PrintDuplexMode.TwoSidedShortEdge:
+                return true;
+        }
+
+        // "Printer default": what the printer is set to for this Windows user, which is the
+        // ticket a job with no setting of its own is printed with. Read each time, not kept:
+        // it can be changed in Windows while the app runs.
+        try
+        {
+            return RunOnSta(() =>
+            {
+                using var server = new LocalPrintServer();
+                using var queue = server.GetPrintQueue(printerName);
+                return (queue.UserPrintTicket ?? queue.DefaultPrintTicket)?.Duplexing switch
+                {
+                    Duplexing.OneSided => false,
+                    Duplexing.TwoSidedLongEdge or Duplexing.TwoSidedShortEdge => true,
+                    // It does not say. A printer that cannot print on both sides at all says nothing.
+                    _ => queue.GetPrintCapabilities().DuplexingCapability
+                        .Any(side => side is Duplexing.TwoSidedLongEdge or Duplexing.TwoSidedShortEdge),
+                };
+            });
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     public void RefreshPrinters()
     {
         // A read that fails keeps the last good list: better than showing none.
@@ -312,7 +348,8 @@ public sealed class PrintDispatcher : IPrintDispatcher
         _ => null,
     };
 
-    private static FixedDocument BuildFixedDocument(IReadOnlyList<byte[]> pageImages)
+    /// <summary>A document with an A4 page for each picture (a PNG of a whole page).</summary>
+    internal static FixedDocument BuildFixedDocument(IReadOnlyList<byte[]> pageImages)
     {
         // A4 at 96 DPI: 8.27" x 11.69" -> 793.7 x 1122.5
         const double pageWidth = 793.7;
@@ -323,11 +360,14 @@ public sealed class PrintDispatcher : IPrintDispatcher
 
         foreach (var bytes in pageImages)
         {
+            // Not unpacked here. A page at 600 DPI is about 140 MB once unpacked, and a job
+            // of several bills held every page that way at once (1.7 GB for six pages). With
+            // no cache the picture is read from its PNG only while its page is written, so
+            // what a job needs no longer grows with its pages. The stream is left open for that.
             var bmp = new BitmapImage();
-            using var stream = new MemoryStream(bytes);
             bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.StreamSource = stream;
+            bmp.CacheOption = BitmapCacheOption.None;
+            bmp.StreamSource = new MemoryStream(bytes);
             bmp.EndInit();
             bmp.Freeze();
 

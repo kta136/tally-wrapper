@@ -126,20 +126,25 @@ No input is ever below zero (`BillValidator` refuses them), and the printed line
 
 One after another, in the hand-over's order (`HandoverSaveWorkflow`):
 
-- `GET /api/bills/by-operation/{saveId}`. None: create it with `ClientOperationId = saveId`, then print it.
+- `GET /api/bills/by-operation/{saveId}`. None: create it with `ClientOperationId = saveId`; it is printed once every bill has been saved (§6).
 - Found, voided or revised: reported ("Not updated", with why) and left as it is. No second bill is made.
 - Found with the same content (compared field by field, whatever the decimals' trailing zeros): "Unchanged", not printed.
 - Found, different, and its push to Tally not settled (`posting`, `reconciliation_required`): reported and left alone.
-- Found and different: updated with `expectedRevisionId` = the revision it was found at, then printed. A `posted` bill needs an admin session: with none active, the window comes to the front with the administrator unlock, which then says "[No.] · [Party] is in Tally. Updating it needs the admin passcode.", offers **Unlock and update** and, on Esc, **Skip this bill** ("Not updated").
+- Found and different: updated with `expectedRevisionId` = the revision it was found at, and printed with the others (§6). A `posted` bill needs an admin session: with none active, the window comes to the front with the administrator unlock, which then says "[No.] · [Party] is in Tally. Updating it needs the admin passcode.", offers **Unlock and update** and, on Esc, **Skip this bill** ("Not updated").
 - A refusal from the server is that bill's reason; the next bill is still tried.
-- When the server cannot be reached (no answer, or a timeout), nothing more is tried: the rest are "Not saved". A create or update that was sent without an answer is remembered for as long as the app runs, and when the bill is next found saved with the same content it is printed as saved: on Try again, and equally when the operator closed the result and the sender handed the bills over afresh.
+- When the server cannot be reached (no answer, or a timeout), nothing more is tried: the rest are "Not saved", and the bills saved before that are still printed. A create or update that was sent without an answer is remembered for as long as the app runs, and when the bill is next found saved with the same content it is printed as saved: on Try again, and equally when the operator closed the result and the sender handed the bills over afresh.
 - `notSent`: each is looked up; one that exists and is not voided is reported "Not in this hand-over", with "Void it in Bills if it’s no longer wanted." Nothing is changed.
 
 The Bills list reloads afterwards if it is open.
 
 ## 6. Printing and what the operator sees
 
-Each created or updated bill prints straight to the printer as a direct print after save does ([07 §1.3](07_printing_spec.md)): the remembered printer, else the Windows default, with the copy defaults of the settings. A bill that could not be printed opens in Print preview, as the direct print after save falls back.
+The created and updated bills print straight to the printer as a direct print after save does ([07 §1.3](07_printing_spec.md)): the remembered printer, else the Windows default, with the copy defaults of the settings. "Unchanged", voided, revised, not-settled, skipped and left-out bills are not printed.
+
+- **Saved first, then printed together.** Every bill of the hand-over is saved before any is printed, so a later buyer's bill is not kept from the server by an earlier bill's pages. The saved bills then go to the printer as one print job, in the hand-over's order, each with all its copies before the next bill's. A hand-over of one bill is one job of that bill, as it always was.
+- **Two-sided printing: a job for each bill.** In one job, printed on both sides, a bill would start on the back of the previous bill's last page. So when the job would be two-sided (the Duplex setting of the print job settings, or, left at "Printer default", what the printer is set to in Windows, read each time) each bill is sent as a job of its own, after all have been saved. The same when the printer cannot be asked.
+- **The admin passcode does not hold up bills already saved.** When a bill that is in Tally makes the app ask for the passcode, the bills saved up to then are sent to the printer before the question appears; the bills after it print together when the hand-over is through. With an admin session already open nothing is asked and all print together.
+- **A failed print.** Each bill keeps its own print result. When the one job fails, every bill in it counts as not printed and they open together in Print preview, as the direct print after save falls back; with a job for each bill, only the bills whose job failed do.
 
 - **All went well**: a card at the bottom right of the screen, over the other windows, that never takes the focus from the window the operator is typing in, and fades after about 5 seconds (held while the pointer is on it). Its title is "2 bills saved and printed", "Bill saved and printed" or "1 bill updated and printed" (with rows for the unchanged ones); a row per bill with the invoice number, the party, the ₹ total and the payment or what happened to it. A click on it, or **Open Bills**, brings Tally Wrapper to the front on Bills.
 - **Anything else** (a bill not saved, the server not answering, a bill left out of this hand-over, a skipped admin update, a refused link): Tally Wrapper's window comes to the front with the result dialog: a row per bill with a result chip and a reason line, **Try again** (Enter) when the server could not be reached, **Open Bills** (Ctrl+2) and **Close** (Esc). Try again runs the same hand-over again; the bills saved by the first run come back "Unchanged".

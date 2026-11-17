@@ -180,6 +180,58 @@ public sealed class HandoverCoordinatorTests
         await _coordinator.Idle;
     }
 
+    [Fact]
+    public async Task Bills_saved_before_the_passcode_prompt_are_at_the_printer_while_it_is_open()
+    {
+        SetKey();
+        _coordinator.MarkStarted();
+        var inTally = Guid.NewGuid();
+        var link = FreshLink(Guid.NewGuid(), inTally, Guid.NewGuid());
+        var payload = HandoverBillMapper.Map(
+            HandoverTestLinks.Read(HandoverTestLinks.Document(DateTimeOffset.UtcNow, [HandoverTestLinks.Bill(inTally, "Buyer A", HandoverTestLinks.Line())])).Bills[0],
+            HandoverTestMasters.Masters).Payload!;
+        _api.ByOperation[inTally] = FakeBillsApi.Bill(Guid.NewGuid(), BillStates.Posted, payload with { PartyName = "Buyer Z" }, "SR/2026-27/4");
+
+        _coordinator.Receive(link);
+        await _host.AdminAsked.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        // The first bill does not wait for the operator: it went to the printer before the prompt came up.
+        Assert.Single(_host.Printed);
+        Assert.Equal(1, _host.PrintJobs);
+        Assert.False(_host.AdminAskedBeforeFirstPrint);
+
+        // Skip this bill (Esc): the third is saved and printed after it.
+        _host.AdminClosed.SetResult();
+        await WaitForDialogAsync();
+        Assert.Equal(2, _host.Printed.Count);
+        Assert.Equal(2, _host.PrintJobs);
+        _coordinator.Result.CloseCommand.Execute(null);
+        await _coordinator.Idle;
+    }
+
+    [Fact]
+    public async Task With_an_admin_session_open_the_bills_of_a_hand_over_print_together()
+    {
+        SetKey();
+        _coordinator.MarkStarted();
+        var inTally = Guid.NewGuid();
+        var link = FreshLink(Guid.NewGuid(), inTally, Guid.NewGuid());
+        var payload = HandoverBillMapper.Map(
+            HandoverTestLinks.Read(HandoverTestLinks.Document(DateTimeOffset.UtcNow, [HandoverTestLinks.Bill(inTally, "Buyer A", HandoverTestLinks.Line())])).Bills[0],
+            HandoverTestMasters.Masters).Payload!;
+        _api.ByOperation[inTally] = FakeBillsApi.Bill(Guid.NewGuid(), BillStates.Posted, payload with { PartyName = "Buyer Z" }, "SR/2026-27/4");
+        _host.AdminTokens.Set(new ShowroomBilling.Contracts.Admin.AdminUnlockResponse(
+            "open-session", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "admin/test"));
+
+        _coordinator.Receive(link);
+        await _coordinator.Idle;
+
+        Assert.False(_host.AdminAsked.Task.IsCompleted);
+        Assert.Equal(3, _host.Printed.Count);
+        Assert.Equal(1, _host.PrintJobs);
+        Assert.Equal("open-session", Assert.Single(_api.Updates).AdminToken);
+    }
+
     private async Task WaitForDialogAsync()
     {
         for (var attempt = 0; attempt < 200 && _host.ActiveDialog != ShellDialogs.HandoverResult; attempt++)
@@ -244,10 +296,18 @@ public sealed class HandoverCoordinatorTests
             await AdminClosed.Task;
         }
 
-        public Task<bool> PrintSavedBillAsync(BillResponse bill)
+        /// <summary>How many times the printer was handed bills.</summary>
+        public int PrintJobs { get; private set; }
+
+        /// <summary>Whether the admin unlock had been asked for when the printer was first handed bills.</summary>
+        public bool? AdminAskedBeforeFirstPrint { get; private set; }
+
+        public Task<IReadOnlyList<bool>> PrintSavedBillsAsync(IReadOnlyList<BillResponse> bills)
         {
-            Printed.Add(bill);
-            return Task.FromResult(true);
+            AdminAskedBeforeFirstPrint ??= AdminAsked.Task.IsCompleted;
+            PrintJobs++;
+            Printed.AddRange(bills);
+            return Task.FromResult<IReadOnlyList<bool>>(bills.Select(_ => true).ToList());
         }
 
         public void OpenSavedBillsPreview(IReadOnlyList<BillResponse> bills)

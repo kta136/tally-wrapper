@@ -319,6 +319,7 @@ public sealed class PrintPreviewViewModelPrintTests
         public string? DefaultPrinter() => printerName;
         public void RefreshPrinters() => _lastRead = [.. Installed];
         public PrintJobCapabilities GetPrinterCapabilities(string selectedPrinterName) => Capabilities;
+        public bool PrintsOnBothSides(string selectedPrinterName, PrintJobSettings? settings = null) => false;
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
 
         public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)

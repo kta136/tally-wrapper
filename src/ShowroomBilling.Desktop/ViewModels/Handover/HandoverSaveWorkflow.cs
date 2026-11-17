@@ -55,11 +55,26 @@ internal sealed record HandoverRun(IReadOnlyList<HandoverBillOutcome> Outcomes, 
 /// when the bill is in Tally. A voided or revised bill, or one whose push is not settled, is
 /// reported and left alone. The bills an earlier hand-over made that this one left out are only
 /// reported.
+/// <para>
+/// Printing comes after saving: every bill is saved first, and the created and updated ones are
+/// then handed to <c>print</c> together, in the hand-over's order, so that they can go to the
+/// printer as one job and no bill waits for another's pages before it is saved. The one moment
+/// they are printed sooner is when the operator has to be asked for the admin passcode: the
+/// bills saved by then are printed before the question, and the rest after it.
+/// </para>
 /// </summary>
+/// <param name="bills">The server.</param>
+/// <param name="requestAdminToken">
+/// Gives the admin session a bill in Tally needs, asking the operator if none is open. It is
+/// handed what to do before it asks (print the bills saved so far), and calls that only if it
+/// has to ask.
+/// </param>
+/// <param name="print">Prints the bills together and says, for each, whether it was sent.</param>
+/// <param name="unanswered">The saves sent without an answer, kept by the caller across hand-overs.</param>
 internal sealed class HandoverSaveWorkflow(
     IBillsApiClient bills,
-    Func<BillResponse, string, CancellationToken, Task<string?>> requestAdminToken,
-    Func<BillResponse, Task<bool>> print,
+    Func<BillResponse, string, Func<Task>, CancellationToken, Task<string?>> requestAdminToken,
+    Func<IReadOnlyList<BillResponse>, Task<IReadOnlyList<bool>>> print,
     Dictionary<Guid, HandoverBillResult>? unanswered = null)
 {
     public const string ServerUnreachableReason = "The server can't be reached.";
@@ -76,6 +91,8 @@ internal sealed class HandoverSaveWorkflow(
     public async Task<HandoverRun> RunAsync(HandoverDocument document, MasterCatalog masters, CancellationToken cancellationToken)
     {
         var outcomes = new List<HandoverBillOutcome>(document.Bills.Count);
+        // Where in the outcomes the bills are that were saved and have not gone to the printer yet.
+        var toPrint = new List<int>();
         var unreachable = false;
         foreach (var bill in document.Bills)
         {
@@ -85,10 +102,17 @@ internal sealed class HandoverSaveWorkflow(
                 continue;
             }
 
-            var outcome = await SaveAsync(bill, masters, cancellationToken);
-            outcomes.Add(outcome.Outcome);
-            unreachable = outcome.Unreachable;
+            var saved = await SaveAsync(bill, masters, PrintSavedSoFarAsync, cancellationToken);
+            outcomes.Add(saved.Outcome);
+            unreachable = saved.Unreachable;
+            if (saved.Print)
+            {
+                toPrint.Add(outcomes.Count - 1);
+            }
         }
+
+        // Also when the server stopped answering part-way: what was saved before that is printed.
+        await PrintSavedSoFarAsync();
 
         foreach (var saveId in document.NotSent ?? [])
         {
@@ -120,11 +144,42 @@ internal sealed class HandoverSaveWorkflow(
         }
 
         return new HandoverRun(outcomes, unreachable);
+
+        async Task PrintSavedSoFarAsync()
+        {
+            if (toPrint.Count == 0)
+            {
+                return;
+            }
+
+            var places = toPrint.ToList();
+            toPrint.Clear();
+
+            IReadOnlyList<bool> printed;
+            try
+            {
+                printed = await print(places.Select(place => outcomes[place].Bill!).ToList());
+            }
+            catch (Exception)
+            {
+                printed = [];
+            }
+
+            for (var i = 0; i < places.Count; i++)
+            {
+                var sent = i < printed.Count && printed[i];
+                outcomes[places[i]] = outcomes[places[i]] with { Print = sent ? HandoverPrintResult.Printed : HandoverPrintResult.Failed };
+            }
+        }
     }
 
-    private async Task<(HandoverBillOutcome Outcome, bool Unreachable)> SaveAsync(
+    /// <param name="Print">The bill was created or updated and is to be printed.</param>
+    private readonly record struct SaveResult(HandoverBillOutcome Outcome, bool Unreachable = false, bool Print = false);
+
+    private async Task<SaveResult> SaveAsync(
         HandoverBill bill,
         MasterCatalog masters,
+        Func<Task> printSavedSoFar,
         CancellationToken cancellationToken)
     {
         BillResponse? existing;
@@ -134,11 +189,11 @@ internal sealed class HandoverSaveWorkflow(
         }
         catch (Exception ex) when (IsUnreachable(ex, cancellationToken))
         {
-            return (NotSaved(bill, ServerUnreachableReason, retryable: true), true);
+            return new(NotSaved(bill, ServerUnreachableReason, retryable: true), Unreachable: true);
         }
         catch (HttpRequestException ex)
         {
-            return (NotSaved(bill, ApiResponseReader.FormatError(ex), retryable: IsServerBusy(ex)), false);
+            return new(NotSaved(bill, ApiResponseReader.FormatError(ex), retryable: IsServerBusy(ex)));
         }
 
         var mapped = HandoverBillMapper.Map(bill, masters);
@@ -146,7 +201,7 @@ internal sealed class HandoverSaveWorkflow(
         {
             if (mapped.Payload is not { } payload)
             {
-                return (NotSaved(bill, mapped.Problem), false);
+                return new(NotSaved(bill, mapped.Problem));
             }
 
             return await CreateAsync(bill, payload, cancellationToken);
@@ -154,17 +209,17 @@ internal sealed class HandoverSaveWorkflow(
 
         if (mapped.Payload is not { } changed)
         {
-            return (NotUpdated(bill, existing, mapped.Problem), false);
+            return new(NotUpdated(bill, existing, mapped.Problem));
         }
 
         if (BillStateIs(existing, BillStates.Voided))
         {
-            return (NotUpdated(bill, existing, "It was voided in Bills, so it was left as it is."), false);
+            return new(NotUpdated(bill, existing, "It was voided in Bills, so it was left as it is."));
         }
 
         if (BillStateIs(existing, BillStates.Revised))
         {
-            return (NotUpdated(bill, existing, "It was revised into another bill in Bills, so it was left as it is."), false);
+            return new(NotUpdated(bill, existing, "It was revised into another bill in Bills, so it was left as it is."));
         }
 
         if (existing.CurrentRevision?.Payload is { } current && HandoverPayloads.SameContent(current, changed))
@@ -172,28 +227,29 @@ internal sealed class HandoverSaveWorkflow(
             if (_unanswered.Remove(bill.SaveId, out var landed))
             {
                 // The save went through on the earlier try; only its answer was lost.
-                return (await PrintedAsync(bill, existing, landed), false);
+                return new(Outcome(bill, existing, landed), Print: true);
             }
 
-            return (Outcome(bill, existing, HandoverBillResult.Unchanged), false);
+            return new(Outcome(bill, existing, HandoverBillResult.Unchanged));
         }
 
         if (BillStateIs(existing, BillStates.Posting) || BillStateIs(existing, BillStates.ReconciliationRequired))
         {
-            return (NotUpdated(bill, existing, "Its push to Tally isn't settled. Check it in Bills, then send it again."), false);
+            return new(NotUpdated(bill, existing, "Its push to Tally isn't settled. Check it in Bills, then send it again."));
         }
 
         string? adminToken = null;
         if (BillStateCapabilities.IsPosted(existing.State))
         {
             var context = $"{existing.InvoiceNumber} · {bill.PartyName.Trim()} is in Tally. Updating it needs the admin passcode.";
-            adminToken = await requestAdminToken(existing, context, cancellationToken);
+            // The operator may be a while at the passcode: the bills saved so far are not kept waiting for it.
+            adminToken = await requestAdminToken(existing, context, printSavedSoFar, cancellationToken);
             if (adminToken is null)
             {
-                return (Outcome(bill, existing, HandoverBillResult.Skipped) with
+                return new(Outcome(bill, existing, HandoverBillResult.Skipped) with
                 {
                     Reason = "Skipped. It is in Tally, and updating it needs the admin passcode.",
-                }, false);
+                });
             }
         }
 
@@ -210,7 +266,7 @@ internal sealed class HandoverSaveWorkflow(
         }
         catch (Exception ex) when (IsUnreachable(ex, cancellationToken))
         {
-            return (NotUpdated(bill, existing, ServerUnreachableReason, retryable: true), true);
+            return new(NotUpdated(bill, existing, ServerUnreachableReason, retryable: true), Unreachable: true);
         }
         catch (HttpRequestException ex)
         {
@@ -218,13 +274,13 @@ internal sealed class HandoverSaveWorkflow(
             var reason = ex is ApiException { StatusCode: HttpStatusCode.Forbidden }
                 ? "It is in Tally, and updating it needs the admin passcode."
                 : ApiResponseReader.FormatError(ex);
-            return (NotUpdated(bill, existing, reason, IsServerBusy(ex)), false);
+            return new(NotUpdated(bill, existing, reason, IsServerBusy(ex)));
         }
 
-        return (await PrintedAsync(bill, updated, HandoverBillResult.Updated), false);
+        return new(Outcome(bill, updated, HandoverBillResult.Updated), Print: true);
     }
 
-    private async Task<(HandoverBillOutcome Outcome, bool Unreachable)> CreateAsync(
+    private async Task<SaveResult> CreateAsync(
         HandoverBill bill,
         BillPayloadDto payload,
         CancellationToken cancellationToken)
@@ -238,30 +294,15 @@ internal sealed class HandoverSaveWorkflow(
         }
         catch (Exception ex) when (IsUnreachable(ex, cancellationToken))
         {
-            return (NotSaved(bill, ServerUnreachableReason, retryable: true, payload), true);
+            return new(NotSaved(bill, ServerUnreachableReason, retryable: true, payload), Unreachable: true);
         }
         catch (HttpRequestException ex)
         {
             _unanswered.Remove(bill.SaveId);
-            return (NotSaved(bill, ApiResponseReader.FormatError(ex), IsServerBusy(ex), payload), false);
+            return new(NotSaved(bill, ApiResponseReader.FormatError(ex), IsServerBusy(ex), payload));
         }
 
-        return (await PrintedAsync(bill, created, HandoverBillResult.Saved), false);
-    }
-
-    private async Task<HandoverBillOutcome> PrintedAsync(HandoverBill bill, BillResponse saved, HandoverBillResult result)
-    {
-        bool printed;
-        try
-        {
-            printed = await print(saved);
-        }
-        catch (Exception)
-        {
-            printed = false;
-        }
-
-        return Outcome(bill, saved, result) with { Print = printed ? HandoverPrintResult.Printed : HandoverPrintResult.Failed };
+        return new(Outcome(bill, created, HandoverBillResult.Saved), Print: true);
     }
 
     private static HandoverBillOutcome Outcome(HandoverBill bill, BillResponse found, HandoverBillResult result) => new(

@@ -27,8 +27,11 @@ internal interface IHandoverHost
     /// <summary>Opens the admin unlock and returns when it closes, unlocked or not.</summary>
     Task RequestAdminUnlockAsync(CancellationToken cancellationToken);
 
-    /// <summary>Prints a saved bill straight to the printer, as a direct print after save does. False when it did not print.</summary>
-    Task<bool> PrintSavedBillAsync(BillResponse bill);
+    /// <summary>
+    /// Prints saved bills straight to the printer, as a direct print after save does, together
+    /// as one print job where that can be. Says for each bill, in the order given, whether it was sent.
+    /// </summary>
+    Task<IReadOnlyList<bool>> PrintSavedBillsAsync(IReadOnlyList<BillResponse> bills);
 
     /// <summary>Opens Print preview with saved bills, where the operator prints them by hand.</summary>
     void OpenSavedBillsPreview(IReadOnlyList<BillResponse> bills);
@@ -135,12 +138,12 @@ public sealed class HandoverCoordinator
         }
 
         var printing = TimeSpan.Zero;
-        async Task<bool> PrintAsync(BillResponse bill)
+        async Task<IReadOnlyList<bool>> PrintAsync(IReadOnlyList<BillResponse> bills)
         {
             var began = _time.GetTimestamp();
             try
             {
-                return await _host.PrintSavedBillAsync(bill);
+                return await _host.PrintSavedBillsAsync(bills);
             }
             finally
             {
@@ -250,13 +253,15 @@ public sealed class HandoverCoordinator
         return await workflow.RunAsync(document, MasterCatalog.From(loaded.Masters), CancellationToken.None);
     }
 
-    private async Task<string?> RequestAdminTokenAsync(BillResponse bill, string context, CancellationToken cancellationToken)
+    private async Task<string?> RequestAdminTokenAsync(BillResponse bill, string context, Func<Task> beforeAsking, CancellationToken cancellationToken)
     {
         if (_host.AdminTokens.IsUnlocked && _host.AdminTokens.Current?.Token is { } open)
         {
             return open;
         }
 
+        // The operator has to be asked, and may take a while: the bills saved so far print first.
+        await beforeAsking();
         BringToFront?.Invoke();
         _host.Admin.HandoverContext = context;
         try
