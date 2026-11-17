@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.Desktop.Services;
@@ -172,6 +173,50 @@ public sealed class ShellHealthCoordinatorTests
         Assert.Equal("DB DOWN", host.StatusBar.StatusText);
     }
 
+    /// <summary>
+    /// The shell writes general words on the pills whenever its state changes ("Cloud unreachable"
+    /// for every limited state). When the state changed because of what the server just answered,
+    /// that answer is what the pills must say: with only the database down, the server is reachable
+    /// and Tally is as it was found.
+    /// </summary>
+    [Fact]
+    public async Task RefreshHealthAsync_WithOnlyTheDatabaseDown_TheCloudAndTallyPillsSayWhatWasFound()
+    {
+        var host = new FakeShellHealthHost();
+        var tally = new TallyCompanyHealthResponse(
+            TallyHealthStatuses.Healthy, true, "Company A", true, 1, DateTimeOffset.UtcNow, "Tally OK - active company 'Company A' is open.");
+        var client = new FakeHealthApiClient(new SystemHealthSnapshot(true, null, tally, Runtime(pending: 0)));
+        var coordinator = new ShellHealthCoordinator(client, new FakeMastersApiClient(), host);
+        // As MainWindowViewModel does on every change of its state.
+        host.StateChanged = coordinator.ApplySystemState;
+        host.SystemState = SystemState.Degraded;
+
+        await coordinator.RefreshHealthAsync(forceTallyCompany: true);
+
+        Assert.Equal(SystemState.Healthy, host.SystemState);
+        Assert.Equal("Cloud reachable", host.Health.CloudTooltip);
+        Assert.Equal("ok", host.Health.TallyDot);
+        Assert.Contains("Tally OK", host.Health.TallyTooltip);
+
+        client.Snapshot = new SystemHealthSnapshot(true, null, tally, DatabaseDown());
+        await coordinator.RefreshHealthAsync(forceTallyCompany: true);
+
+        Assert.Equal(SystemState.Limited, host.SystemState);
+        Assert.Contains("cannot reach its database", host.BannerText);
+        Assert.Equal("err", host.Health.DatabaseDot);
+        Assert.Equal("ok", host.Health.CloudDot);
+        Assert.Equal("Cloud reachable", host.Health.CloudTooltip);
+        Assert.Equal("ok", host.Health.TallyDot);
+        Assert.Contains("Tally OK", host.Health.TallyTooltip);
+
+        // A server that cannot be reached at all is still said to be so.
+        client.Snapshot = SystemHealthSnapshot.Unreachable();
+        await coordinator.RefreshHealthAsync(forceTallyCompany: true);
+
+        Assert.Equal("err", host.Health.CloudDot);
+        Assert.Equal("Cloud unreachable — API offline", host.Health.CloudTooltip);
+    }
+
     private static RuntimeHealthResponse DatabaseDown() => new(
         "Unhealthy",
         DatabaseReachable: false,
@@ -191,7 +236,26 @@ public sealed class ShellHealthCoordinatorTests
     {
         public HealthClusterViewModel Health { get; } = new();
         public StatusBarViewModel StatusBar { get; } = new();
-        public SystemState SystemState { get; set; }
+        private SystemState _systemState;
+
+        /// <summary>What the shell runs when its state changes; nothing unless a test sets it.</summary>
+        public Action<SystemState>? StateChanged { get; set; }
+
+        public SystemState SystemState
+        {
+            get => _systemState;
+            set
+            {
+                if (_systemState == value)
+                {
+                    return;
+                }
+
+                _systemState = value;
+                StateChanged?.Invoke(value);
+            }
+        }
+
         public string BannerText { get; set; } = string.Empty;
         public SystemHealthSnapshot? LastHealthSnapshot { get; set; }
         public DateTimeOffset? LastHealthCheckedAtUtc { get; set; }

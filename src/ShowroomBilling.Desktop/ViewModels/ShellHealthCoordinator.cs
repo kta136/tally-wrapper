@@ -155,6 +155,20 @@ internal sealed class ShellHealthCoordinator(
 
     private void ApplyHealthSnapshot(SystemHealthSnapshot snapshot, bool operatorAsked)
     {
+        ApplyStateOf(snapshot, operatorAsked);
+
+        // The pills last. A change of state writes its own general words on them
+        // (ApplySystemState: "Cloud unreachable" for every limited state, and no
+        // word on Tally), and what the server has just answered is more exact.
+        // Written first, it was overwritten: with only the database down the
+        // cloud pill said the server could not be reached, and a Tally check
+        // that had just come back was wiped, each until the next poll.
+        host.Health.Apply(snapshot);
+    }
+
+    /// <summary>The system state, the banner and the status word that a health answer comes to.</summary>
+    private void ApplyStateOf(SystemHealthSnapshot snapshot, bool operatorAsked)
+    {
         // The database is across the internet from the server, so one poll it
         // did not answer is not yet an outage. The database pill turns red
         // straight away; the bill on screen is taken away only when the next
@@ -162,8 +176,6 @@ internal sealed class ShellHealthCoordinator(
         var databaseDown = snapshot.Runtime?.DatabaseReachable == false;
         var firstMiss = databaseDown && _databaseAnsweredLastPoll && !operatorAsked;
         _databaseAnsweredLastPoll = snapshot.Runtime?.DatabaseReachable == true;
-
-        host.Health.Apply(snapshot);
 
         if (!snapshot.ApiReachable)
         {
