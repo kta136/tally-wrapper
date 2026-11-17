@@ -118,6 +118,53 @@ public sealed class DatabaseHealthPostgresTests(PostgresFixture fixture)
         }
     }
 
+    /// <summary>
+    /// Found on 17 November 2026 by timing a freshly started server: for the first half minute of
+    /// a silence, health did not answer in 12 seconds, let alone 2. The server's connections are
+    /// pooled and each sends a keep-alive when it has been idle. On a silent line that keep-alive
+    /// waits, and the next command on the same connection waits behind it without yielding, so a
+    /// check that had been started on the caller's own thread never got as far as its budget.
+    /// </summary>
+    [Fact]
+    public async Task A_pooled_connection_waiting_on_its_own_keep_alive_does_not_take_the_check_past_its_budget()
+    {
+        await using var database = await fixture.CreateDatabaseAsync();
+        await using var relay = FreezableRelay.To(database.ConnectionString);
+        // As the server's own data source, with the keep-alive after 1 idle second and not 30.
+        var pooled = new NpgsqlConnectionStringBuilder(relay.ConnectionString)
+        {
+            Pooling = true,
+            MinPoolSize = 2,
+            KeepAlive = 1,
+        }.ConnectionString;
+        await using var dataSource = NpgsqlDataSource.Create(pooled);
+        var health = Health(dataSource);
+
+        // Several connections in the pool, as after the burst of requests a Desktop starts with.
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
+        {
+            await using var connection = await dataSource.OpenConnectionAsync(TestContext.Current.CancellationToken);
+            await using var command = new NpgsqlCommand("select pg_sleep(0.2)", connection);
+            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        }));
+        Assert.True((await health.CheckAsync()).Reachable);
+
+        relay.Freeze();
+        // Long enough for each idle connection's keep-alive to have gone out onto the silent line.
+        await Task.Delay(TimeSpan.FromSeconds(2.5), TestContext.Current.CancellationToken);
+
+        var watch = Stopwatch.StartNew();
+        // From another thread, so that a check that blocks fails this test and does not hang it.
+        var check = Task.Run(health.CheckAsync, TestContext.Current.CancellationToken);
+        var first = await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(8), TestContext.Current.CancellationToken));
+        watch.Stop();
+        relay.Thaw();
+
+        Assert.True(ReferenceEquals(first, check), "The check had not answered after 8 seconds.");
+        Assert.False((await check).Reachable);
+        Assert.InRange(watch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(4));
+    }
+
     [Fact]
     public async Task A_caller_that_gives_up_does_not_fail_the_check_for_the_others()
     {

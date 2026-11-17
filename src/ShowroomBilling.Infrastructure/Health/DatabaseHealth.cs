@@ -128,7 +128,12 @@ public sealed class DatabaseHealth(
 
     private async Task<(DatabaseHealthReading Reading, string? Problem, Exception? Cause)> ProbeAsync()
     {
-        var attempt = AskAsync();
+        // On a thread of its own, so that the budget below covers all of it. Called directly, the
+        // attempt runs on this thread until it first has to wait, and with a pooled connection that
+        // can be far in: a connection whose keep-alive is waiting on a silent line makes the next
+        // command on it wait too, without yielding. Measured on a freshly started server: the first
+        // two checks of a silence took more than 12 seconds, and health with them.
+        var attempt = Task.Run(AskAsync);
         try
         {
             var (identity, applied) = await attempt.WaitAsync(Budget);
