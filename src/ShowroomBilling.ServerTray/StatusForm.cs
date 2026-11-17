@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using ShowroomBilling.Contracts.Clients;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
 using ShowroomBilling.ServerTray.Ui;
@@ -385,7 +386,8 @@ public sealed class StatusForm : Form
         {
             try
             {
-                runtime = await _httpClient.GetFromJsonAsync<RuntimeHealthResponse>("/api/runtime/health");
+                // The lists of Tally are not shown here, so they are not asked for.
+                runtime = (await _httpClient.GetFromJsonAsync<HealthResponse>("/api/health?masters=false"))?.Database;
             }
             catch (Exception)
             {

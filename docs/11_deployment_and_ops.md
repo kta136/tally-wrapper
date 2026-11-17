@@ -38,7 +38,7 @@ Desktop never talks to Tally directly.
 The Desktop's one connection setting is `DesktopBootstrap:ApiBaseUrl`, the address of the server API. The built-in value is `http://localhost:5107`, which is right for a Desktop on the server PC itself. Every other workstation saves its own in **Settings → Server**:
 
 - **Find server** scans the workstation's own `/24` networks for a Tally Wrapper API on port `5107` and fills in what it finds
-- **Test server** calls the server's `/api/health/live` and `/api/health/ready`
+- **Test server** calls the server's `/api/health/live` and `/api/health`
 - **Save and restart Billing** writes the address to `%APPDATA%\ShowroomBilling\desktop-bootstrap.local.json` and restarts the Desktop, which reads it at start-up
 
 The environment variable `SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl` overrides the saved address.
@@ -72,7 +72,7 @@ No local durable business cache is allowed.
 ### Operational requirements
 
 - plain-text rolling log files, one line per event ([DEV_SETUP.md](../DEV_SETUP.md#logs) has the line shape): `C:\ProgramData\ShowroomBilling\logs` for the server service
-- `/api/health/live` and `/api/health/ready` endpoints
+- `/api/health/live` and `/api/health` endpoints
 - `StuckPostingRecoveryHostedService` sweeps at start-up and every 5 minutes — any bill stranded in `posting` (the API stopped mid-push, or lost the database before it could record the outcome) moves to `reconciliation_required` with a `bill.posting.recovered` audit event once its claim is older than 10 minutes
 - each successful admin unlock deletes the admin sessions that expired more than 30 days ago; nothing else is purged
 - API errors are returned as RFC 7807 `application/problem+json` via a global `IExceptionHandler`, with no typed-body exceptions. See [`09_api_spec.md`](./09_api_spec.md) §1.
@@ -323,13 +323,12 @@ Location: `C:\ProgramData\ShowroomBilling\logs` on the server (`api-*.log`). An 
 ### API endpoints
 
 - `/api/health/live` — liveness
-- `/api/health/ready` — whether PostgreSQL answers (pending migrations are reported by `/api/runtime/health`)
-- `/api/health/masters` — freshness of companies/ledgers/stock-items/voucher-types snapshots
-- `/api/health/tally-company` — operator-triggered Tally reachability + active-company check
-- `/api/runtime/health` — runtime status from a check of PostgreSQL (reachable, identity, pending migrations) that is at most 5 seconds old
+- `/api/health` — the database, from a check of PostgreSQL (reachable, identity, pending migrations) that is at most 5 seconds old, and the freshness of the companies/ledgers/stock-items/voucher-types lists
+- `/api/health/tally-company` — Tally reachability + active-company check
+- `/api/runtime/health`, `/api/health/masters`, `/api/health/ready` — the same answers under the addresses a Desktop built before November 2026's `/api/health` asks; they go once no counter runs such a build
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
 
-Every Desktop and the server tray poll `/api/runtime/health` every 15 seconds, and each answer comes from a real check of the database; the API keeps one check for 5 seconds, so they share it. (Builds up to 11 October 2026 skipped the database on the routine poll, a habit from a provider that billed for the time the database was awake: a counter could show `READY` for up to 30 minutes after the database had gone, and the tray's database line always read "idle".) Tally-company health and master freshness are requested on startup, on explicit System Health refreshes, and by a slower 30-minute probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
+Every Desktop and the server tray poll `/api/health` every 15 seconds (one request; a Desktop of an earlier build made three or four), and each answer comes from a real check of the database; the API keeps one check for 5 seconds, so they share it. (Builds up to 11 October 2026 skipped the database on the routine poll, a habit from a provider that billed for the time the database was awake: a counter could show `READY` for up to 30 minutes after the database had gone, and the tray's database line always read "idle".) Tally-company health and master freshness are requested on startup, on explicit System Health refreshes, and by a slower 30-minute probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
 
 When the server reports that it cannot reach its database, the Desktop's database pill turns red at once. The database is across the internet from the server, so one poll without an answer is not treated as an outage: the limited-mode screen, with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.", appears when the next poll agrees (within about 30 seconds of the database going), and at once at start-up or when the operator presses Refresh in System Health. It goes with the first poll that gets an answer. The Desktop does not open a settings screen by itself. The tray's database line carries one of five chips: `OK`, `Not answering`, `Upgrade needed`, `Check` (it answers but is marked as another database) or `Unknown` (the server does not answer, or did not report on it).
 
@@ -341,7 +340,7 @@ If Tally becomes unavailable after preflight, a timeout/transport/unreadable-res
 
 ### Master freshness
 
-- `/api/health/masters` surfaces age of each master snapshot
+- `/api/health` surfaces the age of each master snapshot
 - operators trigger a refresh via "Refresh from Tally" in Settings or the System Health dialog
 - no automatic freshness-based warning; freshness is informational
 
@@ -392,6 +391,8 @@ The release after 14 November 2026 carries three migrations:
 - `MasterSnapshotsInOneTable` replaces the five tables of Tally lists with one, and is tied to the server in the same way and in the same step: an older server exe finds no lists and cannot refresh them on the migrated database. The lists are carried across, so nothing has to be refreshed from Tally afterwards. Its `Down` puts the five tables back from the `dropped_20261114_*_rows` copies. Run the `Down`s newest first when going back.
 
 The release after 15 November 2026 carries one more, `DropShowroomAndDocumentType`: it drops `ShowroomId` from five tables and `DocumentType` from `invoice_sequences`, whose key becomes the fiscal year ([10_database_schema.md §1.10](10_database_schema.md)). **The server and the database change together**, as for `DropUnreadColumns` and by the same steps: stop the server service, take the dump below, apply the migration as the owner role, install the new `TallyWrapper.Server.exe`, start the service. A server exe older than this release still writes those columns and cannot save or list a bill on the migrated database; to go back to one, run the migration's `Down` first. The counters are not tied to it: the two fields that left the API's answers (`documentType` of a number preview, `showroomId` of a print asset) were read by no Desktop.
+
+That release also moves health to one address, `GET /api/health`. Nothing has to be done for it: the server still answers the addresses an older Desktop asks, so a counter can be updated before or after the server. (A new Desktop pointed at a server older than this release finds the server but shows `DB ?`, because that server has no such address; the migration above puts the server first in any case.)
 
 **Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 

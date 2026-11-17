@@ -25,7 +25,7 @@ namespace ShowroomBilling.Tests.Contracts;
 /// Three things are set up so the boot needs nothing outside the test run:
 /// 1. The API's <see cref="NpgsqlDataSource"/> is replaced with one for a
 ///    database of this factory's own on the test PostgreSQL server (see
-///    <see cref="PostgresFixture"/>). The context and the readiness check both
+///    <see cref="PostgresFixture"/>). The context and the health check both
 ///    use that registration, so nothing in the API can reach another database,
 ///    whatever connection string the machine's configuration holds.
 /// 2. <c>AutoMigrateOnStartup</c> is forced false: the database is created

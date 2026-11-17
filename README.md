@@ -142,7 +142,7 @@ Development API defaults to:
 
 - OpenAPI document: `http://localhost:5108/openapi/v1.json`
 - Liveness: `http://localhost:5108/api/health/live`
-- Runtime health: `http://localhost:5108/api/runtime/health`
+- Health: `http://localhost:5108/api/health`
 
 ## Configuration
 

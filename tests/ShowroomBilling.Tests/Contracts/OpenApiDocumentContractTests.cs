@@ -27,7 +27,7 @@ public sealed class OpenApiDocumentContractTests : IClassFixture<TestApiFactory>
 
         Assert.Contains("/api/bills/drafts", document.Paths.Keys);
         Assert.Contains("/api/bills/{billId}/push", document.Paths.Keys);
-        Assert.Contains("/api/runtime/health", document.Paths.Keys);
+        Assert.Contains("/api/health", document.Paths.Keys);
     }
 
     [Fact]

@@ -85,6 +85,14 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
     /// the one this API runs as. A production API must not be pointed at the
     /// development database, or the other way round.
     /// </summary>
+    /// <summary>The <c>environment</c> marker the database of this environment must carry.</summary>
+    internal static string ExpectedIdentityFor(string environmentName) =>
+        environmentName.Trim().Equals("Development", StringComparison.OrdinalIgnoreCase)
+            ? "DEV"
+            : environmentName.Trim().Equals("Production", StringComparison.OrdinalIgnoreCase)
+                ? "PROD"
+                : environmentName.Trim().ToUpperInvariant();
+
     internal static bool DatabaseIdentityMatches(string? databaseIdentity, string expectedDatabaseIdentity) =>
         !string.IsNullOrWhiteSpace(databaseIdentity)
         && !databaseIdentity.Trim().Equals("UNSET", StringComparison.OrdinalIgnoreCase)

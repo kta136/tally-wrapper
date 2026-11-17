@@ -31,7 +31,7 @@ namespace ShowroomBilling.Infrastructure.Tally;
 public sealed class StuckPostingRecoveryHostedService(
     IServiceScopeFactory scopeFactory,
     StartupStatus startupStatus,
-    DatabaseSchemaState schemaState,
+    DatabaseHealth databaseHealth,
     ILogger<StuckPostingRecoveryHostedService> logger,
     TimeProvider? timeProvider = null) : BackgroundService
 {
@@ -97,7 +97,7 @@ public sealed class StuckPostingRecoveryHostedService(
     /// <returns>When the youngest remaining claim becomes old enough to recover, if there is one.</returns>
     private async Task<DateTimeOffset?> SweepAsync(CancellationToken stoppingToken)
     {
-        if (schemaState.PendingMigrationCount > 0)
+        if (databaseHealth.PendingMigrationCount > 0)
         {
             // Bills cannot be read until the migrations have been applied, and
             // health says so on every poll. Nothing to add here.

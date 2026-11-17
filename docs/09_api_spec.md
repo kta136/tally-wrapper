@@ -32,7 +32,7 @@ Style:
 
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|
-| `GET` | `/api/runtime/health` | Desktop and server-tray health summary | API availability, database reachability and identity, pending migrations (see §4) |
+| `GET` | `/api/health` | Desktop and server-tray health, one call per poll | database reachability and identity, pending migrations, age of the Tally lists (see §4) |
 | `POST` | `/api/runtime/database/maintenance/test` | Server tray: test a candidate connection string | `{ success, message }` |
 | `PUT` | `/api/runtime/database/maintenance` | Server tray: verify and save the connection string | `{ provider, maskedConnectionString, configPath, isLocalOverridePresent, requiresApiRestart, environmentName }`; never the connection string itself |
 
@@ -202,17 +202,17 @@ These are the admin-gated Bill endpoints listed in §2.2 (the synthetic batch is
 
 | Method | Path | Purpose | Summary response |
 |---|---|---|---|
-| `GET` | `/api/health/live` | Liveness probe | basic OK |
-| `GET` | `/api/health/ready` | Readiness probe | whether PostgreSQL answers; `503` when it does not. Pending migrations are reported by `/api/runtime/health`, not here |
-| `GET` | `/api/health/masters` | Master freshness summary | latest snapshot ages; `503` problem details when the database cannot be read |
-| `GET` | `/api/health/tally-company` | Operator-triggered Tally reachability + active-company check | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
-| `GET` | `/api/runtime/health` | Runtime health, from a check of the database on every call | `{ status, databaseReachable, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, pendingMigrationCount? }` |
+| `GET` | `/api/health/live` | Liveness probe; asks nothing of the database or of Tally | basic OK |
+| `GET` | `/api/health` | What a Desktop or the server tray asks on every poll, from a check of the database on every call | `{ database: { status, databaseReachable, message, databaseIdentity?, expectedDatabaseIdentity?, databaseIdentityMatches?, pendingMigrationCount? }, masters? }`. `masters` is the freshness summary of the four Tally lists; it is null with `?masters=false`, and when the database does not answer or the lists cannot be read |
+| `GET` | `/api/health/tally-company` | Tally reachability + active-company check. Its own call because it takes as long as Tally takes | `{ status, tallyReachable, activeCompanyName, activeCompanyOpen, companyCount, checkedAtUtc, message }` |
 
-The DB-init hosted service is bounded (15 s) and each sweep of the stuck-posting-recovery service is bounded (30 s); neither throws, so a Postgres outage during startup leaves the API up. Their failures go to the API log; `/api/health/ready` and `/api/runtime/health` report whether the database answers now.
+Three older addresses are still answered, for a Desktop built before `GET /api/health` existed (November 2026), and go once no counter runs such a build: `GET /api/runtime/health` (the `database` object above, on its own), `GET /api/health/masters` (the `masters` object; `503` problem details when it cannot be read) and `GET /api/health/ready` (`200`, or `503` when PostgreSQL does not answer).
+
+The DB-init hosted service is bounded (15 s) and each sweep of the stuck-posting-recovery service is bounded (30 s); neither throws, so a Postgres outage during startup leaves the API up. Their failures go to the API log; `/api/health` reports whether the database answers now.
 
 `pendingMigrationCount` is how many of this build's schema migrations the database has not had: `null` until something has looked, `0` when up to date. Above zero the database is reachable but unusable, so health then answers `status: "Unhealthy"` with a message that says so. While the database does not answer, the count is the last one found (by the start-up migration or an earlier check), which is what lets the Desktop and the server tray keep showing it. Requests whose SQL PostgreSQL rejects for a missing column or table (SQLSTATE `42703` / `42P01`) are answered `503` with the title `Database upgrade needed` instead of a bare `500`.
 
-`/api/runtime/health` asks PostgreSQL every time: whether it answers, which database it is (the identity marker) and whether it has this build's migrations. The answer is kept for 5 seconds, so the Desktops and the server tray, which each poll every 15 seconds, share one check instead of making one each. There is no mode that skips the database. A database that has not answered a `select 1` within 2 seconds is reported as not reachable (`databaseReachable: false`, `status: "Unhealthy"`; `/api/health/ready` answers `503` on the same rule), so health itself answers in about 2 seconds when the link to the database has gone silent. A `forceDatabase` query parameter is accepted and ignored: a Desktop sends it so that a server build up to 11 October 2026, which answered without checking unless asked, checks too. Such a server also returns `databaseHealthSkipped` / `databaseHealthSkipReason`, which nothing reads any more.
+`/api/health` asks PostgreSQL every time: whether it answers, which database it is (the identity marker) and whether it has this build's migrations. The answer is kept for 5 seconds, so the Desktops and the server tray, which each poll every 15 seconds, share one check instead of making one each; callers that arrive while a check is out wait for that one. There is no mode that skips the database. The whole check (a connection and two short statements) has 2 seconds: a database that has not answered by then is reported as not reachable (`databaseReachable: false`, `status: "Unhealthy"`), so health itself answers in about 2 seconds when the link to the database has gone silent, and the lists are not read from a database that is not answering. On the older `/api/runtime/health` a `forceDatabase` query parameter is ignored: a Desktop of those builds sends it so that a server build up to 11 October 2026, which answered without checking unless asked, checks too.
 
 The API pushes nothing to the Desktop: there is no hub or event stream. The Desktop refreshes after every command it runs.
 

@@ -5,7 +5,7 @@ namespace ShowroomBilling.Infrastructure.Health;
 /// <summary>
 /// The signal the database initialiser gives the other start-up services:
 /// migrations finished, or they failed. In memory only; every API boot starts
-/// again. What went wrong is in the API log, and <c>GET /api/health/ready</c>
+/// again. What went wrong is in the API log, and <c>GET /api/health</c>
 /// reports whether the database answers now.
 /// </summary>
 public sealed class StartupStatus

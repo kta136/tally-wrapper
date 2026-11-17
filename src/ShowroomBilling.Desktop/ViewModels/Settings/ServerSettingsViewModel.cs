@@ -1,9 +1,11 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
 
@@ -174,18 +176,21 @@ public partial class ServerSettingsViewModel : ObservableObject
 
             try
             {
-                using var ready = await client.GetAsync("/api/health/ready", cancellationToken);
-                if (ready.IsSuccessStatusCode)
+                using var health = await client.GetAsync("/api/health?masters=false", cancellationToken);
+                if (!health.IsSuccessStatusCode)
                 {
-                    return $"Server reachable and its database is ready: {baseUrl}";
+                    // A server older than this Desktop has no such address.
+                    return $"Server reachable, but it did not report on its database: HTTP {(int)health.StatusCode}.";
                 }
 
-                var body = await ready.Content.ReadAsStringAsync(cancellationToken);
-                return $"Server reachable, but its database is not ready: HTTP {(int)ready.StatusCode}. {Summarize(body)}";
+                var database = (await health.Content.ReadFromJsonAsync<HealthResponse>(cancellationToken))?.Database;
+                return database is { DatabaseReachable: true } and not { PendingMigrationCount: > 0 }
+                    ? $"Server reachable and its database is ready: {baseUrl}"
+                    : $"Server reachable, but its database is not ready. {database?.Message}";
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
             {
-                return $"Server reachable, but its readiness check failed: {ex.Message}";
+                return $"Server reachable, but its database check failed: {ex.Message}";
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
@@ -274,15 +279,5 @@ public partial class ServerSettingsViewModel : ObservableObject
                 }
             }
         }
-    }
-
-    private static string Summarize(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return "No response body.";
-        }
-
-        return body.Length <= 180 ? body : string.Concat(body.AsSpan(0, 180), "...");
     }
 }

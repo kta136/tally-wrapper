@@ -53,19 +53,20 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
                 options.UseNpgsql(asApplication, npgsql => npgsql.SetPostgresVersion(18, 0)));
             await using var provider = services.BuildServiceProvider();
             var startupStatus = new StartupStatus();
-            var schemaState = new DatabaseSchemaState();
+            await using var dataSource = NpgsqlDataSource.Create(asApplication);
+            var health = new DatabaseHealth(dataSource, NullLogger<DatabaseHealth>.Instance);
             var service = new DatabaseInitializationHostedService(
                 provider,
                 Options.Create(new DatabaseOptions { AutoMigrateOnStartup = true }),
                 new HostingEnvironment { EnvironmentName = "Production" },
                 startupStatus,
-                schemaState,
+                health,
                 NullLogger<DatabaseInitializationHostedService>.Instance);
 
             // The host must come up regardless.
             await service.StartAsync(TestContext.Current.CancellationToken);
 
-            Assert.Equal(missing, schemaState.PendingMigrationCount);
+            Assert.Equal(missing, health.PendingMigrationCount);
             await Assert.ThrowsAsync<DatabaseNotReadyException>(
                 () => startupStatus.WaitForDatabaseReadyAsync(TestContext.Current.CancellationToken));
 
@@ -75,8 +76,10 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
             Assert.Equal(missing, (await db.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken)).Count());
             Assert.NotNull(await ScalarAsync(database.ConnectionString, "SELECT to_regclass('public.draft_edit_leases')::text"));
 
-            // A full health check finds the same shortfall...
-            Assert.Equal(missing, await DatabaseSchemaState.CheckAsync(db, new DatabaseSchemaState(), TestContext.Current.CancellationToken));
+            // A health check, which asks in its own words, finds the same shortfall...
+            var asked = await new DatabaseHealth(dataSource, NullLogger<DatabaseHealth>.Instance).CheckAsync();
+            Assert.True(asked.Reachable);
+            Assert.Equal(missing, asked.PendingMigrationCount);
 
             // ...and sees it gone once the owner has applied the migrations by hand.
             await using (var asOwner = database.CreateContext())
@@ -84,8 +87,8 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
                 await asOwner.Database.MigrateAsync(TestContext.Current.CancellationToken);
             }
 
-            Assert.Equal(0, await DatabaseSchemaState.CheckAsync(db, schemaState, TestContext.Current.CancellationToken));
-            Assert.Equal(0, schemaState.PendingMigrationCount);
+            Assert.Equal(0, (await health.CheckAsync()).PendingMigrationCount);
+            Assert.Equal(0, health.PendingMigrationCount);
         }
         finally
         {
@@ -98,12 +101,12 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
     public async Task An_up_to_date_database_reports_nothing_pending()
     {
         await using var database = await fixture.CreateDatabaseAsync();
-        await using var db = database.CreateContext();
-        var state = new DatabaseSchemaState();
-        Assert.Null(state.PendingMigrationCount);
+        await using var dataSource = NpgsqlDataSource.Create(database.ConnectionString);
+        var health = new DatabaseHealth(dataSource, NullLogger<DatabaseHealth>.Instance);
+        Assert.Null(health.PendingMigrationCount);
 
-        Assert.Equal(0, await DatabaseSchemaState.CheckAsync(db, state, TestContext.Current.CancellationToken));
-        Assert.Equal(0, state.PendingMigrationCount);
+        Assert.Equal(0, (await health.CheckAsync()).PendingMigrationCount);
+        Assert.Equal(0, health.PendingMigrationCount);
     }
 
     private static async Task ExecuteAsync(string connectionString, string sql)

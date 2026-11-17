@@ -13,7 +13,7 @@ public sealed class DatabaseInitializationHostedService(
     IOptions<DatabaseOptions> databaseOptions,
     IHostEnvironment hostEnvironment,
     StartupStatus startupStatus,
-    DatabaseSchemaState schemaState,
+    DatabaseHealth databaseHealth,
     ILogger<DatabaseInitializationHostedService> logger) : IHostedService
 {
     // Bounded so a slow / unreachable Postgres can't hold the API's startup
@@ -52,13 +52,13 @@ public sealed class DatabaseInitializationHostedService(
             if (pendingCount == 0)
             {
                 logger.LogInformation("No pending database migrations found.");
-                schemaState.Record(0);
+                databaseHealth.RecordPendingMigrations(0);
                 startupStatus.RecordDatabaseReady();
                 return;
             }
 
             await dbContext.Database.MigrateAsync(cts.Token);
-            schemaState.Record(0);
+            databaseHealth.RecordPendingMigrations(0);
             startupStatus.RecordDatabaseReady();
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -90,7 +90,7 @@ public sealed class DatabaseInitializationHostedService(
     {
         if (pendingCount > 0)
         {
-            schemaState.Record(pendingCount);
+            databaseHealth.RecordPendingMigrations(pendingCount);
         }
     }
 

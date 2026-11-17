@@ -1,8 +1,6 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using ShowroomBilling.Contracts.Health;
-using ShowroomBilling.Contracts.Masters;
-using ShowroomBilling.Contracts.Runtime;
 
 namespace ShowroomBilling.Desktop.Services;
 
@@ -13,34 +11,53 @@ public sealed class HealthApiClient(HttpClient httpClient) : IHealthApiClient
         bool includeMasterFreshness = true,
         CancellationToken cancellationToken = default)
     {
+        // The Tally check takes as long as Tally takes, so it is a request of its own, sent
+        // alongside: the database's answer does not wait for it.
+        var tallyCompany = includeTallyCompany
+            ? TryGetTallyCompanyAsync(cancellationToken)
+            : Task.FromResult<TallyCompanyHealthResponse?>(null);
+
+        HttpResponseMessage response;
         try
         {
-            _ = await httpClient.GetAsync("/api/health/live", cancellationToken);
+            response = await httpClient.GetAsync(
+                includeMasterFreshness ? "/api/health" : "/api/health?masters=false", cancellationToken);
         }
         catch
         {
             return SystemHealthSnapshot.Unreachable();
         }
 
-        // forceDatabase is for a server older than this Desktop, which answers
-        // without checking its database unless asked to. A current server
-        // always checks and ignores it.
-        var runtime = await TryGetAsync<RuntimeHealthResponse>("/api/runtime/health?forceDatabase=true", cancellationToken);
-        var masters = includeMasterFreshness
-            ? await TryGetAsync<MasterFreshnessSummaryResponse>("/api/health/masters", cancellationToken)
-            : null;
-        var tallyCompany = includeTallyCompany
-            ? await TryGetAsync<TallyCompanyHealthResponse>("/api/health/tally-company", cancellationToken)
-            : null;
+        using (response)
+        {
+            // Something answered, so the server is there. If the answer is not the one expected
+            // (a server older than this Desktop has no such address), the rest is left unknown.
+            HealthResponse? health = null;
+            if (response.IsSuccessStatusCode)
+            {
+                try
+                {
+                    health = await response.Content.ReadFromJsonAsync<HealthResponse>(cancellationToken);
+                }
+                catch
+                {
+                    // Left unknown.
+                }
+            }
 
-        return new SystemHealthSnapshot(ApiReachable: true, Masters: masters, TallyCompany: tallyCompany, Runtime: runtime);
+            return new SystemHealthSnapshot(
+                ApiReachable: true,
+                Masters: health?.Masters,
+                TallyCompany: await tallyCompany,
+                Runtime: health?.Database);
+        }
     }
 
-    private async Task<T?> TryGetAsync<T>(string requestUri, CancellationToken cancellationToken) where T : class
+    private async Task<TallyCompanyHealthResponse?> TryGetTallyCompanyAsync(CancellationToken cancellationToken)
     {
         try
         {
-            return await httpClient.GetFromJsonAsync<T>(requestUri, cancellationToken);
+            return await httpClient.GetFromJsonAsync<TallyCompanyHealthResponse>("/api/health/tally-company", cancellationToken);
         }
         catch
         {

@@ -63,7 +63,7 @@ public static class DependencyInjection
         services.AddDbContextPool<ShowroomBillingDbContext>((provider, options) =>
             // The registered data source, not the local above: a host that
             // replaces the registration (the contract tests do) moves the
-            // context and the readiness check together.
+            // context and the health check together.
             options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(), npgsql =>
             {
                 npgsql.SetPostgresVersion(18, 0);
@@ -121,15 +121,9 @@ public static class DependencyInjection
         services.AddScoped<ITallyMasterRefresher, TallyMasterRefresher>();
 
         services.AddSingleton<StartupStatus>();
-        services.AddSingleton<DatabaseSchemaState>();
-        services.AddSingleton<DatabaseHealthCache>();
-        services.AddSingleton<DatabaseHealthProbe>();
+        services.AddSingleton<DatabaseHealth>();
         services.AddHostedService<DatabaseInitializationHostedService>();
         services.AddHostedService<StuckPostingRecoveryHostedService>();
-        // One instance for both callers: /api/health/ready through the health
-        // check service, and DatabaseHealthProbe, which asks it directly.
-        services.AddSingleton<PostgresReadinessHealthCheck>();
-        services.AddHealthChecks().AddCheck<PostgresReadinessHealthCheck>("postgres");
 
         return services;
     }

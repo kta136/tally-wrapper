@@ -243,19 +243,11 @@ public sealed class DatabaseConfigurationTests
             Path.Combine(DatabaseConfigurationStore.DirectoryPath, MaintenanceTokenConstants.FileName),
             "maintenance-secret");
 
-        // The maintenance endpoints never ask the health probe for anything.
-        var unusedDataSource = Npgsql.NpgsqlDataSource.Create("Host=localhost;Database=test;Username=test;Password=test");
         var controller = new RuntimeController(
             verifier ?? new FakeDatabaseConnectionVerifier(
                 DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD")),
             new FakeHostEnvironment("Production"),
-            new MaintenanceTokenStore(),
-            new ShowroomBilling.Infrastructure.Health.DatabaseHealthProbe(
-                unusedDataSource,
-                new ShowroomBilling.Infrastructure.Health.PostgresReadinessHealthCheck(unusedDataSource),
-                new ShowroomBilling.Infrastructure.Health.DatabaseSchemaState()),
-            new ShowroomBilling.Infrastructure.Health.DatabaseHealthCache(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<RuntimeController>.Instance);
+            new MaintenanceTokenStore());
         controller.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext()

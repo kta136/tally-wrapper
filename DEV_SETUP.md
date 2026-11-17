@@ -103,8 +103,7 @@ Key endpoints:
 
 - `http://localhost:5108/openapi/v1.json` (the OpenAPI document; Development only, there is no browsable Swagger page)
 - `http://localhost:5108/api/health/live`
-- `http://localhost:5108/api/health/masters` (per-type snapshot freshness; not part of the 15-second poll)
-- `http://localhost:5108/api/runtime/health` (database reachable, its identity and pending migrations, from a check at most 5 seconds old)
+- `http://localhost:5108/api/health` (database reachable, its identity and pending migrations, from a check at most 5 seconds old, and per-list snapshot freshness; what the 15-second poll asks)
 - `http://localhost:5108/api/masters/companies` (desktop read of the whole current snapshot; also `ledgers`, `stock-items`, `voucher-types`)
 - `http://localhost:5108/api/masters/refresh` (synchronously fetches from Tally and writes the snapshot — the only way masters get updated; there is no background polling)
 - `http://localhost:5108/api/numbering/preview` (next visible invoice number; does not reserve)

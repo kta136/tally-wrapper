@@ -1,12 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Npgsql;
 using ShowroomBilling.Api.Clients;
 using ShowroomBilling.Api.Configuration;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Contracts.Maintenance;
 using ShowroomBilling.Contracts.Runtime;
-using ShowroomBilling.Infrastructure.Health;
 
 namespace ShowroomBilling.Api.Controllers;
 
@@ -15,10 +13,7 @@ namespace ShowroomBilling.Api.Controllers;
 public sealed class RuntimeController(
     IDatabaseConnectionVerifier databaseConnectionVerifier,
     IHostEnvironment hostEnvironment,
-    MaintenanceTokenStore maintenanceTokenStore,
-    DatabaseHealthProbe databaseHealthProbe,
-    DatabaseHealthCache databaseHealthCache,
-    ILogger<RuntimeController> logger) : ControllerBase
+    MaintenanceTokenStore maintenanceTokenStore) : ControllerBase
 {
     [HttpPost("database/maintenance/test")]
     public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(
@@ -45,7 +40,7 @@ public sealed class RuntimeController(
 
         var verification = await databaseConnectionVerifier.VerifyAsync(
             connectionString,
-            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            DatabaseConnectionVerifier.ExpectedIdentityFor(hostEnvironment.EnvironmentName),
             cancellationToken);
         return Ok(new DatabaseConfigurationTestResponse(verification.Success, verification.Message));
     }
@@ -61,64 +56,6 @@ public sealed class RuntimeController(
         }
 
         return await VerifyAndSaveAsync(request, cancellationToken);
-    }
-
-    [HttpGet("health")]
-    public async Task<ActionResult<RuntimeHealthResponse>> GetHealth(CancellationToken cancellationToken = default)
-    {
-        if (!databaseHealthCache.TryGet(out var database))
-        {
-            (database, var check) = await databaseHealthProbe.CheckAsync(cancellationToken);
-            // A caller that gave up mid-check makes the check itself fail,
-            // which says nothing about the database: do not hand that on.
-            if (!cancellationToken.IsCancellationRequested)
-            {
-                LogIfChanged(databaseHealthCache.Set(database), database, check);
-            }
-        }
-
-        var expectedDatabaseIdentity = ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName);
-        bool? databaseIdentityMatches = database.Reachable
-            ? DatabaseConnectionVerifier.DatabaseIdentityMatches(database.Identity, expectedDatabaseIdentity)
-            : null;
-        var schemaBehind = database.PendingMigrationCount > 0;
-
-        var message = databaseIdentityMatches == false
-            ? $"Database identity mismatch: PostgreSQL is reachable, but database identity is {database.Identity ?? "unavailable"}; expected {expectedDatabaseIdentity} for {hostEnvironment.EnvironmentName}."
-            : schemaBehind
-                ? $"Database upgrade needed: PostgreSQL is reachable ({database.Identity}), but {database.PendingMigrationCount} schema migration(s) this version needs have not been applied. Bills and invoice numbers cannot be read or saved until the database owner applies them."
-                : database.Reachable
-                    ? $"API is online and PostgreSQL is reachable ({database.Identity})."
-                    : "API is online. PostgreSQL must be configured and reachable for readiness.";
-
-        var response = new RuntimeHealthResponse(
-            (schemaBehind || !database.Reachable ? HealthStatus.Unhealthy : HealthStatus.Healthy).ToString(),
-            DatabaseReachable: database.Reachable,
-            Message: message,
-            DatabaseIdentity: database.Identity,
-            ExpectedDatabaseIdentity: expectedDatabaseIdentity,
-            DatabaseIdentityMatches: databaseIdentityMatches,
-            PendingMigrationCount: database.PendingMigrationCount);
-
-        return Ok(response);
-    }
-
-    /// <summary>One line when the database stops answering and one when it answers again.</summary>
-    private void LogIfChanged(DatabaseHealthReading? before, DatabaseHealthReading now, HealthCheckResult check)
-    {
-        if (before?.Reachable == now.Reachable)
-        {
-            return;
-        }
-
-        if (!now.Reachable)
-        {
-            logger.LogWarning(check.Exception, "The database is not answering. {Description}", check.Description);
-        }
-        else if (before is not null)
-        {
-            logger.LogWarning("The database is answering again.");
-        }
     }
 
     private DatabaseConfigurationResponse BuildDatabaseConfigurationResponse(
@@ -151,7 +88,7 @@ public sealed class RuntimeController(
 
         var verification = await databaseConnectionVerifier.VerifyAsync(
             connectionString.Value!,
-            ExpectedDatabaseIdentity(hostEnvironment.EnvironmentName),
+            DatabaseConnectionVerifier.ExpectedIdentityFor(hostEnvironment.EnvironmentName),
             cancellationToken);
         if (!verification.Success)
         {
@@ -222,11 +159,4 @@ public sealed class RuntimeController(
             return "<invalid connection string>";
         }
     }
-
-    private static string ExpectedDatabaseIdentity(string environmentName) =>
-        environmentName.Trim().Equals("Development", StringComparison.OrdinalIgnoreCase)
-            ? "DEV"
-            : environmentName.Trim().Equals("Production", StringComparison.OrdinalIgnoreCase)
-                ? "PROD"
-                : environmentName.Trim().ToUpperInvariant();
 }

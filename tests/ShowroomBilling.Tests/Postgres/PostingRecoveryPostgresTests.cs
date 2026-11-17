@@ -108,7 +108,7 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
         await using var sweeper = new Sweeper(database);
         var stranded = await StrandAsync(database, claimedAt: sweeper.Clock.GetUtcNow().AddMinutes(-20));
-        sweeper.SchemaState.Record(3);
+        sweeper.Health.RecordPendingMigrations(3);
         sweeper.StartupStatus.RecordDatabaseFailure("3 migration(s) pending.");
         await sweeper.StartAsync();
 
@@ -122,7 +122,7 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
         Assert.Equal(BillStates.Posting, await StateOfAsync(database, stranded));
 
         // The owner applies the migrations; the next health check records it.
-        sweeper.SchemaState.Record(0);
+        sweeper.Health.RecordPendingMigrations(0);
 
         await sweeper.AdvanceUntilAsync(async () =>
             await StateOfAsync(database, stranded) == BillStates.ReconciliationRequired);
@@ -166,7 +166,7 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
             _service = new StuckPostingRecoveryHostedService(
                 _scopes,
                 StartupStatus,
-                SchemaState,
+                Health,
                 NullLogger<StuckPostingRecoveryHostedService>.Instance,
                 Clock);
         }
@@ -175,7 +175,9 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
 
         public StartupStatus StartupStatus { get; } = new();
 
-        public DatabaseSchemaState SchemaState { get; } = new();
+        /// <summary>Only its record of pending migrations is used here, so its data source is never opened.</summary>
+        public DatabaseHealth Health { get; } =
+            new(Npgsql.NpgsqlDataSource.Create("Host=unused"), NullLogger<DatabaseHealth>.Instance);
 
         public int SweepsStarted => _scopes.Started;
 
