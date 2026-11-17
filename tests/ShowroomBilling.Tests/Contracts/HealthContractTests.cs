@@ -52,29 +52,21 @@ public sealed class HealthContractTests(PostgresFixture postgres)
     }
 
     /// <summary>
-    /// What a Desktop built before <c>GET /api/health</c> asks on every poll, and from Settings →
-    /// Server. They are answered as before until no counter runs such a build.
+    /// Until 17 November 2026 a Desktop asked three or four addresses for one poll. Every counter
+    /// has since had a build that asks <c>GET /api/health</c>, and the old ones are gone.
     /// </summary>
-    [Fact]
-    public async Task The_addresses_an_older_Desktop_asks_are_still_answered()
+    [Theory]
+    [InlineData("/api/runtime/health")]
+    [InlineData("/api/health/masters")]
+    [InlineData("/api/health/ready")]
+    public async Task The_addresses_of_the_poll_before_this_one_are_gone(string uri)
     {
         await using var factory = new TestApiFactory(postgres);
         var client = factory.CreateClient();
 
-        // forceDatabase is what such a Desktop sends so that a still older server checks; ignored here.
-        foreach (var uri in new[] { "/api/runtime/health", "/api/runtime/health?forceDatabase=true" })
-        {
-            var runtime = await client.GetFromJsonAsync<RuntimeHealthResponse>(uri, TestContext.Current.CancellationToken);
-            Assert.True(runtime!.DatabaseReachable);
-            Assert.Equal("Healthy", runtime.Status);
-            Assert.Equal(0, runtime.PendingMigrationCount);
-        }
+        using var response = await client.GetAsync(uri, TestContext.Current.CancellationToken);
 
-        Assert.NotNull(await client.GetFromJsonAsync<MasterFreshnessSummaryResponse>(
-            "/api/health/masters", TestContext.Current.CancellationToken));
-
-        using var ready = await client.GetAsync("/api/health/ready", TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -138,12 +130,6 @@ public sealed class HealthContractTests(PostgresFixture postgres)
         watch.Restart();
         Assert.False((await GetDatabaseAsync(client)).DatabaseReachable);
         Assert.InRange(watch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(1));
-
-        // An older Desktop's readiness question gets the same answer.
-        using (var ready = await client.GetAsync("/api/health/ready", TestContext.Current.CancellationToken))
-        {
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
-        }
 
         // The next check finds it still silent. The log has said so already.
         clock.Advance(TimeSpan.FromSeconds(6));

@@ -54,34 +54,6 @@ public sealed class HealthController(
         return Ok(response);
     }
 
-    // ── The addresses a Desktop built before November 2026's GET /api/health asks. ──────────
-    // The same answers under their old names. Remove them once no counter runs such a build.
-
-    [HttpGet("/api/runtime/health")]
-    public async Task<ActionResult<RuntimeHealthResponse>> RuntimeHealth(CancellationToken cancellationToken) =>
-        Ok(await DatabaseAsync(cancellationToken));
-
-    [HttpGet("masters")]
-    public async Task<IActionResult> Masters(CancellationToken cancellationToken) =>
-        await TryMastersAsync(cancellationToken) is { } summary
-            ? Ok(summary)
-            // A 200 with a different shape deserialized into an empty summary on the client.
-            : Problem(
-                statusCode: StatusCodes.Status503ServiceUnavailable,
-                title: "Master freshness unavailable",
-                detail: "Master freshness reporting is unavailable. PostgreSQL may be unreachable.");
-
-    [HttpGet("ready")]
-    public async Task<IActionResult> Ready(CancellationToken cancellationToken)
-    {
-        var database = await databaseHealth.GetAsync(cancellationToken);
-        return database.Reachable
-            ? Ok(new { status = "Healthy" })
-            : StatusCode(StatusCodes.Status503ServiceUnavailable, new { status = "Unhealthy" });
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────────────────────
-
     private async Task<RuntimeHealthResponse> DatabaseAsync(CancellationToken cancellationToken)
     {
         var database = await databaseHealth.GetAsync(cancellationToken);
