@@ -7,6 +7,12 @@
     <Version>1.0</Version>
     <ApplicationIcon>Resources\Billing.ico</ApplicationIcon>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
+    <!--
+      Program.Main, not the Main WPF writes for App.xaml: a start that only passes a
+      hand-over link to the running copy must be over before WPF is loaded. App.xaml stays
+      the application definition, so the XAML designer still finds the app's resources.
+    -->
+    <StartupObject>ShowroomBilling.Desktop.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,10 +1,15 @@
+using System.Diagnostics;
+using System.IO;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Win32;
 using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.Tests.Handover;
 
-/// <summary>The link scheme's registration and its guard, and the pipe a second start hands a link over.</summary>
+/// <summary>
+/// The link scheme's registration and its guard, the pipe a second start hands a link over, and
+/// the app's entry point, which does that before anything else.
+/// </summary>
 public sealed class HandoverStartupTests
 {
     [Theory]
@@ -74,6 +79,107 @@ public sealed class HandoverStartupTests
     public void With_no_copy_running_the_link_is_not_handed_over()
     {
         Assert.False(HandoverPipe.TrySend($"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}", "tallywrapper:handover?d=x&s=y", TimeSpan.FromMilliseconds(200)));
+    }
+
+    [Fact]
+    public async Task A_start_with_a_link_gives_it_to_the_running_copy_and_has_nothing_left_to_do()
+    {
+        var pipeName = $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}";
+        var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var server = new HandoverPipe.Server(pipeName, link => received.TrySetResult(link));
+        server.Start();
+        const string Link = "tallywrapper:handover?d=x&s=y";
+        string? kept = null;
+
+        // As Windows starts it for a link: the link is the only argument.
+        var handedOver = await Task.Run(
+            () => Program.TryHandToRunningCopy([Link], () => pipeName, TimeSpan.FromSeconds(5), out kept),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(handedOver);
+        Assert.Equal(Link, await received.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void A_start_with_a_link_and_no_copy_running_keeps_the_link_for_itself()
+    {
+        const string Link = "tallywrapper:handover?d=x&s=y";
+
+        var handedOver = Program.TryHandToRunningCopy(
+            ["--some-switch", Link],
+            () => $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}",
+            TimeSpan.FromMilliseconds(200),
+            out var kept);
+
+        // The app goes on to start, and handles this link once it has. It is not
+        // offered to a running copy a second time: App takes it as given.
+        Assert.False(handedOver);
+        Assert.Equal(Link, kept);
+    }
+
+    [Fact]
+    public void A_plain_start_never_opens_the_pipe()
+    {
+        var handedOver = Program.TryHandToRunningCopy(
+            ["--some-switch"],
+            () => throw new InvalidOperationException("A start without a link asked for the pipe."),
+            TimeSpan.FromSeconds(5),
+            out var kept);
+
+        Assert.False(handedOver);
+        Assert.Null(kept);
+    }
+
+    [Fact]
+    public void A_pipe_that_cannot_even_be_named_leaves_the_link_to_this_start()
+    {
+        // Nothing can show a message before the app exists, so the start goes on.
+        var handedOver = Program.TryHandToRunningCopy(
+            ["tallywrapper:handover?d=x&s=y"],
+            () => throw new InvalidOperationException("No name."),
+            TimeSpan.FromSeconds(5),
+            out var kept);
+
+        Assert.False(handedOver);
+        Assert.Equal("tallywrapper:handover?d=x&s=y", kept);
+    }
+
+    /// <summary>
+    /// The exe itself, started as Windows starts it for a link, against a stand-in for the
+    /// running copy. This is what shows that <c>Program.Main</c> is the entry point and that the
+    /// start ends without opening a window. The Development name and this run's scratch folders
+    /// (which the exe inherits) keep it away from a real copy of the app; a build's exe never
+    /// registers the link scheme.
+    /// </summary>
+    [Fact]
+    public async Task The_exe_started_with_a_link_gives_it_to_the_running_copy_and_ends()
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "TallyWrapper.exe");
+        Assert.True(File.Exists(exe), $"The Desktop's exe is not next to the tests: {exe}");
+
+        var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var server = new HandoverPipe.Server(HandoverPipe.NameFor(Environments.Development), link => received.TrySetResult(link));
+        server.Start();
+        const string Link = "tallywrapper:handover?d=x&s=y";
+
+        var start = new ProcessStartInfo(exe) { UseShellExecute = false };
+        start.ArgumentList.Add(Link);
+        start.Environment["DOTNET_ENVIRONMENT"] = Environments.Development;
+        using var process = Process.Start(start)!;
+        try
+        {
+            Assert.Equal(Link, await received.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            Assert.Equal(0, process.ExitCode);
+        }
+        finally
+        {
+            // Had the link not been taken, the exe would have gone on to open the app.
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
     }
 
     [Fact]

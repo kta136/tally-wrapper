@@ -28,8 +28,6 @@ namespace ShowroomBilling.Desktop;
 
 public partial class App : System.Windows.Application
 {
-    private static readonly TimeSpan HandoverForwardTimeout = TimeSpan.FromMilliseconds(800);
-
     private IHost? _host;
     private ILogger<App>? _logger;
     private HandoverPipe.Server? _handoverPipe;
@@ -46,23 +44,20 @@ public partial class App : System.Windows.Application
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
     }
 
+    /// <summary>
+    /// The hand-over link this start was given, when no running copy took it:
+    /// <see cref="Program.Main"/> has already offered it, so it is not offered again here.
+    /// </summary>
+    public string? HandoverLink { get; init; }
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // Started by a hand-over link while a copy of the app is already running: give it the
-        // link and stop. A plain start is not affected; with no copy running this one takes it.
-        var handoverLink = e.Args.FirstOrDefault(HandoverLinkReader.IsHandoverArgument);
-        if (handoverLink is not null && HandoverPipe.TrySend(HandoverPipe.NameFor(EnvironmentName), handoverLink, HandoverForwardTimeout))
-        {
-            Shutdown(0);
-            return;
-        }
-
         UiDensityManager.ApplyStoredDensity();
         try
         {
-            await StartAsync(handoverLink);
+            await StartAsync(HandoverLink);
         }
         catch (Exception ex)
         {
@@ -70,8 +65,7 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private static string EnvironmentName
-        => Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? Environments.Production;
+    private static string EnvironmentName => Program.EnvironmentName;
 
     private async Task StartAsync(string? handoverLink)
     {
