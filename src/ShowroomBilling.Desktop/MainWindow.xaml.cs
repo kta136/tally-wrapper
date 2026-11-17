@@ -133,7 +133,9 @@ public partial class MainWindow : Window
         }
         finally
         {
-            // A hand-over link that started the app is taken from here on, settings or not.
+            // A hand-over link that started the app is taken as soon as the settings are in
+            // (InitializeAsync). This is for what that leaves: a start that failed before then,
+            // and a PC whose first setup is due, where the link waits until the form is open.
             _viewModel.Handover.MarkStarted();
         }
     }

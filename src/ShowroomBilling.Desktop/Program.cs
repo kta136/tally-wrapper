@@ -21,14 +21,17 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        string? name = null;
+        string PipeName() => name ??= HandoverPipe.NameFor(EnvironmentName);
+
         // Started by a hand-over link while a copy of the app is already running: give it the
         // link and stop. A plain start is not affected; with no copy running this one takes it.
-        if (TryHandToRunningCopy(args, () => HandoverPipe.NameFor(EnvironmentName), HandoverForwardTimeout, out var handoverLink))
+        if (TryHandToRunningCopy(args, PipeName, HandoverForwardTimeout, out var handoverLink))
         {
             return 0;
         }
 
-        return RunApp(handoverLink);
+        return RunApp(handoverLink, PipeName);
     }
 
     internal static string EnvironmentName
@@ -38,8 +41,13 @@ public static class Program
     /// Offers the hand-over link among <paramref name="args"/>, if there is one, to the copy of
     /// the app listening on the pipe. True when that copy took it and this start has nothing left
     /// to do. Otherwise <paramref name="handoverLink"/> is the link this start handles itself,
-    /// or null for a plain start, which never opens the pipe. This is the only time a start
-    /// offers its link: a second try would wait out the timeout again with no copy running.
+    /// or null for a plain start, which never opens the pipe.
+    /// <para>
+    /// With no copy running or starting (<see cref="HandoverPipe.IsCopyRunning"/>) the answer is
+    /// immediate. With one, the pipe is given <paramref name="timeout"/> to appear and answer,
+    /// because a copy that started a moment ago has not opened it yet. This is the only time a
+    /// start offers its link.
+    /// </para>
     /// </summary>
     internal static bool TryHandToRunningCopy(
         IReadOnlyList<string> args,
@@ -64,7 +72,8 @@ public static class Program
 
         try
         {
-            return HandoverPipe.TrySend(pipeName(), handoverLink, timeout);
+            var name = pipeName();
+            return HandoverPipe.IsCopyRunning(name) && HandoverPipe.TrySend(name, handoverLink, timeout);
         }
         catch (Exception)
         {
@@ -76,10 +85,28 @@ public static class Program
 
     // A method of its own, so that a start which only passes a link on never loads a WPF type.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static int RunApp(string? handoverLink)
+    private static int RunApp(string? handoverLink, Func<string> pipeName)
     {
+        // First of all, so that a link arriving while this copy is still starting waits for it
+        // instead of opening a second window.
+        using var running = MarkRunning(pipeName);
+
         var app = new App { HandoverLink = handoverLink };
         app.InitializeComponent();
         return app.Run();
+    }
+
+    private static IDisposable? MarkRunning(Func<string> pipeName)
+    {
+        try
+        {
+            return HandoverPipe.MarkRunning(pipeName());
+        }
+        catch (Exception)
+        {
+            // Without the marker a later start with a link opens a window of its own. The app
+            // itself is not held up for that.
+            return null;
+        }
     }
 }

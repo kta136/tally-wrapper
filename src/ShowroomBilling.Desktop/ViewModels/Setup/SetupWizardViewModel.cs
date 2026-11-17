@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -61,6 +62,13 @@ public partial class SetupWizardViewModel : ObservableObject
     public bool HasErrorMessage => !string.IsNullOrWhiteSpace(ErrorMessage);
 
     /// <summary>
+    /// Whether these settings mean the first setup is still to be done on this PC: the server
+    /// says the shared settings need it, and this PC has not completed it before.
+    /// </summary>
+    public bool IsDue([NotNullWhen(true)] EffectiveSettingsResponse? settings)
+        => settings?.RequiresInitialSetup == true && !_completionStore.IsComplete();
+
+    /// <summary>
     /// Loads the settings into the form and says whether the wizard should be
     /// shown: only while the server reports that the shared settings still need
     /// their first setup and this PC has not completed it before.
@@ -84,7 +92,7 @@ public partial class SetupWizardViewModel : ObservableObject
             }
         }
 
-        if (settings?.RequiresInitialSetup != true || _completionStore.IsComplete())
+        if (!IsDue(settings))
         {
             return false;
         }

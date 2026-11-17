@@ -86,6 +86,7 @@ public sealed class HandoverStartupTests
     {
         var pipeName = $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}";
         var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var running = HandoverPipe.MarkRunning(pipeName);
         using var server = new HandoverPipe.Server(pipeName, link => received.TrySetResult(link));
         server.Start();
         const string Link = "tallywrapper:handover?d=x&s=y";
@@ -101,20 +102,79 @@ public sealed class HandoverStartupTests
     }
 
     [Fact]
-    public void A_start_with_a_link_and_no_copy_running_keeps_the_link_for_itself()
+    public void A_start_with_a_link_and_no_copy_running_keeps_the_link_for_itself_without_waiting()
     {
         const string Link = "tallywrapper:handover?d=x&s=y";
+        var clock = Stopwatch.StartNew();
 
         var handedOver = Program.TryHandToRunningCopy(
             ["--some-switch", Link],
             () => $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}",
-            TimeSpan.FromMilliseconds(200),
+            TimeSpan.FromSeconds(30),
             out var kept);
 
         // The app goes on to start, and handles this link once it has. It is not
         // offered to a running copy a second time: App takes it as given.
         Assert.False(handedOver);
         Assert.Equal(Link, kept);
+
+        // No copy holds the marker, so there is no pipe to wait for. Every such start used
+        // to wait the whole time it allows a pipe to appear (0.8 s in the app, 30 s here).
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"The start waited {clock.Elapsed.TotalSeconds:0.0} s for a copy that is not there.");
+    }
+
+    [Fact]
+    public async Task A_copy_that_is_still_starting_gets_the_link_when_its_pipe_opens()
+    {
+        var pipeName = $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}";
+        var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        const string Link = "tallywrapper:handover?d=x&s=y";
+
+        // The copy has begun to start: it holds the marker, and its pipe is not open yet.
+        using var running = HandoverPipe.MarkRunning(pipeName);
+        string? kept = null;
+        var offering = Task.Run(
+            () => Program.TryHandToRunningCopy([Link], () => pipeName, TimeSpan.FromSeconds(20), out kept),
+            TestContext.Current.CancellationToken);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        Assert.False(offering.IsCompleted);
+
+        using var server = new HandoverPipe.Server(pipeName, link => received.TrySetResult(link));
+        server.Start();
+
+        // No second window: the start waited for the copy instead of opening the app itself.
+        Assert.True(await offering);
+        Assert.Equal(Link, await received.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void A_copy_that_holds_the_marker_but_never_opens_its_pipe_is_waited_for_only_so_long()
+    {
+        var pipeName = $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}";
+        using var running = HandoverPipe.MarkRunning(pipeName);
+
+        var handedOver = Program.TryHandToRunningCopy(
+            ["tallywrapper:handover?d=x&s=y"], () => pipeName, TimeSpan.FromMilliseconds(200), out var kept);
+
+        Assert.False(handedOver);
+        Assert.Equal("tallywrapper:handover?d=x&s=y", kept);
+    }
+
+    [Fact]
+    public void The_marker_is_there_for_as_long_as_the_copy_holds_it()
+    {
+        var pipeName = $"TallyWrapper.Handover.Tests.{Guid.NewGuid():N}";
+        Assert.False(HandoverPipe.IsCopyRunning(pipeName));
+
+        using (HandoverPipe.MarkRunning(pipeName))
+        {
+            Assert.True(HandoverPipe.IsCopyRunning(pipeName));
+
+            // A copy of the app under another name (another environment, another settings folder) is not this one.
+            Assert.False(HandoverPipe.IsCopyRunning(pipeName + ".other"));
+        }
+
+        Assert.False(HandoverPipe.IsCopyRunning(pipeName));
     }
 
     [Fact]
@@ -149,7 +209,8 @@ public sealed class HandoverStartupTests
     /// running copy. This is what shows that <c>Program.Main</c> is the entry point and that the
     /// start ends without opening a window. The Development name and this run's scratch folders
     /// (which the exe inherits) keep it away from a real copy of the app; a build's exe never
-    /// registers the link scheme.
+    /// registers the link scheme. The stand-in holds the marker a real copy holds from the
+    /// moment it starts; without it the exe would rightly take the link itself.
     /// </summary>
     [Fact]
     public async Task The_exe_started_with_a_link_gives_it_to_the_running_copy_and_ends()
@@ -158,7 +219,9 @@ public sealed class HandoverStartupTests
         Assert.True(File.Exists(exe), $"The Desktop's exe is not next to the tests: {exe}");
 
         var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var server = new HandoverPipe.Server(HandoverPipe.NameFor(Environments.Development), link => received.TrySetResult(link));
+        var pipeName = HandoverPipe.NameFor(Environments.Development);
+        using var running = HandoverPipe.MarkRunning(pipeName);
+        using var server = new HandoverPipe.Server(pipeName, link => received.TrySetResult(link));
         server.Start();
         const string Link = "tallywrapper:handover?d=x&s=y";
 

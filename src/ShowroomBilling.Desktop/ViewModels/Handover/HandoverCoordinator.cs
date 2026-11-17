@@ -44,7 +44,8 @@ public sealed class HandoverCoordinator
     private readonly IBillsApiClient _bills;
     private readonly IHandoverHost _host;
     private readonly TimeProvider _time;
-    private readonly Queue<string> _links = new();
+    // Each link with the moment it arrived, for the timing line in the log.
+    private readonly Queue<(string Link, long ReceivedAt)> _links = new();
     private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private TaskCompletionSource<HandoverResultChoice>? _resultChoice;
     private bool _running;
@@ -80,7 +81,7 @@ public sealed class HandoverCoordinator
     /// <summary>Takes a link from the command line or from a second start of the app. Call on the UI thread.</summary>
     public void Receive(string link)
     {
-        _links.Enqueue(link);
+        _links.Enqueue((link, _time.GetTimestamp()));
         if (!_running)
         {
             _running = true;
@@ -102,11 +103,11 @@ public sealed class HandoverCoordinator
         try
         {
             await _started.Task;
-            while (_links.TryDequeue(out var link))
+            while (_links.TryDequeue(out var next))
             {
                 try
                 {
-                    await HandleAsync(link);
+                    await HandleAsync(next.Link, _time.GetElapsedTime(next.ReceivedAt));
                 }
                 catch (Exception ex)
                 {
@@ -121,7 +122,9 @@ public sealed class HandoverCoordinator
         }
     }
 
-    private async Task HandleAsync(string link)
+    /// <param name="link">The link.</param>
+    /// <param name="waited">How long it waited to be taken: for the app to start, or for the hand-over before it.</param>
+    private async Task HandleAsync(string link, TimeSpan waited)
     {
         var read = HandoverLinkReader.Read(link, _host.Settings.Handover.Store.Load(), _time.GetUtcNow());
         if (read.Document is not { } document)
@@ -131,10 +134,27 @@ public sealed class HandoverCoordinator
             return;
         }
 
-        var workflow = new HandoverSaveWorkflow(_bills, RequestAdminTokenAsync, _host.PrintSavedBillAsync, _unanswered);
+        var printing = TimeSpan.Zero;
+        async Task<bool> PrintAsync(BillResponse bill)
+        {
+            var began = _time.GetTimestamp();
+            try
+            {
+                return await _host.PrintSavedBillAsync(bill);
+            }
+            finally
+            {
+                printing += _time.GetElapsedTime(began);
+            }
+        }
+
+        var workflow = new HandoverSaveWorkflow(_bills, RequestAdminTokenAsync, PrintAsync, _unanswered);
         while (true)
         {
+            printing = TimeSpan.Zero;
+            var runBegan = _time.GetTimestamp();
             var run = await RunAsync(workflow, document);
+            var ran = _time.GetElapsedTime(runBegan);
             Logger?.LogInformation(
                 "Hand-over of {Bills} bill(s): {Saved} saved, {Updated} updated, {Unchanged} unchanged, {Problems} not saved or updated, {Left} left out, {Unprinted} not printed, server unreachable {Unreachable}.",
                 document.Bills.Count,
@@ -145,6 +165,18 @@ public sealed class HandoverCoordinator
                 Count(run, HandoverBillResult.NotInHandover),
                 run.Outcomes.Count(o => o.Print == HandoverPrintResult.Failed),
                 run.ServerUnreachable);
+
+            // Where the time went, in the style of the app's [startup-timing] line: waiting to
+            // be taken, the calls to the server (and an admin unlock, if one was asked for),
+            // and the printer. Numbers only.
+            Logger?.LogInformation(
+                "[handover-timing] waited={WaitedMs}ms saving={SavingMs}ms printing={PrintingMs}ms total={TotalMs}ms",
+                (long)waited.TotalMilliseconds,
+                (long)(ran - printing).TotalMilliseconds,
+                (long)printing.TotalMilliseconds,
+                (long)(waited + ran).TotalMilliseconds);
+            // A second try of the same hand-over did not wait again.
+            waited = TimeSpan.Zero;
 
             if (_host.ActiveTab == NavTab.Bills)
             {

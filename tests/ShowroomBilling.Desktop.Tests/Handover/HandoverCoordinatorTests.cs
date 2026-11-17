@@ -69,6 +69,31 @@ public sealed class HandoverCoordinatorTests
     }
 
     [Fact]
+    public async Task The_log_says_where_a_hand_overs_time_went_in_numbers_only()
+    {
+        SetKey();
+        var log = new ListLogger();
+        _coordinator.Logger = log;
+        _coordinator.Receive(FreshLink(Guid.NewGuid()));
+
+        // The link waits here as it does while the app starts.
+        await Task.Delay(60, TestContext.Current.CancellationToken);
+        _coordinator.MarkStarted();
+        await _coordinator.Idle;
+
+        var line = Assert.Single(log.Lines, line => line.StartsWith("[handover-timing]", StringComparison.Ordinal));
+        var match = System.Text.RegularExpressions.Regex.Match(
+            line, @"^\[handover-timing\] waited=(\d+)ms saving=(\d+)ms printing=(\d+)ms total=(\d+)ms$");
+        Assert.True(match.Success, line);
+        var waited = int.Parse(match.Groups[1].Value);
+        Assert.InRange(waited, 40, 30_000);
+        Assert.True(int.Parse(match.Groups[4].Value) >= waited);
+
+        // Nothing in the log names the buyer or holds the link.
+        Assert.DoesNotContain(log.Lines, line => line.Contains("Buyer A", StringComparison.Ordinal) || line.Contains("tallywrapper:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task With_no_key_the_result_dialog_says_this_PC_has_none()
     {
         _coordinator.MarkStarted();
@@ -163,6 +188,28 @@ public sealed class HandoverCoordinatorTests
         }
 
         Assert.Equal(ShellDialogs.HandoverResult, _host.ActiveDialog);
+    }
+
+    private sealed class ListLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (Lines)
+            {
+                Lines.Add(formatter(state, exception));
+            }
+        }
     }
 
     private sealed class Host : IHandoverHost

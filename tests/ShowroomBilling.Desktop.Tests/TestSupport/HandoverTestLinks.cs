@@ -130,18 +130,22 @@ internal static class HandoverTestMasters
     public static SettingsViewModel Settings(HandoverKeyStore? keys = null)
     {
         var settings = OfflineApi.Settings(handoverKeys: keys ?? new HandoverKeyStore(Path.Combine(TestAppData.Root, "keys", Guid.NewGuid().ToString("N"), HandoverKeyStore.FileName)));
-        settings.ApplyEffectiveSettings(new EffectiveSettingsResponse(
-            "cloud",
-            "Settings loaded from the server",
-            new EffectiveCloudSettingsDto(
-                new ConnectionSettingsDto("localhost", 9000, 30, "Sample Company"),
-                new NumberingSettingsDto("SR/", string.Empty, 4),
-                new PrintSettingsDto("Sample Company", null, null, null, "State", "India", null, null, null, null, null, true, false, false, 10, 8),
-                new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales"),
-                Dto),
-            [],
-            [],
-            DateTimeOffset.UtcNow));
+        settings.ApplyEffectiveSettings(Response());
         return settings;
     }
+
+    /// <summary>What the server answers a settings load with; <paramref name="requiresInitialSetup"/> for a server nobody has set up yet.</summary>
+    public static EffectiveSettingsResponse Response(bool requiresInitialSetup = false) => new(
+        "cloud",
+        "Settings loaded from the server",
+        new EffectiveCloudSettingsDto(
+            new ConnectionSettingsDto("localhost", 9000, 30, "Sample Company"),
+            new NumberingSettingsDto("SR/", string.Empty, 4),
+            new PrintSettingsDto("Sample Company", null, null, null, "State", "India", null, null, null, null, null, true, false, false, 10, 8),
+            new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales"),
+            Dto),
+        [],
+        [],
+        DateTimeOffset.UtcNow,
+        requiresInitialSetup);
 }

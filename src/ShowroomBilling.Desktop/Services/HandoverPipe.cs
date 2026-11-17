@@ -14,7 +14,9 @@ namespace ShowroomBilling.Desktop.Services;
 /// a named pipe that only the same Windows user, in the same session, can open. Its name also
 /// carries the settings folder and the build, so a scratch run or a development build never takes
 /// a link meant for the real app. A message is the link's length (4 bytes, little-endian) and its
-/// UTF-8 text; the running copy answers one byte, 1, once it has the link.
+/// UTF-8 text; the running copy answers one byte, 1, once it has the link. A copy also holds a
+/// marker under the same name from the moment it starts (<see cref="MarkRunning"/>), which is
+/// how a start with a link knows at once that there is no copy to wait for.
 /// </summary>
 public static class HandoverPipe
 {
@@ -33,6 +35,41 @@ public static class HandoverPipe
 #endif
         return $"TallyWrapper.Handover.{environmentName}.{Build}.{user}.{session}.{folder}";
     }
+
+    /// <summary>
+    /// Says, from the first moment of a start until the process ends, that a copy of the app is
+    /// running or on its way up. A start with a link looks for this before it waits for the
+    /// pipe: the pipe opens only once the app has started, and a start that found no pipe could
+    /// not tell "no copy" from "a copy that is still starting" without waiting out the timeout.
+    /// Windows removes the marker with the process, also one that crashed. Keep the returned
+    /// handle for as long as the app runs.
+    /// </summary>
+    public static IDisposable MarkRunning(string pipeName)
+        => new EventWaitHandle(initialState: false, EventResetMode.ManualReset, RunningMarkerName(pipeName));
+
+    /// <summary>Whether a copy of the app that listens on <paramref name="pipeName"/> is running or starting.</summary>
+    public static bool IsCopyRunning(string pipeName)
+    {
+        try
+        {
+            if (!EventWaitHandle.TryOpenExisting(RunningMarkerName(pipeName), out var marker))
+            {
+                return false;
+            }
+
+            marker.Dispose();
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // It is there, though not for this start to open (a copy started as administrator,
+            // say). Let the pipe give the answer, as it did before there was a marker.
+            return true;
+        }
+    }
+
+    // In the session's own namespace, and named after the pipe, so it tells copies apart exactly as the pipe does.
+    private static string RunningMarkerName(string pipeName) => $@"Local\{pipeName}.Running";
 
     /// <summary>
     /// Gives <paramref name="link"/> to the copy of the app listening on <paramref name="pipeName"/>.

@@ -488,10 +488,21 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         // The forced check also brings the database identity for the status bar.
         var healthTask = RefreshHealthAsync(forceTallyCompany: true);
 
-        await Task.WhenAll(settingsTask, healthTask);
         var settingsResponse = await settingsTask;
-
         _ = _printCoordinator.WarmUpPrintPipelineAsync();
+
+        // A hand-over link that started the app is taken from here on. It needs what the
+        // settings step has just applied (settings and masters, the company profile, the copy
+        // defaults and the print layout), not the health check, which takes as long as Tally
+        // takes. If the settings did not come, the hand-over asks for them once more itself.
+        // The one case that waits is a PC whose first setup is still due: there the link is
+        // taken once the setup form has opened, as it always was (MainWindow marks it then).
+        if (!SetupWizard.IsDue(settingsResponse))
+        {
+            Handover.MarkStarted();
+        }
+
+        await healthTask;
         // Invoice is the default tab and OnActiveTabChanged does NOT fire for
         // the constructor's same-value assignment, so the preview fetch
         // wouldn't otherwise run on a cold launch where the operator stays put.
