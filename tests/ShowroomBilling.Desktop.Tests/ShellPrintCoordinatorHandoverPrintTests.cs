@@ -193,8 +193,6 @@ public sealed class ShellPrintCoordinatorHandoverPrintTests
 
         public byte[] GeneratePdf(PrintDocumentOptions options) => [];
         public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => [];
-        public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options) => [];
-        public bool PrintRenderedPages(IReadOnlyList<byte[]> pageImages, string printerName, PrintJobSettings? settings = null) => false;
 
         public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null)
             => Send(new Job([options], printerName, settings, SentAsOneBill: true));

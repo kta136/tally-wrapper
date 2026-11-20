@@ -25,8 +25,14 @@ public interface IPrintDispatcher
     bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null);
     byte[] GeneratePdf(PrintDocumentOptions options);
     IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150);
-    IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options);
+
+    /// <summary>
+    /// Sends the bills to the printer as one job, a page for each copy. The
+    /// pages go as text and lines for the printer to draw; a bill that cannot
+    /// be drawn that way exactly goes as 600 DPI pictures of its pages. False
+    /// when there was nothing to print; a printer that cannot be reached throws.
+    /// Takes as long as the printer's queue takes: call it off the UI thread.
+    /// </summary>
     bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null);
     bool PrintToPrinter(IReadOnlyList<PrintDocumentOptions> options, string printerName, PrintJobSettings? settings = null);
-    bool PrintRenderedPages(IReadOnlyList<byte[]> pageImages, string printerName, PrintJobSettings? settings = null);
 }

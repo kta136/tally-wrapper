@@ -18,7 +18,6 @@ public partial class PrintPreviewViewModel : ObservableObject
     private const double MinZoomPercent = PrintPreviewZoom.MinPercent;
     private const double MaxZoomPercent = PrintPreviewZoom.MaxPercent;
     private const double ZoomStepPercent = 10;
-    private const string PreparingPrintPagesMessage = "Preparing printer-ready pages…";
 
     private readonly IPrintDispatcher? _dispatcher;
     private readonly IPrintPreferencesStore? _preferences;
@@ -26,13 +25,9 @@ public partial class PrintPreviewViewModel : ObservableObject
     private IReadOnlyList<BillPrintContent> _contents = Array.Empty<BillPrintContent>();
     private PrintLayoutOptions _layout = PrintLayoutOptions.Default;
     private CancellationTokenSource? _previewRenderCts;
-    private CancellationTokenSource? _printPrepareCts;
     private int _previewRenderVersion;
-    private int _printPrepareVersion;
     private int _printerLoadVersion;
     private int _printerCapabilityLoadVersion;
-    private Task<IReadOnlyList<byte[]>>? _printPrepareTask;
-    private IReadOnlyList<byte[]>? _preparedPrintPages;
     private bool _suppressZoomPersist;
     private bool _suppressPrintSettingsPersist;
     private PrintJobSettings _preferredPrintJobSettings = PrintJobSettings.Default;
@@ -282,7 +277,6 @@ public partial class PrintPreviewViewModel : ObservableObject
             return;
         }
 
-        CancelPrintPreparation();
         var prior = _previewRenderCts;
         var cts = new CancellationTokenSource();
         _previewRenderCts = cts;
@@ -341,7 +335,6 @@ public partial class PrintPreviewViewModel : ObservableObject
                 PreviewPages.Add(PreviewBitmapDecoder.Decode(bytes));
             }
             StatusMessage = string.Empty;
-            SchedulePrintPagePreparation(options);
         }
         catch (OperationCanceledException)
         {
@@ -541,110 +534,6 @@ public partial class PrintPreviewViewModel : ObservableObject
         }
     }
 
-    private void CancelPrintPreparation()
-    {
-        _preparedPrintPages = null;
-        _printPrepareTask = null;
-        Interlocked.Increment(ref _printPrepareVersion);
-
-        var prior = _printPrepareCts;
-        _printPrepareCts = null;
-        prior?.Cancel();
-        prior?.Dispose();
-    }
-
-    private void SchedulePrintPagePreparation(IReadOnlyList<PrintDocumentOptions> options)
-    {
-        if (_dispatcher is null || options.Count == 0)
-        {
-            return;
-        }
-
-        var prior = _printPrepareCts;
-        var cts = new CancellationTokenSource();
-        _printPrepareCts = cts;
-        _preparedPrintPages = null;
-        var version = Interlocked.Increment(ref _printPrepareVersion);
-        prior?.Cancel();
-        prior?.Dispose();
-
-        _printPrepareTask = PreparePrintPagesAsync(version, options, cts.Token);
-    }
-
-    private async Task<IReadOnlyList<byte[]>> PreparePrintPagesAsync(
-        int version,
-        IReadOnlyList<PrintDocumentOptions> options,
-        CancellationToken cancellationToken)
-    {
-        if (_dispatcher is null)
-        {
-            return Array.Empty<byte[]>();
-        }
-
-        try
-        {
-            await Task.Delay(50, cancellationToken);
-            if (version == _printPrepareVersion && !IsBusy)
-            {
-                StatusMessage = PreparingPrintPagesMessage;
-            }
-
-            var pages = await Task.Run(() => _dispatcher.GeneratePrintPageImages(options), cancellationToken);
-            if (version == _printPrepareVersion && !cancellationToken.IsCancellationRequested)
-            {
-                _preparedPrintPages = pages;
-                if (!IsBusy && StatusMessage == PreparingPrintPagesMessage)
-                {
-                    StatusMessage = pages.Count > 0 ? "Ready to print." : "No pages were generated for this bill.";
-                }
-            }
-
-            return pages;
-        }
-        catch (OperationCanceledException)
-        {
-            return Array.Empty<byte[]>();
-        }
-        catch
-        {
-            if (version == _printPrepareVersion && !IsBusy && StatusMessage == PreparingPrintPagesMessage)
-            {
-                StatusMessage = string.Empty;
-            }
-
-            return Array.Empty<byte[]>();
-        }
-    }
-
-    private async Task<IReadOnlyList<byte[]>> GetPrintPagesAsync(
-        IReadOnlyList<PrintDocumentOptions> options,
-        CancellationToken cancellationToken)
-    {
-        if (_dispatcher is null)
-        {
-            return Array.Empty<byte[]>();
-        }
-
-        if (_preparedPrintPages is { Count: > 0 } pages)
-        {
-            return pages;
-        }
-
-        var task = _printPrepareTask;
-        if (task is not null)
-        {
-            StatusMessage = "Finishing print preparation…";
-            var prepared = await task.WaitAsync(cancellationToken);
-            if (ReferenceEquals(task, _printPrepareTask) && prepared.Count > 0)
-            {
-                return prepared;
-            }
-        }
-
-        StatusMessage = "Rendering printer-ready pages…";
-        return await Task.Run(() => _dispatcher.GeneratePrintPageImages(options), cancellationToken);
-    }
-
     private bool CanPrint() => !IsBusy && _contents.Count > 0 && !string.IsNullOrWhiteSpace(SelectedPrinter);
 
     private bool CanSavePdf => !IsBusy && IsSingleDocument && _contents.Count == 1;
@@ -675,14 +564,14 @@ public partial class PrintPreviewViewModel : ObservableObject
         StatusMessage = $"Sending to {SelectedPrinter}…";
         try
         {
-            var pages = await GetPrintPagesAsync(options, cancellationToken);
+            var printer = SelectedPrinter!;
             var settings = CurrentPrintJobSettings;
-            var ok = await Task.Run(() => _dispatcher.PrintRenderedPages(pages, SelectedPrinter!, settings), cancellationToken);
+            var ok = await Task.Run(() => _dispatcher.PrintToPrinter(options, printer, settings), cancellationToken);
 
             StatusMessage = ok ? "Sent to printer." : "No pages were generated for this bill.";
             if (ok)
             {
-                _preferences?.SaveLastPrinter(SelectedPrinter!);
+                _preferences?.SaveLastPrinter(printer);
                 _onPrintSucceeded?.Invoke();
             }
         }

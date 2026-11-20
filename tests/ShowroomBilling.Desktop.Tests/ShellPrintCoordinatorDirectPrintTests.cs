@@ -291,7 +291,6 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null) => false;
         public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
         public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => Array.Empty<byte[]>();
-        public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options) => Array.Empty<byte[]>();
 
         public bool PrintToPrinter(
             PrintDocumentOptions options,
@@ -319,11 +318,6 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
 
         public bool PrintToPrinter(
             IReadOnlyList<PrintDocumentOptions> options,
-            string printerName,
-            PrintJobSettings? settings = null) => false;
-
-        public bool PrintRenderedPages(
-            IReadOnlyList<byte[]> pageImages,
             string printerName,
             PrintJobSettings? settings = null) => false;
     }

@@ -87,6 +87,54 @@ Tally Wrapper rule:
 - keep PDF export from preview
 - remember the last save directory locally per workstation/user profile
 
+### 1.5 What the printer is sent
+
+Every print to a printer goes through `IPrintDispatcher.PrintToPrinter`: the
+direct print after save, a handed-over bill, and the preview's Print button.
+One call is one print job, with a page for each copy of each bill.
+
+- **Text and lines.** QuestPDF writes each page as an SVG drawing
+  (`BillPrintRenderer.GeneratePageSvgs`) and `VectorPrintPages` turns it into
+  XPS shapes: each letter as a glyph of the installed font at the position
+  QuestPDF gave it, each rule and box as a path, the logo and the signature as
+  the images they are. The printer draws them at its own resolution, so text is
+  as sharp as the printer can make it, and nothing page-sized has to be
+  rendered, packed and unpacked first. (QuestPDF's own XPS output was removed in
+  2026.8.0.)
+- **Pictures, when a bill cannot be drawn that way exactly.** The page reader
+  refuses anything it does not know: an element or attribute QuestPDF has not
+  written for a bill so far, a font that is not installed in the weight asked
+  for or may not be embedded, a letter the font has no glyph for. It also
+  refuses, before anything is rendered, a bill whose text has a letter outside
+  Latin letters, digits, punctuation and signs (Devanagari, say): the SVG names
+  a glyph by its letter, and a shape that stands for two joined letters is left
+  out of it without a trace. A refused job is sent as a 600 DPI picture of
+  every page, which is how all printing worked before, and a warning in the
+  Desktop log says why. The two never mix in one job.
+- **The fallback is decided before the printer is touched.** The text-and-lines
+  document is first written as XPS in memory. A job the print queue itself
+  refuses is reported as a failed print and is not sent again as pictures,
+  because part of it may already be on paper.
+- **Watermark.** An SVG page leaves out whatever is drawn half-transparent, so
+  the watermark is faded onto white first and placed as one solid image under
+  everything else. On white paper that is the same picture, and the printer
+  driver has nothing to blend.
+- **Page and job settings are as before:** A4 pages in a `FixedDocument`,
+  written with the queue's `XpsDocumentWriter` and the same merged
+  `PrintTicket` (§4).
+- **The preview no longer renders printer pages ahead of time.** It used to
+  make the 600 DPI pictures in the background as soon as the preview was
+  drawn, so that Print would not wait. Print now does the whole job when it is
+  pressed; a bill that falls back to pictures takes a second or two per page at
+  that point.
+- **To look at what is sent** without a printer, set `TALLYWRAPPER_PRINT_SAMPLES`
+  to a folder and run `PrintDispatcherTests`: it keeps `direct_print.xps` and a
+  300 DPI picture of each page as an XPS printer would draw it. Do this after
+  changing the bill's font or adding a new kind of shape to `BillDocument`: a
+  font that joins letter pairs into one glyph would lose those letters, and
+  `Every_letter_of_the_bills_own_text_reaches_the_page` is the test that shows
+  it.
+
 ---
 
 ## 2. Copy modes
@@ -160,7 +208,7 @@ The print preview dialog also exposes local printer-job settings:
 
 These settings are queried from the selected printer's `PrintCapabilities`, unsupported
 options are omitted, and the selected values are merged/validated into a WPF
-`PrintTicket` before dispatch. If capabilities cannot be read, the dialog falls
+`PrintTicket` before dispatch, whichever way the pages are sent (§1.5). If capabilities cannot be read, the dialog falls
 back to printer defaults. The values are stored only in the local
 `print-preferences.json` file, are restored visibly when the preview reopens,
 and are reused by direct-print-after-save.

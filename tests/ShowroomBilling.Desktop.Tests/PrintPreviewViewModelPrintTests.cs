@@ -13,7 +13,7 @@ public sealed class PrintPreviewViewModelPrintTests
         PrintCollationMode.Collated);
 
     [Fact]
-    public async Task PrintCommand_sends_multi_bill_preview_as_one_prepared_printer_job()
+    public async Task PrintCommand_sends_a_multi_bill_preview_as_one_printer_job()
     {
         var dispatcher = new FakePrintDispatcher("Counter Printer");
         var preferences = new FakePrintPreferencesStore { LastPrinterName = "Counter Printer" };
@@ -25,28 +25,58 @@ public sealed class PrintPreviewViewModelPrintTests
             new CopyDefaults(Original: true, Duplicate: true, Triplicate: false));
 
         await dispatcher.WaitForPreviewRenderAsync();
-        await dispatcher.WaitForPrintPreparationAsync();
         await WaitForAsync(() => !vm.IsBusy && vm.SelectedPrinter == "Counter Printer");
 
         await vm.PrintCommand.ExecuteAsync(null);
 
+        // One call for all the bills: the dispatcher makes one job of them.
         Assert.Equal(0, dispatcher.SinglePrintCount);
-        Assert.Equal(0, dispatcher.BatchPrintCount);
-        Assert.Equal(1, dispatcher.RenderedPrintCount);
+        Assert.Equal(1, dispatcher.BatchPrintCount);
         Assert.Equal("Counter Printer", dispatcher.LastPrinterName);
         Assert.Equal("Counter Printer", preferences.LastPrinterName);
         Assert.Equal("Sent to printer.", vm.StatusMessage);
 
-        var printed = Assert.IsAssignableFrom<IReadOnlyList<PrintDocumentOptions>>(dispatcher.LastPreparedOptions);
+        var printed = Assert.IsAssignableFrom<IReadOnlyList<PrintDocumentOptions>>(dispatcher.LastBatch);
         Assert.Equal(2, printed.Count);
         Assert.Equal("INV/001", printed[0].Content.InvoiceNumber);
         Assert.Equal("INV/002", printed[1].Content.InvoiceNumber);
         Assert.Equal(new[] { CopyLabel.Original, CopyLabel.Duplicate }, printed[0].Copies);
         Assert.Equal(new[] { CopyLabel.Original, CopyLabel.Duplicate }, printed[1].Copies);
+    }
 
-        var renderedPages = Assert.IsAssignableFrom<IReadOnlyList<byte[]>>(dispatcher.LastRenderedPages);
-        Assert.Single(renderedPages);
-        Assert.Equal(new byte[] { 1, 2, 3 }, renderedPages[0]);
+    [Fact]
+    public async Task Opening_the_preview_does_not_make_printer_pages_before_Print_is_pressed()
+    {
+        var dispatcher = new FakePrintDispatcher("Counter Printer");
+        var vm = new PrintPreviewViewModel(dispatcher, new FakePrintPreferencesStore { LastPrinterName = "Counter Printer" });
+
+        vm.Initialize(Content("INV/001"));
+
+        await dispatcher.WaitForPreviewRenderAsync();
+        await WaitForAsync(() => !vm.IsBusy && vm.SelectedPrinter == "Counter Printer");
+
+        // The pages for the printer used to be rendered here, at 600 DPI, so
+        // that Print would not have to wait for them. They now take a moment.
+        Assert.Equal(0, dispatcher.BatchPrintCount);
+        Assert.Equal(string.Empty, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task A_print_the_printer_refuses_is_reported_and_the_preview_stays_open()
+    {
+        var dispatcher = new FakePrintDispatcher("Counter Printer") { PrintFailure = new InvalidOperationException("The printer is offline.") };
+        var vm = new PrintPreviewViewModel(dispatcher, new FakePrintPreferencesStore { LastPrinterName = "Counter Printer" });
+        var closed = false;
+
+        vm.Initialize(Content("INV/001"), onPrintSucceeded: () => closed = true);
+        await dispatcher.WaitForPreviewRenderAsync();
+        await WaitForAsync(() => !vm.IsBusy && vm.SelectedPrinter == "Counter Printer");
+
+        await vm.PrintCommand.ExecuteAsync(null);
+
+        Assert.Equal("Print failed: The printer is offline.", vm.StatusMessage);
+        Assert.False(closed);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]
@@ -108,7 +138,6 @@ public sealed class PrintPreviewViewModelPrintTests
         vm.Initialize(Content("INV/003"));
 
         await dispatcher.WaitForPreviewRenderAsync();
-        await dispatcher.WaitForPrintPreparationAsync();
         await WaitForAsync(() => vm.DuplexOptions.Any(x => x.Value == PrintDuplexMode.TwoSidedLongEdge));
 
         vm.SelectedDuplexMode = NonDefaultSettings.Duplex;
@@ -117,7 +146,7 @@ public sealed class PrintPreviewViewModelPrintTests
 
         await vm.PrintCommand.ExecuteAsync(null);
 
-        Assert.Equal(1, dispatcher.RenderedPrintCount);
+        Assert.Equal(1, dispatcher.BatchPrintCount);
         Assert.Equal(NonDefaultSettings, dispatcher.LastPrintSettings);
     }
 
@@ -284,16 +313,15 @@ public sealed class PrintPreviewViewModelPrintTests
     private sealed class FakePrintDispatcher(string printerName) : IPrintDispatcher
     {
         private readonly SemaphoreSlim _previewRendered = new(0);
-        private readonly SemaphoreSlim _printPrepared = new(0);
 
         public int SinglePrintCount { get; private set; }
         public int BatchPrintCount { get; private set; }
-        public int RenderedPrintCount { get; private set; }
         public string? LastPrinterName { get; private set; }
         public IReadOnlyList<PrintDocumentOptions>? LastBatch { get; private set; }
-        public IReadOnlyList<PrintDocumentOptions>? LastPreparedOptions { get; private set; }
-        public IReadOnlyList<byte[]>? LastRenderedPages { get; private set; }
         public PrintJobSettings? LastPrintSettings { get; private set; }
+
+        /// <summary>What the print queue answers a job with, when it refuses one.</summary>
+        public Exception? PrintFailure { get; init; }
         public PrintJobCapabilities Capabilities { get; set; } = new(
             IsKnown: true,
             DuplexModes:
@@ -328,13 +356,6 @@ public sealed class PrintPreviewViewModelPrintTests
             return Array.Empty<byte[]>();
         }
 
-        public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options)
-        {
-            LastPreparedOptions = options.ToArray();
-            _printPrepared.Release();
-            return new[] { new byte[] { 1, 2, 3 } };
-        }
-
         public bool PrintToPrinter(
             PrintDocumentOptions options,
             string selectedPrinterName,
@@ -355,19 +376,12 @@ public sealed class PrintPreviewViewModelPrintTests
             LastPrinterName = selectedPrinterName;
             LastBatch = options.ToArray();
             LastPrintSettings = settings;
-            return true;
-        }
+            if (PrintFailure is not null)
+            {
+                throw PrintFailure;
+            }
 
-        public bool PrintRenderedPages(
-            IReadOnlyList<byte[]> pageImages,
-            string selectedPrinterName,
-            PrintJobSettings? settings = null)
-        {
-            RenderedPrintCount++;
-            LastPrinterName = selectedPrinterName;
-            LastRenderedPages = pageImages.ToArray();
-            LastPrintSettings = settings;
-            return pageImages.Count > 0;
+            return true;
         }
 
         public async Task WaitForPreviewRenderAsync()
@@ -375,14 +389,6 @@ public sealed class PrintPreviewViewModelPrintTests
             if (!await _previewRendered.WaitAsync(TimeSpan.FromSeconds(2)))
             {
                 throw new TimeoutException("Preview render did not start before the timeout.");
-            }
-        }
-
-        public async Task WaitForPrintPreparationAsync()
-        {
-            if (!await _printPrepared.WaitAsync(TimeSpan.FromSeconds(2)))
-            {
-                throw new TimeoutException("Print preparation did not start before the timeout.");
             }
         }
     }

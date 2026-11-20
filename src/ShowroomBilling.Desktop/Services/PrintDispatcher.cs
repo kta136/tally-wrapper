@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Packaging;
 using System.Printing;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -7,6 +8,8 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media.Imaging;
+using System.Windows.Xps.Packaging;
+using Microsoft.Extensions.Logging;
 using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop.Services;
@@ -15,15 +18,35 @@ public sealed class PrintDispatcher : IPrintDispatcher
 {
     private const int PrintImageDpi = 600;
 
+    // A4 at 96 DPI: 8.27" x 11.69" -> 793.7 x 1122.5
+    private const double PageWidth = 793.7;
+    private const double PageHeight = 1122.5;
+
     private readonly BillPrintRenderer _renderer;
+    private readonly Action<FixedDocument, string, PrintJobSettings> _sendToPrinter;
+    private readonly ILogger<PrintDispatcher>? _logger;
     private readonly object _printerCacheGate = new();
     private IReadOnlyList<string>? _availablePrinters;
     private string? _defaultPrinter;
+    private volatile FadedWatermark? _fadedWatermark;
 
-    public PrintDispatcher(BillPrintRenderer renderer)
+    public PrintDispatcher(BillPrintRenderer renderer, ILogger<PrintDispatcher>? logger = null)
+        : this(renderer, SendToPrintQueue, logger)
+    {
+    }
+
+    /// <summary>For a test: the finished document is handed to <paramref name="sendToPrinter"/> instead of a print queue.</summary>
+    internal PrintDispatcher(
+        BillPrintRenderer renderer,
+        Action<FixedDocument, string, PrintJobSettings> sendToPrinter,
+        ILogger<PrintDispatcher>? logger = null)
     {
         _renderer = renderer;
+        _sendToPrinter = sendToPrinter;
+        _logger = logger;
     }
+
+    private sealed record FadedWatermark(byte[] Source, float Opacity, byte[] Image);
 
     public IReadOnlyList<string> AvailablePrinters()
     {
@@ -223,20 +246,6 @@ public sealed class PrintDispatcher : IPrintDispatcher
     public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)
         => _renderer.GeneratePageImages(options, dpi);
 
-    public IReadOnlyList<byte[]> GeneratePrintPageImages(IReadOnlyList<PrintDocumentOptions> options)
-    {
-        ArgumentNullException.ThrowIfNull(options);
-
-        var pages = new List<byte[]>();
-        foreach (var option in options)
-        {
-            if (option is null) continue;
-            pages.AddRange(_renderer.GeneratePageImages(option, imageDpi: PrintImageDpi));
-        }
-
-        return pages;
-    }
-
     public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -250,38 +259,190 @@ public sealed class PrintDispatcher : IPrintDispatcher
     {
         ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(printerName)) return false;
-        if (options.Count == 0) return false;
 
-        var pages = GeneratePrintPageImages(options);
-        return PrintRenderedPages(pages, printerName, settings);
-    }
-
-    public bool PrintRenderedPages(
-        IReadOnlyList<byte[]> pageImages,
-        string printerName,
-        PrintJobSettings? settings = null)
-    {
-        ArgumentNullException.ThrowIfNull(pageImages);
-        if (string.IsNullOrWhiteSpace(printerName)) return false;
-        if (pageImages.Count == 0) return false;
+        var bills = options.Where(option => option is not null).ToList();
+        if (bills.Count == 0) return false;
 
         return RunOnSta(() =>
         {
-            using var server = new LocalPrintServer();
-            using var queue = server.GetPrintQueue(printerName);
-            var doc = BuildFixedDocument(pageImages);
-            var writer = PrintQueue.CreateXpsDocumentWriter(queue);
-            var ticket = TryBuildPrintTicket(queue, settings ?? PrintJobSettings.Default);
-            if (ticket is null)
+            var document = BuildPrintDocument(bills);
+            if (document.Pages.Count == 0)
             {
-                writer.Write(doc);
+                return false;
             }
-            else
-            {
-                writer.Write(doc, ticket);
-            }
+
+            _sendToPrinter(document, printerName, settings ?? PrintJobSettings.Default);
             return true;
         });
+    }
+
+    /// <summary>
+    /// The bills as the document that goes to the printer, one page for each
+    /// copy: text and lines where a bill can be drawn that way exactly, and
+    /// otherwise a 600 DPI picture of every page, as all printing once was.
+    /// Needs an STA thread.
+    /// </summary>
+    internal FixedDocument BuildPrintDocument(IReadOnlyList<PrintDocumentOptions> bills)
+    {
+        try
+        {
+            var document = BuildVectorDocument(bills);
+            if (document.Pages.Count > 0)
+            {
+                return document;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Why a bill came out slower, as pictures, is worth being able to look up.
+            _logger?.LogWarning(ex, "A bill could not be sent to the printer as text and lines; sending pictures of its pages instead.");
+        }
+
+        return BuildPictureDocument(bills);
+    }
+
+    private FixedDocument BuildVectorDocument(IReadOnlyList<PrintDocumentOptions> bills)
+    {
+        var pages = new List<string>();
+        foreach (var bill in bills)
+        {
+            VectorPrintPages.RefuseTextBeyondPlainLetters(bill.Content);
+            pages.AddRange(_renderer.GeneratePageSvgs(WithWatermarkFaded(bill)));
+        }
+
+        var document = ToDocument(VectorPrintPages.Build(pages));
+
+        // Whatever in it cannot be written as XPS (a font that will not
+        // embed, say) has to show before the printer has been sent anything:
+        // after that, falling back to pictures could print a bill twice.
+        WriteAsXps(document, Stream.Null);
+        return document;
+    }
+
+    /// <summary>
+    /// An SVG page leaves out what is drawn half-transparent, so the watermark
+    /// is handed over as it looks on white paper, at full strength.
+    /// </summary>
+    private PrintDocumentOptions WithWatermarkFaded(PrintDocumentOptions bill)
+    {
+        var layout = bill.Layout;
+        if (layout.WatermarkBytes is not { Length: > 0 } watermark || layout.WatermarkOpacity <= 0f)
+        {
+            return bill;
+        }
+
+        // The same file at the same strength bill after bill: fade it once.
+        var faded = _fadedWatermark;
+        if (faded is null || !ReferenceEquals(faded.Source, watermark) || faded.Opacity != layout.WatermarkOpacity)
+        {
+            faded = new FadedWatermark(
+                watermark,
+                layout.WatermarkOpacity,
+                VectorPrintPages.FadeOntoWhite(watermark, layout.WatermarkOpacity));
+            _fadedWatermark = faded;
+        }
+
+        return bill with { Layout = layout with { WatermarkBytes = faded.Image, WatermarkOpacity = 1f } };
+    }
+
+    private FixedDocument BuildPictureDocument(IReadOnlyList<PrintDocumentOptions> bills)
+    {
+        var pictures = new List<byte[]>();
+        foreach (var bill in bills)
+        {
+            pictures.AddRange(_renderer.GeneratePageImages(bill, imageDpi: PrintImageDpi));
+        }
+
+        return BuildFixedDocument(pictures);
+    }
+
+    /// <summary>A document with an A4 page for each picture (a PNG of a whole page).</summary>
+    internal static FixedDocument BuildFixedDocument(IReadOnlyList<byte[]> pageImages)
+    {
+        var pages = new List<UIElement>(pageImages.Count);
+        foreach (var bytes in pageImages)
+        {
+            // Not unpacked here. A page at 600 DPI is about 140 MB once unpacked, and a job
+            // of several bills held every page that way at once (1.7 GB for six pages). With
+            // no cache the picture is read from its PNG only while its page is written, so
+            // what a job needs no longer grows with its pages. The stream is left open for that.
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.None;
+            bmp.StreamSource = new MemoryStream(bytes);
+            bmp.EndInit();
+            bmp.Freeze();
+
+            pages.Add(new Image
+            {
+                Source = bmp,
+                Stretch = System.Windows.Media.Stretch.Uniform,
+                Width = PageWidth,
+                Height = PageHeight,
+            });
+        }
+
+        return ToDocument(pages);
+    }
+
+    private static FixedDocument ToDocument(IEnumerable<UIElement> pages)
+    {
+        var doc = new FixedDocument();
+        doc.DocumentPaginator.PageSize = new Size(PageWidth, PageHeight);
+
+        foreach (var element in pages)
+        {
+            var page = new FixedPage { Width = PageWidth, Height = PageHeight };
+            page.Children.Add(element);
+            FixedPage.SetLeft(element, 0);
+            FixedPage.SetTop(element, 0);
+
+            var content = new PageContent();
+            ((IAddChild)content).AddChild(page);
+            doc.Pages.Add(content);
+        }
+
+        return doc;
+    }
+
+    /// <summary>Writes the document as an XPS file: what a print queue is sent, without the queue.</summary>
+    internal static void WriteAsXps(FixedDocument document, Stream target)
+    {
+        using var buffer = new MemoryStream();
+        using (var package = Package.Open(buffer, FileMode.Create, FileAccess.ReadWrite))
+        {
+            // An XPS document over a stream has to be findable by a pack URI while it is written.
+            var address = new Uri($"pack://print-{Guid.NewGuid():N}.xps");
+            PackageStore.AddPackage(address, package);
+            try
+            {
+                using var xps = new XpsDocument(package, CompressionOption.Fast, address.AbsoluteUri);
+                XpsDocument.CreateXpsDocumentWriter(xps).Write(document);
+            }
+            finally
+            {
+                PackageStore.RemovePackage(address);
+            }
+        }
+
+        buffer.Position = 0;
+        buffer.CopyTo(target);
+    }
+
+    private static void SendToPrintQueue(FixedDocument document, string printerName, PrintJobSettings settings)
+    {
+        using var server = new LocalPrintServer();
+        using var queue = server.GetPrintQueue(printerName);
+        var writer = PrintQueue.CreateXpsDocumentWriter(queue);
+        var ticket = TryBuildPrintTicket(queue, settings);
+        if (ticket is null)
+        {
+            writer.Write(document);
+        }
+        else
+        {
+            writer.Write(document, ticket);
+        }
     }
 
     private static PrintTicket? TryBuildPrintTicket(PrintQueue queue, PrintJobSettings settings)
@@ -347,50 +508,6 @@ public sealed class PrintDispatcher : IPrintDispatcher
         PrintCollationMode.Uncollated => Collation.Uncollated,
         _ => null,
     };
-
-    /// <summary>A document with an A4 page for each picture (a PNG of a whole page).</summary>
-    internal static FixedDocument BuildFixedDocument(IReadOnlyList<byte[]> pageImages)
-    {
-        // A4 at 96 DPI: 8.27" x 11.69" -> 793.7 x 1122.5
-        const double pageWidth = 793.7;
-        const double pageHeight = 1122.5;
-
-        var doc = new FixedDocument();
-        doc.DocumentPaginator.PageSize = new Size(pageWidth, pageHeight);
-
-        foreach (var bytes in pageImages)
-        {
-            // Not unpacked here. A page at 600 DPI is about 140 MB once unpacked, and a job
-            // of several bills held every page that way at once (1.7 GB for six pages). With
-            // no cache the picture is read from its PNG only while its page is written, so
-            // what a job needs no longer grows with its pages. The stream is left open for that.
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.None;
-            bmp.StreamSource = new MemoryStream(bytes);
-            bmp.EndInit();
-            bmp.Freeze();
-
-            var image = new Image
-            {
-                Source = bmp,
-                Stretch = System.Windows.Media.Stretch.Uniform,
-                Width = pageWidth,
-                Height = pageHeight,
-            };
-
-            var page = new FixedPage { Width = pageWidth, Height = pageHeight };
-            page.Children.Add(image);
-            FixedPage.SetLeft(image, 0);
-            FixedPage.SetTop(image, 0);
-
-            var content = new PageContent();
-            ((IAddChild)content).AddChild(page);
-            doc.Pages.Add(content);
-        }
-
-        return doc;
-    }
 
     // LocalPrintServer, PrintQueue, and WPF layout objects (FixedDocument, FixedPage, Image)
     // all require an STA thread. Task.Run uses MTA thread-pool threads, so we spin up a
