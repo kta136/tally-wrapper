@@ -238,9 +238,11 @@ public sealed class SyntheticBillPlanner
         // Reservoir-style sample without replacement: pick N unique minute offsets.
         var chosen = SampleWithoutReplacement(slotCount, billCount, rng);
         Array.Sort(chosen);
+        // In UTC whatever offset the window came with: the database takes no other (a window sent
+        // with +05:30 used to fail when its bills were saved).
         var result = new DateTimeOffset[billCount];
         for (var i = 0; i < billCount; i++)
-            result[i] = earliest + TimeSpan.FromMinutes(chosen[i]);
+            result[i] = (earliest + TimeSpan.FromMinutes(chosen[i])).ToUniversalTime();
         return result;
     }
 

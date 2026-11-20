@@ -137,6 +137,22 @@ public sealed class SyntheticBillPlannerTests
     }
 
     [Fact]
+    public void BuildRandomSchedule_GivesUtcTimes_WhateverOffsetTheWindowCameWith()
+    {
+        var india = TimeSpan.FromMinutes(330);
+        var start = new DateTimeOffset(2026, 4, 24, 10, 0, 0, india);
+
+        var slots = SyntheticBillPlanner.BuildRandomSchedule(
+            billCount: 5, startAtUtc: start, endAtUtc: start.AddHours(1), floorUtc: null, nowUtc: Now, rng: new Random(3));
+
+        Assert.All(slots, slot =>
+        {
+            Assert.Equal(TimeSpan.Zero, slot.Offset);
+            Assert.InRange(slot, start, start.AddHours(1));
+        });
+    }
+
+    [Fact]
     public void BuildRandomSchedule_ThrowsWhenStartIsBeforeTheLastBillsMinute()
     {
         var floor = new DateTimeOffset(2026, 4, 24, 12, 0, 37, TimeSpan.Zero);

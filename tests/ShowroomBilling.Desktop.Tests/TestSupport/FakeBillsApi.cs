@@ -69,10 +69,15 @@ internal sealed class FakeBillsApi : IBillsApiClient
     /// <summary>When set, every search fails with it.</summary>
     public Exception? SearchFailure { get; set; }
 
+    /// <summary>Searches that answer only when the test completes them, taken in order before <see cref="Response"/>.</summary>
+    public Queue<TaskCompletionSource<BillListResponse>> PendingSearches { get; } = new();
+
     public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
     {
         LastFilter = filter;
         SearchCount++;
+        if (PendingSearches.TryDequeue(out var pending))
+            return pending.Task;
         return SearchFailure is { } failure
             ? Task.FromException<BillListResponse>(failure)
             : Task.FromResult(Response);

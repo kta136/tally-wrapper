@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,6 +12,11 @@ public partial class SyntheticBatchDialog : UserControl
     private const string DateTimeFormat = "yyyy-MM-dd HH:mm";
 
     private SyntheticBatchViewModel? _watched;
+
+    // What each time box was last given. A box still holding it has not been typed in, so it
+    // follows the view model, and leaving it commits nothing.
+    private string? _startShown;
+    private string? _endShown;
 
     public SyntheticBatchDialog()
     {
@@ -32,8 +38,8 @@ public partial class SyntheticBatchDialog : UserControl
     private void SyncInputsFromVm()
     {
         if (Vm is not { } vm) return;
-        StartAtBox.Text = Format(vm.StartAt);
-        EndAtBox.Text = Format(vm.EndAt);
+        StartAtBox.Text = _startShown = Format(vm.StartAt);
+        EndAtBox.Text = _endShown = Format(vm.EndAt);
     }
 
     // The window is set again once the last bill's time has been read, after the dialog is shown.
@@ -44,37 +50,41 @@ public partial class SyntheticBatchDialog : UserControl
         if (vm is not null) vm.PropertyChanged += OnVmPropertyChanged;
     }
 
-    // A box the operator is typing in is left alone; its own LostFocus commits it.
-    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    // A box the operator has typed in is left alone; its own LostFocus commits it.
+    private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not SyntheticBatchViewModel vm) return;
-        if (e.PropertyName == nameof(SyntheticBatchViewModel.StartAt) && !StartAtBox.IsKeyboardFocusWithin)
-            StartAtBox.Text = Format(vm.StartAt);
-        else if (e.PropertyName == nameof(SyntheticBatchViewModel.EndAt) && !EndAtBox.IsKeyboardFocusWithin)
-            EndAtBox.Text = Format(vm.EndAt);
+        if (e.PropertyName == nameof(SyntheticBatchViewModel.StartAt) && StartAtBox.Text == _startShown)
+            StartAtBox.Text = _startShown = Format(vm.StartAt);
+        else if (e.PropertyName == nameof(SyntheticBatchViewModel.EndAt) && EndAtBox.Text == _endShown)
+            EndAtBox.Text = _endShown = Format(vm.EndAt);
     }
 
     private void OnStartAtLostFocus(object sender, RoutedEventArgs e)
-        => CommitDateTime(sender, vm => vm.StartAt, (vm, value) => vm.StartAt = value);
+        => _startShown = CommitDateTime(StartAtBox, _startShown, vm => vm.StartAt, (vm, value) => vm.StartAt = value);
 
     private void OnEndAtLostFocus(object sender, RoutedEventArgs e)
-        => CommitDateTime(sender, vm => vm.EndAt, (vm, value) => vm.EndAt = value);
+        => _endShown = CommitDateTime(EndAtBox, _endShown, vm => vm.EndAt, (vm, value) => vm.EndAt = value);
 
-    /// <summary>Takes what was typed if it is a date and time; otherwise puts the current value back.</summary>
-    private void CommitDateTime(
-        object sender,
+    /// <summary>
+    /// Takes what was typed if it is a date and time; otherwise puts the current value back.
+    /// Returns what the box now shows. An untouched box commits nothing, so it never writes
+    /// back a time the view model has moved on from.
+    /// </summary>
+    private string? CommitDateTime(
+        TextBox box,
+        string? shown,
         Func<SyntheticBatchViewModel, DateTimeOffset> current,
         Action<SyntheticBatchViewModel, DateTimeOffset> assign)
     {
-        if (Vm is not { } vm || sender is not TextBox box) return;
+        if (Vm is not { } vm || box.Text == shown) return shown;
         if (TryParseLocal(box.Text, out var parsed))
         {
             assign(vm, parsed);
         }
-        else
-        {
-            box.Text = Format(current(vm));
-        }
+
+        box.Text = Format(current(vm));
+        return box.Text;
     }
 
     private static string Format(DateTimeOffset value)

@@ -146,7 +146,9 @@ public sealed class SyntheticBatchViewModelTests
         Assert.Equal((0, 1, BillSearchSorts.CreatedDesc), (api.LastFilter!.Skip, api.LastFilter.Take, api.LastFilter.Sort));
         Assert.Equal(lastBill, vm.StartAt);
         Assert.Equal(lastBill, vm.LastBillAt);
-        Assert.InRange(vm.EndAt, before, DateTimeOffset.Now);
+        // Now, to the minute the box shows.
+        Assert.Equal(0, vm.EndAt.Second);
+        Assert.InRange(vm.EndAt, before.AddMinutes(-1), DateTimeOffset.Now);
         Assert.Equal($"Bills can be dated from the last bill, {lastBill.ToLocalTime():dd MMM, HH:mm}, up to now.", vm.WindowNote);
     }
 
@@ -213,6 +215,64 @@ public sealed class SyntheticBatchViewModelTests
         Assert.Null(vm.LastBillAt);
         Assert.Equal(DateTime.Today, vm.StartAt.LocalDateTime);
         Assert.StartsWith("Could not read when the last bill was made", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task The_answer_to_an_earlier_opening_is_dropped()
+    {
+        var older = LastBillAt(DateTimeOffset.UtcNow.AddHours(-3));
+        var newer = LastBillAt(DateTimeOffset.UtcNow.AddHours(-1));
+        var slow = new TaskCompletionSource<BillListResponse>();
+        var api = new FakeBillsApi { Response = OneBill(newer) };
+        api.PendingSearches.Enqueue(slow);
+        var vm = new SyntheticBatchViewModel(api, new FakeDialogs(), adminTokens: null, settings: null);
+
+        var first = vm.PrepareWindowAsync();
+        await vm.PrepareWindowAsync();
+        slow.SetResult(OneBill(older));
+        await first;
+
+        Assert.Equal(newer, vm.LastBillAt);
+        Assert.Equal(newer, vm.StartAt);
+    }
+
+    [Fact]
+    public async Task A_time_typed_while_the_last_bill_is_read_is_kept()
+    {
+        var lastBill = LastBillAt(DateTimeOffset.UtcNow.AddHours(-3));
+        var slow = new TaskCompletionSource<BillListResponse>();
+        var api = new FakeBillsApi();
+        api.PendingSearches.Enqueue(slow);
+        var vm = new SyntheticBatchViewModel(api, new FakeDialogs(), adminTokens: null, settings: null);
+
+        var opening = vm.PrepareWindowAsync();
+        var typed = lastBill.AddHours(1);
+        vm.StartAt = typed;
+        slow.SetResult(OneBill(lastBill));
+        await opening;
+
+        Assert.Equal(typed, vm.StartAt);
+        Assert.Equal(lastBill, vm.LastBillAt);
+    }
+
+    [Fact]
+    public async Task After_a_batch_a_failed_read_keeps_the_times_and_says_so_with_the_result()
+    {
+        var lastBill = LastBillAt(DateTimeOffset.UtcNow.AddHours(-3));
+        var tokenStore = new AdminTokenStore();
+        tokenStore.Set(new AdminUnlockResponse("admin-token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "unit-test"));
+        var api = new FakeBillsApi { Response = OneBill(lastBill) };
+        var vm = new SyntheticBatchViewModel(api, new FakeDialogs(), tokenStore, settings: null) { Rate24Kt = 6000m };
+        vm.KaratOptions.Add(new SelectableKarat { Label = "22K", TallyItem = "Hallmarked 22KT", IsSelected = true });
+        await vm.PrepareWindowAsync();
+
+        api.SearchFailure = new System.Net.Http.HttpRequestException("No connection");
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(lastBill, vm.StartAt);
+        Assert.Equal(lastBill, vm.LastBillAt);
+        Assert.StartsWith("Created 3 bill(s)", vm.StatusMessage);
+        Assert.Contains("Could not read when the last bill was made", vm.StatusMessage);
     }
 
     /// <summary>A time to the second in local time, as the dialog holds it.</summary>

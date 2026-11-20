@@ -47,7 +47,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
         // Until the last bill's time is read (PrepareWindowAsync): from the start of today to now.
         var now = Now;
         StartAt = new DateTimeOffset(now.Date, now.Offset);
-        EndAt = now;
+        EndAt = FloorToMinute(now);
 
         if (_settings is not null)
         {
@@ -114,13 +114,22 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     private bool CanStart() => !IsRunning && !HasValidation && AnyKaratSelected();
 
+    private const string LastBillUnknown = "Could not read when the last bill was made; the server checks the times when the batch starts.";
+
+    // Counts the openings, so the answer to an earlier one is dropped.
+    private int _windowRequest;
+
     /// <summary>
     /// Reads when the newest bill was made and sets the window to run from it to now: a batch is dated
     /// after every bill already stored and never in the future (owner, 20 November 2026). With no bill
     /// yet the window starts at the start of today. Called each time the dialog opens and after a batch.
+    /// A time the operator changed while the answer was on its way is kept; when the time cannot be
+    /// read, Start and the last bill stay as they were. Returns whether it was read.
     /// </summary>
-    public async Task PrepareWindowAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> PrepareWindowAsync(CancellationToken cancellationToken = default)
     {
+        var request = ++_windowRequest;
+        var (startBefore, endBefore) = (StartAt, EndAt);
         DateTimeOffset? newest = null;
         var known = true;
         try
@@ -137,12 +146,21 @@ public partial class SyntheticBatchViewModel : ObservableObject
             known = false;
         }
 
+        if (request != _windowRequest) return known;
+
+        // To the minute the box shows: a second or two of clock difference with the server must
+        // not make the End it was given "later than now" there.
         var now = Now;
-        LastBillAt = newest?.ToOffset(now.Offset);
-        StartAt = LastBillAt ?? new DateTimeOffset(now.Date, now.Offset);
-        EndAt = now;
+        if (EndAt == endBefore) EndAt = FloorToMinute(now);
         if (!known)
-            StatusMessage = "Could not read when the last bill was made; the server checks the times when the batch starts.";
+        {
+            StatusMessage = LastBillUnknown;
+            return false;
+        }
+
+        LastBillAt = newest?.ToOffset(now.Offset);
+        if (StartAt == startBefore) StartAt = LastBillAt ?? new DateTimeOffset(now.Date, now.Offset);
+        return true;
     }
 
     [RelayCommand(CanExecute = nameof(IsRunning))]
@@ -283,8 +301,8 @@ public partial class SyntheticBatchViewModel : ObservableObject
             BatchCompleted?.Invoke(this, EventArgs.Empty);
             // The next batch goes after these bills.
             var result = StatusMessage;
-            await PrepareWindowAsync();
-            StatusMessage = result;
+            var refreshed = await PrepareWindowAsync();
+            StatusMessage = refreshed ? result : $"{result} {LastBillUnknown}";
         }
         catch (OperationCanceledException)
         {

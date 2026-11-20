@@ -89,6 +89,13 @@ padding / business-day replay. Available in production, admin-gated.
 - **No line under 1 g, and every weight in steps of 0.01 g.** Before 20 November
   2026 a line could weigh 0.001 g, and a diamond item, which had no rate there,
   was replaced by a line of 0.001 g.
+- **A batch's bills follow every stored bill in time as in number.** Each is
+  saved only if no bill made after its time exists, checked while the lock on
+  the year's numbering row is held (`BillLifecycleWorkflow.CreateNewDraftAsync`,
+  backdated bills only). So a bill a counter saves while a batch is being saved
+  stops the batch there with a message saying how many were saved, instead of
+  being numbered before batch bills dated earlier than it. The bills saved
+  before it stay.
 - **No two bills share a minute-slot.** Enforced by
   `SampleWithoutReplacement` in `BuildRandomSchedule` and verified by the
   `BuildRandomSchedule_ProducesSortedDistinctMinuteSlots` test.

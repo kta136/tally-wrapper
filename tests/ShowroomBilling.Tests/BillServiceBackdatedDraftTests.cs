@@ -34,6 +34,45 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     }
 
     [Fact]
+    public async Task CreateBackdatedDraftAsync_IsRefusedWhenABillMadeLaterIsAlreadySaved()
+    {
+        // A counter saved a bill while a batch was being saved: a batch bill dated before it would
+        // take the next number and so be numbered after it.
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var counterBill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Counter Party", 100m)));
+
+        var refused = await Assert.ThrowsAsync<BillStateConflictException>(() => service.CreateBackdatedDraftAsync(
+            new CreateBillDraftRequest(SamplePayload("Batch Party", 60_000m)),
+            counterBill.CreatedAtUtc.AddMinutes(-5)));
+
+        Assert.StartsWith("A bill made after", refused.Message);
+        await using var verify = CreateDbContext();
+        Assert.Equal(1, await verify.Bills.CountAsync());
+
+        // Nothing was used up: the next bill takes the number after the counter's bill.
+        db.ChangeTracker.Clear();
+        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Next Party", 100m)));
+        Assert.NotEqual(counterBill.InvoiceNumber, next.InvoiceNumber);
+        var cores = await verify.Bills.AsNoTracking().OrderBy(b => b.InvoiceCore).Select(b => b.InvoiceCore).ToListAsync();
+        Assert.Equal(cores[0] + 1, cores[1]);
+    }
+
+    [Fact]
+    public async Task CreateBackdatedDraftAsync_GoesAfterTheNewestBill()
+    {
+        await using var db = CreateDbContext();
+        var service = BuildService(db);
+        var earlier = DateTimeOffset.UtcNow.AddHours(-2);
+        await service.CreateBackdatedDraftAsync(new CreateBillDraftRequest(SamplePayload("First Party", 60_000m)), earlier);
+
+        var later = await service.CreateBackdatedDraftAsync(
+            new CreateBillDraftRequest(SamplePayload("Second Party", 60_000m)), earlier.AddMinutes(10));
+
+        Assert.Equal(earlier.AddMinutes(10), later.CreatedAtUtc);
+    }
+
+    [Fact]
     public async Task CreateDraftAsync_DefaultPathStillUsesUtcNow()
     {
         await using var db = CreateDbContext();

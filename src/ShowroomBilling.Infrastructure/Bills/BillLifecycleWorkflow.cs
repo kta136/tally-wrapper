@@ -18,13 +18,13 @@ internal sealed class BillLifecycleWorkflow(
     internal Task<BillResponse> CreateDraftAsync(
         CreateBillDraftRequest request,
         CancellationToken cancellationToken = default)
-        => CreateDraftCoreAsync(request, DateTimeOffset.UtcNow, cancellationToken);
+        => CreateDraftCoreAsync(request, DateTimeOffset.UtcNow, backdated: false, cancellationToken);
 
     internal Task<BillResponse> CreateBackdatedDraftAsync(
         CreateBillDraftRequest request,
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default)
-        => CreateDraftCoreAsync(request, createdAtUtc, cancellationToken);
+        => CreateDraftCoreAsync(request, createdAtUtc, backdated: true, cancellationToken);
 
     internal async Task<BillResponse> UpdateDraftAsync(
         Guid billId,
@@ -249,6 +249,7 @@ internal sealed class BillLifecycleWorkflow(
     private async Task<BillResponse> CreateDraftCoreAsync(
         CreateBillDraftRequest request,
         DateTimeOffset now,
+        bool backdated,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -257,7 +258,7 @@ internal sealed class BillLifecycleWorkflow(
 
         if (request.ClientOperationId is not Guid operationId)
         {
-            return await CreateNewDraftAsync(request, now, cancellationToken);
+            return await CreateNewDraftAsync(request, now, backdated, cancellationToken);
         }
 
         // A retried Save whose first attempt committed but whose response was
@@ -270,7 +271,7 @@ internal sealed class BillLifecycleWorkflow(
 
         try
         {
-            return await CreateNewDraftAsync(request, now, cancellationToken);
+            return await CreateNewDraftAsync(request, now, backdated, cancellationToken);
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
@@ -313,6 +314,7 @@ internal sealed class BillLifecycleWorkflow(
     private async Task<BillResponse> CreateNewDraftAsync(
         CreateBillDraftRequest request,
         DateTimeOffset now,
+        bool backdated,
         CancellationToken cancellationToken)
     {
         var billId = Guid.CreateVersion7();
@@ -322,6 +324,16 @@ internal sealed class BillLifecycleWorkflow(
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var reservation = await ReserveNumberAsync(request.Payload.BillDate, cancellationToken);
+
+        // A backdated bill takes the next number, so no bill may have been made after its time,
+        // or the two would be numbered in one order and dated in the other. The year's sequence
+        // row is locked from here to the commit: a bill saved at a counter meanwhile waits for
+        // this one, and one saved before the lock is seen here.
+        if (backdated && await dbContext.Bills.AnyAsync(x => x.CreatedAtUtc > now, cancellationToken))
+        {
+            throw new BillStateConflictException(
+                $"A bill made after {now.ToOffset(Contracts.IndiaTime.Offset):dd MMM yyyy, HH:mm} is already saved, so a bill dated then would be numbered after it.");
+        }
 
         var bill = NewPendingBill(billId, reservation, now);
         bill.CreateOperationId = request.ClientOperationId;

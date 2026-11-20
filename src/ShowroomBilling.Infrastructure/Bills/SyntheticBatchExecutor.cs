@@ -55,13 +55,25 @@ public sealed class SyntheticBatchExecutor(
             "Synthetic batch planned: {BillCount} bill(s), grand ₹{Grand:N0}, window [{Start:o}, {End:o}]",
             plan.Bills.Count, plan.TotalAmount, request.StartAtUtc, request.EndAtUtc);
 
+        var saved = 0;
         foreach (var planned in plan.Bills)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await billService.CreateBackdatedDraftAsync(
-                new CreateBillDraftRequest(Payload: planned.Payload),
-                planned.ScheduledAtUtc,
-                cancellationToken);
+            try
+            {
+                await billService.CreateBackdatedDraftAsync(
+                    new CreateBillDraftRequest(Payload: planned.Payload),
+                    planned.ScheduledAtUtc,
+                    cancellationToken);
+            }
+            catch (BillStateConflictException ex)
+            {
+                // A counter saved a bill while the batch was being saved: the rest would be
+                // numbered after it and dated before it.
+                throw new BillStateConflictException(
+                    $"A bill was saved at a counter while the batch was being made, so the batch stopped after {saved} of {plan.Bills.Count} bill(s). {ex.Message}");
+            }
+            saved++;
         }
 
         return new SyntheticBatchResponse(
