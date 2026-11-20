@@ -371,6 +371,14 @@ public sealed class SyntheticBillPlannerTests
     [InlineData("Gemstone Pendant", ItemCategories.GoldBased, ItemUnits.Gram, false)]
     [InlineData("Ruby", ItemCategories.GoldBased, ItemUnits.Carat, false)]
     [InlineData("Gold Coin", ItemCategories.GoldBased, "mg", false)]
+    // Item lists saved by older builds say "g"; v1.4 took only "gm" and left every such item out.
+    [InlineData("Gold Chain", ItemCategories.GoldBased, "g", true)]
+    [InlineData("Gold Chain", ItemCategories.GoldBased, "G", true)]
+    [InlineData("Gold Chain", ItemCategories.GoldBased, " GM ", true)]
+    [InlineData("Gold Chain", ItemCategories.GoldBased, "gms", true)]
+    [InlineData("Gold Chain", ItemCategories.GoldBased, "Grams", true)]
+    [InlineData("Gold Chain", ItemCategories.GoldBased, "gm.", true)]
+    [InlineData("Gold Chain", ItemCategories.GoldBased, "cts", false)]
     public void MayBill_LeavesOutDiamondAndStoneItems(string name, string category, string unit, bool mayBill)
     {
         var item = new ItemMasterEntry(name, unit, 8m, category, PricingModes.Wastage, 0m, "");
@@ -420,7 +428,30 @@ public sealed class SyntheticBillPlannerTests
 
         var refused = Assert.Throws<RequestValidationException>(() =>
             new SyntheticBillPlanner().BuildPlan(req, LeftOutItems(), DummyKarats(), new Random(1), null, Now));
-        Assert.Contains("diamond or stone", refused.Message);
+        Assert.StartsWith("No item master can be used: a batch leaves out diamond and stone items", refused.Message);
+    }
+
+    [Fact]
+    public void BuildPlan_BillsGoldItemsWhoseUnitIsWrittenG()
+    {
+        // The shape of an item list saved by an older build: gold items in "g", one item in "gm"
+        // that is a stone item by name, and a diamond item in carats. v1.4 refused it outright.
+        var items = new[]
+        {
+            new ItemMasterEntry("Gold Chain", "g", 8m, ItemCategories.GoldBased, PricingModes.Wastage, 0m, ""),
+            new ItemMasterEntry("Gold Bangle", "g", 0m, ItemCategories.GoldBased, PricingModes.Labour, 450m, ""),
+            new ItemMasterEntry("Stone Ring", ItemUnits.Gram, 12m, ItemCategories.GoldBased, PricingModes.Wastage, 0m, ""),
+            new ItemMasterEntry("Solitaire", ItemUnits.Carat, 0m, ItemCategories.Diamond, PricingModes.Wastage, 0m, ""),
+        };
+        var start = new DateTimeOffset(2026, 4, 24, 9, 0, 0, TimeSpan.Zero);
+        var req = new SyntheticBatchRequest(1_000_000, 199_000, 13_000m, "Cash", 1, 4,
+            start, start.AddDays(1), new[] { "22K", "18K" });
+
+        var plan = new SyntheticBillPlanner().BuildPlan(req, items, DummyKarats(), new Random(9), null, Now);
+
+        var lines = plan.Bills.SelectMany(b => b.Payload.Lines).ToList();
+        Assert.Equal(["Gold Bangle", "Gold Chain"], lines.Select(l => l.ItemName).Distinct().Order());
+        Assert.All(lines, line => Assert.Equal("g", line.Unit));
     }
 
     private static IReadOnlyList<ItemMasterEntry> DummyItems() => new[]

@@ -43,6 +43,15 @@ public sealed class SyntheticBillPlanner
     /// <summary>Words in an item's name that make it a diamond or stone item.</summary>
     private static readonly string[] LeftOutNameWords = ["diamond", "stone"];
 
+    /// <summary>
+    /// The ways a unit says grams. Settings offers "gm", but item lists saved by older builds say
+    /// "g", and v1.4 took only "gm", so it left every gold item of such a list out.
+    /// </summary>
+    private static readonly HashSet<string> GramUnits = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "", "g", "gm", "gms", "gram", "grams",
+    };
+
     /// <param name="floorUtc">When the newest bill already stored was made, or null when there is none.</param>
     /// <param name="nowUtc">The time now: no bill is dated later.</param>
     public SyntheticBatchPlan BuildPlan(
@@ -63,7 +72,7 @@ public sealed class SyntheticBillPlanner
         var billableItems = itemEntries.Where(MayBill).ToList();
         if (billableItems.Count == 0)
             throw new RequestValidationException(
-                "Every item master is a diamond or stone item, and a batch leaves those out. Add a gold item in Settings → Masters.");
+                "No item master can be used: a batch leaves out diamond and stone items (the Diamond category, items not sold by the gram, and names with \"diamond\" or \"stone\"). Add a gold item sold by the gram in Settings → Masters.");
 
         var mappedKarats = karatEntries
             .Where(k => !string.IsNullOrWhiteSpace(k.TallyItem))
@@ -130,11 +139,12 @@ public sealed class SyntheticBillPlanner
     /// Whether a batch may bill this item. Diamond jewellery and stones are left out (owner,
     /// 20 November 2026): an item of the Diamond category, one not sold by the gram (a stone sold
     /// by the carat), and one whose name says diamond or stone, such as a gold-based "Diamond
-    /// Earring" or "Stone Ring". An item with no unit is sold by the gram, as on a bill.
+    /// Earring" or "Stone Ring". A unit of "g", "gm", "gms", "gram" or "grams", in any case, or
+    /// none, is grams.
     /// </summary>
     public static bool MayBill(ItemMasterEntry item)
         => !string.Equals(item.ItemCategory?.Trim(), ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase)
-           && (string.IsNullOrWhiteSpace(item.Unit) || string.Equals(item.Unit.Trim(), ItemUnits.Gram, StringComparison.OrdinalIgnoreCase))
+           && GramUnits.Contains((item.Unit ?? string.Empty).Trim().TrimEnd('.'))
            && !LeftOutNameWords.Any(word => (item.Name ?? string.Empty).Contains(word, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>

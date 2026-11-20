@@ -49,10 +49,11 @@ padding / business-day replay. Available in production, admin-gated.
    the day than it was run).
 3. **Items.** Diamond jewellery and stones are never billed (`MayBill`): an
    item of the Diamond category, one not sold by the gram (a stone sold by the
-   carat, `ct`; an item with no unit counts as grams), and one whose name
-   contains "diamond" or "stone" (so a gold-based "Diamond Earring" or
+   carat, `ct`; a unit of `g`, `gm`, `gms`, `gram` or `grams` in any case, or
+   none, is grams), and one whose name contains "diamond" or "stone" (so a gold-based "Diamond Earring" or
    "Stone Ring" too). A batch whose item masters are all of that kind is
-   refused. Each remaining item × selected (Tally-mapped) karat is priced per
+   refused. (v1.4 took only `gm` or no unit as grams, so an item list saved
+   by an older build, whose gold items say `g`, was refused outright.) Each remaining item × selected (Tally-mapped) karat is priced per
    gram by [`BillCalculator`](../src/ShowroomBilling.Application/Bills/BillCalculator.cs).
 4. `BuildLineTargets` — splits each bill's total into
    `MinItemsPerBill`..`MaxItemsPerBill` shares, each enough for 1 g of the
