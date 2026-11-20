@@ -72,6 +72,38 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Equal("Yes", partyEntry.Element("ISPARTYLEDGER")?.Value);
     }
 
+    [Theory]
+    [InlineData(TallyPostOperation.Create)]
+    [InlineData(TallyPostOperation.Alter)]
+    public void Build_SendsTheCustomerNameAsTheBuyersMailingName(TallyPostOperation operation)
+    {
+        var xml = TallyXmlVoucherBuilder.Build(
+            Request(operation, "MASTER ID", "101", Payload() with { PartyName = "  Buyer A  " }),
+            Ledgers(),
+            "Acme Jewellers");
+
+        var voucher = xml.Descendants("VOUCHER").Single();
+        Assert.Equal("Buyer A", voucher.Element("PARTYMAILINGNAME")?.Value);
+        // The ledger fields still name the ledger, and the narration still carries the name.
+        Assert.Equal("Cash", voucher.Element("PARTYLEDGERNAME")?.Value);
+        Assert.Equal("Cash", voucher.Element("PARTYNAME")?.Value);
+        Assert.Equal("Buyer A", voucher.Element("NARRATION")?.Value);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public void Build_SendsThePartyLedgerAsTheMailingNameWhenTheBillNamesNoCustomer(string? partyName)
+    {
+        var payload = Payload() with { PartyName = partyName, Payment = "UPI" };
+
+        var xml = TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers(), "Acme Jewellers");
+
+        var voucher = xml.Descendants("VOUCHER").Single();
+        Assert.Equal("Card", voucher.Element("PARTYMAILINGNAME")?.Value);
+        Assert.Null(voucher.Element("NARRATION"));
+    }
+
     [Fact]
     public void Build_TreatsPayloadGstinAsUnregisteredConsumerForTallyPosting()
     {

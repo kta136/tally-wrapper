@@ -112,7 +112,10 @@ The `<PARTYLEDGERNAME>` Tally sees is **never** the operator's free-text custome
 3. **Validate.** A blank resolved ledger fails the build with `CONFIG_MISSING_CASH_LEDGER` or `CONFIG_MISSING_CREDIT_DEBIT_LEDGER` (terminal). A blank `bill.Payment` fails with `MISSING_PAYMENT_MODE` (terminal). The bill lands in `failed`; the operator fixes Settings and clicks Retry.
 4. **Use the resolved ledger** for both `<PARTYLEDGERNAME>` and the offsetting Dr leg under `<ALLLEDGERENTRIES.LIST>`.
 
-**The free-text `bill.PartyName`** (e.g. `"Mr. Sharma — walk-in"`) is operator/print-only. It is joined with `bill.Notes` by `" | "` and emitted as `<NARRATION>` so the customer label is preserved on the Tally voucher for human reference, but it never reaches `<PARTYLEDGERNAME>` and is never used to look up a Tally ledger.
+**The free-text `bill.PartyName`** (e.g. `"Mr. Sharma — walk-in"`) never reaches `<PARTYLEDGERNAME>` and is never used to look up a Tally ledger. It goes onto the voucher in two places, both free text:
+
+- `<PARTYMAILINGNAME>`, the buyer's mailing name in the voucher's party details, which takes free text. A bill with no customer name sends the resolved party ledger there instead, so an alter of a bill whose name was removed also replaces the old name. Not yet pushed to a live company ([docs/06 §4.2](06_tally_xml_golden_path.md)).
+- `<NARRATION>`, joined with `bill.Notes` by `" | "`, left out when both are blank.
 
 This split exists because the customer label is unbounded free text and would never match a ledger; the payment-mode → ledger map is the only deterministic mapping the operator controls. If the showroom moves all card/UPI receipts to a single bank account ledger today and a different one tomorrow, only `Settings.Ledgers.CreditDebitLedger` changes — bills, payloads, and validation rules stay untouched.
 
@@ -123,13 +126,14 @@ The single shared helper is [`PaymentMode`](../src/ShowroomBilling.Contracts/Bil
 The voucher builder emits the party and location fields Tally uses for GST return readiness:
 
 - resolved party ledger → `<PARTYLEDGERNAME>`, `<PARTYNAME>`, and the debit ledger entry's `<ISPARTYLEDGER>Yes</ISPARTYLEDGER>`
+- `bill.PartyName` (or the party ledger, when the bill names no customer) → `<PARTYMAILINGNAME>`
 - all sales posted by this app → `<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>`
 - `Print.CompanyState` → `<STATENAME>`, `<PLACEOFSUPPLY>`, `<CONSIGNEESTATENAME>`
 - `Print.CompanyCountry` → `<COUNTRYNAME>`, `<COUNTRYOFRESIDENCE>`, `<CONSIGNEECOUNTRYNAME>`
 
 `COUNTRYNAME` is enough for the sales voucher screen to show a country, but GSTR-1 uses the GST transaction storages (`COUNTRYOFRESIDENCE` / `CONSIGNEECOUNTRYNAME`). Tally Wrapper bills do not collect a separate buyer country for counter sales, so the configured invoice country is the domestic default for those voucher fields.
 
-Do not emit a free-text customer label as `<PARTYNAME>`: Tally expects the party ledger there. Do not emit `<PARTYGSTIN>` or `<CONSIGNEEGSTIN>` from this billing app; this workflow is only for unregistered/consumer sales. The operator-entered customer label remains narration/printing context.
+Do not emit a free-text customer label as `<PARTYNAME>`: Tally expects the party ledger there. The customer's name goes in `<PARTYMAILINGNAME>` (§3.1). Do not emit `<PARTYGSTIN>` or `<CONSIGNEEGSTIN>` from this billing app; this workflow is only for unregistered/consumer sales.
 
 ---
 

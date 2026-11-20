@@ -20,7 +20,7 @@ public static class TallyXmlVoucherBuilder
 
         // V1 parity (tally/xml_builder.py): the Tally party ledger is resolved from the
         // payment mode via the operator-configured ledger map, not from the free-text
-        // customer name. bill.PartyName is print-only; it flows into NARRATION below.
+        // customer name. bill.PartyName goes into PARTYMAILINGNAME and NARRATION below.
         Require(bill.Payment, "MISSING_PAYMENT_MODE", "Bill has no payment mode; cannot resolve a Tally party ledger.");
         var paymentMode = PaymentMode.Normalize(bill.Payment);
         var partyLedger = paymentMode == PaymentMode.Cash ? ledgers.CashLedger : ledgers.CreditDebitLedger;
@@ -100,6 +100,10 @@ public static class TallyXmlVoucherBuilder
         }
         voucherElement.Add(new XElement("PARTYLEDGERNAME", partyLedger));
         voucherElement.Add(new XElement("PARTYNAME", partyLedger));
+        // The buyer's mailing name in the voucher's party details: free text, unlike the two
+        // ledger fields above. Without a customer name it is the party ledger, so that an
+        // alter of a bill whose name was removed replaces the old name too.
+        voucherElement.Add(new XElement("PARTYMAILINGNAME", NormalizeOptional(bill.PartyName) ?? partyLedger));
         voucherElement.Add(new XElement("GSTREGISTRATIONTYPE", "Unregistered/Consumer"));
         var normalizedCompanyState = NormalizeOptional(companyState);
         if (normalizedCompanyState is not null)

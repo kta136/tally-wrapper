@@ -214,9 +214,11 @@ The desktop's Push button stays busy for the full duration of one Tally round-tr
 
 A missing mapping raises `VoucherBuildException` before anything is sent, surfacing in the UI as a `failed` bill with a `CONFIG_MISSING_*` error code — the operator fixes the mapping in Settings, then clicks Retry. The builder also checks that the ledger amounts net to zero exactly as they will be sent, and fails with `VOUCHER_UNBALANCED` if they do not.
 
-The `{PartyLedger}` placeholder in `<PARTYLEDGERNAME>` and the offsetting Dr ledger entry is **resolved from the bill's payment mode**, not from the customer name. `bill.Payment` is normalized via [`PaymentMode.Normalize`](../src/ShowroomBilling.Contracts/Bills/PaymentMode.cs) into `Cash` or `Credit and debit`, then mapped to `Ledgers.CashLedger` or `Ledgers.CreditDebitLedger`. The free-text `bill.PartyName` (operator's customer label) is joined with `bill.Notes` and emitted as `<NARRATION>` — it never reaches `<PARTYLEDGERNAME>`. See [`05_tally_integration_contract.md` §3.1](05_tally_integration_contract.md) for the full derivation rule.
+The `{PartyLedger}` placeholder in `<PARTYLEDGERNAME>` and the offsetting Dr ledger entry is **resolved from the bill's payment mode**, not from the customer name. `bill.Payment` is normalized via [`PaymentMode.Normalize`](../src/ShowroomBilling.Contracts/Bills/PaymentMode.cs) into `Cash` or `Credit and debit`, then mapped to `Ledgers.CashLedger` or `Ledgers.CreditDebitLedger`. The free-text `bill.PartyName` (operator's customer label) never reaches `<PARTYLEDGERNAME>`. It is sent as `<PARTYMAILINGNAME>`, the buyer's mailing name in the voucher's party details (the party ledger when the bill names no customer), and joined with `bill.Notes` as `<NARRATION>`. See [`05_tally_integration_contract.md` §3.1](05_tally_integration_contract.md) for the full derivation rule.
 
 `<PARTYNAME>` deliberately uses the same resolved party ledger. It is a Tally GST transaction field, not the free-text customer label.
+
+`<PARTYMAILINGNAME>` was added on 20 November 2026 and has not yet been pushed to a live company. Tally's sample XML page (§6.1) does not show it, so it is unconfirmed: push one bill with a customer name to the test company and open the voucher's party details before relying on it.
 
 ### 4.3 Envelope shape
 
@@ -244,6 +246,7 @@ This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` prod
             <VOUCHERNUMBER>{InvoiceNumber}</VOUCHERNUMBER>
             <PARTYLEDGERNAME>{PartyLedger}</PARTYLEDGERNAME>
             <PARTYNAME>{PartyLedger}</PARTYNAME>
+            <PARTYMAILINGNAME>{PartyName, or PartyLedger when blank}</PARTYMAILINGNAME>
             <GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>
             <STATENAME>{CompanyState}</STATENAME>
             <PLACEOFSUPPLY>{CompanyState}</PLACEOFSUPPLY>
@@ -374,7 +377,7 @@ These are all bugs that caused real failed pushes during Tally Wrapper bring-up 
 
 `REMOTEID` on create imports is `post:{billId:N}:{revisionId:N}`; an explicit repost sends the caller's own key instead. Tally enforces uniqueness on this field per company, so if a push happens twice against the same bill revision (e.g. network glitch, retry), Tally rejects the second import with `ERRORS > 0` — classified as `TALLY_ERRORS`, landing the bill in `failed`. The operator checks Tally and then decides: Mark as Pushed (admin, local-only) when Tally holds the voucher, or Retry (same `REMOTEID`; Tally rejects it again while it holds the first voucher). An edit saves a new revision, so the next push carries a fresh `REMOTEID`; if Tally still holds the first voucher that creates a second one.
 
-Live finding (April 11, 2026): after an import that failed with `EXCEPTIONS=1`, a second, otherwise valid import that reused the same `REMOTEID` failed too, and one with a fresh `REMOTEID` succeeded.
+Live finding (April 11, 2026): after an import that failed with `EXCEPTIONS=1`, a second, otherwise valid import that reused the same `REMOTEID` failed too, and one with a fresh `REMOTEID` succeeded. Tally's documentation offers a reason that has not been checked here: the first voucher may have been kept as an exception (§6.3).
 
 Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"`.
 
@@ -409,7 +412,7 @@ Tally's answer to a create it accepted (captured live):
 | alter request and `ALTERED <= 0` | `Failed` | `TALLY_NO_EFFECT` |
 | otherwise | `Posted` | — |
 
-`RemoteId` on create success: `LASTVCHID ?? LASTMID ?? request.IdempotencyKey`. `tallyMasterId` is captured from positive numeric `LASTVCHID`.
+`RemoteId` on create success: `LASTVCHID ?? LASTMID ?? request.IdempotencyKey`. `tallyMasterId` is captured from positive numeric `LASTVCHID`, which Tally documents as the master id of the last imported voucher (§6.2).
 
 `RemoteId` on alter success: `LASTVCHID ?? LASTMID ?? request.TargetTagValue`; `tallyMasterId` is `LASTVCHID` when positive numeric, otherwise the alter target.
 
@@ -439,3 +442,55 @@ Current focused regression command:
 ```powershell
 dotnet test --project tests/ShowroomBilling.Tests/ShowroomBilling.Tests.csproj --filter "FullyQualifiedName~TallyPosterTests|FullyQualifiedName~TallyXmlRetryPolicyTests|FullyQualifiedName~TallyXmlVoucherBuilderTests"
 ```
+
+---
+
+## 6. Tally's own documentation
+
+Read on 18 November 2026. Use these pages to check a request shape, not as proof of behaviour: they describe file import from Tally's menu far more than XML sent over HTTP, and nothing in this section has been run against a live company unless it says so. The change control in §1 still holds.
+
+### 6.1 Pages
+
+All on `help.tallysolutions.com` unless marked.
+
+| Page | What it holds |
+|---|---|
+| [Sample XML](https://help.tallysolutions.com/sample-xml/) | The most useful single page: sales voucher samples (as voucher, as invoice), voucher alteration, voucher cancellation, an object export (a ledger), and what the fields of the import answer mean |
+| [Exceptions Report](https://help.tallysolutions.com/data-exceptions-resolutions-in-tallyprime/) | What Tally does with imported data that has a problem (§6.3) |
+| [Import Data FAQ](https://help.tallysolutions.com/tally-prime/data-exchange-tally-prime/import-data-faq/) | The import settings under Alt+O → Configuration, and the `Tally.imp` log |
+| [Import File definition and related events](https://help.tallysolutions.com/?p=180668) | The `Response Report` attribute and `$$LastImportError`: a TDL loaded in Tally can make the import answer carry the error text |
+| [Integration initiated from third-party applications](https://help.tallysolutions.com/tallyprime-as-server/) | The shortest statement of the import answer, and that a duplicate request shows in the error count |
+| [XML integration](https://help.tallysolutions.com/xml-interface/) and [Pre-requisites for integrations](https://help.tallysolutions.com/pre-requisites-for-integrations/) | The header fields of a request, and `STATUS` in an answer |
+| [Case Study II](https://help.tallysolutions.com/article/DeveloperReference/integration-capabilities/case_study_2.htm) | Written for Tally.ERP 9: an alter that names its voucher by `MASTER ID` |
+| [Import data from JSON or XML](https://help.tallysolutions.com/import-data-from-xml-or-json/) | Import of a JSON file, from Release 7.0 |
+
+Not from Tally, so weigh them as one person's report: a [Stack Overflow answer on `REMOTEID`](https://stackoverflow.com/questions/46767573/what-is-the-significance-of-remoteid-attribute-in-tally-voucher-xml-file) and a vendor's [integration guide](https://perimattic.com/products/erpplugs/learn/tally-api-integration/).
+
+Tally Connector, a tool inside TallyPrime Developer, sends a request and shows the answer. It is the quick way to try a shape before changing the builder.
+
+### 6.2 What they settle
+
+- **`LASTVCHID` is the master id of the last imported voucher**, and `LASTMID` always comes back as 0. So the id recorded in `tally.posted` is the right alter target, and the fallback to `LASTMID` in §4.5 never supplies a value.
+- **An alter names its voucher by master id, or by voucher number with type and date.** The `MASTER ID` form of §4.3 is a documented one.
+- **Cancelling a voucher is a documented request**: `ACTION="Cancel"` with the voucher number, type and date. This app does not send it; Void refuses a bill whose voucher Tally holds and leaves the cancelling to the operator.
+- **Both header forms are documented.** The voucher samples on the Sample XML page use `VERSION` / `TALLYREQUEST` `Import` / `TYPE` `Data` / `ID` `Vouchers`; the form this app sends, `TALLYREQUEST` `Import Data` with no `VERSION`, is on the other pages. §4.3.1 item 1 is about adding `VERSION` to the second form.
+- **A duplicate request shows in the error count**, which is what §4.4 saw.
+- **An answer may carry `STATUS`**: 1 for success, 0 for failure. `TallyPoster` does not read it.
+- **Tally's own logs** for a refused import: `Tally.imp` in the TallyPrime folder, and F1 → Troubleshooting → Event Log.
+
+### 6.3 Open: a refused voucher may be kept as an exception
+
+The Exceptions Report page says that imported data with a problem is, unless the import is set up otherwise, recorded as an exception while the import carries on. What is under exception stays out of the books and reports until somebody resolves it in Tally, and a voucher resolved there becomes a new voucher under the next free number. The reports are under Alt+O → Exceptions and Alt+Y → All Exceptions.
+
+The page describes import from Tally's menu. No page says whether a voucher sent over HTTP is treated the same way, so this is not known for this app. It matters because `TallyPoster` settles an answer with `EXCEPTIONS > 0` and nothing created as `failed`, which is read everywhere as "Tally holds nothing":
+
+- if Tally kept the voucher, resolving it in Tally later makes a second sale under another number, once the bill has been edited and pushed again;
+- it would explain the live finding in §4.4, where a `REMOTEID` was refused after an import that had failed with `EXCEPTIONS=1`.
+
+To settle it: push one voucher that names a ledger the test company does not have, then look in Tally under Alt+O → Exceptions. If the voucher is there, an answer with `EXCEPTIONS > 0` is not a definite failure and §4.5 has to change.
+
+### 6.4 What no page answers
+
+- **Whether Tally takes more than one request at a time.** Nothing official. The vendor guide says the listener handles requests one after another and that a large export holds up the rest.
+- **Whether the import settings apply to XML over HTTP.** Alt+O → Configuration has a setting for overwriting a voucher that has the same GUID and one for ignoring errors during import. If they do apply, what a repeated `REMOTEID` does depends on how the Tally PC is set up. The Stack Overflow answer says a known `REMOTEID` updates the voucher, the opposite of §4.4.
+- **How to read one voucher back by master id or GUID.** The only object export shown is a ledger. The lookup of §4.3 is a filtered collection for that reason.
