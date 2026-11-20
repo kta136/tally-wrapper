@@ -10,10 +10,16 @@ public partial class SyntheticBatchDialog : UserControl
 {
     private const string DateTimeFormat = "yyyy-MM-dd HH:mm";
 
+    private SyntheticBatchViewModel? _watched;
+
     public SyntheticBatchDialog()
     {
         InitializeComponent();
-        DataContextChanged += (_, _) => SyncInputsFromVm();
+        DataContextChanged += (_, _) =>
+        {
+            Watch(Vm);
+            SyncInputsFromVm();
+        };
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible) SyncInputsFromVm();
@@ -28,6 +34,24 @@ public partial class SyntheticBatchDialog : UserControl
         if (Vm is not { } vm) return;
         StartAtBox.Text = Format(vm.StartAt);
         EndAtBox.Text = Format(vm.EndAt);
+    }
+
+    // The window is set again once the last bill's time has been read, after the dialog is shown.
+    private void Watch(SyntheticBatchViewModel? vm)
+    {
+        if (_watched is not null) _watched.PropertyChanged -= OnVmPropertyChanged;
+        _watched = vm;
+        if (vm is not null) vm.PropertyChanged += OnVmPropertyChanged;
+    }
+
+    // A box the operator is typing in is left alone; its own LostFocus commits it.
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is not SyntheticBatchViewModel vm) return;
+        if (e.PropertyName == nameof(SyntheticBatchViewModel.StartAt) && !StartAtBox.IsKeyboardFocusWithin)
+            StartAtBox.Text = Format(vm.StartAt);
+        else if (e.PropertyName == nameof(SyntheticBatchViewModel.EndAt) && !EndAtBox.IsKeyboardFocusWithin)
+            EndAtBox.Text = Format(vm.EndAt);
     }
 
     private void OnStartAtLostFocus(object sender, RoutedEventArgs e)

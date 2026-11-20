@@ -11,12 +11,15 @@ namespace ShowroomBilling.Application.Bills;
 ///
 /// Core algorithm:
 ///   1. Partition <see cref="SyntheticBatchRequest.TotalAmount"/> into random per-bill totals in
-///      [SoftMinBillTotal, MaxBillAmount] ≤ ₹1,99,000.
-///   2. For each bill, pick a distinct minute-slot inside [StartAtUtc, EndAtUtc], respecting
-///      a floor (the latest existing <c>Bill.CreatedAtUtc</c>) so causality holds.
-///   3. Split the per-bill target into 1..N line targets (rejection-sample, fall back to even split).
-///   4. Build each line: pick random item × mapped karat, derive qty from target/effRate × random
-///      fraction in [QtyFractionMin, QtyFractionMax]. Totals via <see cref="BillCalculator"/>.
+///      [MinBillTotal, MaxBillAmount] ≤ ₹1,99,000.
+///   2. For each bill, pick a distinct minute-slot inside [StartAtUtc, EndAtUtc], which must lie
+///      between the latest existing <c>Bill.CreatedAtUtc</c> and now, so a batch is never dated
+///      before a bill already stored nor in the future.
+///   3. Split each bill's total into 1..N line shares, each enough for the smallest weight of the
+///      dearest item.
+///   4. Build each line from a random item (never a diamond or stone one, <see cref="MayBill"/>) ×
+///      mapped karat, weighing what its share buys in steps of <see cref="SyntheticBatchPlanLimits.WeightStep"/>,
+///      then add steps until the bill comes to its total. Totals via <see cref="BillCalculator"/>.
 ///
 /// The planner does NOT reserve invoice numbers or write to DB; the executor does that per-bill.
 /// </summary>
@@ -28,12 +31,27 @@ public sealed class SyntheticBillPlanner
         IReadOnlyList<PlannedBill> Bills,
         decimal TotalAmount);
 
+    /// <summary>An item at a karat, and what a gram of it is billed at.</summary>
+    private sealed record LinePricing(ItemMasterEntry Item, KaratMasterEntry Karat, BillCalculator.LineInputs Inputs)
+    {
+        public decimal Rate { get; } = BillCalculator.ComputeEffectiveRate(Inputs);
+
+        public decimal TotalFor(decimal weight)
+            => BillCalculator.ComputeLine(Inputs with { NetWeight = weight }).LineTotalInclusive;
+    }
+
+    /// <summary>Words in an item's name that make it a diamond or stone item.</summary>
+    private static readonly string[] LeftOutNameWords = ["diamond", "stone"];
+
+    /// <param name="floorUtc">When the newest bill already stored was made, or null when there is none.</param>
+    /// <param name="nowUtc">The time now: no bill is dated later.</param>
     public SyntheticBatchPlan BuildPlan(
         SyntheticBatchRequest request,
         IReadOnlyList<ItemMasterEntry> itemEntries,
         IReadOnlyList<KaratMasterEntry> karatEntries,
         Random rng,
-        DateTimeOffset? floorUtc = null)
+        DateTimeOffset? floorUtc,
+        DateTimeOffset nowUtc)
     {
         ValidateRequest(request);
 
@@ -41,6 +59,11 @@ public sealed class SyntheticBillPlanner
             throw new RequestValidationException("At least one item master entry is required.");
         if (karatEntries is null || karatEntries.Count == 0)
             throw new RequestValidationException("At least one karat master entry is required.");
+
+        var billableItems = itemEntries.Where(MayBill).ToList();
+        if (billableItems.Count == 0)
+            throw new RequestValidationException(
+                "Every item master is a diamond or stone item, and a batch leaves those out. Add a gold item in Settings → Masters.");
 
         var mappedKarats = karatEntries
             .Where(k => !string.IsNullOrWhiteSpace(k.TallyItem))
@@ -61,6 +84,16 @@ public sealed class SyntheticBillPlanner
                 throw new RequestValidationException("Selected karats are not mapped to a Tally stock item.");
         }
 
+        // A rate under ₹1 a gram is no price; it would also let a weight step add nothing.
+        var pricings = (
+                from item in billableItems
+                from karat in mappedKarats
+                select new LinePricing(item, karat, BuildLineInputs(request, item, karat, netWeight: 0m)))
+            .Where(p => p.Rate >= 1m)
+            .ToList();
+        if (pricings.Count == 0)
+            throw new RequestValidationException("No item has a price at this 24kt rate. Check the rate and the karat purities.");
+
         var billTotals = PartitionBillTotals(
             totalAmount: request.TotalAmount,
             maxBillAmount: request.MaxBillAmount,
@@ -71,6 +104,7 @@ public sealed class SyntheticBillPlanner
             startAtUtc: request.StartAtUtc,
             endAtUtc: request.EndAtUtc,
             floorUtc: floorUtc,
+            nowUtc: nowUtc,
             rng: rng);
 
         var planned = new List<PlannedBill>(billTotals.Count);
@@ -79,10 +113,9 @@ public sealed class SyntheticBillPlanner
         {
             var scheduledAt = scheduled[i];
             var bill = BuildPlannedBill(
-                targetTotal: billTotals[i],
+                billTotal: billTotals[i],
                 request: request,
-                itemEntries: itemEntries,
-                karatEntries: mappedKarats,
+                pricings: pricings,
                 voucherDate: IndiaTime.DateOf(scheduledAt),
                 scheduledAtUtc: scheduledAt,
                 rng: rng);
@@ -93,17 +126,28 @@ public sealed class SyntheticBillPlanner
         return new SyntheticBatchPlan(planned, grandTotalSum);
     }
 
-    /// <summary>Computes the achievable [min, max] bill-count window for a given total+max pair.</summary>
+    /// <summary>
+    /// Whether a batch may bill this item. Diamond jewellery and stones are left out (owner,
+    /// 20 November 2026): an item of the Diamond category, one not sold by the gram (a stone sold
+    /// by the carat), and one whose name says diamond or stone, such as a gold-based "Diamond
+    /// Earring" or "Stone Ring". An item with no unit is sold by the gram, as on a bill.
+    /// </summary>
+    public static bool MayBill(ItemMasterEntry item)
+        => !string.Equals(item.ItemCategory?.Trim(), ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase)
+           && (string.IsNullOrWhiteSpace(item.Unit) || string.Equals(item.Unit.Trim(), ItemUnits.Gram, StringComparison.OrdinalIgnoreCase))
+           && !LeftOutNameWords.Any(word => (item.Name ?? string.Empty).Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The fewest and the most bills <see cref="PartitionBillTotals"/> can make: the fewest when every
+    /// bill is the max and what is left under the minimum is dropped, the most when every bill is the minimum.
+    /// </summary>
     public static (int Min, int Max) EstimateBillCountBounds(long totalAmount, long maxBillAmount)
     {
-        if (totalAmount <= 0) return (0, 0);
+        if (totalAmount < SyntheticBatchPlanLimits.MinBillTotal) return (0, 0);
         if (maxBillAmount <= 0) throw new ArgumentOutOfRangeException(nameof(maxBillAmount));
 
-        if (totalAmount < SyntheticBatchPlanLimits.SoftMinBillTotal)
-            return (1, 1);
-
-        var min = Math.Max(1, (int)Math.Ceiling((double)totalAmount / maxBillAmount));
-        var max = Math.Max(min, (int)(totalAmount / SyntheticBatchPlanLimits.SoftMinBillTotal));
+        var min = 1 + (int)((totalAmount - SyntheticBatchPlanLimits.MinBillTotal) / Math.Max(maxBillAmount, SyntheticBatchPlanLimits.MinBillTotal));
+        var max = Math.Max(min, (int)(totalAmount / SyntheticBatchPlanLimits.MinBillTotal));
         return (min, max);
     }
 
@@ -111,10 +155,10 @@ public sealed class SyntheticBillPlanner
 
     public static void ValidateRequest(SyntheticBatchRequest request)
     {
-        if (request.TotalAmount <= 0)
-            throw new RequestValidationException("Total target amount must be greater than zero.");
-        if (request.MaxBillAmount <= 0)
-            throw new RequestValidationException("Max bill amount must be greater than zero.");
+        if (request.TotalAmount < SyntheticBatchPlanLimits.MinBillTotal)
+            throw new RequestValidationException($"Total target amount must be at least ₹{SyntheticBatchPlanLimits.MinBillTotal:N0}, the smallest bill a batch makes.");
+        if (request.MaxBillAmount < SyntheticBatchPlanLimits.MinBillTotal)
+            throw new RequestValidationException($"Max bill amount must be at least ₹{SyntheticBatchPlanLimits.MinBillTotal:N0}.");
         if (request.MaxBillAmount > SyntheticBatchPlanLimits.HardMaxBillAmount)
             throw new RequestValidationException($"Max bill amount cannot exceed ₹{SyntheticBatchPlanLimits.HardMaxBillAmount:N0}.");
         if (request.Rate24Kt <= 0m)
@@ -129,12 +173,13 @@ public sealed class SyntheticBillPlanner
             throw new RequestValidationException("Start time must be before end time.");
     }
 
+    /// <summary>
+    /// Random bill totals in [MinBillTotal, maxBillAmount] that add up to at most
+    /// <paramref name="totalAmount"/>. What is left under the minimum is not billed (as in V1).
+    /// </summary>
     public static IReadOnlyList<long> PartitionBillTotals(long totalAmount, long maxBillAmount, Random rng)
     {
-        var min = SyntheticBatchPlanLimits.SoftMinBillTotal;
-        if (totalAmount <= 0) return Array.Empty<long>();
-        if (totalAmount < min) return new[] { totalAmount };
-
+        var min = SyntheticBatchPlanLimits.MinBillTotal;
         var remaining = totalAmount;
         var totals = new List<long>();
         while (remaining >= min)
@@ -146,25 +191,34 @@ public sealed class SyntheticBillPlanner
             remaining -= draw;
         }
 
-        if (totals.Count == 0)
-            totals.Add(Math.Min(maxBillAmount, totalAmount));
         return totals;
     }
 
+    /// <summary>
+    /// <paramref name="billCount"/> distinct minutes in [<paramref name="startAtUtc"/>, <paramref name="endAtUtc"/>],
+    /// in order, all after the newest stored bill's minute. The window may start in that bill's minute (a
+    /// window is typed to the minute) but not before it, and may not end after <paramref name="nowUtc"/>.
+    /// </summary>
     public static IReadOnlyList<DateTimeOffset> BuildRandomSchedule(
         int billCount,
         DateTimeOffset startAtUtc,
         DateTimeOffset endAtUtc,
         DateTimeOffset? floorUtc,
+        DateTimeOffset nowUtc,
         Random rng)
     {
         if (billCount <= 0) return Array.Empty<DateTimeOffset>();
+
+        if (floorUtc is { } newest && newest > nowUtc)
+            throw new RequestValidationException(
+                $"The last bill is dated {InIndia(newest)}, later than now, so there is no time left to date a batch in.");
+        if (endAtUtc > nowUtc)
+            throw new RequestValidationException("End time cannot be later than now.");
         if (startAtUtc >= endAtUtc)
             throw new RequestValidationException("Start time must be before end time.");
-
-        if (floorUtc is { } floor && startAtUtc <= floor)
+        if (floorUtc is { } floor && startAtUtc < FloorToMinute(floor))
             throw new RequestValidationException(
-                "Start time must be later than the latest existing bill's timestamp.");
+                $"Start time cannot be before the last bill, {InIndia(floor)}.");
 
         var earliest = CeilToMinute(startAtUtc);
         if (floorUtc is { } f2)
@@ -190,83 +244,53 @@ public sealed class SyntheticBillPlanner
         return result;
     }
 
-    public static IReadOnlyList<long> BuildLineTargets(long targetTotal, int minItems, int maxItems, Random rng)
+    /// <summary>
+    /// Splits a bill's total into <paramref name="minItems"/>..<paramref name="maxItems"/> shares of at
+    /// least <paramref name="minimumEach"/> rupees, as many as fit. Each share gets the minimum, and what
+    /// is left is cut at random points among them, so the shares always add up to the total.
+    /// </summary>
+    public static IReadOnlyList<long> BuildLineTargets(long targetTotal, int minItems, int maxItems, long minimumEach, Random rng)
     {
-        var feasibleMax = Math.Max(1, Math.Min(maxItems,
-            targetTotal >= SyntheticBatchPlanLimits.MinItemTarget
-                ? (int)(targetTotal / SyntheticBatchPlanLimits.MinItemTarget)
-                : 1));
-        var feasibleMin = Math.Max(1, Math.Min(minItems, feasibleMax));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(minimumEach);
+
+        var feasibleMax = (int)Math.Max(1, Math.Min(maxItems, targetTotal / minimumEach));
+        var feasibleMin = Math.Clamp(minItems, 1, feasibleMax);
         var lineCount = rng.Next(feasibleMin, feasibleMax + 1);
-        if (lineCount <= 1 || targetTotal <= 0) return new[] { targetTotal };
+        if (lineCount == 1) return [targetTotal];
 
-        var minimumEach = targetTotal >= (long)SyntheticBatchPlanLimits.MinItemTarget * lineCount
-            ? SyntheticBatchPlanLimits.MinItemTarget
-            : 1;
+        var spare = targetTotal - minimumEach * lineCount;
+        var cuts = new long[lineCount - 1];
+        for (var i = 0; i < cuts.Length; i++)
+            cuts[i] = rng.NextInt64(0, spare + 1);
+        Array.Sort(cuts);
 
-        for (var attempt = 0; attempt < SyntheticBatchPlanLimits.LineCountRetryAttempts; attempt++)
+        var shares = new long[lineCount];
+        var previous = 0L;
+        for (var i = 0; i < cuts.Length; i++)
         {
-            if (targetTotal - 1 < lineCount - 1) break;
-            var cuts = SampleWithoutReplacement((int)(targetTotal - 1), lineCount - 1, rng)
-                .Select(c => (long)(c + 1))
-                .OrderBy(c => c)
-                .ToArray();
-            var slices = new long[lineCount];
-            slices[0] = cuts[0];
-            for (var i = 1; i < lineCount - 1; i++) slices[i] = cuts[i] - cuts[i - 1];
-            slices[lineCount - 1] = targetTotal - cuts[^1];
-            if (slices.All(s => s >= minimumEach)) return slices;
+            shares[i] = minimumEach + cuts[i] - previous;
+            previous = cuts[i];
         }
-
-        // Fallback: even split.
-        var even = targetTotal / lineCount;
-        var remainder = (int)(targetTotal - even * lineCount);
-        var fallback = Enumerable.Repeat(even, lineCount).ToArray();
-        for (var i = 0; i < remainder; i++) fallback[i] += 1;
-        return fallback;
+        shares[^1] = minimumEach + spare - previous;
+        return shares;
     }
 
-    private PlannedBill BuildPlannedBill(
-        long targetTotal,
+    private static PlannedBill BuildPlannedBill(
+        long billTotal,
         SyntheticBatchRequest request,
-        IReadOnlyList<ItemMasterEntry> itemEntries,
-        IReadOnlyList<KaratMasterEntry> karatEntries,
+        IReadOnlyList<LinePricing> pricings,
         DateOnly voucherDate,
         DateTimeOffset scheduledAtUtc,
         Random rng)
     {
-        var lineTargets = BuildLineTargets(targetTotal, request.MinItemsPerBill, request.MaxItemsPerBill, rng);
-        var lines = new List<BillLineItemDto>(lineTargets.Count);
-        foreach (var lineTarget in lineTargets)
-        {
-            var line = BuildLineForTarget(
-                targetInclusive: lineTarget,
-                request: request,
-                itemEntry: itemEntries[rng.Next(itemEntries.Count)],
-                karatEntry: karatEntries[rng.Next(karatEntries.Count)],
-                rng: rng);
-            if (line is null)
-            {
-                // Could not produce a valid line at this rate/karat — fall back to a minimum-qty line
-                // so the bill is still persistable. Mirrors V1 _build_fallback_voucher.
-                var fallbackItem = itemEntries[rng.Next(itemEntries.Count)];
-                var fallbackKarat = karatEntries[rng.Next(karatEntries.Count)];
-                line = BuildLine(
-                    request: request,
-                    itemEntry: fallbackItem,
-                    karatEntry: fallbackKarat,
-                    qty: SyntheticBatchPlanLimits.MinQty);
-            }
-            lines.Add(line!);
-        }
+        var lines = BuildLines(billTotal, request, pricings, rng);
 
         var totals = BillCalculator.BuildTotals(lines.Select(l => l.LineTotal), discount: 0m);
-        // V1: a synthetic bill has no customer, so its party is the payment-mode
-        // label, spelled the way every other bill spells it.
         var paymentMode = PaymentMode.Normalize(request.PaymentMode);
 
         var payload = new BillPayloadDto(
-            PartyName: paymentMode,
+            // V1 made the party the payment-mode label; since 20 November 2026 it is a customer's name.
+            PartyName: SyntheticCustomerNames.Pick(rng),
             PartyGstin: null,
             PartyPhone: null,
             PartyAddress: null,
@@ -285,41 +309,101 @@ public sealed class SyntheticBillPlanner
         return new PlannedBill(payload, scheduledAtUtc);
     }
 
-    private static BillLineItemDto? BuildLineForTarget(
-        long targetInclusive,
+    /// <summary>Tries to price one bill this many times before saying it cannot be done.</summary>
+    private const int BillAttempts = 20;
+
+    /// <summary>
+    /// The lines of one bill: each at least <see cref="SyntheticBatchPlanLimits.MinLineWeight"/>, weighed in
+    /// steps of <see cref="SyntheticBatchPlanLimits.WeightStep"/>, coming to a grand total within a step of
+    /// <paramref name="billTotal"/>, and never under <see cref="SyntheticBatchPlanLimits.MinBillTotal"/> or
+    /// over the max bill amount.
+    /// </summary>
+    private static List<BillLineItemDto> BuildLines(
+        long billTotal,
         SyntheticBatchRequest request,
-        ItemMasterEntry itemEntry,
-        KaratMasterEntry karatEntry,
+        IReadOnlyList<LinePricing> pricings,
         Random rng)
     {
-        var inputs = BuildLineInputs(request, itemEntry, karatEntry, netWeight: 0m);
-        var effRate = BillCalculator.ComputeEffectiveRate(inputs);
-        if (effRate <= 0m) return null;
+        var minWeight = SyntheticBatchPlanLimits.MinLineWeight;
+        var affordable = pricings.Where(p => p.Rate * minWeight <= billTotal).ToList();
+        if (affordable.Count == 0)
+            throw new RequestValidationException(
+                $"At this 24kt rate, {minWeight:0.##} g of any item comes to more than ₹{billTotal:N0}. Check the rate.");
 
-        var fraction = (decimal)(SyntheticBatchPlanLimits.QtyFractionMin
-            + (SyntheticBatchPlanLimits.QtyFractionMax - SyntheticBatchPlanLimits.QtyFractionMin) * rng.NextDouble());
-        var qty = Math.Max(SyntheticBatchPlanLimits.MinQty, Math.Round(targetInclusive / effRate * fraction, 3));
-
-        var probe = BillCalculator.ComputeLine(inputs with { NetWeight = qty });
-        if (probe.LineTotalInclusive > targetInclusive)
+        // Only a max bill amount within a couple of weight steps of the minimum can miss; other
+        // items, weights and line counts may still land in it.
+        for (var attempt = 0; attempt < BillAttempts; attempt++)
         {
-            qty = Math.Max(SyntheticBatchPlanLimits.MinQty, Math.Round(targetInclusive / effRate * 0.5m, 3));
-            probe = BillCalculator.ComputeLine(inputs with { NetWeight = qty });
+            var lines = TryBuildLines(billTotal, request, affordable, rng);
+            if (lines is not null) return lines;
         }
-        if (probe.LineTotalInclusive > targetInclusive)
-            qty = SyntheticBatchPlanLimits.MinQty;
 
-        return BuildLine(request, itemEntry, karatEntry, qty);
+        throw new RequestValidationException(
+            $"No bill between ₹{SyntheticBatchPlanLimits.MinBillTotal:N0} and ₹{request.MaxBillAmount:N0} can be made in steps of {SyntheticBatchPlanLimits.WeightStep} g at this rate. Raise the max bill amount.");
     }
 
-    private static BillLineItemDto BuildLine(
+    /// <summary>One try at <see cref="BuildLines"/>: null when the bill came out over the max bill amount.</summary>
+    private static List<BillLineItemDto>? TryBuildLines(
+        long billTotal,
         SyntheticBatchRequest request,
-        ItemMasterEntry itemEntry,
-        KaratMasterEntry karatEntry,
-        decimal qty)
+        IReadOnlyList<LinePricing> affordable,
+        Random rng)
     {
-        var result = BillCalculator.ComputeLine(BuildLineInputs(request, itemEntry, karatEntry, netWeight: qty));
+        var minWeight = SyntheticBatchPlanLimits.MinLineWeight;
+        var step = SyntheticBatchPlanLimits.WeightStep;
 
+        // Each share buys the smallest weight of the dearest item, so any item can take any share.
+        var minimumEach = (long)Math.Ceiling(affordable.Max(p => p.Rate) * minWeight);
+        var shares = BuildLineTargets(billTotal, request.MinItemsPerBill, request.MaxItemsPerBill, minimumEach, rng);
+
+        var picked = new LinePricing[shares.Count];
+        var weights = new decimal[shares.Count];
+        var lineTotals = new decimal[shares.Count];
+        for (var i = 0; i < shares.Count; i++)
+        {
+            picked[i] = affordable[rng.Next(affordable.Count)];
+            weights[i] = Math.Max(minWeight, Math.Floor(shares[i] / picked[i].Rate / step) * step);
+            lineTotals[i] = picked[i].TotalFor(weights[i]);
+        }
+
+        decimal Grand() => BillCalculator.BuildTotals(lineTotals.Sum(), discount: 0m).GrandTotal;
+
+        decimal GrandWith(int line, decimal lineTotal)
+            => BillCalculator.BuildTotals(lineTotals.Sum() - lineTotals[line] + lineTotal, discount: 0m).GrandTotal;
+
+        void AddStep(int line)
+        {
+            weights[line] += step;
+            lineTotals[line] = picked[line].TotalFor(weights[line]);
+        }
+
+        // Weights rounded down leave each line up to a step short of its share. Add steps, on lines picked
+        // at random, while the bill stays within its total.
+        while (true)
+        {
+            var fits = Enumerable.Range(0, shares.Count)
+                .Where(i => GrandWith(i, picked[i].TotalFor(weights[i] + step)) <= billTotal)
+                .ToList();
+            if (fits.Count == 0) break;
+            AddStep(fits[rng.Next(fits.Count)]);
+        }
+
+        // A total within a step of the minimum can still be under it: the cheapest line takes more.
+        var cheapest = Enumerable.Range(0, shares.Count).MinBy(i => picked[i].Rate);
+        while (Grand() < SyntheticBatchPlanLimits.MinBillTotal)
+            AddStep(cheapest);
+
+        if (Grand() > request.MaxBillAmount)
+            return null;
+
+        return Enumerable.Range(0, shares.Count)
+            .Select(i => BuildLine(picked[i], weights[i], lineTotals[i]))
+            .ToList();
+    }
+
+    private static BillLineItemDto BuildLine(LinePricing pricing, decimal weight, decimal lineTotal)
+    {
+        var (itemEntry, karatEntry) = (pricing.Item, pricing.Karat);
         var stockName = !string.IsNullOrWhiteSpace(karatEntry.TallyItem)
             ? karatEntry.TallyItem.Trim()
             : itemEntry.Name;
@@ -327,14 +411,14 @@ public sealed class SyntheticBillPlanner
         return new BillLineItemDto(
             ItemName: itemEntry.Name,
             HsnCode: JewelleryGst.HsnCode,
-            Quantity: qty,
+            Quantity: weight,
             Unit: string.IsNullOrWhiteSpace(itemEntry.Unit) ? ItemUnits.Gram : itemEntry.Unit,
-            Rate: result.EffectiveRate,
-            LineTotal: result.LineTotalInclusive,
+            Rate: pricing.Rate,
+            LineTotal: lineTotal,
             Karat: karatEntry.Label,
             RawJson: null,
             StockName: stockName,
-            GrossWeight: qty,
+            GrossWeight: weight,
             LessWeight: 0m,
             WastagePercent: itemEntry.WastagePercent,
             LabourPerUnit: itemEntry.DefaultLabourPerGram,
@@ -342,6 +426,7 @@ public sealed class SyntheticBillPlanner
             Extra: 0m);
     }
 
+    // A diamond item never gets here (MayBill), so every line is priced by weight.
     private static BillCalculator.LineInputs BuildLineInputs(
         SyntheticBatchRequest request,
         ItemMasterEntry itemEntry,
@@ -355,11 +440,14 @@ public sealed class SyntheticBillPlanner
             NetWeight: netWeight,
             ExtraCharges: 0m,
             PricingMode: itemEntry.PricingMode,
-            IsDiamond: string.Equals(itemEntry.ItemCategory, ItemCategories.Diamond, StringComparison.OrdinalIgnoreCase),
+            IsDiamond: false,
             DiamondRate: 0m);
 
     private static DateTimeOffset FloorToMinute(DateTimeOffset v)
         => new(v.Year, v.Month, v.Day, v.Hour, v.Minute, 0, v.Offset);
+
+    private static string InIndia(DateTimeOffset instant)
+        => instant.ToOffset(IndiaTime.Offset).ToString("dd MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture);
 
     private static DateTimeOffset CeilToMinute(DateTimeOffset v)
     {
@@ -372,9 +460,9 @@ public sealed class SyntheticBillPlanner
     {
         if (k > population) throw new ArgumentException("k > population", nameof(k));
 
-        // Line targets pick about 20 cut points out of up to 199,000 rupees.
-        // Drawing until k distinct values turn up avoids allocating the whole
-        // range; collisions are rare while k is small against the population.
+        // A schedule usually picks a few dozen minutes out of a window of many hundreds.
+        // Drawing until k distinct values turn up avoids allocating the whole range;
+        // collisions are rare while k is small against the population.
         if ((long)k * 8 <= population)
         {
             var picked = new HashSet<int>(k);
@@ -390,7 +478,7 @@ public sealed class SyntheticBillPlanner
             return sample;
         }
 
-        // Partial Fisher-Yates shuffle, for the schedule, where k can approach the population.
+        // Partial Fisher-Yates shuffle, for a window that the bills nearly fill.
         var indices = Enumerable.Range(0, population).ToArray();
         for (var i = 0; i < k; i++)
         {

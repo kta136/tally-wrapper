@@ -8,20 +8,24 @@ namespace ShowroomBilling.Desktop.Shell;
 /// handled whether or not its command may run, and a handled key types nothing, so neither
 /// character could be typed into any text box: not in a party name, a note or a reason.
 /// The window calls this from its key handler instead, and takes the key only when it ran.
+/// <c>Ctrl+Alt+G</c>, the batch data scheduler (as in V1), is here for the same reason: on a
+/// keyboard with AltGr it is a character, and while admin is locked it must do nothing at all.
 /// </summary>
 public static class BareKeyShortcuts
 {
     /// <summary>
     /// Runs the shortcut <paramref name="key"/> stands for, if it may run now. False means the
-    /// key is not a shortcut at this moment (a text box has the cursor, or a dialog is open):
-    /// leave it unhandled, so the character is typed.
+    /// key is not a shortcut at this moment (a text box has the cursor, a dialog is open, or
+    /// admin is locked): leave it unhandled, so the character is typed.
     /// </summary>
-    public static bool TryRun(Key key, ModifierKeys modifiers, ICommand shortcuts, ICommand adminUnlock)
+    /// <param name="key">The key, with <c>Key.System</c> already resolved to the system key (Alt is held for the chord).</param>
+    public static bool TryRun(Key key, ModifierKeys modifiers, ICommand shortcuts, ICommand adminUnlock, ICommand batchScheduler)
     {
         var command = (key, modifiers) switch
         {
             (Key.OemQuestion, ModifierKeys.Shift) => shortcuts,
             (Key.OemTilde, ModifierKeys.None) => adminUnlock,
+            (Key.G, ModifierKeys.Control | ModifierKeys.Alt) => batchScheduler,
             _ => null,
         };
         if (command is null || !command.CanExecute(null))

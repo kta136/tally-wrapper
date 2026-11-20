@@ -366,7 +366,16 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         }
 
         ActiveDialog = ShellDialogs.SyntheticBatch;
+        // Start at the last bill and end now, as of this opening.
+        _ = SyntheticBatch.PrepareWindowAsync();
     }
+
+    // Ctrl+Alt+G, the hidden key V1 had: opens the batch data scheduler while admin is unlocked
+    // and no dialog is open, and does nothing otherwise (the key is then left alone).
+    [RelayCommand(CanExecute = nameof(CanUseBatchSchedulerKey))]
+    private void OpenSyntheticBatchKey() => OpenSyntheticBatch();
+
+    private bool CanUseBatchSchedulerKey() => Admin.IsUnlocked && !IsAnyDialogOpen;
 
     [RelayCommand]
     private void OpenHealth()

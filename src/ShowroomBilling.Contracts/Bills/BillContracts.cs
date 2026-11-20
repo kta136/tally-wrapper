@@ -137,6 +137,16 @@ public sealed record BillSearchFilter(
     bool? IncludeTotal = true,
     string? Search = null);
 
+/// <summary>The orders <see cref="BillSearchFilter.Sort"/> takes; anything else is <see cref="Workflow"/>.</summary>
+public static class BillSearchSorts
+{
+    /// <summary>The Bills tab's order: pending and draft bills first, then the highest invoice number.</summary>
+    public const string Workflow = "workflow";
+
+    /// <summary>The bill made last first.</summary>
+    public const string CreatedDesc = "created_desc";
+}
+
 public sealed record BillSummaryItem(
     Guid Id,
     string State,

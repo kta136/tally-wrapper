@@ -22,7 +22,8 @@ public sealed class SyntheticBatchExecutor(
     BillService billService,
     ICloudSettingsService settings,
     ShowroomBillingDbContext dbContext,
-    ILogger<SyntheticBatchExecutor> logger)
+    ILogger<SyntheticBatchExecutor> logger,
+    TimeProvider? timeProvider = null)
 {
     public async Task<SyntheticBatchResponse> ExecuteAsync(
         SyntheticBatchRequest request,
@@ -41,13 +42,14 @@ public sealed class SyntheticBatchExecutor(
         if (karatEntries.Count == 0)
             throw new RequestValidationException("No karat masters are configured.");
 
-        // The planner keeps the batch after the newest bill already stored.
+        // The planner keeps the batch between the newest bill already stored and now.
         var floorUtc = await dbContext.Bills
             .AsNoTracking()
             .MaxAsync(b => (DateTimeOffset?)b.CreatedAtUtc, cancellationToken);
+        var nowUtc = (timeProvider ?? TimeProvider.System).GetUtcNow();
 
         var rng = new Random();
-        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, floorUtc);
+        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, floorUtc, nowUtc);
 
         logger.LogInformation(
             "Synthetic batch planned: {BillCount} bill(s), grand ₹{Grand:N0}, window [{Start:o}, {End:o}]",

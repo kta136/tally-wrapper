@@ -87,7 +87,7 @@
             <StackPanel>
                 <TextBlock Margin="0,0,0,8" Style="{StaticResource CardTitle}" Text="Batch data scheduler" />
                 <TextBlock Margin="0,0,0,16" Foreground="{StaticResource InkMutedBrush}" TextWrapping="Wrap">
-                    <Run Text="Generates a cluster of realistic " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="pending" /><Run Text=" bills by splitting a total target amount into bills of ₹25,000 to ₹1,99,000, spread across a time window you choose. Nothing is sent to Tally, and the audit timestamps are backfilled." />
+                    <Run Text="Generates a cluster of realistic " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="pending" /><Run Text=" bills by splitting a total target amount into bills of ₹50,000 to ₹1,99,000, spread across a time window you choose. Nothing is sent to Tally, and the audit timestamps are backfilled." />
                 </TextBlock>
                 <StackPanel Orientation="Horizontal">
                     <Button Command="{Binding DataContext.OpenSyntheticBatchCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="Open Batch data scheduler…" />

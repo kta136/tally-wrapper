@@ -140,6 +140,9 @@
                                      LostFocus="OnEndAtLostFocus" />
                         </StackPanel>
                     </Grid>
+                    <TextBlock Margin="0,14,0,0"
+                               Style="{StaticResource TxtHint}"
+                               Text="{Binding WindowNote, Mode=OneWay}" />
                 </StackPanel>
             </Border>
 

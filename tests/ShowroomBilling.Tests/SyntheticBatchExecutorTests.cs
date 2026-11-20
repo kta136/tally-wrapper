@@ -53,20 +53,30 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
 
         // A window that opens before the newest bill would put bills out of order.
         var refused = await Assert.ThrowsAsync<RequestValidationException>(() => executor.ExecuteAsync(request));
-        Assert.Equal("Start time must be later than the latest existing bill's timestamp.", refused.Message);
+        Assert.StartsWith("Start time cannot be before the last bill,", refused.Message);
+        Assert.Equal(1, await db.Bills.CountAsync());
+
+        // So would one that ends later than now.
+        var future = await Assert.ThrowsAsync<RequestValidationException>(() =>
+            executor.ExecuteAsync(request with { StartAtUtc = existingAt.AddMinutes(1), EndAtUtc = DateTimeOffset.UtcNow.AddMinutes(5) }));
+        Assert.Equal("End time cannot be later than now.", future.Message);
         Assert.Equal(1, await db.Bills.CountAsync());
 
         var response = await executor.ExecuteAsync(request with { StartAtUtc = existingAt.AddMinutes(1) });
 
         await using var verify = CreateDbContext();
         var stored = await verify.Bills.AsNoTracking().Where(b => b.Id != existing.Id).ToListAsync();
-        Assert.True(response.BillCount >= 3, $"400,000 in bills of at most 199,000 is at least three; got {response.BillCount}.");
+        // Two, not three: what is left under 50,000 after the last bill is dropped, not
+        // billed, so 400,000 can come out as, say, 192,536 + 189,573. Asking for three
+        // would fail about one run in 19. SyntheticBillPlannerTests holds the rule itself.
+        Assert.True(response.BillCount >= 2, $"400,000 in bills of at most 199,000 is at least two; got {response.BillCount}.");
         Assert.Equal(response.BillCount, stored.Count);
         Assert.All(stored, bill =>
         {
             Assert.Equal(BillStates.Pending, bill.State);
             Assert.NotNull(bill.InvoiceCore);
             Assert.True(bill.CreatedAtUtc > existingAt, $"{bill.InvoiceNumber} was dated {bill.CreatedAtUtc:o}, not after {existingAt:o}.");
+            Assert.True(bill.CreatedAtUtc <= DateTimeOffset.UtcNow, $"{bill.InvoiceNumber} was dated {bill.CreatedAtUtc:o}, in the future.");
         });
         Assert.Equal(stored.Count, stored.Select(b => b.InvoiceNumber).Distinct().Count());
     }

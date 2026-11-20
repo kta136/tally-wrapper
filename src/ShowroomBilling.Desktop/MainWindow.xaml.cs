@@ -43,14 +43,18 @@ public partial class MainWindow : Window
     /// <summary>
     /// <c>?</c> and the backtick are shortcuts only where they are not text, so they are not
     /// key bindings (see <see cref="BareKeyShortcuts"/>): the key is taken only when its shortcut ran.
+    /// The same goes for Ctrl+Alt+G, which only acts while admin is unlocked.
     /// </summary>
     protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
     {
+        // With Alt held, the key arrives as Key.System and the real key is SystemKey.
+        var key = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
         if (!e.Handled && BareKeyShortcuts.TryRun(
-                e.Key,
+                key,
                 System.Windows.Input.Keyboard.Modifiers,
                 _viewModel.OpenShortcutsKeyCommand,
-                _viewModel.OpenAdminUnlockKeyCommand))
+                _viewModel.OpenAdminUnlockKeyCommand,
+                _viewModel.OpenSyntheticBatchKeyCommand))
         {
             e.Handled = true;
         }

@@ -9,8 +9,8 @@ namespace ShowroomBilling.Infrastructure.Bills;
 
 internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
 {
-    private const string SortWorkflow = "workflow";
-    private const string SortCreatedDesc = "created_desc";
+    private const string SortWorkflow = BillSearchSorts.Workflow;
+    private const string SortCreatedDesc = BillSearchSorts.CreatedDesc;
     private const int MaxBatchGetIds = 200;
 
     internal async Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)

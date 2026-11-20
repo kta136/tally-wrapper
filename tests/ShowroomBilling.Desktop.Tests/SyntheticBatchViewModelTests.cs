@@ -20,6 +20,24 @@ public sealed class SyntheticBatchViewModelTests
     }
 
     [Fact]
+    public void ValidationMessage_FlagsAMaxBillAmountUnderTheSmallestBill()
+    {
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), new FakeDialogs(), adminTokens: null, settings: null) { Rate24Kt = 6000m };
+        vm.MaxBillAmount = 49_999;
+
+        Assert.Equal("Max bill amount must be between ₹50,000 and ₹1,99,000.", vm.ValidationMessage);
+    }
+
+    [Fact]
+    public void ValidationMessage_FlagsATotalUnderTheSmallestBill()
+    {
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), new FakeDialogs(), adminTokens: null, settings: null) { Rate24Kt = 6000m };
+        vm.TotalAmount = 49_999;
+
+        Assert.Equal("Total target amount must be at least ₹50,000, the smallest bill a batch makes.", vm.ValidationMessage);
+    }
+
+    [Fact]
     public void ValidationMessage_FlagsReversedTimeWindow()
     {
         var vm = new SyntheticBatchViewModel(new FakeBillsApi(), new FakeDialogs(), adminTokens: null, settings: null) { Rate24Kt = 6000m };
@@ -79,7 +97,7 @@ public sealed class SyntheticBatchViewModelTests
         };
         var vm = new SyntheticBatchViewModel(api, dialogs, tokenStore, settings: null) { Rate24Kt = 6000m };
         vm.KaratOptions.Add(new SelectableKarat { Label = "22K", TallyItem = "Hallmarked 22KT", IsSelected = true });
-        var start = new DateTimeOffset(DateTime.Today.AddHours(9));
+        var start = DateTimeOffset.Now.AddHours(-4);
         var end = start.AddHours(3);
         vm.StartAt = start;
         vm.EndAt = end;
@@ -102,9 +120,10 @@ public sealed class SyntheticBatchViewModelTests
         var api = new FakeBillsApi();
         var vm = new SyntheticBatchViewModel(api, new FakeDialogs(), tokenStore, settings: null) { Rate24Kt = 6000m };
         vm.KaratOptions.Add(new SelectableKarat { Label = "22K", TallyItem = "Hallmarked 22KT", IsSelected = true });
-        var start = new DateTimeOffset(DateTime.Today.AddHours(9));
+        var start = DateTimeOffset.Now.AddHours(-4);
         vm.StartAt = start;
         vm.EndAt = start.AddHours(3);
+        Assert.Null(vm.ValidationMessage);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -112,4 +131,99 @@ public sealed class SyntheticBatchViewModelTests
         Assert.Equal("admin-token", api.LastAdminToken);
         Assert.Equal(1, api.CallCount);
     }
+
+    [Fact]
+    public async Task The_window_runs_from_the_last_bill_to_now()
+    {
+        var lastBill = LastBillAt(DateTimeOffset.UtcNow.AddHours(-2));
+        var api = new FakeBillsApi { Response = OneBill(lastBill) };
+        var vm = new SyntheticBatchViewModel(api, new FakeDialogs(), adminTokens: null, settings: null);
+
+        var before = DateTimeOffset.Now;
+        await vm.PrepareWindowAsync();
+
+        // The newest bill made, whatever its state or number.
+        Assert.Equal((0, 1, BillSearchSorts.CreatedDesc), (api.LastFilter!.Skip, api.LastFilter.Take, api.LastFilter.Sort));
+        Assert.Equal(lastBill, vm.StartAt);
+        Assert.Equal(lastBill, vm.LastBillAt);
+        Assert.InRange(vm.EndAt, before, DateTimeOffset.Now);
+        Assert.Equal($"Bills can be dated from the last bill, {lastBill.ToLocalTime():dd MMM, HH:mm}, up to now.", vm.WindowNote);
+    }
+
+    [Fact]
+    public async Task With_no_bill_yet_the_window_starts_at_the_start_of_today()
+    {
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi(), new FakeDialogs(), adminTokens: null, settings: null);
+
+        await vm.PrepareWindowAsync();
+
+        Assert.Null(vm.LastBillAt);
+        Assert.Equal(DateTime.Today, vm.StartAt.LocalDateTime);
+        Assert.Equal("Bills can be dated up to now.", vm.WindowNote);
+    }
+
+    [Fact]
+    public async Task A_window_outside_the_last_bill_and_now_is_refused()
+    {
+        var lastBill = LastBillAt(DateTimeOffset.UtcNow.AddHours(-2));
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi { Response = OneBill(lastBill) }, new FakeDialogs(), adminTokens: null, settings: null)
+        {
+            Rate24Kt = 6000m,
+        };
+        vm.KaratOptions.Add(new SelectableKarat { Label = "22K", TallyItem = "Hallmarked 22KT", IsSelected = true });
+        await vm.PrepareWindowAsync();
+        var end = vm.EndAt;
+
+        vm.EndAt = DateTimeOffset.Now.AddMinutes(30);
+        Assert.Equal("End time cannot be later than now.", vm.ValidationMessage);
+
+        vm.EndAt = end;
+        vm.StartAt = lastBill.AddMinutes(-1);
+        Assert.Equal($"Start time cannot be before the last bill, {lastBill.ToLocalTime():dd MMM, HH:mm}.", vm.ValidationMessage);
+
+        // The boxes hold whole minutes, so the last bill's own minute is allowed; no bill goes in it.
+        vm.StartAt = new DateTimeOffset(lastBill.Year, lastBill.Month, lastBill.Day, lastBill.Hour, lastBill.Minute, 0, lastBill.Offset);
+        Assert.Null(vm.ValidationMessage);
+    }
+
+    [Fact]
+    public async Task A_last_bill_dated_later_than_now_leaves_no_window()
+    {
+        var lastBill = LastBillAt(DateTimeOffset.UtcNow.AddHours(3));
+        var vm = new SyntheticBatchViewModel(new FakeBillsApi { Response = OneBill(lastBill) }, new FakeDialogs(), adminTokens: null, settings: null)
+        {
+            Rate24Kt = 6000m,
+        };
+
+        await vm.PrepareWindowAsync();
+
+        Assert.Equal(
+            $"The last bill is dated {lastBill.ToLocalTime():dd MMM, HH:mm}, later than now, so there is no time left to date a batch in.",
+            vm.ValidationMessage);
+    }
+
+    [Fact]
+    public async Task When_the_last_bill_cannot_be_read_the_form_says_so_and_the_server_checks()
+    {
+        var vm = new SyntheticBatchViewModel(
+            new FakeBillsApi { SearchFailure = new System.Net.Http.HttpRequestException("No connection") }, new FakeDialogs(), adminTokens: null, settings: null);
+
+        await vm.PrepareWindowAsync();
+
+        Assert.Null(vm.LastBillAt);
+        Assert.Equal(DateTime.Today, vm.StartAt.LocalDateTime);
+        Assert.StartsWith("Could not read when the last bill was made", vm.StatusMessage);
+    }
+
+    /// <summary>A time to the second in local time, as the dialog holds it.</summary>
+    private static DateTimeOffset LastBillAt(DateTimeOffset utc)
+    {
+        var local = utc.ToLocalTime();
+        return new DateTimeOffset(local.Year, local.Month, local.Day, local.Hour, local.Minute, 37, local.Offset);
+    }
+
+    private static BillListResponse OneBill(DateTimeOffset createdAt) => new(1, 0, 1,
+    [
+        new BillSummaryItem(Guid.NewGuid(), BillStates.Pending, "SR/1", "Party A", DateOnly.FromDateTime(createdAt.Date), 60_000m, createdAt, createdAt),
+    ]);
 }

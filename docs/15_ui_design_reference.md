@@ -127,6 +127,7 @@ Global (registered in the app shell):
 
 - `Ctrl+1` Invoice tab · `Ctrl+2` Bills tab · `Ctrl+3` Settings tab
 - `?` open the shortcuts list, and `` ` `` the admin unlock: only while no text box has the cursor and no dialog is open. In a text box both are ordinary characters and are typed.
+- `Ctrl+Alt+G` opens the Batch data scheduler, as it did in V1: only while admin is unlocked and no dialog is open, from any screen and also with the cursor in a text box. While admin is locked it does nothing and the key is left alone. It is not in the shortcuts list, on purpose.
 - When the last dialog closes, the cursor goes back to where it was on the screen behind it (`Shell/DialogFocusReturn`); if that control has gone, to the tab's own place: Party on Invoice (the 24K rate while that is empty), the list on Bills. After a bill is saved the cursor is in Party, ready for the next bill, whether or not a print preview opened in between. The Bills tab takes the keyboard as soon as it is shown, so its keys work without a click.
 - `Esc` close the top-most dialog
 - `F9` print estimate (Invoice screen active)

@@ -23,6 +23,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly AdminTokenStore? _adminTokens;
     private readonly SettingsViewModel? _settings;
+    private readonly TimeProvider _time;
 
     /// <summary>Fires on successful completion so the Bills tab can refresh.</summary>
     public event EventHandler? BatchCompleted;
@@ -31,20 +32,22 @@ public partial class SyntheticBatchViewModel : ObservableObject
         IBillsApiClient billsApi,
         IDialogService dialogs,
         AdminTokenStore? adminTokens,
-        SettingsViewModel? settings)
+        SettingsViewModel? settings,
+        TimeProvider? time = null)
     {
         _billsApi = billsApi;
         _dialogs = dialogs;
         _adminTokens = adminTokens;
         _settings = settings;
+        _time = time ?? TimeProvider.System;
 
         KaratOptions = new ObservableCollection<SelectableKarat>();
         PaymentOptions = new ObservableCollection<string> { Contracts.Bills.PaymentMode.Cash, Contracts.Bills.PaymentMode.CreditDebit };
 
-        var now = DateTimeOffset.Now;
-        var localStart = new DateTimeOffset(now.Year, now.Month, now.Day, 9, 0, 0, now.Offset);
-        StartAt = localStart > now ? localStart : new DateTimeOffset(now.DateTime.Date, now.Offset);
-        EndAt = new DateTimeOffset(now.DateTime.Date.AddDays(0).AddHours(23).AddMinutes(59), now.Offset);
+        // Until the last bill's time is read (PrepareWindowAsync): from the start of today to now.
+        var now = Now;
+        StartAt = new DateTimeOffset(now.Date, now.Offset);
+        EndAt = now;
 
         if (_settings is not null)
         {
@@ -74,6 +77,13 @@ public partial class SyntheticBatchViewModel : ObservableObject
     [ObservableProperty] private DateTimeOffset startAt;
     [ObservableProperty] private DateTimeOffset endAt;
 
+    /// <summary>When the newest stored bill was made, in local time; null when there is none or it could not be read.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowNote))]
+    private DateTimeOffset? lastBillAt;
+
+    private DateTimeOffset Now => _time.GetLocalNow();
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(CancelCommand))]
     private bool isRunning;
@@ -99,9 +109,41 @@ public partial class SyntheticBatchViewModel : ObservableObject
     partial void OnMaxItemsPerBillChanged(int value) => RecomputeValidation();
     partial void OnStartAtChanged(DateTimeOffset value) => RecomputeValidation();
     partial void OnEndAtChanged(DateTimeOffset value) => RecomputeValidation();
+    partial void OnLastBillAtChanged(DateTimeOffset? value) => RecomputeValidation();
     partial void OnPaymentModeChanged(string value) => RecomputeValidation();
 
     private bool CanStart() => !IsRunning && !HasValidation && AnyKaratSelected();
+
+    /// <summary>
+    /// Reads when the newest bill was made and sets the window to run from it to now: a batch is dated
+    /// after every bill already stored and never in the future (owner, 20 November 2026). With no bill
+    /// yet the window starts at the start of today. Called each time the dialog opens and after a batch.
+    /// </summary>
+    public async Task PrepareWindowAsync(CancellationToken cancellationToken = default)
+    {
+        DateTimeOffset? newest = null;
+        var known = true;
+        try
+        {
+            var latest = await _billsApi.SearchAsync(
+                new BillSearchFilter(State: null, FromDate: null, ToDate: null, Skip: 0, Take: 1,
+                    Sort: BillSearchSorts.CreatedDesc, IncludeTotal: false),
+                cancellationToken);
+            newest = latest.Items.FirstOrDefault()?.CreatedAtUtc;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // The server checks the window again when the batch is sent; the form just cannot say so first.
+            known = false;
+        }
+
+        var now = Now;
+        LastBillAt = newest?.ToOffset(now.Offset);
+        StartAt = LastBillAt ?? new DateTimeOffset(now.Date, now.Offset);
+        EndAt = now;
+        if (!known)
+            StatusMessage = "Could not read when the last bill was made; the server checks the times when the batch starts.";
+    }
 
     [RelayCommand(CanExecute = nameof(IsRunning))]
     private void Cancel() => _cts?.Cancel();
@@ -164,24 +206,31 @@ public partial class SyntheticBatchViewModel : ObservableObject
     private void RecomputeValidation()
     {
         string? msg = null;
-        if (TotalAmount <= 0)
-            msg = "Total target amount must be greater than zero.";
-        else if (MaxBillAmount <= 0 || MaxBillAmount > SyntheticBatchPlanLimits.HardMaxBillAmount)
-            msg = $"Max bill amount must be between ₹1 and ₹{SyntheticBatchPlanLimits.HardMaxBillAmount.ToString("N0", AmountCulture)}.";
+        var minBill = SyntheticBatchPlanLimits.MinBillTotal.ToString("N0", AmountCulture);
+        if (TotalAmount < SyntheticBatchPlanLimits.MinBillTotal)
+            msg = $"Total target amount must be at least ₹{minBill}, the smallest bill a batch makes.";
+        else if (MaxBillAmount < SyntheticBatchPlanLimits.MinBillTotal || MaxBillAmount > SyntheticBatchPlanLimits.HardMaxBillAmount)
+            msg = $"Max bill amount must be between ₹{minBill} and ₹{SyntheticBatchPlanLimits.HardMaxBillAmount.ToString("N0", AmountCulture)}.";
         else if (Rate24Kt <= 0m)
             msg = "24kt rate must be greater than zero.";
         else if (MinItemsPerBill <= 0 || MaxItemsPerBill < MinItemsPerBill)
             msg = "Items per bill range is invalid.";
+        else if (LastBillAt is { } newest && newest > Now)
+            msg = $"The last bill is dated {Show(newest)}, later than now, so there is no time left to date a batch in.";
+        else if (EndAt > Now)
+            msg = "End time cannot be later than now.";
         else if (StartAt >= EndAt)
             msg = "Start time must be before end time.";
+        else if (LastBillAt is { } last && StartAt < FloorToMinute(last))
+            msg = $"Start time cannot be before the last bill, {Show(last)}.";
         else if (!AnyKaratSelected())
             msg = "Select at least one Tally-mapped karat.";
         else
         {
             var (minBills, maxBills) = SyntheticBillPlanner.EstimateBillCountBounds(TotalAmount, MaxBillAmount);
-            var slots = AvailableMinuteSlots(StartAt, EndAt);
+            var slots = AvailableMinuteSlots(StartAt, EndAt, LastBillAt);
             if (slots < maxBills)
-                msg = $"Window fits {slots} minute slot(s) but up to {maxBills} bills may be generated. Widen window or lower total.";
+                msg = $"Window fits {slots} minute slot(s) but up to {maxBills} bills may be generated. Lower the total, or widen the window (it can run from the last bill to now).";
             else if (slots < minBills)
                 msg = $"Window fits only {slots} slot(s); at least {minBills} required.";
         }
@@ -189,15 +238,22 @@ public partial class SyntheticBatchViewModel : ObservableObject
         StartCommand.NotifyCanExecuteChanged();
     }
 
-    private static int AvailableMinuteSlots(DateTimeOffset start, DateTimeOffset end)
+    /// <summary>The minutes a bill can be given, as the server counts them: none in or before the last bill's minute.</summary>
+    private static int AvailableMinuteSlots(DateTimeOffset start, DateTimeOffset end, DateTimeOffset? lastBill)
     {
         if (start >= end) return 0;
-        var s = new DateTimeOffset(start.Year, start.Month, start.Day, start.Hour, start.Minute, 0, start.Offset);
+        var s = FloorToMinute(start);
         if (s != start) s = s.AddMinutes(1);
-        var e = new DateTimeOffset(end.Year, end.Month, end.Day, end.Hour, end.Minute, 0, end.Offset);
+        if (lastBill is { } last && FloorToMinute(last).AddMinutes(1) > s) s = FloorToMinute(last).AddMinutes(1);
+        var e = FloorToMinute(end);
         if (e < s) return 0;
         return (int)(e - s).TotalMinutes + 1;
     }
+
+    private static DateTimeOffset FloorToMinute(DateTimeOffset v)
+        => new(v.Year, v.Month, v.Day, v.Hour, v.Minute, 0, v.Offset);
+
+    private static string Show(DateTimeOffset local) => local.ToString("dd MMM, HH:mm", CultureInfo.InvariantCulture);
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync(CancellationToken _)
@@ -225,6 +281,10 @@ public partial class SyntheticBatchViewModel : ObservableObject
             StatusMessage = $"Created {response.BillCount} bill(s) · ₹{response.TotalAmount:N0}.";
             RunState = "Done";
             BatchCompleted?.Invoke(this, EventArgs.Empty);
+            // The next batch goes after these bills.
+            var result = StatusMessage;
+            await PrepareWindowAsync();
+            StatusMessage = result;
         }
         catch (OperationCanceledException)
         {

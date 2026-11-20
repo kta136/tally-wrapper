@@ -20,22 +20,60 @@ public sealed class ShellKeyboardTests
         var ran = new List<string>();
         var shortcuts = new RelayCommand(() => ran.Add("shortcuts"), () => allowed);
         var unlock = new RelayCommand(() => ran.Add("unlock"), () => allowed);
+        var batch = new RelayCommand(() => ran.Add("batch"), () => allowed);
+        const ModifierKeys CtrlAlt = ModifierKeys.Control | ModifierKeys.Alt;
 
-        Assert.True(BareKeyShortcuts.TryRun(Key.OemQuestion, ModifierKeys.Shift, shortcuts, unlock));
-        Assert.True(BareKeyShortcuts.TryRun(Key.OemTilde, ModifierKeys.None, shortcuts, unlock));
-        Assert.Equal(["shortcuts", "unlock"], ran);
+        Assert.True(BareKeyShortcuts.TryRun(Key.OemQuestion, ModifierKeys.Shift, shortcuts, unlock, batch));
+        Assert.True(BareKeyShortcuts.TryRun(Key.OemTilde, ModifierKeys.None, shortcuts, unlock, batch));
+        Assert.True(BareKeyShortcuts.TryRun(Key.G, CtrlAlt, shortcuts, unlock, batch));
+        Assert.Equal(["shortcuts", "unlock", "batch"], ran);
 
-        // A text box has the cursor, or a dialog is open: the key is left alone, and types.
+        // A text box has the cursor, a dialog is open, or admin is locked: the key is left alone, and types.
         allowed = false;
-        Assert.False(BareKeyShortcuts.TryRun(Key.OemQuestion, ModifierKeys.Shift, shortcuts, unlock));
-        Assert.False(BareKeyShortcuts.TryRun(Key.OemTilde, ModifierKeys.None, shortcuts, unlock));
+        Assert.False(BareKeyShortcuts.TryRun(Key.OemQuestion, ModifierKeys.Shift, shortcuts, unlock, batch));
+        Assert.False(BareKeyShortcuts.TryRun(Key.OemTilde, ModifierKeys.None, shortcuts, unlock, batch));
+        Assert.False(BareKeyShortcuts.TryRun(Key.G, CtrlAlt, shortcuts, unlock, batch));
 
         // Other keys, and the same keys with other modifiers, are not these shortcuts.
         allowed = true;
-        Assert.False(BareKeyShortcuts.TryRun(Key.OemQuestion, ModifierKeys.None, shortcuts, unlock));
-        Assert.False(BareKeyShortcuts.TryRun(Key.OemTilde, ModifierKeys.Shift, shortcuts, unlock));
-        Assert.False(BareKeyShortcuts.TryRun(Key.A, ModifierKeys.None, shortcuts, unlock));
-        Assert.Equal(2, ran.Count);
+        Assert.False(BareKeyShortcuts.TryRun(Key.OemQuestion, ModifierKeys.None, shortcuts, unlock, batch));
+        Assert.False(BareKeyShortcuts.TryRun(Key.OemTilde, ModifierKeys.Shift, shortcuts, unlock, batch));
+        Assert.False(BareKeyShortcuts.TryRun(Key.A, ModifierKeys.None, shortcuts, unlock, batch));
+        Assert.False(BareKeyShortcuts.TryRun(Key.G, ModifierKeys.Control, shortcuts, unlock, batch));
+        Assert.False(BareKeyShortcuts.TryRun(Key.G, ModifierKeys.None, shortcuts, unlock, batch));
+        Assert.Equal(3, ran.Count);
+    }
+
+    [Fact]
+    public void Ctrl_Alt_G_opens_the_batch_data_scheduler_only_while_admin_is_unlocked()
+    {
+        var seen = WpfTestHost.Run(() =>
+        {
+            var tokens = new ShowroomBilling.Desktop.Services.AdminTokenStore();
+            var shell = DesignSample.CreateShell(tokenStore: tokens);
+            // The sample leaves a confirm question open for its snapshot; answer it first.
+            shell.ConfirmDialog.Cancel();
+
+            // Locked: nothing happens and nothing hints that the key does anything.
+            var whileLocked = shell.OpenSyntheticBatchKeyCommand.CanExecute(null);
+
+            tokens.Set(new ShowroomBilling.Contracts.Admin.AdminUnlockResponse(
+                "token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(30), "admin/test"));
+            var whileUnlocked = shell.OpenSyntheticBatchKeyCommand.CanExecute(null);
+            shell.OpenSyntheticBatchKeyCommand.Execute(null);
+            var opened = shell.ActiveDialog;
+
+            // Another dialog is open (possibly an awaited prompt): the key never replaces it.
+            shell.ActiveDialog = ShellDialogs.Health;
+            var overADialog = shell.OpenSyntheticBatchKeyCommand.CanExecute(null);
+
+            return (whileLocked, whileUnlocked, opened, overADialog);
+        });
+
+        Assert.False(seen.whileLocked);
+        Assert.True(seen.whileUnlocked);
+        Assert.Equal(ShellDialogs.SyntheticBatch, seen.opened);
+        Assert.False(seen.overADialog);
     }
 
     [Fact]
