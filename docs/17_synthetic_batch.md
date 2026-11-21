@@ -344,7 +344,7 @@ curl -X POST http://localhost:5108/api/bills/synthetic-batch \
    start at the last bill and end now; on a new scratch database, at the start
    of today.
 5. The result takes the form's place. **Open Bills tab** shows the new bills,
-   with `Updated` timestamps inside the times chosen, in state `pending`, each
+   with `Updated` dates inside the days chosen, in state `pending`, each
    made out to a customer's name.
 6. Shop hours: Settings → Admin → **Shop hours for a batch**, then **Save
    hours**; the dialog's right side shows them the next time it opens.

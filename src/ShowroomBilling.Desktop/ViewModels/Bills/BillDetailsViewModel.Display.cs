@@ -11,7 +11,7 @@ public sealed record BillDetailsLine(string ItemName, string Net, string Karat, 
 /// One entry of the timeline: an audit event, or the step the bill is waiting for. <paramref name="Tone"/> colours
 /// the bullet; a pending entry is drawn as a ring, and the line between bullets stops at the last one.
 /// </summary>
-public sealed record TimelineEntry(string Title, string Detail, string Time, string Tone, bool IsFirst, bool IsLast, bool IsPending);
+public sealed record TimelineEntry(string Title, string Detail, string Date, string Tone, bool IsFirst, bool IsLast, bool IsPending);
 
 /// <summary>What the Bill Details dialog shows, worked out for display: amounts with lakh grouping, weights with their unit, the timeline and the one-sentence state.</summary>
 public partial class BillDetailsViewModel
@@ -79,12 +79,10 @@ public partial class BillDetailsViewModel
             for (var i = 0; i < AuditTrail.Count; i++)
             {
                 var item = AuditTrail[i];
-                var local = item.CreatedAtUtc.ToLocalTime();
-                var time = local.Date == DateTime.Today
-                    ? local.ToString("HH:mm", UiCulture.Culture)
-                    : local.ToString("dd MMM, HH:mm", UiCulture.Culture);
+                // The day only: no screen of a bill shows a time of day.
+                var date = item.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy", UiCulture.Culture);
                 entries.Add(new TimelineEntry(
-                    item.Title, item.Detail, time, item.Tone,
+                    item.Title, item.Detail, date, item.Tone,
                     IsFirst: i == 0,
                     IsLast: i == AuditTrail.Count - 1 && next is null,
                     IsPending: false));

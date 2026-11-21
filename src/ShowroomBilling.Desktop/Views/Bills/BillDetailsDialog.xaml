@@ -38,7 +38,7 @@
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
 
-        <!--  A timeline entry: a bullet joined to the next one by a line, the title, what happened, and the time.
+        <!--  A timeline entry: a bullet joined to the next one by a line, the title, what happened, and the date.
               The step the bill is waiting for is a ring instead of a dot.  -->
         <DataTemplate x:Key="TimelineEntryTemplate" DataType="{x:Type vm:TimelineEntry}">
             <Grid>
@@ -70,7 +70,7 @@
                            Margin="12,2,0,0"
                            VerticalAlignment="Top"
                            Foreground="{StaticResource InkMutedBrush}"
-                           Text="{Binding Time}" />
+                           Text="{Binding Date}" />
             </Grid>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsLast}" Value="True">
@@ -190,7 +190,7 @@
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
                                 <TextBlock Style="{StaticResource SummaryLabel}" Text="Created" />
-                                <TextBlock Style="{StaticResource SummaryValue}" Text="{Binding Bill.CreatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='dd MMM yyyy, HH:mm', TargetNullValue='—', FallbackValue='—'}" />
+                                <TextBlock Style="{StaticResource SummaryValue}" Text="{Binding Bill.CreatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='dd MMM yyyy', TargetNullValue='—', FallbackValue='—'}" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,12,0">
                                 <TextBlock Style="{StaticResource SummaryLabel}" Text="Payment" />

@@ -138,6 +138,22 @@ public sealed class DialogDisplayTests
     }
 
     [Fact]
+    public void The_timeline_gives_the_day_of_an_event_and_no_time_of_day()
+    {
+        var details = new BillDetailsViewModel(new FakeBillsApi(), new FakeDialogs());
+
+        // Noon in UTC is the same day in every time zone a test may run in; the second event is today.
+        details.AuditTrail.Add(new BillAuditTrailItemViewModel(
+            Guid.NewGuid(), new DateTimeOffset(2026, 10, 11, 12, 0, 0, TimeSpan.Zero), "Bill created", "Saved as a draft", "info", null!));
+        details.AuditTrail.Add(new BillAuditTrailItemViewModel(
+            Guid.NewGuid(), DateTimeOffset.Now, "Saved again", "One line added", "info", null!));
+
+        Assert.Equal(
+            ["11 Oct 2026", DateTime.Today.ToString("dd MMM yyyy", ShowroomBilling.Desktop.Shell.UiCulture.Culture)],
+            details.Timeline.Select(entry => entry.Date));
+    }
+
+    [Fact]
     public void The_last_action_replaces_the_state_in_the_foot_of_bill_details()
     {
         var details = new BillDetailsViewModel(new FakeBillsApi(), new FakeDialogs()) { StatusMessage = "Pushed to Tally." };

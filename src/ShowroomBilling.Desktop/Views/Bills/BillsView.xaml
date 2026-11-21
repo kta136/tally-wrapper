@@ -596,7 +596,7 @@
                                            Margin="10,0"
                                            VerticalAlignment="Center"
                                            Foreground="{StaticResource InkMutedBrush}"
-                                           Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='dd MMM · HH:mm'}" />
+                                           Text="{Binding UpdatedAtUtc, Converter={StaticResource UtcToLocal}, StringFormat='dd MMM yyyy'}" />
 
                                 <TextBlock Grid.Column="7"
                                            Margin="10,0"

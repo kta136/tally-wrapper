@@ -8,7 +8,4 @@ public sealed record BillAuditTrailItemViewModel(
     string Title,
     string Detail,
     string Tone,
-    BillAuditEventDto Source)
-{
-    public string TimeText => CreatedAtUtc.ToLocalTime().ToString("dd MMM HH:mm");
-}
+    BillAuditEventDto Source);
