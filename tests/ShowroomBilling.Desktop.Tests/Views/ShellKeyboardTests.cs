@@ -77,6 +77,61 @@ public sealed class ShellKeyboardTests
     }
 
     [Fact]
+    public void A_question_puts_the_keyboard_on_its_answer_and_a_warning_puts_it_on_Cancel()
+    {
+        // The question used to focus its button the moment it became visible, before it had been
+        // laid out, and a button that has not been laid out cannot take the focus: the keyboard
+        // stayed where it was, Enter did nothing, and a warning's Cancel was not under the keys.
+        var seen = WpfTestHost.Run(() =>
+        {
+            var shell = DesignSample.CreateShell();
+            shell.ConfirmDialog.Cancel();
+            var elsewhere = new TextBox();
+            var question = new ShowroomBilling.Desktop.Views.ConfirmDialog { Visibility = Visibility.Collapsed };
+            var window = new Window
+            {
+                Left = -20000,
+                Top = -20000,
+                Width = 900,
+                Height = 600,
+                ShowActivated = false,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.None,
+                DataContext = shell,
+                Content = new Grid { Children = { elsewhere, question } },
+            };
+            window.Show();
+            try
+            {
+                string? Ask(ShowroomBilling.Desktop.ViewModels.ConfirmRequest request)
+                {
+                    question.Visibility = Visibility.Collapsed;
+                    shell.ConfirmDialog.Cancel();
+                    elsewhere.Focus();
+                    WpfTestHost.DrainDispatcher();
+                    _ = shell.ConfirmDialog.ShowAsync(request);
+                    question.Visibility = Visibility.Visible;
+                    WpfTestHost.DrainDispatcher();
+                    return (FocusManager.GetFocusedElement(window) as Button)?.Name;
+                }
+
+                return (
+                    Plain: Ask(new("Make the bills?", "They wait in the Bills tab.", "Make the bills")),
+                    Warning: Ask(new("Make the bills?", "They wait in the Bills tab.", "Make the bills", IsWarning: true)),
+                    Destructive: Ask(new("Delete the bill?", "It cannot be brought back.", "Delete", IsDestructive: true)));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        Assert.Equal("ConfirmButton", seen.Plain);
+        Assert.Equal("CancelButton", seen.Warning);
+        Assert.Equal("CancelButton", seen.Destructive);
+    }
+
+    [Fact]
     public void The_window_has_no_key_binding_for_a_bare_character()
     {
         // A key binding marks its key handled even while its command cannot run,
