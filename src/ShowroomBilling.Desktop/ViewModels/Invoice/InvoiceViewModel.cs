@@ -117,7 +117,6 @@ public partial class InvoiceViewModel : ObservableObject
     private MasterCatalog Catalog => _settings?.Catalog ?? MasterCatalog.Empty;
     public IReadOnlyList<ItemMasterEntry> ItemMasters => Catalog.Items;
     public IReadOnlyList<KaratMasterEntry> KaratMasters => Catalog.Karats;
-    public IReadOnlyList<string> UnitOptions { get; } = ItemUnits.All;
     public IReadOnlyList<string> PaymentOptions { get; } = [PaymentMode.CreditDebit, PaymentMode.Cash];
 
     [ObservableProperty]

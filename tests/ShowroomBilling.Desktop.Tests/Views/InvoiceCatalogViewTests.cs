@@ -206,6 +206,55 @@ public sealed class InvoiceCatalogViewTests
 
     private static TextBox BoxOf(SuggestBox cell) => (TextBox)cell.Template.FindName("PART_TextBox", cell);
 
+    [Fact]
+    public void A_line_whose_item_writes_grams_as_g_shows_its_unit_and_keeps_it()
+    {
+        // Item lists saved by older builds write grams as "g". The Unit cell is a drop-down, and
+        // one that offered only "gm" and "ct" showed nothing for such a line: on the live screen
+        // only the empty last row, which starts at "gm", had a unit. The unit is not rewritten to
+        // "gm" either: it is printed and sent to Tally as it is saved.
+        var seen = WpfTestHost.Run(() =>
+        {
+            var settings = OfflineApi.Settings();
+            settings.Publish(
+                items: [TestMasters.Item("Gold Ring", unit: "g", wastage: 8m), TestMasters.Item("Gold Chain", wastage: 6m)],
+                karats: [TestMasters.Karat("22K", 91.6m)]);
+            var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings)
+            {
+                Rate24Kt = 10_000m,
+            };
+            var view = Hosted(invoice);
+            Layout(view);
+
+            var ring = invoice.Lines[0];
+            ring.ItemMaster = settings.Catalog.Items[0];
+            ring.GrossWeight = 10m;
+            var chain = invoice.Lines[1];
+            chain.ItemMaster = settings.Catalog.Items[1];
+            Layout(view);
+
+            var unitCells = Descendants(view).OfType<ComboBox>().ToList();
+            var ofRing = unitCells.Single(cell => ReferenceEquals(cell.ItemsSource, ring.UnitChoices));
+            var ofChain = unitCells.Single(cell => ReferenceEquals(cell.ItemsSource, chain.UnitChoices));
+            var shown = (Ring: ofRing.SelectedItem as string, RingUnit: ring.Unit, Chain: ofChain.SelectedItem as string, ChainUnit: chain.Unit);
+
+            // The operator can still pick grams as the app writes them, and go back.
+            ofRing.SelectedItem = "gm";
+            Layout(view);
+            var picked = ring.Unit;
+            ofRing.SelectedItem = "g";
+            Layout(view);
+
+            return (shown, picked, back: ring.Unit, choices: string.Join(",", ring.UnitChoices), others: string.Join(",", chain.UnitChoices));
+        });
+
+        Assert.Equal(("g", "g", "gm", "gm"), seen.shown);
+        Assert.Equal("gm", seen.picked);
+        Assert.Equal("g", seen.back);
+        Assert.Equal("gm,ct,g", seen.choices);
+        Assert.Equal("gm,ct", seen.others);
+    }
+
     /// <summary>
     /// The screen as the app has it: inside a window (never shown). In no window at all, a row's
     /// cells receive their values in another order, and what went wrong on the real screen did not

@@ -83,7 +83,6 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
     public ObservableCollection<VoucherTypeSnapshotItem> VoucherTypeOptions { get; }
     public ObservableCollection<StockItemSnapshotItem> StockItems { get; }
 
-    public IReadOnlyList<string> ItemUnitOptions { get; } = ItemUnits.All;
     public IReadOnlyList<string> ItemCategoryOptions { get; } = ItemCategories.All;
     public IReadOnlyList<string> PricingModeOptions { get; } = PricingModes.All;
 

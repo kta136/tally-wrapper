@@ -130,7 +130,7 @@
                                 </shell:FillCell>
                                 <ComboBox Grid.Column="1"
                                           IsEditable="False"
-                                          ItemsSource="{Binding DataContext.ItemUnitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          ItemsSource="{Binding UnitChoices}"
                                           SelectedItem="{Binding Unit}"
                                           Style="{StaticResource MasterRowCombo}" />
                                 <ComboBox Grid.Column="2"

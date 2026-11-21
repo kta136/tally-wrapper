@@ -9,6 +9,20 @@ public partial class ItemMasterRowVm : ObservableObject
 {
     [ObservableProperty] private string name = string.Empty;
     [ObservableProperty] private string unit = ItemUnits.Gram;
+
+    /// <summary>
+    /// What the Unit drop-down offers: grams and carats, and this item's own unit when it is neither
+    /// (an item saved by an older build as "g"). Without its own unit in the list the drop-down
+    /// showed nothing for such an item. The unit is kept as saved until the operator picks another.
+    /// </summary>
+    public System.Collections.ObjectModel.ObservableCollection<string> UnitChoices { get; } = new(ItemUnits.All);
+
+    // Before the change is announced, so the drop-down holds the unit by the time it is told to show it.
+    partial void OnUnitChanging(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && !UnitChoices.Contains(value)) UnitChoices.Add(value);
+    }
+
     [ObservableProperty] private string wastagePercent = "0";
     [ObservableProperty] private string itemCategory = ItemCategories.GoldBased;
     [ObservableProperty] private string pricingMode = PricingModes.Wastage;

@@ -18,6 +18,22 @@ public partial class BillLineViewModel : ObservableObject
     [ObservableProperty] private decimal? grossWeight;
     [ObservableProperty] private decimal? lessWeight;
     [ObservableProperty] private string unit = ItemUnits.Gram;
+
+    /// <summary>
+    /// What the Unit cell offers: grams and carats, and this line's own unit when it is neither.
+    /// Item lists saved by older builds write grams as "g", and a line takes its unit from its
+    /// item. The cell is a drop-down, and one that does not hold the line's unit shows nothing:
+    /// every such line had an empty Unit cell, and only the empty last row, which starts at "gm",
+    /// showed one. The unit itself is left as it is: it is printed and sent to Tally as saved.
+    /// </summary>
+    public System.Collections.ObjectModel.ObservableCollection<string> UnitChoices { get; } = new(ItemUnits.All);
+
+    // Before the change is announced, so the drop-down holds the unit by the time it is told to show it.
+    partial void OnUnitChanging(string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && !UnitChoices.Contains(value)) UnitChoices.Add(value);
+    }
+
     [ObservableProperty] private string karat = string.Empty;
     [ObservableProperty] private decimal? wastagePercent;
     [ObservableProperty] private decimal? labourPerUnit;

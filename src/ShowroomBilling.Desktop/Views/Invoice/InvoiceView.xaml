@@ -785,7 +785,8 @@
 
                                             <!--  6 · unit  -->
                                             <Border Grid.Column="6">
-                                                <ComboBox ItemsSource="{Binding DataContext.UnitOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                <!--  The line's own choices: they hold its unit also when it is not gm or ct.  -->
+                                                <ComboBox ItemsSource="{Binding UnitChoices}"
                                                           SelectedItem="{Binding Unit}"
                                                           Style="{StaticResource TableCellCombo}" />
                                             </Border>
