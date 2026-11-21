@@ -93,7 +93,7 @@ public sealed class SyntheticBillPlannerTests
             billCount: 30,
             startAtUtc: start,
             endAtUtc: end,
-            floorUtc: null,
+            earliestUtc: null,
             nowUtc: Now,
             rng: rng);
 
@@ -104,36 +104,33 @@ public sealed class SyntheticBillPlannerTests
     }
 
     [Fact]
-    public void BuildRandomSchedule_RespectsFloorUtc()
+    public void BuildRandomSchedule_PutsNoBillBeforeTheEarliest()
     {
-        var rng = new Random(99);
-        var floor = new DateTimeOffset(2026, 4, 24, 0, 15, 0, TimeSpan.Zero);
-        var start = floor.AddMinutes(5);
-        var end = start.AddHours(1);
+        var earliest = new DateTimeOffset(2026, 4, 24, 0, 15, 0, TimeSpan.Zero);
 
         var slots = SyntheticBillPlanner.BuildRandomSchedule(
             billCount: 5,
-            startAtUtc: start,
-            endAtUtc: end,
-            floorUtc: floor,
+            startAtUtc: earliest.AddMinutes(5),
+            endAtUtc: earliest.AddHours(1),
+            earliestUtc: earliest,
             nowUtc: Now,
-            rng: rng);
+            rng: new Random(99));
 
-        Assert.All(slots, t => Assert.True(t > floor, "slot must be after floor"));
+        Assert.All(slots, t => Assert.True(t >= earliest, "slot must not be before the earliest"));
     }
 
     [Fact]
-    public void BuildRandomSchedule_MayStartInTheLastBillsMinute_AndPutsNoBillInIt()
+    public void BuildRandomSchedule_MayStartAMinuteBeforeTheEarliest_AndPutsNoBillThere()
     {
-        // The dialog shows the last bill's time to the minute, so a window typed from it starts a
-        // few seconds before the bill; that is allowed, and every bill goes in a later minute.
-        var floor = new DateTimeOffset(2026, 4, 24, 12, 0, 37, TimeSpan.Zero);
-        var start = new DateTimeOffset(2026, 4, 24, 12, 0, 0, TimeSpan.Zero);
+        // A counter built before 21 November 2026 offers the last bill's own time, to the second,
+        // as the start: the minute before the earliest. That is allowed, and no bill goes in it.
+        var earliest = new DateTimeOffset(2026, 4, 24, 12, 1, 0, TimeSpan.Zero);
+        var start = new DateTimeOffset(2026, 4, 24, 12, 0, 37, TimeSpan.Zero);
 
         var slots = SyntheticBillPlanner.BuildRandomSchedule(
-            billCount: 3, startAtUtc: start, endAtUtc: start.AddMinutes(3), floorUtc: floor, nowUtc: Now, rng: new Random(1));
+            billCount: 3, startAtUtc: start, endAtUtc: earliest.AddMinutes(2), earliestUtc: earliest, nowUtc: Now, rng: new Random(1));
 
-        Assert.Equal([start.AddMinutes(1), start.AddMinutes(2), start.AddMinutes(3)], slots);
+        Assert.Equal([earliest, earliest.AddMinutes(1), earliest.AddMinutes(2)], slots);
     }
 
     [Fact]
@@ -143,7 +140,7 @@ public sealed class SyntheticBillPlannerTests
         var start = new DateTimeOffset(2026, 4, 24, 10, 0, 0, india);
 
         var slots = SyntheticBillPlanner.BuildRandomSchedule(
-            billCount: 5, startAtUtc: start, endAtUtc: start.AddHours(1), floorUtc: null, nowUtc: Now, rng: new Random(3));
+            billCount: 5, startAtUtc: start, endAtUtc: start.AddHours(1), earliestUtc: null, nowUtc: Now, rng: new Random(3));
 
         Assert.All(slots, slot =>
         {
@@ -153,20 +150,20 @@ public sealed class SyntheticBillPlannerTests
     }
 
     [Fact]
-    public void BuildRandomSchedule_ThrowsWhenStartIsBeforeTheLastBillsMinute()
+    public void BuildRandomSchedule_ThrowsWhenStartIsBeforeTheMinuteAheadOfTheEarliest()
     {
-        var floor = new DateTimeOffset(2026, 4, 24, 12, 0, 37, TimeSpan.Zero);
+        var earliest = new DateTimeOffset(2026, 4, 24, 12, 1, 0, TimeSpan.Zero);
 
         var refused = Assert.Throws<RequestValidationException>(() =>
             SyntheticBillPlanner.BuildRandomSchedule(
                 billCount: 3,
-                startAtUtc: floor.AddMinutes(-1),
-                endAtUtc: floor.AddHours(1),
-                floorUtc: floor,
+                startAtUtc: earliest.AddSeconds(-61),
+                endAtUtc: earliest.AddHours(1),
+                earliestUtc: earliest,
                 nowUtc: Now,
                 rng: new Random(1)));
-        // Said in India's time: 12:00 UTC is 17:30 there.
-        Assert.Equal("Start time cannot be before the last bill, 24 Apr 2026, 17:30.", refused.Message);
+        // Said in India's time: 12:01 UTC is 17:31 there.
+        Assert.Equal("Start time cannot be before 24 Apr 2026, 17:31, the first time after the last bill.", refused.Message);
     }
 
     [Fact]
@@ -174,21 +171,21 @@ public sealed class SyntheticBillPlannerTests
     {
         var refused = Assert.Throws<RequestValidationException>(() =>
             SyntheticBillPlanner.BuildRandomSchedule(
-                billCount: 3, startAtUtc: Now.AddHours(-1), endAtUtc: Now.AddMinutes(1), floorUtc: null, nowUtc: Now, rng: new Random(1)));
+                billCount: 3, startAtUtc: Now.AddHours(-1), endAtUtc: Now.AddMinutes(1), earliestUtc: null, nowUtc: Now, rng: new Random(1)));
 
         Assert.Equal("End time cannot be later than now.", refused.Message);
     }
 
     [Fact]
-    public void BuildRandomSchedule_ThrowsWhenTheLastBillIsLaterThanNow()
+    public void BuildRandomSchedule_ThrowsWhenTheEarliestIsLaterThanNow()
     {
-        // A batch made before 20 November 2026 could date bills later in the day than it was run.
+        // A batch made before 20 November 2026 could date bills later in the day than it was run,
+        // and a bill dated ahead of the day it was saved counts from the start of its date.
         var refused = Assert.Throws<RequestValidationException>(() =>
             SyntheticBillPlanner.BuildRandomSchedule(
-                billCount: 3, startAtUtc: Now.AddHours(-1), endAtUtc: Now, floorUtc: Now.AddHours(2), nowUtc: Now, rng: new Random(1)));
+                billCount: 3, startAtUtc: Now.AddHours(-1), endAtUtc: Now, earliestUtc: Now.AddHours(2), nowUtc: Now, rng: new Random(1)));
 
-        Assert.StartsWith("The last bill is dated", refused.Message);
-        Assert.EndsWith("later than now, so there is no time left to date a batch in.", refused.Message);
+        Assert.Equal("The last bill leaves no time to date a batch in: a batch can be dated from 20 Nov 2026, 19:30, which is later than now.", refused.Message);
     }
 
     [Fact]

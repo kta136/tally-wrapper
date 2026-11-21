@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
@@ -42,14 +43,12 @@ public sealed class SyntheticBatchExecutor(
         if (karatEntries.Count == 0)
             throw new RequestValidationException("No karat masters are configured.");
 
-        // The planner keeps the batch between the newest bill already stored and now.
-        var floorUtc = await dbContext.Bills
-            .AsNoTracking()
-            .MaxAsync(b => (DateTimeOffset?)b.CreatedAtUtc, cancellationToken);
+        // The planner keeps the batch between the last bill already stored and now.
+        var earliestUtc = await EarliestBillTimeAsync(cancellationToken);
         var nowUtc = (timeProvider ?? TimeProvider.System).GetUtcNow();
 
         var rng = new Random();
-        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, floorUtc, nowUtc);
+        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, earliestUtc, nowUtc);
 
         logger.LogInformation(
             "Synthetic batch planned: {BillCount} bill(s), grand ₹{Grand:N0}, window [{Start:o}, {End:o}]",
@@ -79,6 +78,55 @@ public sealed class SyntheticBatchExecutor(
         return new SyntheticBatchResponse(
             BillCount: plan.Bills.Count,
             TotalAmount: plan.TotalAmount);
+    }
+
+    /// <summary>
+    /// The first minute a batch may date a bill, or null when there is no bill. Batch bills take
+    /// the next numbers, so they are dated after every bill already stored (owner, 20 November
+    /// 2026). A bill counts as made when it was saved, except that one saved on a later day than
+    /// its date counts as the end of that date, so a bill dated yesterday lets a batch start today
+    /// (owner, 21 November 2026), and one dated ahead of the day it was saved counts from the start
+    /// of its date. <see cref="BillLifecycleWorkflow"/> refuses a backdated bill by the same rule.
+    /// </summary>
+    public async Task<DateTimeOffset?> EarliestBillTimeAsync(CancellationToken cancellationToken = default)
+    {
+        var bills = from bill in dbContext.Bills.AsNoTracking()
+                    join rev in dbContext.BillRevisions.AsNoTracking()
+                        on bill.CurrentRevisionId equals rev.Id into revs
+                    from rev in revs.DefaultIfEmpty()
+                    select new { bill.CreatedAtUtc, BillDate = rev == null ? null : rev.BillDate };
+
+        // Only the bills of the latest date matter: a bill of an earlier date counts at most as
+        // the end of its date, which is not after the start of the latest one. Its date and its
+        // last save are read together, so a bill deleted meanwhile cannot leave one without the other.
+        DateTimeOffset? earliest = null;
+        var last = await bills
+            .Where(x => x.BillDate != null)
+            .OrderByDescending(x => x.BillDate)
+            .ThenByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (last is { BillDate: { } date })
+        {
+            var dayStart = IndiaTime.StartOf(date);
+            var nextDayStart = IndiaTime.StartOf(date.AddDays(1));
+            var after = MinuteAfter(last.CreatedAtUtc);
+            earliest = after < dayStart ? dayStart : after > nextDayStart ? nextDayStart : after;
+        }
+
+        // A bill with no date (no revision) counts as made when it was saved.
+        var undated = await bills
+            .Where(x => x.BillDate == null)
+            .MaxAsync(x => (DateTimeOffset?)x.CreatedAtUtc, cancellationToken);
+        if (undated is { } u && (earliest is null || MinuteAfter(u) > earliest))
+            earliest = MinuteAfter(u);
+
+        return earliest?.ToUniversalTime();
+    }
+
+    private static DateTimeOffset MinuteAfter(DateTimeOffset instant)
+    {
+        var utc = instant.ToUniversalTime();
+        return new DateTimeOffset(utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, 0, TimeSpan.Zero).AddMinutes(1);
     }
 
     private static IReadOnlyList<T> ReadMasters<T>(Func<string?, IReadOnlyList<T>> parse, string? json, string label)

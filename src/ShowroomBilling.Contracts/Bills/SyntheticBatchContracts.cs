@@ -39,3 +39,10 @@ public sealed record SyntheticBatchRequest(
 public sealed record SyntheticBatchResponse(
     int BillCount,
     decimal TotalAmount);
+
+/// <summary>
+/// When a batch may be dated from: <paramref name="EarliestUtc"/> is the first minute after the last
+/// bill (a bill dated an earlier day than it was saved counts as the end of that day), or null when
+/// there is no bill. A batch is never dated later than now.
+/// </summary>
+public sealed record SyntheticBatchWindowResponse(DateTimeOffset? EarliestUtc);

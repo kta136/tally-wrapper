@@ -28,7 +28,7 @@ padding / business-day replay. Available in production, admin-gated.
 | `PaymentMode` | string | `Cash`, or anything else → "Credit and debit" (`PaymentMode.Normalize`). It is the bill's payment, which picks the voucher's party ledger. Until 20 November 2026 it was also the bill's party; bills made before then keep "Cash" or "Credit and debit" there (before 10 October 2026, "Credit and Debit" with a capital D). |
 | (party) | | Not an input. Each bill is made out to a random Indian customer, a first name and a surname from one region's names (`SyntheticCustomerNames`), men and women alike. The party goes into the Tally narration, so vouchers read `Rahul Sharma \| Cash`, and is the buyer's mailing name on the voucher; it is never a ledger. |
 | `MinItemsPerBill` / `MaxItemsPerBill` | int | `1..25`, min ≤ max |
-| `StartAtUtc` / `EndAtUtc` | UTC | From the newest stored bill to now (owner, 20 November 2026): start no earlier than that bill's minute, end no later than now, start < end; the window must have ≥ bill-count minute slots after that bill's minute. The dialog fills in the last bill's time and now when it opens (and again after a batch), and refuses a time outside them. With no bill yet, it starts at the start of today. |
+| `StartAtUtc` / `EndAtUtc` | UTC | From the last stored bill to now (owner, 20 November 2026): start no earlier than the earliest time (below), end no later than now, start < end; the window must have ≥ bill-count minute slots from the earliest time on. The earliest time is the minute after the last bill was saved, except that a bill saved on a later day than its date counts as the end of that date (owner, 21 November 2026: a bill saved today but dated yesterday lets a batch start at 00:00 today), and one dated ahead of the day it was saved counts from the start of its date. `GET /api/bills/synthetic-batch/window` gives it (`SyntheticBatchExecutor.EarliestBillTimeAsync`). The dialog fills in that time and now when it opens (and again after a batch), and refuses a time outside them. With no bill yet, it starts at the start of today. The server also takes a start in the minute before the earliest time, which is what a counter built before 21 November 2026 offers (the last bill's own time); no bill goes in that minute. |
 | `SelectedKaratLabels` | list | must be non-empty subset of Tally-mapped karats |
 
 ## Algorithm
@@ -41,12 +41,14 @@ padding / business-day replay. Available in production, admin-gated.
    two bills in about 1 batch in 19, not always three or more.
 2. `BuildRandomSchedule` — samples `N` distinct minute-slots from the interval
    `[ceil_minute(Start), floor_minute(End)]` without replacement, sorted
-   ascending, none in or before the minute of the latest existing
-   `Bill.CreatedAtUtc`, so the batch's bills follow every stored bill in time
-   as they do in number. It refuses a window that starts before that minute
-   or ends after now, and says so when the latest bill is itself dated later
-   than now (a batch made before 20 November 2026 could date bills later in
-   the day than it was run).
+   ascending, none before the earliest time (see `StartAtUtc` above), so the
+   batch's bills follow every stored bill in date as they do in number. It
+   refuses a window that starts before that time or ends after now, and says
+   so when the earliest time is itself later than now (a batch made before
+   20 November 2026 could date bills later in the day than it was run). A
+   batch bill can be timed before a bill saved the same day but dated the day
+   before, and is numbered after it: Tally sees only the dates, which stay in
+   number order.
 3. **Items.** Diamond jewellery and stones are never billed (`MayBill`): an
    item of the Diamond category, one not sold by the gram (a stone sold by the
    carat, `ct`; a unit of `g`, `gm`, `gms`, `gram` or `grams` in any case, or
@@ -90,8 +92,11 @@ padding / business-day replay. Available in production, admin-gated.
 - **No line under 1 g, and every weight in steps of 0.01 g.** Before 20 November
   2026 a line could weigh 0.001 g, and a diamond item, which had no rate there,
   was replaced by a line of 0.001 g.
-- **A batch's bills follow every stored bill in time as in number.** Each is
-  saved only if no bill made after its time exists, checked while the lock on
+- **A batch's bills follow every stored bill in date as in number.** Each is
+  saved only if no stored bill comes after it by the same rule as the earliest
+  time: none of a later date, and none of its own date (or with no date) made
+  in its minute or after; a bill of an earlier date never does. It is checked
+  while the lock on
   the year's numbering row is held (`BillLifecycleWorkflow.CreateNewDraftAsync`,
   backdated bills only). So a bill a counter saves while a batch is being saved
   stops the batch there with a message saying how many were saved, instead of
@@ -124,8 +129,9 @@ Run this against a scratch database only. A plain `dotnet run` uses whatever
 database connection this PC has saved; see
 [DEV_SETUP.md](../DEV_SETUP.md#run-against-a-scratch-database).
 
-The window in step 3 must start no earlier than the newest bill already
-stored and end no later than now; change the two times to fit.
+The window in step 3 must start no earlier than the earliest time
+(`GET /api/bills/synthetic-batch/window`) and end no later than now; change
+the two times to fit.
 
 ```powershell
 # 1. Start the API

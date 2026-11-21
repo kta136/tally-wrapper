@@ -233,6 +233,24 @@ internal sealed class FakeBillsApi : IBillsApiClient
             TotalAmount: 300_000m));
     }
 
+    /// <summary>When a batch may be dated from: no bill yet, unless a test says otherwise.</summary>
+    public SyntheticBatchWindowResponse Window { get; set; } = new(EarliestUtc: null);
+
+    /// <summary>When set, every window read fails with it.</summary>
+    public Exception? WindowFailure { get; set; }
+
+    /// <summary>Window reads that answer only when the test completes them, taken in order before <see cref="Window"/>.</summary>
+    public Queue<TaskCompletionSource<SyntheticBatchWindowResponse>> PendingWindows { get; } = new();
+
+    public Task<SyntheticBatchWindowResponse> GetSyntheticBatchWindowAsync(CancellationToken cancellationToken = default)
+    {
+        if (PendingWindows.TryDequeue(out var pending))
+            return pending.Task;
+        return WindowFailure is { } failure
+            ? Task.FromException<SyntheticBatchWindowResponse>(failure)
+            : Task.FromResult(Window);
+    }
+
     private Task<T> Write<T>(string call, Func<T> result)
     {
         Calls.Add(call);

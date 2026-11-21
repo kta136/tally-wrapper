@@ -64,6 +64,7 @@ Both accept only the Npgsql keyword form (`Host=...;Port=...;Database=...;Userna
 | `DELETE` | `/api/bills/{billId}` | **Admin** — hard-delete bill + revisions, keep audit tombstone | delete summary |
 | `POST` | `/api/bills/delete-selected` | **Admin** — batch hard-delete | per-item outcomes |
 | `POST` | `/api/bills/synthetic-batch` | **Admin** — create a batch of backdated `pending` bills (see [`17_synthetic_batch.md`](17_synthetic_batch.md)) | `{ billCount, totalAmount }` |
+| `GET` | `/api/bills/synthetic-batch/window` | When a batch may be dated from: the first minute after the last bill, where a bill dated an earlier day than it was saved counts as the end of that day | `{ earliestUtc }` (null with no bill) |
 
 #### Behavior
 

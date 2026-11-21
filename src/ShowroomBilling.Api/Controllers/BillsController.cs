@@ -23,6 +23,11 @@ public sealed class BillsController(
         return Ok(response);
     }
 
+    /// <summary>When a batch may be dated from, for the Batch Data Scheduler's form. A read: no token.</summary>
+    [HttpGet("synthetic-batch/window")]
+    public async Task<ActionResult<SyntheticBatchWindowResponse>> GetSyntheticBatchWindow(CancellationToken cancellationToken)
+        => Ok(new SyntheticBatchWindowResponse(await syntheticBatchExecutor.EarliestBillTimeAsync(cancellationToken)));
+
     [HttpPost("drafts")]
     [Authorize(Policy = DevicePolicy.PolicyName)]
     public async Task<ActionResult<BillResponse>> CreateDraft(

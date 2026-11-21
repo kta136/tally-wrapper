@@ -76,4 +76,7 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
 
     public Task<SyntheticBatchResponse> CreateSyntheticBatchAsync(SyntheticBatchRequest request, string adminToken, CancellationToken cancellationToken = default)
         => httpClient.PostApiAsync<SyntheticBatchResponse>("/api/bills/synthetic-batch", request, cancellationToken, adminToken);
+
+    public Task<SyntheticBatchWindowResponse> GetSyntheticBatchWindowAsync(CancellationToken cancellationToken = default)
+        => httpClient.GetApiAsync<SyntheticBatchWindowResponse>("/api/bills/synthetic-batch/window", cancellationToken);
 }

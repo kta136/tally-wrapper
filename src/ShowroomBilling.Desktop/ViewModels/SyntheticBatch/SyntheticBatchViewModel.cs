@@ -77,10 +77,14 @@ public partial class SyntheticBatchViewModel : ObservableObject
     [ObservableProperty] private DateTimeOffset startAt;
     [ObservableProperty] private DateTimeOffset endAt;
 
-    /// <summary>When the newest stored bill was made, in local time; null when there is none or it could not be read.</summary>
+    /// <summary>
+    /// The first minute a batch may date a bill, in local time, as the server works it out: just after
+    /// the last bill, where a bill dated an earlier day than it was saved counts as the end of that day.
+    /// Null when there is no bill or it could not be read.
+    /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowNote))]
-    private DateTimeOffset? lastBillAt;
+    private DateTimeOffset? earliestAt;
 
     private DateTimeOffset Now => _time.GetLocalNow();
 
@@ -109,7 +113,7 @@ public partial class SyntheticBatchViewModel : ObservableObject
     partial void OnMaxItemsPerBillChanged(int value) => RecomputeValidation();
     partial void OnStartAtChanged(DateTimeOffset value) => RecomputeValidation();
     partial void OnEndAtChanged(DateTimeOffset value) => RecomputeValidation();
-    partial void OnLastBillAtChanged(DateTimeOffset? value) => RecomputeValidation();
+    partial void OnEarliestAtChanged(DateTimeOffset? value) => RecomputeValidation();
     partial void OnPaymentModeChanged(string value) => RecomputeValidation();
 
     private bool CanStart() => !IsRunning && !HasValidation && AnyKaratSelected();
@@ -120,25 +124,23 @@ public partial class SyntheticBatchViewModel : ObservableObject
     private int _windowRequest;
 
     /// <summary>
-    /// Reads when the newest bill was made and sets the window to run from it to now: a batch is dated
-    /// after every bill already stored and never in the future (owner, 20 November 2026). With no bill
-    /// yet the window starts at the start of today. Called each time the dialog opens and after a batch.
-    /// A time the operator changed while the answer was on its way is kept; when the time cannot be
-    /// read, Start and the last bill stay as they were. Returns whether it was read.
+    /// Asks the server when a batch may be dated from and sets the window to run from then to now: a
+    /// batch is dated after every bill already stored and never in the future (owner, 20 November
+    /// 2026), and a bill dated an earlier day than it was saved counts as the end of that day (owner,
+    /// 21 November 2026). With no bill yet the window starts at the start of today. Called each time
+    /// the dialog opens and after a batch. A time the operator changed while the answer was on its way
+    /// is kept; when the time cannot be read, Start and the earliest time stay as they were. Returns
+    /// whether it was read.
     /// </summary>
     public async Task<bool> PrepareWindowAsync(CancellationToken cancellationToken = default)
     {
         var request = ++_windowRequest;
         var (startBefore, endBefore) = (StartAt, EndAt);
-        DateTimeOffset? newest = null;
+        DateTimeOffset? earliest = null;
         var known = true;
         try
         {
-            var latest = await _billsApi.SearchAsync(
-                new BillSearchFilter(State: null, FromDate: null, ToDate: null, Skip: 0, Take: 1,
-                    Sort: BillSearchSorts.CreatedDesc, IncludeTotal: false),
-                cancellationToken);
-            newest = latest.Items.FirstOrDefault()?.CreatedAtUtc;
+            earliest = (await _billsApi.GetSyntheticBatchWindowAsync(cancellationToken)).EarliestUtc;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -158,8 +160,8 @@ public partial class SyntheticBatchViewModel : ObservableObject
             return false;
         }
 
-        LastBillAt = newest?.ToOffset(now.Offset);
-        if (StartAt == startBefore) StartAt = LastBillAt ?? new DateTimeOffset(now.Date, now.Offset);
+        EarliestAt = earliest?.ToOffset(now.Offset);
+        if (StartAt == startBefore) StartAt = EarliestAt ?? new DateTimeOffset(now.Date, now.Offset);
         return true;
     }
 
@@ -233,20 +235,20 @@ public partial class SyntheticBatchViewModel : ObservableObject
             msg = "24kt rate must be greater than zero.";
         else if (MinItemsPerBill <= 0 || MaxItemsPerBill < MinItemsPerBill)
             msg = "Items per bill range is invalid.";
-        else if (LastBillAt is { } newest && newest > Now)
-            msg = $"The last bill is dated {Show(newest)}, later than now, so there is no time left to date a batch in.";
+        else if (EarliestAt is { } first && first > Now)
+            msg = $"The last bill leaves no time to date a batch in: a batch can be dated from {Show(first)}, which is later than now.";
         else if (EndAt > Now)
             msg = "End time cannot be later than now.";
         else if (StartAt >= EndAt)
             msg = "Start time must be before end time.";
-        else if (LastBillAt is { } last && StartAt < FloorToMinute(last))
-            msg = $"Start time cannot be before the last bill, {Show(last)}.";
+        else if (EarliestAt is { } allowed && StartAt < allowed)
+            msg = $"Start time cannot be before {Show(allowed)}, the first time after the last bill.";
         else if (!AnyKaratSelected())
             msg = "Select at least one Tally-mapped karat.";
         else
         {
             var (minBills, maxBills) = SyntheticBillPlanner.EstimateBillCountBounds(TotalAmount, MaxBillAmount);
-            var slots = AvailableMinuteSlots(StartAt, EndAt, LastBillAt);
+            var slots = AvailableMinuteSlots(StartAt, EndAt, EarliestAt);
             if (slots < maxBills)
                 msg = $"Window fits {slots} minute slot(s) but up to {maxBills} bills may be generated. Lower the total, or widen the window (it can run from the last bill to now).";
             else if (slots < minBills)
@@ -256,13 +258,13 @@ public partial class SyntheticBatchViewModel : ObservableObject
         StartCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>The minutes a bill can be given, as the server counts them: none in or before the last bill's minute.</summary>
-    private static int AvailableMinuteSlots(DateTimeOffset start, DateTimeOffset end, DateTimeOffset? lastBill)
+    /// <summary>The minutes a bill can be given, as the server counts them: none before the earliest.</summary>
+    private static int AvailableMinuteSlots(DateTimeOffset start, DateTimeOffset end, DateTimeOffset? earliest)
     {
         if (start >= end) return 0;
         var s = FloorToMinute(start);
         if (s != start) s = s.AddMinutes(1);
-        if (lastBill is { } last && FloorToMinute(last).AddMinutes(1) > s) s = FloorToMinute(last).AddMinutes(1);
+        if (earliest is { } first && first > s) s = first;
         var e = FloorToMinute(end);
         if (e < s) return 0;
         return (int)(e - s).TotalMinutes + 1;

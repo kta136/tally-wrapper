@@ -23,8 +23,8 @@ public partial class SyntheticBatchViewModel
            + $"The ₹{UiCulture.Rupees(SyntheticBatchPlanLimits.HardMaxBillAmount)} cap is a GST rule, not a preference.";
 
     /// <summary>The line under the times: the window a batch may be dated in.</summary>
-    public string WindowNote => LastBillAt is { } last
-        ? $"Bills can be dated from the last bill, {last.ToString("dd MMM, HH:mm", System.Globalization.CultureInfo.InvariantCulture)}, up to now."
+    public string WindowNote => EarliestAt is { } first
+        ? $"Bills can be dated from {first.ToString("dd MMM, HH:mm", System.Globalization.CultureInfo.InvariantCulture)}, after the last bill, up to now."
         : "Bills can be dated up to now.";
 
     /// <summary>A rate of zero is the one thing the form cannot guess, so the field itself is marked.</summary>

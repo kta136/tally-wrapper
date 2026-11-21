@@ -325,11 +325,13 @@ internal sealed class BillLifecycleWorkflow(
 
         var reservation = await ReserveNumberAsync(request.Payload.BillDate, cancellationToken);
 
-        // A backdated bill takes the next number, so no bill may have been made after its time,
-        // or the two would be numbered in one order and dated in the other. The year's sequence
-        // row is locked from here to the commit: a bill saved at a counter meanwhile waits for
-        // this one, and one saved before the lock is seen here.
-        if (backdated && await dbContext.Bills.AnyAsync(x => x.CreatedAtUtc > now, cancellationToken))
+        // A backdated bill takes the next number, so no bill may come after it, or the two would be
+        // numbered in one order and dated in the other: none of a later date, and none of its own
+        // date made in its minute or after. A bill of an earlier date never does, whenever it was
+        // saved (the rule of SyntheticBatchExecutor.EarliestBillTimeAsync). The year's sequence row
+        // is locked from here to the commit: a bill saved at a counter meanwhile waits for this
+        // one, and one saved before the lock is seen here.
+        if (backdated && await LaterBillExistsAsync(request.Payload.BillDate, now, cancellationToken))
         {
             throw new BillStateConflictException(
                 $"A bill made after {now.ToOffset(Contracts.IndiaTime.Offset):dd MMM yyyy, HH:mm} is already saved, so a bill dated then would be numbered after it.");
@@ -358,6 +360,33 @@ internal sealed class BillLifecycleWorkflow(
         await transaction.CommitAsync(cancellationToken);
 
         return BillSerialization.MapResponse(bill, revision);
+    }
+
+    /// <summary>
+    /// Whether a stored bill comes after a bill dated <paramref name="billDate"/> and made at
+    /// <paramref name="at"/>: one of a later date, or one of the same date (or with no date)
+    /// made in that minute or after. Two branches, so each can use an index (the revisions' date,
+    /// the bills' creation time): it runs for every batch bill while counters wait on the lock.
+    /// </summary>
+    private Task<bool> LaterBillExistsAsync(DateOnly billDate, DateTimeOffset at, CancellationToken cancellationToken)
+    {
+        var minute = new DateTimeOffset(at.Year, at.Month, at.Day, at.Hour, at.Minute, 0, at.Offset).ToUniversalTime();
+
+        var datedLater = from rev in dbContext.BillRevisions.AsNoTracking()
+                         where rev.BillDate > billDate
+                         join stored in dbContext.Bills.AsNoTracking() on rev.BillId equals stored.Id
+                         where stored.CurrentRevisionId == rev.Id
+                         select stored.Id;
+
+        var madeLater = from stored in dbContext.Bills.AsNoTracking()
+                        where stored.CreatedAtUtc >= minute
+                        join rev in dbContext.BillRevisions.AsNoTracking()
+                            on stored.CurrentRevisionId equals rev.Id into revs
+                        from rev in revs.DefaultIfEmpty()
+                        where rev == null || rev.BillDate == null || rev.BillDate >= billDate
+                        select stored.Id;
+
+        return datedLater.Concat(madeLater).AnyAsync(cancellationToken);
     }
 
     /// <summary>

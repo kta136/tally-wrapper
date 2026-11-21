@@ -13,7 +13,8 @@ namespace ShowroomBilling.Application.Bills;
 ///   1. Partition <see cref="SyntheticBatchRequest.TotalAmount"/> into random per-bill totals in
 ///      [MinBillTotal, MaxBillAmount] ≤ ₹1,99,000.
 ///   2. For each bill, pick a distinct minute-slot inside [StartAtUtc, EndAtUtc], which must lie
-///      between the latest existing <c>Bill.CreatedAtUtc</c> and now, so a batch is never dated
+///      between the first minute after the last bill already stored (worked out by the server's
+///      <c>SyntheticBatchExecutor.EarliestBillTimeAsync</c>) and now, so a batch is never dated
 ///      before a bill already stored nor in the future.
 ///   3. Split each bill's total into 1..N line shares, each enough for the smallest weight of the
 ///      dearest item.
@@ -52,14 +53,14 @@ public sealed class SyntheticBillPlanner
         "", "g", "gm", "gms", "gram", "grams",
     };
 
-    /// <param name="floorUtc">When the newest bill already stored was made, or null when there is none.</param>
+    /// <param name="earliestUtc">The first minute a bill may be dated, just after the last bill already stored, or null when there is none.</param>
     /// <param name="nowUtc">The time now: no bill is dated later.</param>
     public SyntheticBatchPlan BuildPlan(
         SyntheticBatchRequest request,
         IReadOnlyList<ItemMasterEntry> itemEntries,
         IReadOnlyList<KaratMasterEntry> karatEntries,
         Random rng,
-        DateTimeOffset? floorUtc,
+        DateTimeOffset? earliestUtc,
         DateTimeOffset nowUtc)
     {
         ValidateRequest(request);
@@ -112,7 +113,7 @@ public sealed class SyntheticBillPlanner
             billCount: billTotals.Count,
             startAtUtc: request.StartAtUtc,
             endAtUtc: request.EndAtUtc,
-            floorUtc: floorUtc,
+            earliestUtc: earliestUtc,
             nowUtc: nowUtc,
             rng: rng);
 
@@ -206,36 +207,34 @@ public sealed class SyntheticBillPlanner
 
     /// <summary>
     /// <paramref name="billCount"/> distinct minutes in [<paramref name="startAtUtc"/>, <paramref name="endAtUtc"/>],
-    /// in order, all after the newest stored bill's minute. The window may start in that bill's minute (a
-    /// window is typed to the minute) but not before it, and may not end after <paramref name="nowUtc"/>.
+    /// in order, none before <paramref name="earliestUtc"/>, the first minute after the last bill. The window
+    /// may not end after <paramref name="nowUtc"/>, nor start before the minute ahead of <paramref name="earliestUtc"/>:
+    /// a counter built before 21 November 2026 offers the last bill's own time as the start, and no bill
+    /// goes in that minute.
     /// </summary>
     public static IReadOnlyList<DateTimeOffset> BuildRandomSchedule(
         int billCount,
         DateTimeOffset startAtUtc,
         DateTimeOffset endAtUtc,
-        DateTimeOffset? floorUtc,
+        DateTimeOffset? earliestUtc,
         DateTimeOffset nowUtc,
         Random rng)
     {
         if (billCount <= 0) return Array.Empty<DateTimeOffset>();
 
-        if (floorUtc is { } newest && newest > nowUtc)
+        if (earliestUtc is { } first && first > nowUtc)
             throw new RequestValidationException(
-                $"The last bill is dated {InIndia(newest)}, later than now, so there is no time left to date a batch in.");
+                $"The last bill leaves no time to date a batch in: a batch can be dated from {InIndia(first)}, which is later than now.");
         if (endAtUtc > nowUtc)
             throw new RequestValidationException("End time cannot be later than now.");
         if (startAtUtc >= endAtUtc)
             throw new RequestValidationException("Start time must be before end time.");
-        if (floorUtc is { } floor && startAtUtc < FloorToMinute(floor))
+        if (earliestUtc is { } allowed && startAtUtc < allowed - TimeSpan.FromMinutes(1))
             throw new RequestValidationException(
-                $"Start time cannot be before the last bill, {InIndia(floor)}.");
+                $"Start time cannot be before {InIndia(allowed)}, the first time after the last bill.");
 
         var earliest = CeilToMinute(startAtUtc);
-        if (floorUtc is { } f2)
-        {
-            var floorEarliest = FloorToMinute(f2) + TimeSpan.FromMinutes(1);
-            if (floorEarliest > earliest) earliest = floorEarliest;
-        }
+        if (earliestUtc is { } floor && CeilToMinute(floor) > earliest) earliest = CeilToMinute(floor);
         var latest = FloorToMinute(endAtUtc);
         if (latest < earliest)
             throw new RequestValidationException("Selected time window does not contain any valid minute slots.");

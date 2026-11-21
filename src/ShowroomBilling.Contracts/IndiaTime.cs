@@ -14,6 +14,10 @@ public static class IndiaTime
     public static DateOnly DateOf(DateTimeOffset instant) =>
         DateOnly.FromDateTime(instant.ToOffset(Offset).DateTime);
 
+    /// <summary>The instant <paramref name="date"/> begins in India: midnight, India time.</summary>
+    public static DateTimeOffset StartOf(DateOnly date) =>
+        new(date.ToDateTime(TimeOnly.MinValue), Offset);
+
     /// <summary>Today's calendar date in India.</summary>
     public static DateOnly Today(TimeProvider? timeProvider = null) =>
         DateOf((timeProvider ?? TimeProvider.System).GetUtcNow());
