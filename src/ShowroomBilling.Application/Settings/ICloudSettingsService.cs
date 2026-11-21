@@ -1,3 +1,4 @@
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Application.Settings;
@@ -18,5 +19,12 @@ public interface ICloudSettingsService
 
     Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
         UpdatePrintLayoutRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The shop hours a batch of the Batch Data Scheduler keeps to; none set when nothing was saved.</summary>
+    Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default);
+
+    Task<BatchHoursResponse> UpdateBatchHoursAsync(
+        UpdateBatchHoursRequest request,
         CancellationToken cancellationToken = default);
 }

@@ -17,20 +17,30 @@ namespace ShowroomBilling.Infrastructure.Bills;
 /// <see cref="BillService.CreateBackdatedDraftAsync"/>, one at a time.
 ///
 /// A number is reserved under a <c>FOR UPDATE</c> row lock, so the bills are
-/// saved one after another, each in its own transaction.
+/// saved one after another, each in its own transaction. A batch that stops
+/// part-way keeps the bills it has saved; <see cref="SyntheticBatchOutcomes"/>
+/// holds how many that was, for a Desktop that got no answer.
 /// </summary>
 public sealed class SyntheticBatchExecutor(
     BillService billService,
     ICloudSettingsService settings,
     ShowroomBillingDbContext dbContext,
     ILogger<SyntheticBatchExecutor> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null,
+    SyntheticBatchOutcomes? outcomes = null)
 {
     public async Task<SyntheticBatchResponse> ExecuteAsync(
         SyntheticBatchRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // The same batch sent twice (a request sent again after its answer was lost) makes no
+        // second batch. Said before anything else, or the times, which are now too early, would
+        // be what is refused.
+        const string alreadySent = "This batch has already been sent to the server. Look at the Bills tab before starting another.";
+        if (request.BatchId is { } sentId && outcomes?.Find(sentId) is not null)
+            throw new BillStateConflictException(alreadySent);
 
         var effective = await settings.GetEffectiveSettingsAsync(cancellationToken);
         var itemEntries = ReadMasters(
@@ -43,42 +53,100 @@ public sealed class SyntheticBatchExecutor(
         if (karatEntries.Count == 0)
             throw new RequestValidationException("No karat masters are configured.");
 
-        // The planner keeps the batch between the last bill already stored and now.
+        // The planner keeps the batch between the last bill already stored and now, and inside
+        // the shop hours saved in Settings → Admin.
         var earliestUtc = await EarliestBillTimeAsync(cancellationToken);
         var nowUtc = (timeProvider ?? TimeProvider.System).GetUtcNow();
+        var hours = (await settings.GetBatchHoursAsync(cancellationToken)).Hours;
+
+        // The operator said yes to a batch that keeps to the hours the form showed. If they were
+        // changed meanwhile (at another counter), no bill is dated by hours nobody approved.
+        if (request.ExpectedHours is { } shown && shown != hours)
+            throw new RequestValidationException(
+                "The shop hours were changed while this batch was being set up. Look at them again, then start the batch again.");
 
         var rng = new Random();
-        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, earliestUtc, nowUtc);
+        var plan = new SyntheticBillPlanner().BuildPlan(request, itemEntries, karatEntries, rng, earliestUtc, nowUtc, hours);
 
         logger.LogInformation(
             "Synthetic batch planned: {BillCount} bill(s), grand ₹{Grand:N0}, window [{Start:o}, {End:o}]",
             plan.Bills.Count, plan.TotalAmount, request.StartAtUtc, request.EndAtUtc);
 
+        // Only a batch that came with an id is kept track of: nobody could ask about another.
+        var batchId = outcomes is null ? null : request.BatchId;
+        if (batchId is { } id && !outcomes!.TryStart(id, plan.Bills.Count))
+            throw new BillStateConflictException(alreadySent);
+
         var saved = 0;
-        foreach (var planned in plan.Bills)
+        var lastSaveInDoubt = false;
+        string? firstNumber = null;
+        string? lastNumber = null;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+            foreach (var planned in plan.Bills)
             {
-                await billService.CreateBackdatedDraftAsync(
-                    new CreateBillDraftRequest(Payload: planned.Payload),
-                    planned.ScheduledAtUtc,
-                    cancellationToken);
+                // A cancelled run stops between two bills. The bill in hand is saved or it is
+                // not, never cut off at its commit, so the count of saved bills is what is stored.
+                cancellationToken.ThrowIfCancellationRequested();
+                BillResponse bill;
+                try
+                {
+                    bill = await billService.CreateBackdatedDraftAsync(
+                        new CreateBillDraftRequest(Payload: planned.Payload),
+                        planned.ScheduledAtUtc,
+                        CancellationToken.None);
+                }
+                catch (BillStateConflictException ex)
+                {
+                    // A counter saved a bill while the batch was being saved: the rest would be
+                    // numbered after it and dated before it.
+                    throw new BillStateConflictException(
+                        $"A bill was saved at a counter while the batch was being made, so the batch stopped after {saved} of {plan.Bills.Count} bill(s). {ex.Message}");
+                }
+                catch (Exception ex) when (ex is not BillValidationException and not RequestValidationException)
+                {
+                    // Refused before anything was written (the two above, and a bill that fails its
+                    // checks) is a bill not saved. Anything else may have failed at the commit, with
+                    // the bill stored and the answer lost, so the count is one short or it is not.
+                    lastSaveInDoubt = true;
+                    throw;
+                }
+
+                saved++;
+                firstNumber ??= bill.InvoiceNumber;
+                lastNumber = bill.InvoiceNumber;
+                if (batchId is { } known) outcomes!.Saved(known, bill.InvoiceNumber, planned.Payload.Totals.GrandTotal);
+
+                // Each bill starts from what the database holds. One context carries the whole
+                // batch, and without this it would keep every bill it has saved, and its own copy
+                // of the year's numbering row, which a delete or a renumbering at a counter changes.
+                dbContext.ChangeTracker.Clear();
             }
-            catch (BillStateConflictException ex)
-            {
-                // A counter saved a bill while the batch was being saved: the rest would be
-                // numbered after it and dated before it.
-                throw new BillStateConflictException(
-                    $"A bill was saved at a counter while the batch was being made, so the batch stopped after {saved} of {plan.Bills.Count} bill(s). {ex.Message}");
-            }
-            saved++;
+        }
+        finally
+        {
+            if (batchId is { } known) outcomes!.Finish(known, lastSaveInDoubt);
+            if (saved < plan.Bills.Count)
+                logger.LogWarning(
+                    "Synthetic batch stopped after {Saved} of {Planned} bill(s){InDoubt}",
+                    saved, plan.Bills.Count, lastSaveInDoubt ? "; the next bill may or may not have been saved" : string.Empty);
         }
 
         return new SyntheticBatchResponse(
             BillCount: plan.Bills.Count,
-            TotalAmount: plan.TotalAmount);
+            TotalAmount: plan.TotalAmount,
+            FirstInvoiceNumber: firstNumber,
+            LastInvoiceNumber: lastNumber);
     }
+
+    /// <summary>
+    /// What the Batch Data Scheduler's form needs before a batch is sent: when a batch may be dated
+    /// from (<see cref="EarliestBillTimeAsync"/>) and the shop hours it keeps to.
+    /// </summary>
+    public async Task<SyntheticBatchWindowResponse> GetWindowAsync(CancellationToken cancellationToken = default)
+        => new(
+            await EarliestBillTimeAsync(cancellationToken),
+            (await settings.GetBatchHoursAsync(cancellationToken)).Hours);
 
     /// <summary>
     /// The first minute a batch may date a bill, or null when there is no bill. Batch bills take

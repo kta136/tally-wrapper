@@ -72,6 +72,9 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.ItemMasterDataJson).HasColumnType("jsonb");
             entity.Property(x => x.KaratMappingDataJson).HasColumnType("jsonb");
             entity.Property(x => x.PrintLayoutJson).HasColumnType("jsonb");
+            // The default is the database's too, so a row written by a build from before the
+            // column (which does not name it) still gets a value.
+            entity.Property(x => x.BatchHoursJson).HasColumnType("text").HasDefaultValue("{}");
         });
 
         modelBuilder.Entity<AuditEventEntity>(entity =>

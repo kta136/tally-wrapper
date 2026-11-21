@@ -2,6 +2,14 @@ namespace ShowroomBilling.Infrastructure.Persistence.Entities;
 
 public sealed class CloudSettingsEntity
 {
+    /// <summary>
+    /// The id the first settings row is stored under. There is one row of settings, and the
+    /// primary key is what keeps it one: of two requests that find no settings at the same
+    /// moment, the second adds nothing. (A row made by a build from before 21 November 2026 has
+    /// an id of its own; it is changed in place and never added to.)
+    /// </summary>
+    public static readonly Guid FirstSettingsId = new("00000000-0000-0000-0000-000000000001");
+
     public Guid Id { get; set; }
 
     public string Host { get; set; } = string.Empty;
@@ -71,6 +79,12 @@ public sealed class CloudSettingsEntity
     public string KaratMappingDataJson { get; set; } = "[]";
 
     public string PrintLayoutJson { get; set; } = "{}";
+
+    /// <summary>
+    /// The shop hours a batch keeps to (<c>BatchHoursSettings</c>, as JSON). <c>{}</c>, which is
+    /// also the column's default, means none are set.
+    /// </summary>
+    public string BatchHoursJson { get; set; } = "{}";
 
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }

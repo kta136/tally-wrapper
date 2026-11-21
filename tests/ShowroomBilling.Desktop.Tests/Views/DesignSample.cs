@@ -248,7 +248,7 @@ internal static class DesignSample
             setupWizard: new SetupWizardViewModel(
                 settingsApi: null!,
                 completionStore: null!),
-            syntheticBatch: new SyntheticBatchViewModel(new FakeBillsApi(), dialogs, adminTokens: null, settings: null));
+            syntheticBatch: BatchScheduler(dialogs));
 
         // Left open so the confirm overlay has its texts; nothing awaits the answer.
         _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.Repost("SR/2026-27/0001", tallyMayHoldVoucher: true));
@@ -256,6 +256,19 @@ internal static class DesignSample
     }
 
     /// <summary>An admin session that has just been unlocked, for the screens that show admin-only controls.</summary>
+    /// <summary>The batch scheduler, with shop hours saved so that its card in Settings, Admin is filled in.</summary>
+    private static SyntheticBatchViewModel BatchScheduler(IDialogService dialogs)
+    {
+        var api = new FakeBillsApi
+        {
+            Hours = new ShowroomBilling.Contracts.Bills.BatchHoursSettings(new TimeOnly(10, 0), new TimeOnly(20, 0), DayOfWeek.Monday, 5),
+        };
+        var batch = new SyntheticBatchViewModel(api, dialogs, adminTokens: null, settings: null);
+        // The fake answers at once, so the card is filled before the first picture.
+        batch.HoursEditor.LoadAsync().GetAwaiter().GetResult();
+        return batch;
+    }
+
     public static AdminTokenStore UnlockedTokens()
     {
         var tokens = new AdminTokenStore();

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShowroomBilling.Api.Security;
 using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Api.Controllers;
@@ -41,6 +42,24 @@ public sealed class SettingsController(ICloudSettingsService cloudSettingsServic
         CancellationToken cancellationToken)
     {
         var response = await cloudSettingsService.UpdatePrintLayoutAsync(request, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>The shop hours a batch of the Batch Data Scheduler keeps to. A read: no token.</summary>
+    [HttpGet("batch-hours")]
+    public async Task<ActionResult<BatchHoursResponse>> GetBatchHours(CancellationToken cancellationToken)
+    {
+        var response = await cloudSettingsService.GetBatchHoursAsync(cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpPut("batch-hours")]
+    [Authorize(Policy = AdminPolicy.PolicyName)]
+    public async Task<ActionResult<BatchHoursResponse>> UpdateBatchHours(
+        [FromBody] UpdateBatchHoursRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = await cloudSettingsService.UpdateBatchHoursAsync(request, cancellationToken);
         return Ok(response);
     }
 

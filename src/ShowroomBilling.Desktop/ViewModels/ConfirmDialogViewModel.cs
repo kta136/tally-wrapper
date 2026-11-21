@@ -8,7 +8,8 @@ namespace ShowroomBilling.Desktop.ViewModels;
 /// that is hard to undo: the dialog then puts keyboard focus on Cancel, so a stray
 /// Enter does not go ahead. <see cref="Note"/> is the one sentence to read twice, shown
 /// in a banner under the question; <see cref="IsDestructive"/> turns the confirm
-/// button red, for an action that deletes something.
+/// button red, for an action that deletes something. <see cref="Facts"/> are the figures the
+/// operator is asked to check before saying yes, listed between the question and the note.
 /// </summary>
 public sealed record ConfirmRequest(
     string Title,
@@ -16,7 +17,11 @@ public sealed record ConfirmRequest(
     string ConfirmText = "OK",
     bool IsWarning = false,
     string? Note = null,
-    bool IsDestructive = false);
+    bool IsDestructive = false,
+    IReadOnlyList<ConfirmFact>? Facts = null);
+
+/// <summary>One figure to check: its name and its value. <see cref="Marked"/> is the one the note is about.</summary>
+public sealed record ConfirmFact(string Label, string Value, bool Marked = false);
 
 /// <summary>
 /// The shared confirmation overlay. It sits above every other dialog, so a
@@ -40,6 +45,12 @@ public partial class ConfirmDialogViewModel : ObservableObject
 
     public bool HasNote => !string.IsNullOrWhiteSpace(NoteText);
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFacts))]
+    private IReadOnlyList<ConfirmFact> facts = [];
+
+    public bool HasFacts => Facts.Count > 0;
+
     /// <summary>
     /// Asks the question and completes with the answer. A question asked while
     /// another is still open is answered "no": the operator never saw it.
@@ -58,6 +69,7 @@ public partial class ConfirmDialogViewModel : ObservableObject
         IsWarning = request.IsWarning || request.IsDestructive;
         IsDestructive = request.IsDestructive;
         NoteText = request.Note ?? string.Empty;
+        Facts = request.Facts ?? [];
         IsOpen = true;
         return _pending.Task;
     }

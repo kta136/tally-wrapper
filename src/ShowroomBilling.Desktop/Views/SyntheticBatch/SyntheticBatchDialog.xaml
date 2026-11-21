@@ -4,12 +4,29 @@
              xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell">
     <UserControl.Resources>
         <Style x:Key="BatchCard" BasedOn="{StaticResource Panel}" TargetType="{x:Type Border}">
-            <Setter Property="Padding" Value="20,16,20,18" />
-            <Setter Property="Margin" Value="0,0,0,14" />
+            <Setter Property="Padding" Value="20,14,20,14" />
         </Style>
-        <Style x:Key="BatchCardTitle" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+        <Style x:Key="BatchPartTitle" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="BatchDivider" TargetType="{x:Type Border}">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="0,12,0,10" />
+            <Setter Property="Background" Value="{StaticResource DividerBrush}" />
+        </Style>
+
+        <!--  A row of the right-hand panel: what it is on the left, its value on the right.  -->
+        <Style x:Key="BatchRowName" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{StaticResource InkSoftBrush}" />
+            <Setter Property="Margin" Value="0,0,12,9" />
+        </Style>
+        <Style x:Key="BatchRowValue" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,9" />
         </Style>
 
         <!--  The 24K rate has no default, so an empty one is the field to look at: a red edge on a pink wash.  -->
@@ -19,176 +36,126 @@
                     <Setter Property="Background" Value="{StaticResource ErrWashBrush}" />
                     <Setter Property="BorderBrush" Value="{StaticResource ErrTextBrush}" />
                     <Setter Property="BorderThickness" Value="2" />
-                    <Setter Property="Padding" Value="9,0" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--  The round tile of a result: green for made, amber for stopped, red for not made.  -->
+        <Style x:Key="ResultTile" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="48" />
+            <Setter Property="Height" Value="48" />
+            <Setter Property="CornerRadius" Value="24" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Result.Tone}" Value="ok">
+                    <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Result.Tone}" Value="err">
+                    <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ResultGlyph" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Result.Tone}" Value="ok">
+                    <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Result.Tone}" Value="err">
+                    <Setter Property="Foreground" Value="{StaticResource ErrTextBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
 
-    <!--  Admin only. Everything the batch needs is on this page: how much, when, which karats, and how it is going.  -->
+    <!--
+        Admin only. One screen, two columns: the form on the left and what the batch will make on the
+        right. When a run ends, its result takes the form's place and the right side shows what was asked.
+    -->
     <shell:DialogFrame BodyBackground="{StaticResource BgBrush}"
-                       BodyPadding="20,16,20,6"
+                       BodyPadding="20,16,20,16"
                        CloseCommand="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                        DataContext="{Binding SyntheticBatch}"
                        HeaderChips="{StaticResource AdminOnlyChip}"
-                       PanelWidth="780"
-                       Subtitle="Synthetic bill generator, ported from V1"
+                       HeaderGlyph="&#xE787;"
+                       PanelWidth="1040"
+                       Subtitle="Makes pending bills that add up to a total, dated between two times you pick"
                        Title="Batch data scheduler">
         <shell:DialogFrame.FooterNote>
-            <Button Command="{Binding CancelCommand}"
-                    Content="Cancel run"
-                    Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}" />
+            <Grid>
+                <!--  Ready  -->
+                <TextBlock VerticalAlignment="Center"
+                           Style="{StaticResource TxtHint}"
+                           Text="You are asked to check the figures before any bill is made."
+                           Visibility="{Binding IsReadyShown, Converter={StaticResource BoolToVis}}" />
+                <!--  Running  -->
+                <TextBlock VerticalAlignment="Center"
+                           Style="{StaticResource TxtHint}"
+                           Text="Cancel stops after the bill being saved. Bills already saved stay."
+                           Visibility="{Binding IsRunningShown, Converter={StaticResource BoolToVis}}" />
+                <!--  A result with bills to look at: the way back to the form sits apart, on the left  -->
+                <Button HorizontalAlignment="Left"
+                        Command="{Binding ShowFormCommand}"
+                        Content="Make another batch"
+                        Visibility="{Binding Result.BillsMayBeSaved, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+            </Grid>
         </shell:DialogFrame.FooterNote>
         <shell:DialogFrame.Footer>
-            <StackPanel Orientation="Horizontal">
-                <Button Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                        Content="Close"
-                        shell:Kbd.Hint="Esc" />
-                <Button MinWidth="130"
-                        Margin="10,0,0,0"
-                        Command="{Binding StartCommand}"
-                        Content="Start schedule"
-                        Style="{StaticResource BtnPrimary}" />
-            </StackPanel>
+            <Grid>
+                <!--  Ready. "Make bills…" is not the Enter key's button: a time just typed is taken only
+                      when the cursor leaves its box, and Enter would start with the time before it.  -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsReadyShown, Converter={StaticResource BoolToVis}}">
+                    <Button Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            Content="Close"
+                            shell:Kbd.Hint="Esc" />
+                    <Button MinWidth="130"
+                            Margin="10,0,0,0"
+                            Command="{Binding StartCommand}"
+                            Content="Make bills…"
+                            Style="{StaticResource BtnPrimary}" />
+                </StackPanel>
+                <!--  Running  -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsRunningShown, Converter={StaticResource BoolToVis}}">
+                    <Button Command="{Binding CancelCommand}" Content="Cancel run" />
+                    <Button MinWidth="130"
+                            Margin="10,0,0,0"
+                            Content="Making bills…"
+                            IsEnabled="False"
+                            Style="{StaticResource BtnPrimary}" />
+                </StackPanel>
+                <!--  A result  -->
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsResultShown, Converter={StaticResource BoolToVis}}">
+                    <Button Command="{Binding DataContext.CloseDialogCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            Content="Close"
+                            shell:Kbd.Hint="Esc" />
+                    <Button MinWidth="130"
+                            Margin="10,0,0,0"
+                            Command="{Binding OpenBillsCommand}"
+                            Content="Open Bills tab"
+                            IsDefault="True"
+                            shell:Kbd.Hint="Enter"
+                            Style="{StaticResource BtnPrimary}"
+                            Visibility="{Binding Result.BillsMayBeSaved, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                    <Button MinWidth="130"
+                            Margin="10,0,0,0"
+                            Command="{Binding ShowFormCommand}"
+                            Content="Back to the form"
+                            Style="{StaticResource BtnPrimary}"
+                            Visibility="{Binding Result.BillsMayBeSaved, Converter={StaticResource InverseBoolToVis}, FallbackValue=Collapsed}" />
+                </StackPanel>
+            </Grid>
         </shell:DialogFrame.Footer>
 
         <StackPanel>
-            <TextBlock Margin="0,0,0,14"
-                       Foreground="{StaticResource InkMutedBrush}"
-                       shell:RichText.Markup="Creates a cluster of **pending** bills whose content is realistic and whose audit timestamps are backfilled inside the window below. Nothing is sent to Tally."
-                       TextWrapping="Wrap" />
-
-            <Border Margin="0,0,0,14"
-                    Style="{StaticResource AdminBannerErr}"
-                    Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource ErrTextBrush}"
-                               Text="&#xE783;" />
-                    <TextBlock VerticalAlignment="Center"
-                               Foreground="{StaticResource ErrInkBrush}"
-                               Text="{Binding ErrorMessage}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-
-            <!--  How much  -->
-            <Border Style="{StaticResource BatchCard}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource BatchCardTitle}" Text="How much to create" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="Total target amount, ₹" />
-                            <TextBox Margin="0,0,0,14" Text="{Binding TotalAmount, Converter={StaticResource GroupedNumber}}" />
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="24K rate, ₹ per gram" />
-                            <TextBox Margin="0,0,0,14"
-                                     Style="{StaticResource RateBox}"
-                                     Text="{Binding Rate24Kt, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="Fewest items per bill" />
-                            <TextBox Text="{Binding MinItemsPerBill, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="Largest single bill, ₹" />
-                            <TextBox Margin="0,0,0,14"
-                                     Padding="10,0,96,0"
-                                     shell:FieldAdorn.Suffix="{Binding MaxBillLimitText}"
-                                     Text="{Binding MaxBillAmount, Converter={StaticResource GroupedNumber}}" />
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="Payment" />
-                            <ComboBox Margin="0,0,0,14"
-                                      ItemsSource="{Binding PaymentOptions}"
-                                      SelectedItem="{Binding PaymentMode}" />
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="Most items per bill" />
-                            <TextBox Text="{Binding MaxItemsPerBill, UpdateSourceTrigger=PropertyChanged}" />
-                        </StackPanel>
-                    </Grid>
-                    <TextBlock Margin="0,14,0,0"
-                               Style="{StaticResource TxtHint}"
-                               Text="{Binding BillRangeNote, Mode=OneWay}" />
-                </StackPanel>
-            </Border>
-
-            <!--  When  -->
-            <Border Style="{StaticResource BatchCard}">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource BatchCardTitle}" Text="When the bills are dated" />
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="Start, local time" />
-                            <TextBox x:Name="StartAtBox"
-                                     FontFamily="{StaticResource MonoFontFamily}"
-                                     FontSize="{DynamicResource FontSizeMono}"
-                                     LostFocus="OnStartAtLostFocus" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2">
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="End, local time" />
-                            <TextBox x:Name="EndAtBox"
-                                     FontFamily="{StaticResource MonoFontFamily}"
-                                     FontSize="{DynamicResource FontSizeMono}"
-                                     LostFocus="OnEndAtLostFocus" />
-                        </StackPanel>
-                    </Grid>
-                    <TextBlock Margin="0,14,0,0"
-                               Style="{StaticResource TxtHint}"
-                               Text="{Binding WindowNote, Mode=OneWay}" />
-                </StackPanel>
-            </Border>
-
-            <!--  Karats  -->
-            <Border Style="{StaticResource BatchCard}">
-                <StackPanel>
-                    <Grid Margin="0,0,0,2">
-                        <TextBlock FontWeight="SemiBold" Text="Karats that can be used" />
-                        <StackPanel HorizontalAlignment="Right"
-                                    Orientation="Horizontal"
-                                    Visibility="{Binding HasKaratOptions, Converter={StaticResource BoolToVis}}">
-                            <Button Command="{Binding SelectAllKaratsCommand}"
-                                    Content="Select all"
-                                    Style="{StaticResource BtnGhost}" />
-                            <Button Command="{Binding ClearAllKaratsCommand}"
-                                    Content="Clear all"
-                                    Style="{StaticResource BtnGhost}" />
-                        </StackPanel>
-                    </Grid>
-                    <TextBlock Margin="0,0,0,12"
-                               Style="{StaticResource TxtHint}"
-                               Text="Only karats mapped to a Tally stock item." />
-                    <ItemsControl ItemsSource="{Binding KaratOptions}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <ToggleButton Content="{Binding Label}"
-                                              IsChecked="{Binding IsSelected}"
-                                              Style="{StaticResource ChipToggle}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Style="{StaticResource TxtHint}"
-                               Text="No karat has a Tally stock item yet. Map them in Settings, Masters."
-                               Visibility="{Binding HasKaratOptions, Converter={StaticResource InverseBoolToVis}}" />
-                </StackPanel>
-            </Border>
-
-            <!--  What stops it from starting  -->
-            <Border Margin="0,0,0,14"
+            <!--  What stops Start, across the top of the form  -->
+            <Border Margin="0,0,0,10"
                     Style="{StaticResource AdminBannerWarn}"
-                    Visibility="{Binding HasValidation, Converter={StaticResource BoolToVis}}">
+                    Visibility="{Binding ShowValidation, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Margin="0,0,10,0"
                                VerticalAlignment="Center"
@@ -204,27 +171,343 @@
                 </StackPanel>
             </Border>
 
-            <!--  How the run is going  -->
-            <Border Style="{StaticResource BatchCard}">
-                <StackPanel>
-                    <StackPanel Margin="0,0,0,12" Orientation="Horizontal">
-                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Progress" />
-                        <Border Margin="10,0,0,0"
-                                Style="{StaticResource ToneChip}"
-                                Tag="{Binding RunTone}">
-                            <TextBlock Style="{StaticResource ToneChipText}"
-                                       Tag="{Binding RunTone}"
-                                       Text="{Binding RunState}" />
-                        </Border>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="620" />
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!--  ── Left: the form, kept from keys and clicks while a batch runs ──  -->
+                <Border Grid.Column="0"
+                        shell:InputLock.IsLocked="{Binding IsRunning}"
+                        Style="{StaticResource BatchCard}"
+                        Visibility="{Binding IsFormShown, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Margin="0,0,0,8" Style="{StaticResource BatchPartTitle}" Text="Amount" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Total to make" />
+                                <TextBox Padding="26,0,10,0"
+                                         shell:FieldAdorn.Prefix="₹"
+                                         Text="{Binding TotalAmount, Converter={StaticResource GroupedNumber}}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Largest single bill" />
+                                <TextBox Padding="26,0,136,0"
+                                         shell:FieldAdorn.Prefix="₹"
+                                         shell:FieldAdorn.Suffix="{Binding MaxBillLimitText}"
+                                         Text="{Binding MaxBillAmount, Converter={StaticResource GroupedNumber}}" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="24K rate" />
+                                <TextBox Padding="26,0,76,0"
+                                         shell:FieldAdorn.Placeholder="Today's rate"
+                                         shell:FieldAdorn.Prefix="₹"
+                                         shell:FieldAdorn.Suffix="per gram"
+                                         Style="{StaticResource RateBox}"
+                                         Text="{Binding RateText, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Payment" />
+                                <ComboBox ItemsSource="{Binding PaymentOptions}" SelectedItem="{Binding PaymentMode}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="{Binding ItemsPerBillLabel, Mode=OneTime}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBox Width="64"
+                                             AutomationProperties.Name="Fewest items per bill"
+                                             Text="{Binding MinItemsPerBill, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Margin="8,0"
+                                               VerticalAlignment="Center"
+                                               Style="{StaticResource TxtHint}"
+                                               Text="to" />
+                                    <TextBox Width="64"
+                                             AutomationProperties.Name="Most items per bill"
+                                             Text="{Binding MaxItemsPerBill, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Style="{StaticResource BatchDivider}" />
+                        <Grid Margin="0,0,0,6">
+                            <TextBlock Style="{StaticResource BatchPartTitle}" Text="Dates" />
+                            <Button Height="28"
+                                    HorizontalAlignment="Right"
+                                    Command="{Binding LastBillToNowCommand}"
+                                    Content="Last bill to now"
+                                    Style="{StaticResource BtnGhost}" />
+                        </Grid>
+                        <Grid shell:InputLock.IsLocked="{Binding IsReadingTimes}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="84" />
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="84" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FieldLabel}" Text="From" />
+                            <DatePicker Grid.Row="1"
+                                        Grid.Column="0"
+                                        AutomationProperties.Name="From date"
+                                        SelectedDate="{Binding FromDate}" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="2"
+                                     AutomationProperties.Name="From time"
+                                     shell:FieldAdorn.Placeholder="hh:mm"
+                                     Text="{Binding FromTime, UpdateSourceTrigger=LostFocus}" />
+                            <TextBlock Grid.Row="0" Grid.Column="4" Style="{StaticResource FieldLabel}" Text="To" />
+                            <DatePicker Grid.Row="1"
+                                        Grid.Column="4"
+                                        AutomationProperties.Name="To date"
+                                        SelectedDate="{Binding ToDate}" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="6"
+                                     AutomationProperties.Name="To time"
+                                     shell:FieldAdorn.Placeholder="hh:mm"
+                                     Text="{Binding ToTime, UpdateSourceTrigger=LostFocus}" />
+                        </Grid>
+                        <TextBlock Margin="0,8,0,0"
+                                   Style="{StaticResource TxtHint}"
+                                   Text="{Binding WindowNote}"
+                                   TextWrapping="Wrap" />
+
+                        <Border Style="{StaticResource BatchDivider}" />
+                        <Grid Margin="0,0,0,6">
+                            <TextBlock Style="{StaticResource BatchPartTitle}" Text="Karats that can be used" />
+                            <StackPanel HorizontalAlignment="Right"
+                                        Orientation="Horizontal"
+                                        Visibility="{Binding HasKaratOptions, Converter={StaticResource BoolToVis}}">
+                                <Button Height="28"
+                                        Command="{Binding SelectAllKaratsCommand}"
+                                        Content="Select all"
+                                        Style="{StaticResource BtnGhost}" />
+                                <Button Height="28"
+                                        Command="{Binding ClearAllKaratsCommand}"
+                                        Content="Clear all"
+                                        Style="{StaticResource BtnGhost}" />
+                            </StackPanel>
+                        </Grid>
+                        <WrapPanel>
+                            <ItemsControl Focusable="False" ItemsSource="{Binding KaratOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <ToggleButton Content="{Binding Label}"
+                                                      IsChecked="{Binding IsSelected}"
+                                                      Style="{StaticResource ChipToggle}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Margin="8,0,0,0"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource TxtHint}"
+                                       Text="Only karats with a Tally stock item are shown."
+                                       Visibility="{Binding HasKaratOptions, Converter={StaticResource BoolToVis}}" />
+                        </WrapPanel>
+                        <TextBlock Style="{StaticResource TxtHint}"
+                                   Text="No karat has a Tally stock item yet. Map them in Settings, Masters."
+                                   Visibility="{Binding HasKaratOptions, Converter={StaticResource InverseBoolToVis}}" />
                     </StackPanel>
-                    <ProgressBar IsIndeterminate="{Binding IsRunning}"
-                                 Maximum="100"
-                                 Value="{Binding ProgressValue, Mode=OneWay}" />
-                    <TextBlock Margin="0,10,0,0"
-                               Style="{StaticResource TxtHint}"
-                               Text="{Binding StatusMessage, TargetNullValue='Ready.', FallbackValue='Ready.'}" />
-                </StackPanel>
-            </Border>
+                </Border>
+
+                <!--  ── Left, once a run has ended: what it came to ──  -->
+                <Border Grid.Column="0"
+                        Style="{StaticResource BatchCard}"
+                        Visibility="{Binding IsResultShown, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <Border Style="{StaticResource ResultTile}">
+                            <TextBlock Style="{StaticResource ResultGlyph}" Text="{Binding Result.Glyph}" />
+                        </Border>
+                        <TextBlock Margin="0,14,0,0"
+                                   FontSize="{DynamicResource FontSizeTitle}"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding Result.Headline}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Text="{Binding Result.Reason}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding Result.HasReason, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Foreground="{StaticResource InkMutedBrush}"
+                                   shell:RichText.Markup="{Binding Result.Where}"
+                                   TextWrapping="Wrap" />
+
+                        <Grid Margin="0,18,0,0" Visibility="{Binding Result.HasNumbers, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="First bill" />
+                                <TextBlock FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold" Text="{Binding Result.FirstNumber}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Last bill" />
+                                <TextBlock FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold" Text="{Binding Result.LastNumber}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Margin="0,18,0,0"
+                                   Style="{StaticResource TxtHint}"
+                                   Text="{Binding NextBatchNote}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!--  ── Right, with the form: what this batch makes, and how the run is going ──  -->
+                <Border Grid.Column="2"
+                        Style="{StaticResource BatchCard}"
+                        Visibility="{Binding IsFormShown, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Bottom"
+                                   Margin="0,12,0,0"
+                                   Style="{StaticResource TxtHint}"
+                                   Text="Shop hours are set in Settings, Admin."
+                                   TextWrapping="Wrap" />
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock VerticalAlignment="Center"
+                                           FontWeight="Medium"
+                                           Foreground="{StaticResource InkMutedBrush}"
+                                           Text="This batch makes" />
+                                <Border HorizontalAlignment="Right"
+                                        Style="{StaticResource ToneChip}"
+                                        Tag="{Binding RunTone}"
+                                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Style="{StaticResource ToneChipText}"
+                                               Tag="{Binding RunTone}"
+                                               Text="{Binding RunState}" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Margin="0,2,0,4"
+                                       FontSize="{DynamicResource FontSizeTotal}"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding BillCountText}" />
+                            <TextBlock Style="{StaticResource TxtHint}"
+                                       Text="{Binding BillRangeNote}"
+                                       TextWrapping="Wrap" />
+
+                            <!--  While a batch runs: the server makes it in one call, so the bar shows that it is working, not how far.  -->
+                            <StackPanel Margin="0,14,0,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}">
+                                <ProgressBar IsIndeterminate="{Binding IsRunning}" />
+                                <TextBlock Margin="0,8,0,0"
+                                           Text="{Binding StatusMessage}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <Border Margin="0,16,0,16" Style="{StaticResource BatchDivider}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Style="{StaticResource BatchRowName}" Text="Adds up to" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource BatchRowValue}" Text="{Binding AddsUpToText}" />
+                                <TextBlock Grid.Row="1" Style="{StaticResource BatchRowName}" Text="Dated" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource BatchRowValue}" Text="{Binding DatedText}" />
+                                <TextBlock Grid.Row="2" Style="{StaticResource BatchRowName}" Text="Shop hours" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource BatchRowValue}" Text="{Binding ShopHoursText}" />
+                                <TextBlock Grid.Row="3" Style="{StaticResource BatchRowName}" Text="Closed on" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource BatchRowValue}" Text="{Binding ClosedOnText}" />
+                                <TextBlock Grid.Row="4" Style="{StaticResource BatchRowName}" Text="Bills at least" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource BatchRowValue}" Text="{Binding GapText}" />
+                                <TextBlock Grid.Row="5" VerticalAlignment="Center" Style="{StaticResource BatchRowName}" Text="Saved as" />
+                                <shell:StateChip Grid.Row="5"
+                                                 Grid.Column="1"
+                                                 Margin="0,0,0,9"
+                                                 HorizontalAlignment="Right"
+                                                 Kind="{Binding SavedAsKind, Mode=OneTime}"
+                                                 Label="{Binding SavedAsLabel, Mode=OneTime}"
+                                                 Tone="{Binding SavedAsTone, Mode=OneTime}" />
+                                <TextBlock Grid.Row="6" Style="{StaticResource BatchRowName}" Text="Sent to Tally" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource BatchRowValue}" Text="No" />
+                            </Grid>
+
+                            <!--  Too short for the gap: said quietly, since the batch is made all the same.  -->
+                            <StackPanel Margin="0,4,0,0"
+                                        Orientation="Horizontal"
+                                        Visibility="{Binding HasCloserNote, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Margin="0,2,8,0"
+                                           VerticalAlignment="Top"
+                                           FontFamily="{StaticResource IconFontFamily}"
+                                           FontSize="13"
+                                           Foreground="{StaticResource InfoInkBrush}"
+                                           Text="&#xE946;" />
+                                <TextBlock MaxWidth="280"
+                                           Foreground="{StaticResource InfoInkBrush}"
+                                           Style="{StaticResource TxtHint}"
+                                           Text="{Binding CloserNote}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!--  ── Right, beside a result: what was asked ──  -->
+                <Border Grid.Column="2"
+                        Style="{StaticResource BatchCard}"
+                        Visibility="{Binding IsResultShown, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <TextBlock VerticalAlignment="Center"
+                                       FontWeight="Medium"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="What was asked" />
+                            <Border HorizontalAlignment="Right"
+                                    Style="{StaticResource ToneChip}"
+                                    Tag="{Binding RunTone}">
+                                <TextBlock Style="{StaticResource ToneChipText}"
+                                           Tag="{Binding RunTone}"
+                                           Text="{Binding RunState}" />
+                            </Border>
+                        </Grid>
+                        <ItemsControl Focusable="False" ItemsSource="{Binding Asked}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource BatchRowName}" Text="{Binding Label}" />
+                                        <TextBlock Style="{StaticResource BatchRowValue}" Text="{Binding Value}" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
         </StackPanel>
     </shell:DialogFrame>
 </UserControl>

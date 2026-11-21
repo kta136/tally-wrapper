@@ -132,6 +132,31 @@ public sealed class ShellKeyboardTests
     }
 
     [Fact]
+    public void Open_Bills_tab_on_a_batch_result_closes_the_scheduler_and_shows_every_bill()
+    {
+        var seen = WpfTestHost.Run(() =>
+        {
+            var shell = DesignSample.CreateShell(tokenStore: DesignSample.UnlockedTokens());
+            shell.ConfirmDialog.Cancel();
+            // A filter left on from earlier would hide the pending bills a batch has just made.
+            shell.Bills.StateFilter = shell.Bills.StateFilterOptions.Last();
+            shell.Bills.SearchQuery = "nobody";
+            shell.OpenSyntheticBatchKeyCommand.Execute(null);
+            var opened = shell.ActiveDialog;
+
+            shell.SyntheticBatch.OpenBillsCommand.Execute(null);
+
+            return (opened, shell.ActiveDialog, shell.ActiveTab, shell.Bills.StateFilter, shell.Bills.SearchQuery);
+        });
+
+        Assert.Equal(ShellDialogs.SyntheticBatch, seen.opened);
+        Assert.Null(seen.Item2);
+        Assert.Equal(NavTab.Bills, seen.Item3);
+        Assert.Equal("All", seen.Item4);
+        Assert.Equal(string.Empty, seen.Item5);
+    }
+
+    [Fact]
     public void The_window_has_no_key_binding_for_a_bare_character()
     {
         // A key binding marks its key handled even while its command cannot run,

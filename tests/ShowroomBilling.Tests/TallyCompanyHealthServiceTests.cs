@@ -130,6 +130,14 @@ public sealed class TallyCompanyHealthServiceTests
             UpdatePrintLayoutRequest request,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<ShowroomBilling.Contracts.Bills.BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<ShowroomBilling.Contracts.Bills.BatchHoursResponse> UpdateBatchHoursAsync(
+            ShowroomBilling.Contracts.Bills.UpdateBatchHoursRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeTallyMasterSource(IReadOnlyList<CompanySnapshotItem>? companies) : ITallyMasterSource

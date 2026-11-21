@@ -139,7 +139,20 @@ Until 14 November 2026 this was five tables: `tally_master_snapshot_batches` and
 
 ### 1.7 `cloud_settings` and `database_identity`
 
-`cloud_settings` is the one row of shared settings: Tally connection, numbering, print, and ledger mapping columns, plus three jsonb columns. `ItemMasterDataJson` and `KaratMappingDataJson` hold the Masters lists. `PrintLayoutJson` (default `{}`) holds margins, logo/signature placements, optional watermark placement, density/border/pin settings and the ordered section rows; asset IDs in it refer to `print_assets."Id"`, and legacy JSON without `watermark`/`pageLayout` is read with structured defaults. What the fields are is in [08_settings_catalog.md](08_settings_catalog.md).
+`cloud_settings` is the one row of shared settings: Tally connection, numbering, print, and ledger mapping columns, plus three jsonb columns and one text column of JSON. `ItemMasterDataJson` and `KaratMappingDataJson` hold the Masters lists. `PrintLayoutJson` (default `{}`) holds margins, logo/signature placements, optional watermark placement, density/border/pin settings and the ordered section rows; asset IDs in it refer to `print_assets."Id"`, and legacy JSON without `watermark`/`pageLayout` is read with structured defaults. What the fields are is in [08_settings_catalog.md](08_settings_catalog.md).
+
+The row is made by the first request that reads the settings. It is stored under a fixed `Id` (`CloudSettingsEntity.FirstSettingsId`) with `INSERT … ON CONFLICT DO NOTHING`, so of several requests that find no settings at the same moment the primary key lets one add the row; the others wait for it and read it. The same statement writes the row's `settings.seeded` audit event, so there is one of those too. Until 21 November 2026 each of them added a row with an id of its own, so a database first used by an older build can hold more than one. Every read and write takes one row: the newest by `"UpdatedAtUtc"` and, where two carry the same time, the higher `"Id"` (`CloudSettingsRow.InUse`). A save moves that row's time on, so an extra row is never read and never changes; no migration removes it. To see whether a database has one, and to remove it as the owner role:
+
+```sql
+-- The first line is the row in use. One line is right.
+SELECT "Id", "UpdatedAtUtc", "ActiveCompanyName", "InvoicePrefix"
+  FROM public.cloud_settings ORDER BY "UpdatedAtUtc" DESC, "Id" DESC;
+
+DELETE FROM public.cloud_settings
+ WHERE "Id" <> (SELECT "Id" FROM public.cloud_settings ORDER BY "UpdatedAtUtc" DESC, "Id" DESC LIMIT 1);
+```
+
+`BatchHoursJson` (`text`, not null, default `{}`; added on 21 November 2026 by the `AddBatchHours` migration) holds the shop hours a batch of the Batch Data Scheduler keeps to, as JSON: `Opens`, `Closes` (times of day in India), `ClosedOn` (the weekly closed day, 0 = Sunday) and `GapMinutes` ([17_synthetic_batch.md](17_synthetic_batch.md#shop-hours)). `{}`, an empty value, or one that cannot be read means no hours are set. The default is the database's as well as the application's, so a server build from before the column, which does not name it, still writes a valid row.
 
 `database_identity` is a key/value table (`key`, `value`, `updated_at_utc`). The row `environment` says `DEV` or `PROD`; see [DEV_SETUP.md](../DEV_SETUP.md#database).
 

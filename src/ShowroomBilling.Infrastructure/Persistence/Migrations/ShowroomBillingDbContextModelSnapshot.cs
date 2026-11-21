@@ -302,6 +302,12 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("BatchHoursJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("{}");
+
                     b.Property<string>("CashLedger")
                         .IsRequired()
                         .HasMaxLength(256)

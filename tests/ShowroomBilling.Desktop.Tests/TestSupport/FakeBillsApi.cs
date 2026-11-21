@@ -4,12 +4,13 @@ using ShowroomBilling.Desktop.Services;
 namespace ShowroomBilling.Desktop.Tests.TestSupport;
 
 /// <summary>
-/// One in-memory <see cref="IBillsApiClient"/> for every Desktop test. Each
+/// One in-memory <see cref="IBillsApiClient"/> (and the batch scheduler's
+/// <see cref="ISyntheticBatchApiClient"/>) for every Desktop test. Each
 /// call is recorded in <see cref="Calls"/> as "verb:billId" (or just "verb"
 /// for calls with no single bill); set <see cref="FailWith"/> to make the next
 /// write throw, as the real client does on a non-2xx answer.
 /// </summary>
-internal sealed class FakeBillsApi : IBillsApiClient
+internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
 {
     public List<string> Calls { get; } = [];
     public Exception? FailWith { get; set; }
@@ -223,14 +224,44 @@ internal sealed class FakeBillsApi : IBillsApiClient
         return Write("delete-selected", () => new DeleteSelectedBillsResponse(request.BillIds.Count, request.BillIds.Count, 0, []));
     }
 
-    public Task<SyntheticBatchResponse> CreateSyntheticBatchAsync(SyntheticBatchRequest request, string adminToken, CancellationToken cancellationToken = default)
+    /// <summary>When set, making a batch fails with it, as a refusal or a lost connection does.</summary>
+    public Exception? BatchFailure { get; set; }
+
+    /// <summary>When true, making a batch does not answer until the caller cancels it, as a long batch does.</summary>
+    public bool BatchWaitsToBeCancelled { get; set; }
+
+    /// <summary>What the server holds of how far a batch got; null when it holds nothing.</summary>
+    public SyntheticBatchOutcomeResponse? Outcome { get; set; }
+
+    /// <summary>Answers to how far a batch got that are given first, in order, before <see cref="Outcome"/>: a batch still being saved.</summary>
+    public Queue<SyntheticBatchOutcomeResponse?> EarlierOutcomes { get; } = new();
+
+    /// <summary>When set, asking how far a batch got fails with it.</summary>
+    public Exception? OutcomeFailure { get; set; }
+
+    /// <summary>The batch ids the outcome was asked for.</summary>
+    public List<Guid> OutcomeReads { get; } = [];
+
+    public async Task<SyntheticBatchResponse> CreateSyntheticBatchAsync(SyntheticBatchRequest request, string adminToken, CancellationToken cancellationToken = default)
     {
         CallCount++;
         LastRequest = request;
         AdminTokens.Add(adminToken);
-        return Task.FromResult(new SyntheticBatchResponse(
+        if (BatchWaitsToBeCancelled) await Task.Delay(Timeout.Infinite, cancellationToken);
+        if (BatchFailure is { } failure) throw failure;
+        return new SyntheticBatchResponse(
             BillCount: 3,
-            TotalAmount: 300_000m));
+            TotalAmount: 300_000m,
+            FirstInvoiceNumber: "SR/25-26/0101",
+            LastInvoiceNumber: "SR/25-26/0103");
+    }
+
+    public Task<SyntheticBatchOutcomeResponse?> GetSyntheticBatchOutcomeAsync(Guid batchId, CancellationToken cancellationToken = default)
+    {
+        OutcomeReads.Add(batchId);
+        if (OutcomeFailure is { } failure)
+            return Task.FromException<SyntheticBatchOutcomeResponse?>(failure);
+        return Task.FromResult(EarlierOutcomes.TryDequeue(out var earlier) ? earlier : Outcome);
     }
 
     /// <summary>When a batch may be dated from: no bill yet, unless a test says otherwise.</summary>
@@ -249,6 +280,28 @@ internal sealed class FakeBillsApi : IBillsApiClient
         return WindowFailure is { } failure
             ? Task.FromException<SyntheticBatchWindowResponse>(failure)
             : Task.FromResult(Window);
+    }
+
+    /// <summary>The shop hours the server holds for a batch.</summary>
+    public BatchHoursSettings Hours { get; set; } = new();
+
+    /// <summary>When set, reading or saving the shop hours fails with it.</summary>
+    public Exception? HoursFailure { get; set; }
+
+    /// <summary>The shop hours saved, with the admin token each was saved with.</summary>
+    public List<(BatchHoursSettings Hours, string AdminToken)> SavedHours { get; } = [];
+
+    public Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default)
+        => HoursFailure is { } failure
+            ? Task.FromException<BatchHoursResponse>(failure)
+            : Task.FromResult(new BatchHoursResponse(Hours, DateTimeOffset.UtcNow));
+
+    public Task<BatchHoursResponse> SaveBatchHoursAsync(UpdateBatchHoursRequest request, string adminToken, CancellationToken cancellationToken = default)
+    {
+        if (HoursFailure is { } failure) return Task.FromException<BatchHoursResponse>(failure);
+        SavedHours.Add((request.Hours, adminToken));
+        Hours = request.Hours;
+        return Task.FromResult(new BatchHoursResponse(Hours, DateTimeOffset.UtcNow));
     }
 
     private Task<T> Write<T>(string call, Func<T> result)

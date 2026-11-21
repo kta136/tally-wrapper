@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application;
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Settings;
@@ -274,6 +275,75 @@ public sealed class CloudSettingsServiceTests(PostgresFixture postgres) : Databa
             await Assert.ThrowsAsync<RequestValidationException>(() =>
                 service.UpdatePrintLayoutAsync(new UpdatePrintLayoutRequest(invalid)));
         }
+    }
+
+    [Fact]
+    public async Task Batch_hours_are_none_until_saved_and_are_read_back_as_saved()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+
+        Assert.Equal(new BatchHoursSettings(), (await service.GetBatchHoursAsync()).Hours);
+
+        // Seconds are dropped: a time is hours and minutes.
+        var saved = await service.UpdateBatchHoursAsync(new UpdateBatchHoursRequest(
+            new BatchHoursSettings(new TimeOnly(10, 0, 45), new TimeOnly(20, 30, 59), DayOfWeek.Tuesday, GapMinutes: 5)));
+
+        var expected = new BatchHoursSettings(new TimeOnly(10, 0), new TimeOnly(20, 30), DayOfWeek.Tuesday, GapMinutes: 5);
+        Assert.Equal(expected, saved.Hours);
+
+        // Read by another context: what is stored, not what the first one remembers.
+        await using var other = CreateDbContext();
+        var reloaded = await new CloudSettingsService(other).GetBatchHoursAsync();
+        Assert.Equal(expected, reloaded.Hours);
+        Assert.Equal(1, await other.AuditEvents.CountAsync(e => e.EntityType == "settings" && e.EventType == "settings.batch_hours_updated"));
+
+        // The other settings are left as they were, and saving them leaves the hours.
+        var settings = await new CloudSettingsService(other).GetEffectiveSettingsAsync();
+        await new CloudSettingsService(other).SaveEffectiveSettingsAsync(new UpdateEffectiveSettingsRequest(settings.Settings));
+        await using var third = CreateDbContext();
+        Assert.Equal(expected, (await new CloudSettingsService(third).GetBatchHoursAsync()).Hours);
+
+        // Saving none again clears them.
+        await new CloudSettingsService(third).UpdateBatchHoursAsync(new UpdateBatchHoursRequest(new BatchHoursSettings()));
+        await using var fourth = CreateDbContext();
+        Assert.Equal(new BatchHoursSettings(), (await new CloudSettingsService(fourth).GetBatchHoursAsync()).Hours);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("{}")]
+    [InlineData("null")]
+    [InlineData("not json")]
+    [InlineData("""{"Opens":"half past ten"}""")]
+    [InlineData("[1, 2]")]
+    public async Task Batch_hours_that_are_empty_or_cannot_be_read_are_none(string stored)
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+        await service.GetBatchHoursAsync();
+        var entity = await dbContext.CloudSettings.SingleAsync();
+        entity.BatchHoursJson = stored;
+        await dbContext.SaveChangesAsync();
+
+        await using var other = CreateDbContext();
+        var response = await new CloudSettingsService(other).GetBatchHoursAsync();
+
+        Assert.Equal(new BatchHoursSettings(), response.Hours);
+    }
+
+    [Fact]
+    public async Task UpdateBatchHoursAsync_refuses_bad_hours_and_stores_nothing()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new CloudSettingsService(dbContext);
+
+        await Assert.ThrowsAsync<RequestValidationException>(() => service.UpdateBatchHoursAsync(
+            new UpdateBatchHoursRequest(new BatchHoursSettings(new TimeOnly(20, 0), new TimeOnly(10, 0)))));
+
+        await using var other = CreateDbContext();
+        Assert.Equal(new BatchHoursSettings(), (await new CloudSettingsService(other).GetBatchHoursAsync()).Hours);
+        Assert.Equal(0, await other.AuditEvents.CountAsync(e => e.EventType == "settings.batch_hours_updated"));
     }
 
     private static PrintLayoutSettings ValidDesignerLayout() =>

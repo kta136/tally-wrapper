@@ -11,7 +11,8 @@ namespace ShowroomBilling.Api.Controllers;
 [Route("api/bills")]
 public sealed class BillsController(
     BillService billService,
-    SyntheticBatchExecutor syntheticBatchExecutor) : ControllerBase
+    SyntheticBatchExecutor syntheticBatchExecutor,
+    SyntheticBatchOutcomes syntheticBatchOutcomes) : ControllerBase
 {
     [HttpPost("synthetic-batch")]
     [Authorize(Policy = AdminPolicy.PolicyName)]
@@ -23,10 +24,21 @@ public sealed class BillsController(
         return Ok(response);
     }
 
-    /// <summary>When a batch may be dated from, for the Batch Data Scheduler's form. A read: no token.</summary>
+    /// <summary>
+    /// When a batch may be dated from and the shop hours it keeps to, for the Batch Data Scheduler's
+    /// form. A read: no token.
+    /// </summary>
     [HttpGet("synthetic-batch/window")]
     public async Task<ActionResult<SyntheticBatchWindowResponse>> GetSyntheticBatchWindow(CancellationToken cancellationToken)
-        => Ok(new SyntheticBatchWindowResponse(await syntheticBatchExecutor.EarliestBillTimeAsync(cancellationToken)));
+        => Ok(await syntheticBatchExecutor.GetWindowAsync(cancellationToken));
+
+    /// <summary>
+    /// How far a batch got, by the id its Desktop sent with it: for a Desktop whose request ended
+    /// without an answer. Not found when the id is unknown, which it is after an API restart. A read: no token.
+    /// </summary>
+    [HttpGet("synthetic-batch/{batchId:guid}")]
+    public ActionResult<SyntheticBatchOutcomeResponse> GetSyntheticBatchOutcome(Guid batchId)
+        => syntheticBatchOutcomes.Find(batchId) is { } outcome ? Ok(outcome) : NotFound();
 
     [HttpPost("drafts")]
     [Authorize(Policy = DevicePolicy.PolicyName)]

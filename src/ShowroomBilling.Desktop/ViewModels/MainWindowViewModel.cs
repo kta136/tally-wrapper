@@ -144,7 +144,16 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
         Settings.AdminVm = Admin;
         SetupWizard.Completed += OnSetupWizardCompleted;
-        SyntheticBatch.BatchCompleted += (_, _) => _ = Bills.LoadAsync();
+        SyntheticBatch.BillsSaved += (_, _) => _ = Bills.LoadAsync();
+        // "Open Bills tab" on a batch's result: the dialog closes and the bills it made are in front.
+        SyntheticBatch.OpenBillsRequested += (_, _) =>
+        {
+            if (ActiveDialog == ShellDialogs.SyntheticBatch) ActiveDialog = null;
+            ActiveTab = NavTab.Bills;
+            // Every bill, newest first: a filter left on (posted only, another day, a search)
+            // would hide the bills the operator has asked to see.
+            Bills.ClearFiltersCommand.Execute(null);
+        };
 
         // What Bills needs of the shell that is not a dialog: the Invoice tab, the health
         // check, and the two commands its row menu binds. Dialogs it reaches by itself.
@@ -365,6 +374,8 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             SyntheticBatch.Rate24Kt = Invoice.Rate24Kt.Value;
         }
 
+        // The question before a batch warns when the rate typed there is far from this one.
+        SyntheticBatch.InvoiceRate24Kt = Invoice.Rate24Kt;
         ActiveDialog = ShellDialogs.SyntheticBatch;
         // Start at the last bill and end now, as of this opening.
         _ = SyntheticBatch.PrepareWindowAsync();

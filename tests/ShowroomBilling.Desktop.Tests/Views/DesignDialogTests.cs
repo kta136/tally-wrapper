@@ -109,17 +109,83 @@ public sealed class DesignDialogTests
                 return new SetupWizardDialog();
             });
 
+            // The batch scheduler: ready to start, with something stopping it, and with each kind of result.
             Capture(found, bindingErrors, "Design-Dialog-SyntheticBatch", shell =>
             {
-                var batch = shell.SyntheticBatch;
-                batch.StartAt = new DateTimeOffset(new DateTime(2026, 10, 11, 0, 0, 0), TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 10, 11)));
-                batch.EndAt = new DateTimeOffset(new DateTime(2026, 10, 11, 23, 59, 0), TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 10, 11)));
-                foreach (var (label, item) in new[] { ("24kt", "Gold 24kt"), ("22kt", "Gold 22kt"), ("18kt", "Gold 18kt") })
-                {
-                    batch.KaratOptions.Add(new SelectableKarat { Label = label, TallyItem = item, IsSelected = true });
-                }
-
+                FillBatch(shell.SyntheticBatch);
                 return new SyntheticBatchDialog();
+            });
+
+            Capture(found, bindingErrors, "Design-Dialog-SyntheticBatch-NoRate", shell =>
+            {
+                FillBatch(shell.SyntheticBatch);
+                shell.SyntheticBatch.Rate24Kt = 0m;
+                return new SyntheticBatchDialog();
+            });
+
+            Capture(found, bindingErrors, "Design-Dialog-SyntheticBatch-Done", shell =>
+            {
+                var batch = FillBatch(shell.SyntheticBatch);
+                batch.RunState = "Done";
+                batch.Result = new BatchResult(
+                    "ok",
+                    "8 bills made",
+                    string.Empty,
+                    "They come to **₹9,99,640** and are in the Bills tab as **pending**. Nothing was sent to Tally.",
+                    BillsMayBeSaved: true,
+                    "SR/2026-27/0101",
+                    "SR/2026-27/0108");
+                return new SyntheticBatchDialog();
+            });
+
+            Capture(found, bindingErrors, "Design-Dialog-SyntheticBatch-Stopped", shell =>
+            {
+                var batch = FillBatch(shell.SyntheticBatch);
+                batch.RunState = "Stopped";
+                batch.Result = new BatchResult(
+                    "warn",
+                    "Stopped after 3 of 12 bills",
+                    "You cancelled the run.",
+                    "The 3 saved bills are in the Bills tab as **pending**. Nothing was sent to Tally.",
+                    BillsMayBeSaved: true,
+                    "SR/2026-27/0101",
+                    "SR/2026-27/0103");
+                return new SyntheticBatchDialog();
+            });
+
+            Capture(found, bindingErrors, "Design-Dialog-SyntheticBatch-NotMade", shell =>
+            {
+                var batch = FillBatch(shell.SyntheticBatch);
+                batch.RunState = "Failed";
+                batch.Result = new BatchResult(
+                    "err",
+                    "The batch was not made",
+                    "The From time cannot be before the last bill.",
+                    "Nothing was saved.",
+                    BillsMayBeSaved: false);
+                return new SyntheticBatchDialog();
+            });
+
+            Capture(found, bindingErrors, "Design-Dialog-Confirm-Batch", shell =>
+            {
+                shell.ConfirmDialog.Cancel();
+                _ = shell.ConfirmDialog.ShowAsync(new ConfirmRequest(
+                    "Make 5 to 20 pending bills?",
+                    "They are saved as soon as you say yes, and wait in the Bills tab. Nothing is sent to Tally.",
+                    "Make the bills",
+                    IsWarning: true,
+                    Note: "The 24K rate here, ₹9,500, is 21% below the Invoice tab's ₹12,000. Check it before you go on.",
+                    Facts:
+                    [
+                        new ConfirmFact("Adds up to", "₹10,00,000"),
+                        new ConfirmFact("24K rate", "₹9,500 per gram", Marked: true),
+                        new ConfirmFact("Dated", "11 Oct, 10:43 to 11 Oct, 16:45"),
+                        new ConfirmFact("Shop hours", "10:00 to 20:00, not on Sunday"),
+                        new ConfirmFact("Payment", "Cash"),
+                        new ConfirmFact("Items per bill", "1 to 3"),
+                        new ConfirmFact("Karats", "24kt, 22kt, 18kt"),
+                    ]));
+                return new ConfirmDialog();
             });
 
             Capture(found, bindingErrors, "Design-Dialog-PrintPreview", shell =>
@@ -205,6 +271,38 @@ public sealed class DesignDialogTests
         });
 
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
+    /// <summary>The batch scheduler filled in as an operator would: a total, a rate, the hours of one day, shop hours and three karats.</summary>
+    private static SyntheticBatchViewModel FillBatch(SyntheticBatchViewModel batch)
+    {
+        var day = new DateTime(2026, 10, 11);
+        var offset = TimeZoneInfo.Local.GetUtcOffset(day);
+        foreach (var (label, item) in new[] { ("24kt", "Gold 24kt"), ("22kt", "Gold 22kt"), ("18kt", "Gold 18kt") })
+        {
+            batch.KaratOptions.Add(new SelectableKarat { Label = label, TallyItem = item, IsSelected = true });
+        }
+
+        batch.Rate24Kt = 12_000m;
+        batch.EarliestAt = new DateTimeOffset(day.AddHours(10).AddMinutes(43), offset);
+        batch.StartAt = new DateTimeOffset(day.AddHours(10).AddMinutes(43), offset);
+        batch.EndAt = new DateTimeOffset(day.AddHours(16).AddMinutes(45), offset);
+        batch.Hours = new BatchHoursSettings(new TimeOnly(10, 0), new TimeOnly(20, 0), DayOfWeek.Monday, 5);
+
+        batch.Asked =
+        [
+            new ConfirmFact("Total", "₹10,00,000"),
+            new ConfirmFact("Largest single bill", "₹1,99,000"),
+            new ConfirmFact("24K rate", "₹12,000 per gram"),
+            new ConfirmFact("Payment", "Cash"),
+            new ConfirmFact("Items per bill", "1 to 3"),
+            new ConfirmFact("Dated", "11 Oct, 10:43 to 16:45"),
+            new ConfirmFact("Shop hours", "10:00 to 20:00"),
+            new ConfirmFact("Closed on", "Monday"),
+            new ConfirmFact("Bills at least", "5 minutes apart"),
+            new ConfirmFact("Karats", "24kt, 22kt, 18kt"),
+        ];
+        return batch;
     }
 
     private static void Capture(

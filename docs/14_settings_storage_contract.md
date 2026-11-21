@@ -21,6 +21,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 - voucher type settings
 - item master data
 - karat/stock mappings
+- the shop hours a batch of the Batch Data Scheduler keeps to (opening and closing time, the weekly closed day, the gap between bills): set in Settings → Admin, saved through `PUT /api/settings/batch-hours` and read by the server for every batch, so every counter's batches keep the same hours and none can send its own ([17](17_synthetic_batch.md#shop-hours))
 - admin/shared operational settings
 - any setting that changes shared business behavior across counters
 

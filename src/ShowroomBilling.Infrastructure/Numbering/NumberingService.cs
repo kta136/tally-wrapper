@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
+using ShowroomBilling.Infrastructure.Settings;
 
 namespace ShowroomBilling.Infrastructure.Numbering;
 
@@ -96,7 +97,7 @@ public sealed class NumberingService(ShowroomBillingDbContext dbContext)
         // on every Save Bill while the sequence row is locked.
         var settings = await dbContext.CloudSettings
             .AsNoTracking()
-            .OrderByDescending(x => x.UpdatedAtUtc)
+            .InUse()
             .Select(x => new { x.InvoicePrefix, x.InvoiceSuffix, x.InvoicePadding })
             .FirstOrDefaultAsync(cancellationToken);
         if (settings is null)

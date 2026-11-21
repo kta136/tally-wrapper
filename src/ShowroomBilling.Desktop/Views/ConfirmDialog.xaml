@@ -87,6 +87,43 @@
                            Foreground="{StaticResource InkMutedBrush}"
                            Text="{Binding MessageText}"
                            TextWrapping="Wrap" />
+
+                <!--  The figures to check before saying yes: a name and a value on each line.  -->
+                <ItemsControl Margin="0,14,0,0"
+                              Grid.IsSharedSizeScope="True"
+                              Focusable="False"
+                              ItemsSource="{Binding Facts}"
+                              Visibility="{Binding HasFacts, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="FactName" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Margin="0,0,16,0"
+                                           Foreground="{StaticResource InkSoftBrush}"
+                                           Text="{Binding Label}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Value}"
+                                           TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                            <Setter Property="FontWeight" Value="Medium" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Marked}" Value="True">
+                                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
                 <Border Margin="0,14,0,0"
                         Padding="14,9"
                         BorderThickness="1"

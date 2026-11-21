@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 
 namespace ShowroomBilling.Application.Settings;
@@ -84,6 +85,48 @@ public static class CloudSettingsValidator
         ValidateWatermark(layout.Watermark);
         ValidatePageLayout(layout.PageLayout);
     }
+
+    /// <summary>
+    /// Checks the shop hours of a batch and returns them as they are stored: a time keeps its hours
+    /// and minutes only. Opening and closing time come together or not at all, closing is later
+    /// than opening on the same day (no overnight hours), the closed day is a weekday, and the gap
+    /// is from 0 to <see cref="BatchHoursLimits.MaxGapMinutes"/> minutes.
+    /// </summary>
+    public static BatchHoursSettings ValidateBatchHours(UpdateBatchHoursRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var hours = request.Hours ?? throw new RequestValidationException("Shop hours are required.");
+
+        if ((hours.Opens is null) != (hours.Closes is null))
+        {
+            throw new RequestValidationException(
+                "Give both an opening time and a closing time, or leave both empty.");
+        }
+
+        var opens = ToTheMinute(hours.Opens);
+        var closes = ToTheMinute(hours.Closes);
+        if (opens is { } from && closes is { } to && to <= from)
+        {
+            throw new RequestValidationException(
+                "Closing time must be later than opening time, on the same day.");
+        }
+
+        if (hours.ClosedOn is { } day && !Enum.IsDefined(day))
+        {
+            throw new RequestValidationException("The closed day must be a day of the week.");
+        }
+
+        if (hours.GapMinutes is < 0 or > BatchHoursLimits.MaxGapMinutes)
+        {
+            throw new RequestValidationException(
+                $"The gap between bills must be from 0 to {BatchHoursLimits.MaxGapMinutes} minutes.");
+        }
+
+        return hours with { Opens = opens, Closes = closes };
+    }
+
+    private static TimeOnly? ToTheMinute(TimeOnly? time) =>
+        time is { } value ? new TimeOnly(value.Hour, value.Minute) : null;
 
     private static void ValidatePlacement(PrintLayoutAssetPlacement? placement, string name)
     {

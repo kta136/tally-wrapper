@@ -302,5 +302,13 @@ public sealed class TallyPosterTests
             UpdatePrintLayoutRequest request,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<BatchHoursResponse> UpdateBatchHoursAsync(
+            UpdateBatchHoursRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

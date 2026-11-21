@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Auditing;
 using ShowroomBilling.Application.Settings;
+using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
@@ -135,6 +136,67 @@ public sealed class CloudSettingsService(
         return new PrintLayoutResponse(request.Layout, entity.UpdatedAtUtc);
     }
 
+    public async Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default)
+    {
+        // Only these two columns: the settings row also carries the item masters, the karat mapping
+        // and the print layout as large JSON, and this is read each time the batch scheduler opens
+        // and for every batch.
+        var stored = await dbContext.CloudSettings
+            .AsNoTracking()
+            .InUse()
+            .Select(x => new { x.BatchHoursJson, x.UpdatedAtUtc })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (stored is not null)
+        {
+            return new BatchHoursResponse(DeserializeBatchHours(stored.BatchHoursJson), stored.UpdatedAtUtc);
+        }
+
+        // No settings yet: they are seeded, as every other read of them does.
+        var entity = await GetOrCreateAsync(cancellationToken);
+        return new BatchHoursResponse(DeserializeBatchHours(entity.BatchHoursJson), entity.UpdatedAtUtc);
+    }
+
+    public async Task<BatchHoursResponse> UpdateBatchHoursAsync(
+        UpdateBatchHoursRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var hours = CloudSettingsValidator.ValidateBatchHours(request);
+
+        var entity = await GetOrCreateAsync(cancellationToken);
+        entity.BatchHoursJson = JsonSerializer.Serialize(hours, BatchHoursJsonOptions);
+        entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
+
+        WriteAuditEvent("settings.batch_hours_updated", entity.Id.ToString());
+        await dbContext.SaveChangesAsync(cancellationToken);
+        cache?.Clear();
+
+        return new BatchHoursResponse(hours, entity.UpdatedAtUtc);
+    }
+
+    private static readonly JsonSerializerOptions BatchHoursJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    /// <summary>What is stored, or no hours at all when nothing is stored or it cannot be read.</summary>
+    private static BatchHoursSettings DeserializeBatchHours(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new BatchHoursSettings();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<BatchHoursSettings>(json, BatchHoursJsonOptions) ?? new BatchHoursSettings();
+        }
+        catch (JsonException)
+        {
+            return new BatchHoursSettings();
+        }
+    }
+
     private static readonly PrintLayoutSettings DefaultPrintLayout = new(
         LeftMarginCm: PrintLayoutDefaults.MarginCm,
         RightMarginCm: PrintLayoutDefaults.MarginCm,
@@ -172,20 +234,29 @@ public sealed class CloudSettingsService(
 
     private async Task<CloudSettingsEntity> GetOrCreateAsync(CancellationToken cancellationToken)
     {
-        var entity = await dbContext.CloudSettings
-            .OrderByDescending(x => x.UpdatedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken);
+        var entity = await dbContext.CloudSettings.InUse().FirstOrDefaultAsync(cancellationToken);
         if (entity is not null)
         {
             return entity;
         }
 
-        entity = CloudSettingsDefaults.Create();
-        dbContext.CloudSettings.Add(entity);
-        WriteAuditEvent("settings.seeded", entity.Id.ToString());
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SeedAsync(cancellationToken);
+        return await dbContext.CloudSettings.InUse().FirstOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The settings could not be read back after they were seeded.");
+    }
+
+    /// <summary>
+    /// Adds the first settings row. A Desktop that starts against a new database asks for several
+    /// things at once, and each of those requests finds no settings; the row has a fixed id, so
+    /// one of them adds it and the others add nothing. Whoever called then reads the row that is
+    /// there, which is why this returns none.
+    /// </summary>
+    private async Task SeedAsync(CancellationToken cancellationToken)
+    {
+        var seed = CloudSettingsDefaults.Create();
+        await CloudSettingsRow.AddFirstAsync(
+            dbContext, seed, AuditEvent("settings.seeded", seed.Id.ToString()), cancellationToken);
         cache?.Clear();
-        return entity;
     }
 
     private EffectiveSettingsResponse MapResponse(CloudSettingsEntity entity)
@@ -274,10 +345,13 @@ public sealed class CloudSettingsService(
         return string.Equals(value.Trim(), "[]", StringComparison.Ordinal);
     }
 
-    private void WriteAuditEvent(string eventType, string entityId)
+    private void WriteAuditEvent(string eventType, string entityId) =>
+        dbContext.AuditEvents.Add(AuditEvent(eventType, entityId));
+
+    private AuditEventEntity AuditEvent(string eventType, string entityId)
     {
         var actor = actorContext?.Current ?? AuditRow.System;
-        dbContext.AuditEvents.Add(AuditRow.Create("settings", entityId, eventType, actor, DateTimeOffset.UtcNow));
+        return AuditRow.Create("settings", entityId, eventType, actor, DateTimeOffset.UtcNow);
     }
 
     private static string? Normalize(string? value) =>

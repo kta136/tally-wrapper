@@ -114,6 +114,7 @@ public partial class App : System.Windows.Application
         builder.Services.AddTransient<DeviceTokenHandler>();
         builder.Services.AddApiClient<ISettingsApiClient, SettingsApiClient>();
         builder.Services.AddApiClient<IBillsApiClient, BillsApiClient>();
+        builder.Services.AddApiClient<ISyntheticBatchApiClient, SyntheticBatchApiClient>(SyntheticBatchApiClient.BatchTimeout);
         builder.Services.AddApiClient<INumberingApiClient, NumberingApiClient>();
         builder.Services.AddApiClient<IMastersApiClient, MastersApiClient>();
         builder.Services.AddApiClient<IHealthApiClient, HealthApiClient>(TimeSpan.FromSeconds(5));
@@ -158,7 +159,7 @@ public partial class App : System.Windows.Application
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DesktopBootstrapOptions>>().Value));
         builder.Services.AddSingleton<AdminUnlockViewModel>();
         builder.Services.AddSingleton(sp => new ViewModels.SyntheticBatch.SyntheticBatchViewModel(
-            sp.GetRequiredService<IBillsApiClient>(),
+            sp.GetRequiredService<ISyntheticBatchApiClient>(),
             sp.GetRequiredService<IDialogService>(),
             sp.GetRequiredService<AdminTokenStore>(),
             sp.GetRequiredService<SettingsViewModel>()));

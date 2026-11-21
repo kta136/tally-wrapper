@@ -72,6 +72,7 @@ public static class DependencyInjection
         services.AddScoped<IMasterSnapshotService, MasterSnapshotService>();
         services.AddScoped<NumberingService>();
         services.AddScoped<BillService>();
+        services.AddSingleton<SyntheticBatchOutcomes>();
         services.AddScoped<SyntheticBatchExecutor>();
         services.AddSingleton<EffectiveSettingsCache>();
         services.AddScoped<ICloudSettingsService, CloudSettingsService>();

@@ -10,7 +10,8 @@ namespace ShowroomBilling.Tests.Contracts;
 /// <summary>
 /// <c>GET /api/bills/synthetic-batch/window</c> says when the Batch Data Scheduler may date bills
 /// from: the first minute after the last bill, where a bill dated an earlier day than it was saved
-/// counts as the end of that day. It is a read, so it needs no token.
+/// counts as the end of that day. With it come the shop hours a batch keeps to. It is a read, so
+/// it needs no token.
 /// </summary>
 [Trait("Category", "Postgres")]
 public sealed class SyntheticBatchWindowContractTests(PostgresFixture postgres)
@@ -25,6 +26,8 @@ public sealed class SyntheticBatchWindowContractTests(PostgresFixture postgres)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var window = await response.Content.ReadFromJsonAsync<SyntheticBatchWindowResponse>(TestContext.Current.CancellationToken);
         Assert.Null(window!.EarliestUtc);
+        // The shop hours come with it; none have been saved. (BatchHoursContractTests saves some.)
+        Assert.Equal(new BatchHoursSettings(), window.Hours);
     }
 
     [Fact]

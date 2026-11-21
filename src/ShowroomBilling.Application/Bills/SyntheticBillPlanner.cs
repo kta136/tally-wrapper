@@ -15,7 +15,8 @@ namespace ShowroomBilling.Application.Bills;
 ///   2. For each bill, pick a distinct minute-slot inside [StartAtUtc, EndAtUtc], which must lie
 ///      between the first minute after the last bill already stored (worked out by the server's
 ///      <c>SyntheticBatchExecutor.EarliestBillTimeAsync</c>) and now, so a batch is never dated
-///      before a bill already stored nor in the future.
+///      before a bill already stored nor in the future. With shop hours set, only a minute the shop
+///      is open (<see cref="BatchOpenMinutes"/>), and the bills a gap apart when there is room.
 ///   3. Split each bill's total into 1..N line shares, each enough for the smallest weight of the
 ///      dearest item.
 ///   4. Build each line from a random item (never a diamond or stone one, <see cref="MayBill"/>) ×
@@ -55,13 +56,15 @@ public sealed class SyntheticBillPlanner
 
     /// <param name="earliestUtc">The first minute a bill may be dated, just after the last bill already stored, or null when there is none.</param>
     /// <param name="nowUtc">The time now: no bill is dated later.</param>
+    /// <param name="hours">The shop hours the bills are dated in, or null for any time; see <see cref="BuildRandomSchedule"/>.</param>
     public SyntheticBatchPlan BuildPlan(
         SyntheticBatchRequest request,
         IReadOnlyList<ItemMasterEntry> itemEntries,
         IReadOnlyList<KaratMasterEntry> karatEntries,
         Random rng,
         DateTimeOffset? earliestUtc,
-        DateTimeOffset nowUtc)
+        DateTimeOffset nowUtc,
+        BatchHoursSettings? hours = null)
     {
         ValidateRequest(request);
 
@@ -115,7 +118,8 @@ public sealed class SyntheticBillPlanner
             endAtUtc: request.EndAtUtc,
             earliestUtc: earliestUtc,
             nowUtc: nowUtc,
-            rng: rng);
+            rng: rng,
+            hours: hours);
 
         var planned = new List<PlannedBill>(billTotals.Count);
         decimal grandTotalSum = 0m;
@@ -185,8 +189,11 @@ public sealed class SyntheticBillPlanner
     }
 
     /// <summary>
-    /// Random bill totals in [MinBillTotal, maxBillAmount] that add up to at most
-    /// <paramref name="totalAmount"/>. What is left under the minimum is not billed (as in V1).
+    /// Random bill totals in [MinBillTotal, maxBillAmount] that add up to <paramref name="totalAmount"/>,
+    /// or to as much of it as the bills can hold. What is left under the minimum after the last bill
+    /// is no bill of its own: it goes to the bills that have room under the max (owner, 21 November
+    /// 2026; V1 dropped it, so a batch came to as much as ₹49,999 under its total). Only what no bill
+    /// has room for is not billed, which takes every bill being at the max.
     /// </summary>
     public static IReadOnlyList<long> PartitionBillTotals(long totalAmount, long maxBillAmount, Random rng)
     {
@@ -202,6 +209,24 @@ public sealed class SyntheticBillPlanner
             remaining -= draw;
         }
 
+        if (remaining == 0 || totals.Count == 0) return totals;
+
+        // A random part to each bill in a random order, then the rest to whichever still has room,
+        // so the leftover does not always land on the same bill.
+        var order = Enumerable.Range(0, totals.Count).ToArray();
+        rng.Shuffle(order);
+        foreach (var wholeRoom in new[] { false, true })
+        {
+            foreach (var i in order)
+            {
+                var room = Math.Min(maxBillAmount - totals[i], remaining);
+                if (room <= 0) continue;
+                var part = wholeRoom ? room : rng.NextInt64(0, room + 1);
+                totals[i] += part;
+                remaining -= part;
+            }
+        }
+
         return totals;
     }
 
@@ -211,6 +236,15 @@ public sealed class SyntheticBillPlanner
     /// may not end after <paramref name="nowUtc"/>, nor start before the minute ahead of <paramref name="earliestUtc"/>:
     /// a counter built before 21 November 2026 offers the last bill's own time as the start, and no bill
     /// goes in that minute.
+    /// <para>
+    /// With <paramref name="hours"/> (owner, 21 November 2026) a bill is dated only at a minute the
+    /// shop is open, as <see cref="BatchOpenMinutes.Count"/> counts them, and a window with fewer of
+    /// those than bills is refused. Two bills are at least <see cref="BatchHoursSettings.GapMinutes"/>
+    /// apart when the open minutes have room for that (<see cref="BatchOpenMinutes.RoomAtGap"/>);
+    /// when they do not, the batch is planned all the same, with the largest gap that fits. The gap
+    /// is measured along the open minutes laid end to end, so a night or a closed day between two
+    /// bills only puts them further apart. Every placement that keeps the gap is as likely as any other.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<DateTimeOffset> BuildRandomSchedule(
         int billCount,
@@ -218,7 +252,8 @@ public sealed class SyntheticBillPlanner
         DateTimeOffset endAtUtc,
         DateTimeOffset? earliestUtc,
         DateTimeOffset nowUtc,
-        Random rng)
+        Random rng,
+        BatchHoursSettings? hours = null)
     {
         if (billCount <= 0) return Array.Empty<DateTimeOffset>();
 
@@ -239,20 +274,60 @@ public sealed class SyntheticBillPlanner
         if (latest < earliest)
             throw new RequestValidationException("Selected time window does not contain any valid minute slots.");
 
-        var slotCount = (int)((latest - earliest).TotalMinutes) + 1;
+        // The minutes a bill may be dated at, as runs that follow one another: the whole window, or
+        // with shop hours what each day has open.
+        var runs = BatchOpenMinutes.Runs(earliest, latest, hours).ToList();
+        var slotCount = (int)Math.Min(runs.Sum(run => run.Length), int.MaxValue);
         if (slotCount < billCount)
+        {
+            if (!KeepsHours(hours))
+                throw new RequestValidationException(
+                    $"Selected window has {slotCount} minute slot(s); {billCount} are required.");
+            if (slotCount == 0)
+                throw new RequestValidationException(
+                    $"The shop is not open at any minute of the selected times (shop hours: {Describe(hours)}). A batch dates bills only while the shop is open; the hours are set in Settings → Admin.");
             throw new RequestValidationException(
-                $"Selected window has {slotCount} minute slot(s); {billCount} are required.");
+                $"The selected times have {slotCount} minute(s) inside the shop hours ({Describe(hours)}); {billCount} bills need one each. Choose a longer time, or change the hours in Settings → Admin.");
+        }
+
+        // The gap asked for when the open minutes have room for it, else the largest that fits.
+        // Bills g apart on a line of n minutes are bills next to each other on a line of
+        // n - (bills - 1) × (g - 1): pick there, then put the g - 1 minutes back after each bill.
+        var gap = 1;
+        if (billCount > 1)
+            gap = Math.Clamp(hours?.GapMinutes ?? 0, 1, (slotCount - 1) / (billCount - 1));
+        var spread = gap - 1;
 
         // Reservoir-style sample without replacement: pick N unique minute offsets.
-        var chosen = SampleWithoutReplacement(slotCount, billCount, rng);
+        var chosen = SampleWithoutReplacement(slotCount - (billCount - 1) * spread, billCount, rng);
         Array.Sort(chosen);
         // In UTC whatever offset the window came with: the database takes no other (a window sent
         // with +05:30 used to fail when its bills were saved).
         var result = new DateTimeOffset[billCount];
+        var runIndex = 0;
+        var before = 0L;
         for (var i = 0; i < billCount; i++)
-            result[i] = (earliest + TimeSpan.FromMinutes(chosen[i])).ToUniversalTime();
+        {
+            var position = chosen[i] + (long)i * spread;
+            while (position >= before + runs[runIndex].Length)
+                before += runs[runIndex++].Length;
+            result[i] = BatchOpenMinutes.InstantOf(runs[runIndex].FirstMinute + position - before);
+        }
         return result;
+    }
+
+    /// <summary>Whether these hours leave any minute out: an opening and a closing time, or a closed day.</summary>
+    private static bool KeepsHours(BatchHoursSettings? hours)
+        => hours is { Opens: not null, Closes: not null } or { ClosedOn: not null };
+
+    /// <summary>The hours in words, for a refusal: "10:00 to 20:00, closed on Tuesday".</summary>
+    private static string Describe(BatchHoursSettings? hours)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var times = hours is { Opens: { } opens, Closes: { } closes }
+            ? $"{opens.ToString("HH:mm", culture)} to {closes.ToString("HH:mm", culture)}"
+            : "any time of day";
+        return hours?.ClosedOn is { } day ? $"{times}, closed on {day}" : times;
     }
 
     /// <summary>
@@ -313,7 +388,9 @@ public sealed class SyntheticBillPlanner
                 TaxTotal: totals.Cgst + totals.Sgst,
                 RoundOff: totals.RoundOff,
                 GrandTotal: totals.GrandTotal),
-            Notes: SyntheticBatchPlanLimits.DefaultNarration,
+            // The note is the payment, as an operator writes it: it is the second half of the Tally
+            // narration. (V1 wrote "Cash" on every bill, so a card bill's voucher said Cash.)
+            Notes: paymentMode,
             Payment: paymentMode,
             Rate24Kt: request.Rate24Kt);
 
@@ -434,7 +511,11 @@ public sealed class SyntheticBillPlanner
             WastagePercent: itemEntry.WastagePercent,
             LabourPerUnit: itemEntry.DefaultLabourPerGram,
             DiamondRate: null,
-            Extra: 0m);
+            Extra: 0m,
+            // What the Invoice tab saves with a line. Without them a bill opened for edit takes the
+            // mode from the item master as it is by then, and prices the line again by that.
+            ItemCategory: ItemCategories.GoldBased,
+            PricingMode: string.IsNullOrWhiteSpace(itemEntry.PricingMode) ? PricingModes.Wastage : itemEntry.PricingMode);
     }
 
     // A diamond item never gets here (MayBill), so every line is priced by weight.

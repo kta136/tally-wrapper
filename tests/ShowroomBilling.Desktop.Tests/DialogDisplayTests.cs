@@ -170,15 +170,14 @@ public sealed class DialogDisplayTests
 
         Assert.Equal("Not started", batch.RunState);
         Assert.Equal("neutral", batch.RunTone);
-        Assert.Equal(0, batch.ProgressValue);
         Assert.True(batch.IsRateMissing);
-        Assert.Equal("limit 1,99,000", batch.MaxBillLimitText);
+        Assert.Equal("GST limit 1,99,000", batch.MaxBillLimitText);
+        Assert.Equal("Items per bill, 1 to 25", batch.ItemsPerBillLabel);
 
         batch.Rate24Kt = 7780m;
         batch.RunState = "Done";
 
         Assert.False(batch.IsRateMissing);
         Assert.Equal("ok", batch.RunTone);
-        Assert.Equal(100, batch.ProgressValue);
     }
 }
