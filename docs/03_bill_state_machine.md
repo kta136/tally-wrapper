@@ -149,7 +149,7 @@ No queue state. Posting to Tally is synchronous and operator-initiated — the b
 There is no `tally_posting_jobs` table or queue. On push/retry/repost, `BillPostingWorkflow.PushInternalAsync`:
 
 1. Transitions the bill to `posting` and saves.
-2. If `EditedAfterPush=true`, resolves the previous Tally `MASTER ID` from the pre-edit `tally.posted` audit. A bill that was marked as pushed by hand has no such audit; Tally is asked which voucher carries its number, and the push goes ahead only when there is exactly one ([05 §4](05_tally_integration_contract.md)). Otherwise the push fails (`TALLY_VOUCHER_NOT_FOUND`, `TALLY_VOUCHER_AMBIGUOUS`, `TALLY_ALTER_TARGET_MISSING`) without creating a fallback voucher.
+2. If `EditedAfterPush=true`, reads the voucher to alter from Tally: the one with the `MASTER ID` the pre-edit `tally.posted` audit records, or, for a bill that was marked as pushed by hand and has no such audit, the one voucher that carries its number ([05 §4](05_tally_integration_contract.md)). The alter names that voucher by its id and the date it has in Tally. When no single voucher can be named safely, the push fails (`TALLY_VOUCHER_NOT_FOUND`, `TALLY_VOUCHER_AMBIGUOUS`, `TALLY_VOUCHER_MISMATCH`, `TALLY_COMPANY_CHANGED`, `TALLY_ALTER_TARGET_MISSING`) without creating a fallback voucher.
 3. Calls `ITallyPoster.PostAsync` synchronously (builds create XML, or alter XML for edited-after-push, sends via HTTP to Tally, parses response).
 4. Writes `tally.posted`, `tally.failed`, or `tally.outcome.unknown` and transitions the bill to `posted`, `failed`, or `reconciliation_required`. The audit trail is append-only, including across edit-and-repush flows.
 

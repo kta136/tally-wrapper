@@ -184,7 +184,7 @@ Section 3 documents the **read** path (masters). This section documents the **wr
 Synchronous, in-process, driven by an operator click on Push / Retry / Repost:
 
 1. `BillPostingWorkflow.PushInternalAsync` transitions the bill to `posting` and saves (so a crash is recoverable).
-2. Builds a `TallyPostRequest` carrying the bill header + `BillPayloadDto` from the current revision's snapshot. `Operation=Create` is the default; `Operation=Alter` is used only for `EditedAfterPush=true` bills after resolving the old Tally `MASTER ID` from pre-edit audit.
+2. Builds a `TallyPostRequest` carrying the bill header + `BillPayloadDto` from the current revision's snapshot. `Operation=Create` is the default; `Operation=Alter` is used only for `EditedAfterPush=true` bills, after the old voucher's `MASTER ID` and the date it has in Tally have been read from Tally (§4.3; this read happens before step 1's claim).
 3. Calls `ITallyPoster.PostAsync` which:
    - reads ledger mappings + active company from cloud settings via `ICloudSettingsService`
    - builds an Import Data envelope via `TallyXmlVoucherBuilder.Build`
@@ -302,16 +302,46 @@ This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` prod
 For an edited-after-push bill, the same voucher body is emitted with alter attributes instead of a create `REMOTEID`:
 
 ```xml
-<VOUCHER VCHTYPE="{SalesVoucherType}" ACTION="Alter" TAGNAME="MASTER ID" TAGVALUE="{oldTallyMasterId}">
-  <DATE>{yyyyMMdd}</DATE>
-  <EFFECTIVEDATE>{yyyyMMdd}</EFFECTIVEDATE>
+<VOUCHER DATE="{voucherDateInTally:yyyyMMdd}" VCHTYPE="{SalesVoucherType}" ACTION="Alter"
+         TAGNAME="MASTER ID" TAGVALUE="{oldTallyMasterId}" OBJVIEW="Accounting Voucher View">
+  <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
+  <DATE>{billDate:yyyyMMdd}</DATE>
+  <EFFECTIVEDATE>{billDate:yyyyMMdd}</EFFECTIVEDATE>
   <VOUCHERTYPENAME>{SalesVoucherType}</VOUCHERTYPENAME>
   <VOUCHERNUMBER>{InvoiceNumber}</VOUCHERNUMBER>
   ...
 </VOUCHER>
 ```
 
-The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.posted` audit, preferring `details.tallyMasterId` and falling back to numeric legacy `details.remoteId`. If that audit is missing (a bill an admin marked as pushed), it asks Tally for the voucher by number:
+Tally finds the voucher to alter by `TAGVALUE` **together with the `DATE` attribute**, which must be the date the voucher has in Tally now; the bill's (possibly edited) date goes in the `<DATE>` element, and Tally moves the voucher to it. An alter Tally cannot match is imported as a new voucher, answered `CREATED=1 ALTERED=0` with no error. Found the hard way:
+
+- **Live, 25 November 2026:** the first alter ever sent to a live company had no `DATE` attribute. Tally left the old voucher untouched and created a second one; with the voucher type's numbering set to Automatic / Auto Renumber, the new voucher took a number in the middle of the series and every later voucher's number moved up by one. `TALLY_UNEXPECTED_CREATE_ON_ALTER` caught it (§4.5), but only after the fact.
+- **TallyPrime 7.2, a copy of a test company, the same day** (the voucher type set to Automatic / Auto Renumber like the live one; every request read back afterwards by master id, alter id, date, number, ledger and inventory lines):
+
+| Alter sent | Tally's answer | What Tally then held |
+|---|---|---|
+| As above but no `DATE` attribute (the old request) | `CREATED=1` | A second voucher; the next voucher renumbered |
+| `DATE` attribute = the voucher's date (`yyyyMMdd` or `1-Jun-2026`, either header form, `TAGNAME="MASTER ID"` or `"Voucher Number"`) | `ALTERED=1` | Same voucher, same number. In the accounting view every ledger and inventory line is **replaced** (a removed item line goes, quantities and amounts change); in the invoice view only the narration changes |
+| The same alter sent twice | `ALTERED=1` twice | No line doubled |
+| `DATE` attribute = the old date, `<DATE>` = a later date | `ALTERED=1` | Voucher moved to the new date; Auto Renumber renumbers by date |
+| `DATE` attribute = the new date | `CREATED=1` | A second voucher |
+| An invoice-view voucher, alter with `OBJVIEW` + `<PERSISTEDVIEW>` as above | `ALTERED=1` | Lines replaced, voucher now in the accounting view |
+| `REMOTEID` = the voucher's GUID, or a `<GUID>` child, no `TAGNAME` | `CREATED=1` | A second voucher |
+
+Vouchers the app creates have so far been kept in the accounting view by the live company; the view markers make an alter replace the lines whichever view a voucher is in. Creates are sent without them, as before.
+
+The date comes from Tally, never from the bill: before every alter (and before the bill is claimed) the API reads the voucher. The id is the one the last successful pre-edit `tally.posted` audit records, preferring `details.tallyMasterId` and falling back to numeric legacy `details.remoteId`, and Tally is asked for the voucher with that id:
+
+```xml
+<COLLECTION NAME="TW_VoucherById">
+  <TYPE>Voucher</TYPE>
+  <FETCH>MasterID, VoucherNumber, VoucherTypeName, Date, Amount</FETCH>
+  <FILTER>TW_VoucherIdIs</FILTER>
+</COLLECTION>
+<SYSTEM TYPE="Formulae" NAME="TW_VoucherIdIs">$MasterID = {id}</SYSTEM>
+```
+
+in the same envelope as the lookup by number below. The filter is the id alone (a master id names one voucher within the company) and the type is checked on this side, so a voucher type whose name a TDL formula cannot carry can still be read. No such voucher (deleted in Tally, or dated outside the bill's fiscal year) is `TALLY_VOUCHER_NOT_FOUND` with nothing sent: sending the alter anyway would create a second voucher. The id is also bound to its company: `tally.posted` records the company each accepted voucher went to, and an alter is refused with `TALLY_COMPANY_CHANGED` when Settings now name another one, checked before the read; the company and voucher type of the read are carried into the alter request, and `TallyPoster` will not send it anywhere else. An id from a push that recorded no company (one made before 25 November 2026) is accepted only when the voucher shows the date and grand total the bill had when Tally was last said to hold it. If that audit is missing (a bill an admin marked as pushed), the API asks Tally for the voucher by number instead:
 
 ```xml
 <ENVELOPE>
@@ -333,7 +363,7 @@ The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.p
         <TDLMESSAGE>
           <COLLECTION NAME="TW_VouchersByNumber">
             <TYPE>Voucher</TYPE>
-            <FETCH>MasterID, VoucherNumber, VoucherTypeName, Date</FETCH>
+            <FETCH>MasterID, VoucherNumber, VoucherTypeName, Date, Amount</FETCH>
             <FILTER>TW_VoucherNumberIs</FILTER>
           </COLLECTION>
           <SYSTEM TYPE="Formulae" NAME="TW_VoucherNumberIs">$VoucherNumber = "{number}" AND $VoucherTypeName = "{SalesVoucherType}"</SYSTEM>
@@ -344,14 +374,14 @@ The API resolves `{oldTallyMasterId}` from the last successful pre-edit `tally.p
 </ENVELOPE>
 ```
 
-It reads each `<VOUCHER>` in the answer and keeps those whose `<VOUCHERNUMBER>` is the number asked for and whose type (`<VOUCHERTYPENAME>` or the `VCHTYPE` attribute) is the sales voucher type, taking `<MASTERID>`. Exactly one is the alter target; none is `TALLY_VOUCHER_NOT_FOUND`, several is `TALLY_VOUCHER_AMBIGUOUS`, and in both cases nothing is sent and no replacement voucher is created. A voucher whose `<ISDELETED>` is `Yes` (one Tally keeps only as deleted) does not count.
+It reads each `<VOUCHER>` in the answer and keeps those whose `<VOUCHERNUMBER>` (or, for the read by id, `<MASTERID>`) is the one asked for, whose type (`<VOUCHERTYPENAME>` or the `VCHTYPE` attribute) is the sales voucher type and whose `<DATE>` is inside the fiscal year asked for (Tally does not always keep to `SVFROMDATE` / `SVTODATE`), taking `<MASTERID>`, `<DATE>` and the voucher-level `<AMOUNT>` (the party amount, negative). A voucher that matches but has no usable id, date or type is an error, not a miss (the read by id does not filter on the type, so it must be there to be checked), and so is one id listed with two dates. An answer that is not a collection (a bare `<RESPONSE>Unknown Request…</RESPONSE>`, or `<STATUS>0</STATUS>`; Tally sends both with HTTP 200) is an error too, never "no such voucher": the push is refused like a failed preflight. Found by number, exactly one is the alter target only when its date and total equal the date and grand total of the revision current when the bill was marked as pushed, because under Auto Renumber the number may have moved to another sale; otherwise `TALLY_VOUCHER_MISMATCH`. None is `TALLY_VOUCHER_NOT_FOUND`, several is `TALLY_VOUCHER_AMBIGUOUS`, and in every one of these cases nothing is sent and no replacement voucher is created. A voucher whose `<ISDELETED>` is `Yes` (one Tally keeps only as deleted) does not count.
 
 Run read-only against TallyPrime on 14 November 2026, through the app's own lookup code: for a posted bill it found exactly one voucher, and its `<MASTERID>` was the `tallyMasterId` recorded in that bill's `tally.posted` audit; for a number that does not exist it found none. Each answer took about 0.2 s. Two things about the answer, both pinned in `TallyVoucherLookupTests`:
 
 - It starts with a `<BODY><DESC><CMPINFO>` block of counts, one of which is an element named `<VOUCHER>` holding a number. It is there even when no voucher matched (the `<COLLECTION>` is then empty). The check on this side passes over it, because it has no `<VOUCHERNUMBER>`.
 - A voucher comes as `<VOUCHER REMOTEID=… VCHKEY=… VCHTYPE=… OBJVIEW=…>` with its native fields (`DATE`, `GUID`, `VOUCHERTYPENAME`, `VOUCHERNUMBER`, `ISDELETED`, `ISINVOICE`, …) beside `<MASTERID>`.
 
-The alter that follows a lookup (a hand-marked bill, edited and pushed) has been run against the stand-in Tally only.
+The read by id (`$MasterID` filter) was run read-only against a live TallyPrime 7.2 on 25 November 2026 and returned the voucher with its `<DATE>`. The alter that follows either read has been run against TallyPrime 7.2 with a copy of a test company (the table above), and against the stand-in Tally, which since then matches an alter the way Tally does and creates a voucher when it cannot.
 
 **Sign convention (Accounting Invoice view).** Tally's voucher import interprets the `AMOUNT` sign as the net change from the company's Cr-side perspective, not directly as Dr/Cr:
 
@@ -379,7 +409,7 @@ These are all bugs that caused real failed pushes during Tally Wrapper bring-up 
 
 Live finding (April 11, 2026): after an import that failed with `EXCEPTIONS=1`, a second, otherwise valid import that reused the same `REMOTEID` failed too, and one with a fresh `REMOTEID` succeeded. Tally's documentation offers a reason that has not been checked here: the first voucher may have been kept as an exception (§6.3).
 
-Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"`.
+Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"` + `DATE="{the date it has in Tally}"` (§4.3). Tally replaces the `REMOTEID` a create sent with its own GUID, so a voucher read back never shows `post:…`, and a re-import naming that GUID creates another voucher rather than altering it.
 
 ### 4.5 Response classification
 
@@ -429,7 +459,7 @@ There is no auto-retry: the operator decides what to do next. A `failed` bill ca
 - **Bill-content errors → Edit, then Push:** `MISSING_PAYMENT_MODE`, `NO_LINES`, `VOUCHER_UNBALANCED`.
 - **Ambiguous write outcomes → verify Tally, then resolve:** `TALLY_TRANSPORT_UNKNOWN`, `TALLY_TIMEOUT`, `TALLY_RESPONSE_UNKNOWN`, `TALLY_PARTIAL_EFFECT`, `TALLY_UNEXPECTED_CREATE_ON_ALTER`, `TALLY_UNEXPECTED`.
 - **Definite Tally rejection → correct data/config, then Retry or Edit:** `TALLY_LINEERROR`, `TALLY_ERRORS`, `TALLY_NO_EFFECT`, `TALLY_PREPARE_FAILED`.
-- **Edited bill whose voucher cannot be named → check Tally:** `TALLY_VOUCHER_NOT_FOUND` (no voucher with the bill's number: renumber it in Tally and Retry, or Mark as Pending if it is not there), `TALLY_VOUCHER_AMBIGUOUS` (several with that number: remove or renumber the extra one, then Retry), `TALLY_ALTER_TARGET_MISSING` (no recorded id and no lookup). Nothing is sent to Tally and no replacement voucher is created.
+- **Edited bill whose voucher cannot be named → check Tally:** `TALLY_VOUCHER_NOT_FOUND` (the recorded voucher is gone from Tally, or no voucher has the bill's number: renumber it in Tally and Retry, or Mark as Pending if it is not there), `TALLY_VOUCHER_AMBIGUOUS` (several with that number: remove or renumber the extra one, then Retry), `TALLY_VOUCHER_MISMATCH` (the one voucher with that number shows another date or total: change it in Tally by hand and Mark as Pushed), `TALLY_COMPANY_CHANGED` (pushed to another company than Settings now names: choose that company again, or change the voucher by hand and Mark as Pushed), `TALLY_ALTER_TARGET_MISSING` (no recorded id and no lookup). Nothing is sent to Tally and no replacement voucher is created.
 
 Every voucher click makes one HTTP attempt — there is no automatic voucher retry, backoff, or next-attempt clock. Safe XML reads retain the short transport retry pipeline.
 
@@ -470,8 +500,8 @@ Tally Connector, a tool inside TallyPrime Developer, sends a request and shows t
 
 ### 6.2 What they settle
 
-- **`LASTVCHID` is the master id of the last imported voucher**, and `LASTMID` always comes back as 0. So the id recorded in `tally.posted` is the right alter target, and the fallback to `LASTMID` in §4.5 never supplies a value.
-- **An alter names its voucher by master id, or by voucher number with type and date.** The `MASTER ID` form of §4.3 is a documented one.
+- **`LASTVCHID` is the master id of the last imported voucher**, and `LASTMID` always comes back as 0. So the id recorded in `tally.posted` is the right alter target, and the fallback to `LASTMID` in §4.5 never supplies a value. On an alter that matched, `LASTVCHID` is the altered voucher's id.
+- **An alter names its voucher by master id, or by voucher number, each with type and date.** Every documented sample puts `DATE` and `VCHTYPE` on the `VOUCHER` tag. The `MASTER ID` form of §4.3 is a documented one, but the samples do not say that the `DATE` attribute is required or that an alter Tally cannot match becomes a new voucher; both were found live and confirmed on TallyPrime 7.2 (§4.3).
 - **Cancelling a voucher is a documented request**: `ACTION="Cancel"` with the voucher number, type and date. This app does not send it; Void refuses a bill whose voucher Tally holds and leaves the cancelling to the operator.
 - **Both header forms are documented.** The voucher samples on the Sample XML page use `VERSION` / `TALLYREQUEST` `Import` / `TYPE` `Data` / `ID` `Vouchers`; the form this app sends, `TALLYREQUEST` `Import Data` with no `VERSION`, is on the other pages. §4.3.1 item 1 is about adding `VERSION` to the second form.
 - **A duplicate request shows in the error count**, which is what §4.4 saw.

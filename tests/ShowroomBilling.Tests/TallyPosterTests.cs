@@ -22,6 +22,37 @@ public sealed class TallyPosterTests
         Assert.Equal("101", response.TallyMasterId);
     }
 
+    [Theory]
+    [InlineData("Other Jewellers", "Sales")]
+    [InlineData("Acme Jewellers", "Retail Sale")]
+    public async Task PostAsync_AlterIsNotSentWhereItsVoucherWasNotRead(string readInCompany, string readAsType)
+    {
+        // Settings changed between the read of the voucher and this write.
+        var (poster, client) = BuildPosterWithClient(Response(created: 0, altered: 1));
+        var request = Request(TallyPostOperation.Alter, "MASTER ID", "101") with
+        {
+            TargetCompany = readInCompany,
+            TargetVoucherType = readAsType,
+        };
+
+        var response = await poster.PostAsync(request);
+
+        Assert.Equal(TallyPostOutcome.Failed, response.Outcome);
+        Assert.Equal("TALLY_COMPANY_CHANGED", response.ErrorCode);
+        Assert.Null(client.LastRequest);
+    }
+
+    [Fact]
+    public async Task PostAsync_AnAcceptedVoucherNamesTheCompanyItWentTo()
+    {
+        // A master id names a voucher only within its company, so the push records which one.
+        var accepted = await BuildPoster(Response(created: 1, altered: 0, lastVoucherId: "101")).PostAsync(Request());
+        var refused = await BuildPoster(Response(created: 0, altered: 0)).PostAsync(Request());
+
+        Assert.Equal("Acme Jewellers", accepted.Company);
+        Assert.Null(refused.Company);
+    }
+
     [Fact]
     public async Task PostAsync_AlterSucceedsOnlyWhenAlteredIsPositive()
     {
@@ -227,7 +258,11 @@ public sealed class TallyPosterTests
             Payload: Payload(),
             Operation: operation,
             TargetTagName: targetTagName,
-            TargetTagValue: targetTagValue);
+            TargetTagValue: targetTagValue,
+            TargetVoucherDate: operation == TallyPostOperation.Alter ? Payload().BillDate : null,
+            // An Alter goes where its voucher was read: here, the settings of FakeCloudSettingsService.
+            TargetCompany: operation == TallyPostOperation.Alter ? "Acme Jewellers" : null,
+            TargetVoucherType: operation == TallyPostOperation.Alter ? "Sales" : null);
 
     private static BillPayloadDto Payload() =>
         new(
@@ -269,7 +304,10 @@ public sealed class TallyPosterTests
             Task.FromException<XElement>(exception);
     }
 
-    internal sealed class FakeCloudSettingsService(string? companyState = null, string? companyCountry = null) : ICloudSettingsService
+    internal sealed class FakeCloudSettingsService(
+        string? companyState = null,
+        string? companyCountry = null,
+        string salesVoucherType = "Sales") : ICloudSettingsService
     {
         public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new EffectiveSettingsResponse(
@@ -279,7 +317,7 @@ public sealed class TallyPosterTests
                     new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Acme Jewellers"),
                     new NumberingSettingsDto("DEV-", "", 4),
                     new PrintSettingsDto("Acme", null, null, null, companyState, companyCountry, null, null, null, null, null, true, false, false, 11, 9),
-                    new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales"),
+                    new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", salesVoucherType),
                     new MasterDataSettingsDto("[]", "[]")),
                 CloudOwnedCategories: [],
                 LocalOnlyCategories: [],

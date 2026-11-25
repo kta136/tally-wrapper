@@ -21,12 +21,25 @@ public sealed class TallyPoster(
         // outcome that needs reconciliation.
         XElement xml;
         string requestExcerpt;
+        string? company;
         try
         {
             var settings = await cloudSettings.GetEffectiveSettingsAsync(cancellationToken);
             var ledgers = settings.Settings.Ledgers;
-            var company = settings.Settings.Connection.ActiveCompanyName;
+            company = settings.Settings.Connection.ActiveCompanyName;
             var print = settings.Settings.Print;
+
+            // An Alter goes only where its voucher was read: a master id in
+            // another company, or a voucher type it was not read as, is not
+            // the voucher that was checked.
+            if (request.Operation == TallyPostOperation.Alter
+                && (!SameName(request.TargetCompany, company)
+                    || !SameName(request.TargetVoucherType, TallyXmlVoucherBuilder.SalesVoucherTypeOf(ledgers))))
+            {
+                return TallyPostResponse.Failed(
+                    "TALLY_COMPANY_CHANGED",
+                    "The Tally company or sales voucher type in Settings changed while this push was being prepared, so nothing was sent. Push the bill again.");
+            }
 
             xml = TallyXmlVoucherBuilder.Build(request, ledgers, company, print.CompanyState, print.CompanyCountry);
             var requestXml = xml.ToString(SaveOptions.DisableFormatting);
@@ -100,7 +113,12 @@ public sealed class TallyPoster(
         var responseXml = response.ToString(SaveOptions.DisableFormatting);
         var responseExcerpt = Truncate(responseXml, ExcerptLimit);
 
-        return ClassifyResponse(response, request, requestExcerpt, responseExcerpt);
+        var classified = ClassifyResponse(response, request, requestExcerpt, responseExcerpt);
+        // A master id names a voucher only within its company; the push
+        // records which one, so a later Alter can refuse another company.
+        return classified.Outcome == TallyPostOutcome.Posted
+            ? classified with { Company = string.IsNullOrWhiteSpace(company) ? null : company.Trim() }
+            : classified;
     }
 
     /// <summary>
@@ -110,6 +128,9 @@ public sealed class TallyPoster(
     /// Tally and the outcome is known. Every other transport error can come
     /// after Tally has read the request, and stays ambiguous.
     /// </summary>
+    private static bool SameName(string? left, string? right) =>
+        string.Equals(left?.Trim() ?? string.Empty, right?.Trim() ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
     private static bool ConnectionWasNeverMade(HttpRequestException exception) =>
         exception.HttpRequestError is HttpRequestError.ConnectionError or HttpRequestError.NameResolutionError;
 

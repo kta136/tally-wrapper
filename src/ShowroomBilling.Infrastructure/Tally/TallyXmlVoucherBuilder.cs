@@ -9,6 +9,12 @@ namespace ShowroomBilling.Infrastructure.Tally;
 
 public static class TallyXmlVoucherBuilder
 {
+    private const string AccountingVoucherView = "Accounting Voucher View";
+
+    /// <summary>The voucher type a sale is sent as: the one Settings name, or Tally's own "Sales".</summary>
+    public static string SalesVoucherTypeOf(LedgerMappingsDto ledgers) =>
+        string.IsNullOrWhiteSpace(ledgers.SalesVoucherType) ? "Sales" : ledgers.SalesVoucherType.Trim();
+
     public static XElement Build(
         TallyPostRequest request,
         LedgerMappingsDto ledgers,
@@ -64,22 +70,37 @@ public static class TallyXmlVoucherBuilder
                 "Bill has a non-zero discount but no discount ledger is mapped in Settings.");
         }
 
-        var voucherType = string.IsNullOrWhiteSpace(ledgers.SalesVoucherType) ? "Sales" : ledgers.SalesVoucherType;
+        var voucherType = SalesVoucherTypeOf(ledgers);
 
+        var isAlter = request.Operation == TallyPostOperation.Alter;
         var voucherAttributes = new List<XAttribute>();
-        if (request.Operation == TallyPostOperation.Alter)
+        if (isAlter)
         {
-            if (string.IsNullOrWhiteSpace(request.TargetTagName) || string.IsNullOrWhiteSpace(request.TargetTagValue))
+            if (string.IsNullOrWhiteSpace(request.TargetTagName)
+                || string.IsNullOrWhiteSpace(request.TargetTagValue)
+                || request.TargetVoucherDate is not { } dateInTally)
             {
                 throw new VoucherBuildException(
                     "TALLY_ALTER_TARGET_MISSING",
-                    "Edited bill cannot alter Tally because the original voucher identifier is missing.");
+                    "Edited bill cannot alter Tally because the original voucher identifier or its date in Tally is missing.");
             }
 
+            // Tally finds the voucher by the tag together with the DATE
+            // attribute, which must be the date the voucher has now. Without
+            // it, or with the bill's edited date, Tally quietly creates a
+            // second voucher instead (CREATED=1): seen live on 25 November
+            // 2026 and again on TallyPrime 7.2 against a test company. The
+            // new date goes in the DATE element below, and Tally moves the
+            // voucher to it.
+            voucherAttributes.Add(new XAttribute("DATE", FormatTallyDate(dateInTally)));
             voucherAttributes.Add(new XAttribute("VCHTYPE", voucherType));
             voucherAttributes.Add(new XAttribute("ACTION", "Alter"));
             voucherAttributes.Add(new XAttribute("TAGNAME", request.TargetTagName.Trim()));
             voucherAttributes.Add(new XAttribute("TAGVALUE", request.TargetTagValue.Trim()));
+            // The lines sent replace the voucher's lines only in the
+            // accounting view; a voucher kept in the invoice view takes the
+            // narration and drops the ledger and item lines without a word.
+            voucherAttributes.Add(new XAttribute("OBJVIEW", AccountingVoucherView));
         }
         else
         {
@@ -88,8 +109,12 @@ public static class TallyXmlVoucherBuilder
             voucherAttributes.Add(new XAttribute("ACTION", "Create"));
         }
 
-        var voucherElement = new XElement("VOUCHER",
-            voucherAttributes,
+        var voucherElement = new XElement("VOUCHER", voucherAttributes);
+        if (isAlter)
+        {
+            voucherElement.Add(new XElement("PERSISTEDVIEW", AccountingVoucherView));
+        }
+        voucherElement.Add(
             new XElement("DATE", FormatTallyDate(bill.BillDate)),
             new XElement("EFFECTIVEDATE", FormatTallyDate(bill.BillDate)),
             new XElement("VOUCHERTYPENAME", voucherType));

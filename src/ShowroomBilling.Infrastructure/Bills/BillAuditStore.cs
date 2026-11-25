@@ -105,6 +105,27 @@ internal sealed class BillAuditStore(
         return null;
     }
 
+    /// <summary>
+    /// True when the <c>details</c> object of a bill audit payload has the
+    /// property at all, null or not; an event written before the property
+    /// existed has none.
+    /// </summary>
+    internal static bool HasDetailsProperty(string? payloadJson, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(payloadJson)) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            return doc.RootElement.TryGetProperty("details", out var details)
+                && details.ValueKind == JsonValueKind.Object
+                && details.TryGetProperty(propertyName, out _);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     private static JsonElement ParsePayload(string payloadJson)
     {
         if (string.IsNullOrWhiteSpace(payloadJson))

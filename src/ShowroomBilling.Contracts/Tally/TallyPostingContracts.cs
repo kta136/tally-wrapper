@@ -5,6 +5,11 @@ namespace ShowroomBilling.Contracts.Tally;
 /// <summary>
 /// Synchronous "post this bill to Tally now" request used by BillService.PushAsync.
 /// There is no queue — the request is fulfilled inside the push HTTP call.
+/// An Alter names its voucher by <paramref name="TargetTagName"/> / <paramref name="TargetTagValue"/>
+/// and <paramref name="TargetVoucherDate"/>, the date that voucher has in Tally now
+/// (the bill's own date may have been edited since). <paramref name="TargetCompany"/> and
+/// <paramref name="TargetVoucherType"/> are where that voucher was read: an Alter is not
+/// sent anywhere else, even when Settings change in between.
 /// </summary>
 public sealed record TallyPostRequest(
     Guid BillId,
@@ -13,7 +18,10 @@ public sealed record TallyPostRequest(
     BillPayloadDto Payload,
     TallyPostOperation Operation = TallyPostOperation.Create,
     string? TargetTagName = null,
-    string? TargetTagValue = null);
+    string? TargetTagValue = null,
+    DateOnly? TargetVoucherDate = null,
+    string? TargetCompany = null,
+    string? TargetVoucherType = null);
 
 public enum TallyPostOperation
 {
@@ -28,6 +36,10 @@ public enum TallyPostOutcome
     Unknown,
 }
 
+/// <param name="Company">
+/// The Tally company the voucher went to, on a voucher Tally accepted. A master
+/// id names a voucher only within its company, so an Alter must go to the same one.
+/// </param>
 public sealed record TallyPostResponse(
     TallyPostOutcome Outcome,
     string? RemoteId,
@@ -35,7 +47,8 @@ public sealed record TallyPostResponse(
     string? ErrorMessage,
     string? RequestExcerpt,
     string? ResponseExcerpt,
-    string? TallyMasterId = null)
+    string? TallyMasterId = null,
+    string? Company = null)
 {
     /// <summary>Tally accepted the voucher.</summary>
     public static TallyPostResponse Posted(

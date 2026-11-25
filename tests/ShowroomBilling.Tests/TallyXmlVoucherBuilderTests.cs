@@ -18,6 +18,10 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Equal("Sales", voucher.Attribute("VCHTYPE")?.Value);
         Assert.Null(voucher.Attribute("TAGNAME"));
         Assert.Null(voucher.Attribute("TAGVALUE"));
+        // A create is sent as it always was: the alter's date and view markers are not on it.
+        Assert.Null(voucher.Attribute("DATE"));
+        Assert.Null(voucher.Attribute("OBJVIEW"));
+        Assert.Null(voucher.Element("PERSISTEDVIEW"));
     }
 
     [Fact]
@@ -34,6 +38,44 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Equal("Sales", voucher.Attribute("VCHTYPE")?.Value);
         Assert.Equal("MASTER ID", voucher.Attribute("TAGNAME")?.Value);
         Assert.Equal("101", voucher.Attribute("TAGVALUE")?.Value);
+    }
+
+    /// <summary>
+    /// The shape that changed a voucher in place on TallyPrime 7.2 (25 November
+    /// 2026): without the DATE attribute, or with the bill's new date in it,
+    /// Tally created a second voucher; without the accounting view it kept the
+    /// voucher's old lines.
+    /// </summary>
+    [Fact]
+    public void Build_AlterNamesTheVoucherByTheDateItHasInTallyAndSendsTheNewDateInside()
+    {
+        var payload = Payload() with { BillDate = new DateOnly(2026, 4, 3) };
+
+        var xml = TallyXmlVoucherBuilder.Build(
+            Request(TallyPostOperation.Alter, "MASTER ID", "101", payload, targetVoucherDate: new DateOnly(2026, 4, 1)),
+            Ledgers(),
+            "Acme Jewellers");
+
+        var voucher = xml.Descendants("VOUCHER").Single();
+        Assert.Equal("20260401", voucher.Attribute("DATE")?.Value);
+        Assert.Equal("20260403", voucher.Element("DATE")?.Value);
+        Assert.Equal("20260403", voucher.Element("EFFECTIVEDATE")?.Value);
+        Assert.Equal("Accounting Voucher View", voucher.Attribute("OBJVIEW")?.Value);
+        Assert.Equal("Accounting Voucher View", voucher.Element("PERSISTEDVIEW")?.Value);
+        Assert.Equal(
+            ["DATE", "VCHTYPE", "ACTION", "TAGNAME", "TAGVALUE", "OBJVIEW"],
+            voucher.Attributes().Select(a => a.Name.LocalName).ToArray());
+    }
+
+    [Fact]
+    public void Build_AlterWithoutTheVoucherDateInTallyIsRefused()
+    {
+        var request = Request(TallyPostOperation.Alter, "MASTER ID", "101") with { TargetVoucherDate = null };
+
+        var ex = Assert.Throws<VoucherBuildException>(() =>
+            TallyXmlVoucherBuilder.Build(request, Ledgers(), "Acme Jewellers"));
+
+        Assert.Equal("TALLY_ALTER_TARGET_MISSING", ex.ErrorCode);
     }
 
     [Fact]
@@ -198,7 +240,8 @@ public sealed class TallyXmlVoucherBuilderTests
         TallyPostOperation operation = TallyPostOperation.Create,
         string? targetTagName = null,
         string? targetTagValue = null,
-        BillPayloadDto? payload = null) =>
+        BillPayloadDto? payload = null,
+        DateOnly? targetVoucherDate = null) =>
         new(
             BillId: Guid.Parse("11111111-1111-1111-1111-111111111111"),
             InvoiceNumber: "DEV-26/0001",
@@ -206,7 +249,10 @@ public sealed class TallyXmlVoucherBuilderTests
             Payload: payload ?? Payload(),
             Operation: operation,
             TargetTagName: targetTagName,
-            TargetTagValue: targetTagValue);
+            TargetTagValue: targetTagValue,
+            // An Alter always names the voucher's date in Tally; the payload's own date by default.
+            TargetVoucherDate: targetVoucherDate
+                ?? (operation == TallyPostOperation.Alter ? (payload ?? Payload()).BillDate : null));
 
     private static LedgerMappingsDto Ledgers() =>
         new("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales");

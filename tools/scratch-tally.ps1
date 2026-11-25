@@ -4,8 +4,14 @@
 # It answers the three things the API asks Tally for:
 #   - the four master collections (companies, ledgers, stock items, voucher types)
 #   - a voucher import (Create or Alter)
-#   - which vouchers carry a given number (asked when a bill that was marked as
-#     pushed by hand is edited and pushed); it knows the vouchers of this run only
+#   - which voucher has a given master id, or which vouchers carry a given
+#     number (asked before an edited bill is pushed); it knows the vouchers of
+#     this run only
+#
+# An Alter is matched the way TallyPrime matches it: by its TAGVALUE master id
+# together with its DATE attribute, which must be the date the voucher has now.
+# When they do not match a voucher, it creates a new one (CREATED=1), as
+# TallyPrime does, and the API reports the bill as needing reconciliation.
 #
 # To see the bill states that need Tally to misbehave, put one of these words in
 # the bill's party name or note (both go into the voucher narration):
@@ -83,7 +89,18 @@ function Tag([string]$name, [string]$value) {
     if ([string]::IsNullOrWhiteSpace($value)) { '' } else { "<$name>$(Escape-Xml $value)</$name>" }
 }
 
+function Get-VoucherRow([string]$masterId, $voucher) {
+    "<VOUCHER VCHTYPE=`"$(Escape-Xml $voucher.type)`"><DATE TYPE=`"Date`">$($voucher.date)</DATE><MASTERID>$masterId</MASTERID>$(Tag 'VOUCHERNUMBER' $voucher.number)$(Tag 'VOUCHERTYPENAME' $voucher.type)$(Tag 'AMOUNT' $voucher.amount)<ISDELETED>No</ISDELETED></VOUCHER>"
+}
+
+# The company a request names (SVCURRENTCOMPANY). Master ids belong to a company:
+# a voucher is found, and an Alter matched, only in the company it was taken in.
+function Get-RequestCompany([string]$body) {
+    if ($body -match '<SVCURRENTCOMPANY>(.*?)</SVCURRENTCOMPANY>') { [System.Net.WebUtility]::HtmlDecode($Matches[1]).Trim() } else { '' }
+}
+
 function Get-Collection([string]$body) {
+    $company = Get-RequestCompany $body
     $rows = if ($body -match '<ID>TW_Companies</ID>') {
         $companies | ForEach-Object {
             "<COMPANY NAME=`"$(Escape-Xml $_.name)`">$(Tag 'NAME' $_.name)<ISINACTIVE>$(Yes (-not $_.active))</ISINACTIVE></COMPANY>"
@@ -102,9 +119,10 @@ function Get-Collection([string]$body) {
         }
     } elseif ($body -match '<ID>TW_VouchersByNumber</ID>') {
         $wanted = if ($body -match '\$VoucherNumber = "([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '' }
-        $vouchers.GetEnumerator() | Where-Object { $_.Value.number -eq $wanted } | ForEach-Object {
-            "<VOUCHER VCHTYPE=`"$(Escape-Xml $_.Value.type)`"><MASTERID>$($_.Key)</MASTERID>$(Tag 'VOUCHERNUMBER' $_.Value.number)$(Tag 'VOUCHERTYPENAME' $_.Value.type)</VOUCHER>"
-        }
+        $vouchers.GetEnumerator() | Where-Object { $_.Value.company -eq $company -and $_.Value.number -eq $wanted } | ForEach-Object { Get-VoucherRow $_.Key $_.Value }
+    } elseif ($body -match '<ID>TW_VoucherById</ID>') {
+        $wanted = if ($body -match '\$MasterID = (\d+)') { $Matches[1] } else { '' }
+        $vouchers.GetEnumerator() | Where-Object { $_.Value.company -eq $company -and $_.Key -eq $wanted } | ForEach-Object { Get-VoucherRow $_.Key $_.Value }
     } else {
         return $null
     }
@@ -150,30 +168,42 @@ try {
                 $number = if ($body -match '<VOUCHERNUMBER>(.*?)</VOUCHERNUMBER>') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '?' }
                 $type = if ($body -match '<VOUCHER\b[^>]*\bVCHTYPE="([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { 'Sales' }
                 $target = if ($body -match '<VOUCHER\b[^>]*\bTAGVALUE="(\d+)"') { $Matches[1] } else { '' }
+                $dateNamed = if ($body -match '<VOUCHER\b[^>]*\bDATE="(\d{8})"') { $Matches[1] } else { '' }
+                $date = if ($body -match '<DATE>(\d{8})</DATE>') { $Matches[1] } else { '' }
+                # The voucher's total as Tally lists it: the party line, the first ledger line the API sends.
+                $amount = if ($body -match '<AMOUNT>(-?[\d.]+)</AMOUNT>') { $Matches[1] } else { '' }
+                $company = Get-RequestCompany $body
+                # TallyPrime finds the voucher to alter by master id and the date it has now, within the company.
+                $matched = $action -eq 'Alter' -and $target -and $vouchers.Contains($target) -and
+                    $vouchers[$target].company -eq $company -and $dateNamed -eq $vouchers[$target].date
                 if ($narration -cmatch 'FAIL') {
                     $answer = Get-ImportResult 0 0 1 'Stand-in Tally refused this voucher: the party name or note contains FAIL.' ''
                     Write-Log "voucher $action $number -> line error (FAIL in narration)"
                 } else {
                     # Tally takes the voucher, whether or not its answer gets back.
                     $voucherId = ''
-                    if ($action -eq 'Create') {
+                    if ($matched) {
+                        $vouchers[$target] = @{ number = $number; type = $type; date = $date; amount = $amount; company = $company }
+                    } else {
                         $voucherId = "$nextVoucherId"
-                        $vouchers[$voucherId] = @{ number = $number; type = $type }
+                        $vouchers[$voucherId] = @{ number = $number; type = $type; date = $date; amount = $amount; company = $company }
                         $nextVoucherId++
-                    } elseif ($target -and $vouchers.Contains($target)) {
-                        $vouchers[$target] = @{ number = $number; type = $type }
                     }
 
                     if ($narration -cmatch 'UNKNOWN') {
                         $status = 500
                         $answer = 'Stand-in Tally: server error on request (narration contains UNKNOWN).'
                         Write-Log "voucher $action $number -> kept, but HTTP 500 (UNKNOWN in narration)"
-                    } elseif ($action -eq 'Create') {
-                        $answer = Get-ImportResult 1 0 0 '' $voucherId
-                        Write-Log "voucher Create $number -> created, voucher id $voucherId"
+                    } elseif ($matched) {
+                        $answer = Get-ImportResult 0 1 0 '' $target
+                        Write-Log "voucher Alter $number -> altered, voucher id $target"
                     } else {
-                        $answer = Get-ImportResult 0 1 0 '' ''
-                        Write-Log "voucher Alter $number -> altered$(if ($target) { ", voucher id $target" })"
+                        $answer = Get-ImportResult 1 0 0 '' $voucherId
+                        if ($action -eq 'Alter') {
+                            Write-Log "voucher Alter $number -> no voucher $target dated '$dateNamed': created voucher id $voucherId instead, as TallyPrime does"
+                        } else {
+                            Write-Log "voucher Create $number -> created, voucher id $voucherId"
+                        }
                     }
                 }
             } else {
