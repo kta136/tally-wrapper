@@ -1,11 +1,12 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace ShowroomBilling.Desktop.Shell;
 
 /// <summary>
-/// Defers constructing a WPF view until the host first becomes visible, then
+/// Defers constructing a WPF view until the host is first shown, then
 /// keeps the realized view cached for later tab/dialog activations.
 /// </summary>
 public sealed class LazyViewHost : ContentControl
@@ -25,11 +26,34 @@ public sealed class LazyViewHost : ContentControl
             new PropertyMetadata(null, OnContentDataContextChanged));
 
     private FrameworkElement? _view;
+    private bool _checkQueued;
 
     public LazyViewHost()
     {
-        Loaded += (_, _) => EnsureContentIfVisible();
-        IsVisibleChanged += (_, _) => EnsureContentIfVisible();
+        Loaded += (_, _) => CheckOnceBindingsHaveRun();
+        IsVisibleChanged += (_, _) => CheckOnceBindingsHaveRun();
+    }
+
+    /// <summary>
+    /// A host can read as visible before its <c>Visibility</c> binding has a value. When the main
+    /// window first showed, none of its hosts had one yet, so every tab and every dialog was built at
+    /// once (about three seconds of a full core at start-up). The bindings that are still waiting run
+    /// at <see cref="DispatcherPriority.DataBind"/>, so the host looks again after them: still visible,
+    /// it builds its view, and that is still before the next frame is drawn.
+    /// </summary>
+    private void CheckOnceBindingsHaveRun()
+    {
+        if (_view is not null || _checkQueued || !IsVisible)
+        {
+            return;
+        }
+
+        _checkQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.DataBind, () =>
+        {
+            _checkQueued = false;
+            EnsureContentIfVisible();
+        });
     }
 
     public Type? ViewType

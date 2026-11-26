@@ -157,6 +157,36 @@ public sealed class ShellKeyboardTests
     }
 
     [Fact]
+    public void Ctrl_N_and_Ctrl_Delete_leave_the_bill_alone_behind_an_open_question()
+    {
+        // Save asks before it saves; a row removed while it asks would be gone from the bill the
+        // operator then says yes to.
+        var (before, afterDelete, afterAdd, closed) = WpfTestHost.Run(() =>
+        {
+            var shell = DesignSample.CreateShell();
+            shell.ConfirmDialog.Cancel();
+            shell.ActiveTab = NavTab.Invoice;
+            var rows = shell.Invoice.Lines.ToList();
+
+            _ = shell.ConfirmDialog.ShowAsync(new ShowroomBilling.Desktop.ViewModels.ConfirmRequest("Save “Gold Ri” as typed?", "Not a saved item.", "Save as typed"));
+            shell.RemoveInvoiceRowCommand.Execute(null);
+            var deleted = shell.Invoice.Lines.ToList();
+            shell.AddInvoiceRowCommand.Execute(null);
+            var added = shell.Invoice.Lines.ToList();
+
+            // Once the question is answered, the shortcut works again.
+            shell.ConfirmDialog.Cancel();
+            shell.RemoveInvoiceRowCommand.Execute(null);
+            return (rows, deleted, added, shell.Invoice.Lines.Count);
+        });
+
+        Assert.True(before.Count > 1);
+        Assert.Equal(before, afterDelete);   // the very same rows, in order
+        Assert.Equal(before, afterAdd);
+        Assert.Equal(before.Count - 1, closed);
+    }
+
+    [Fact]
     public void The_window_has_no_key_binding_for_a_bare_character()
     {
         // A key binding marks its key handled even while its command cannot run,

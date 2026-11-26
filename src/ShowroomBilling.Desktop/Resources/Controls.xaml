@@ -1134,7 +1134,16 @@
                         <Trigger Property="IsIndeterminate" Value="True">
                             <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="marquee" Property="Visibility" Value="Visible" />
-                            <Trigger.EnterActions>
+                        </Trigger>
+                        <!--  The marquee runs only while the bar can be seen. A running animation makes WPF
+                              draw every frame, and one bar left indeterminate in a hidden pane kept the app
+                              at a third of a core while idle.  -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsIndeterminate" Value="True" />
+                                <Condition Property="IsVisible" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <MultiTrigger.EnterActions>
                                 <BeginStoryboard x:Name="marqueeRun">
                                     <Storyboard RepeatBehavior="Forever">
                                         <DoubleAnimation Storyboard.TargetName="marqueeScale"
@@ -1144,11 +1153,11 @@
                                                          Duration="0:0:1.6" />
                                     </Storyboard>
                                 </BeginStoryboard>
-                            </Trigger.EnterActions>
-                            <Trigger.ExitActions>
+                            </MultiTrigger.EnterActions>
+                            <MultiTrigger.ExitActions>
                                 <StopStoryboard BeginStoryboardName="marqueeRun" />
-                            </Trigger.ExitActions>
-                        </Trigger>
+                            </MultiTrigger.ExitActions>
+                        </MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

@@ -177,6 +177,17 @@ public sealed class DesignDialogTests
                 return new ConfirmDialog();
             });
 
+            Capture(found, bindingErrors, "Design-Dialog-Confirm-ItemAsTyped", shell =>
+            {
+                shell.ConfirmDialog.Cancel();
+                // A name cut short by Ctrl+S over the sample bill's first item.
+                var line = shell.Invoice.Lines.First(candidate => !candidate.IsEmpty);
+                line.ItemName = "Gold Ri";
+                line.ItemMaster = null;
+                _ = shell.Invoice.SaveDraftCommand.ExecuteAsync(null);
+                return new ConfirmDialog();
+            });
+
             Capture(found, bindingErrors, "Design-Dialog-Confirm-Batch", shell =>
             {
                 shell.ConfirmDialog.Cancel();

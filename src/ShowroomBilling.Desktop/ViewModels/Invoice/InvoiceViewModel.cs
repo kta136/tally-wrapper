@@ -312,6 +312,12 @@ public partial class InvoiceViewModel : ObservableObject
         OnPropertyChanged(nameof(HasMultipleRows));
         if (!_deferLineCollectionRecompute)
             Recompute();
+        // A removed row takes its fault with it, and the rows after it are numbered again.
+        if (_refusedBy is not null)
+        {
+            RecheckRefusal();
+            UpdateStatus();
+        }
     }
 
     private void OnLineMutated(object? sender, EventArgs e)
@@ -386,6 +392,12 @@ public partial class InvoiceViewModel : ObservableObject
         RefreshRates();
         // A karat's purity may be another now.
         Recompute();
+        // And an item or karat the bill was refused for may be a saved one now, or the other way.
+        if (_refusedBy is not null)
+        {
+            RecheckRefusal();
+            UpdateStatus();
+        }
     }
 
     private void AddTrailingBlankRow(bool deferCollectionRecompute = false)
@@ -696,6 +708,32 @@ public partial class InvoiceViewModel : ObservableObject
         }
         _refusedBy = null;
         RateMissing = false;
+
+        if (ItemsNotSaved() is { Count: > 0 } asTyped)
+        {
+            // The question is an overlay, and the bill behind it can still change while it is open
+            // (a row shortcut, settings arriving that reprice a line). Only the bill the operator
+            // said yes to is saved.
+            var asked = PayloadText();
+            if (!await _dialogs.ConfirmAsync(ItemsAsTypedQuestion(asTyped)))
+            {
+                // Kept true as the lines change: it goes once each item is picked from the list.
+                Refuse(ItemsNotSavedSentence() ?? string.Empty, ItemsNotSavedSentence);
+                return;
+            }
+
+            if (ValidateForSave() is { } late)
+            {
+                Refuse(late, ValidateForSave);
+                return;
+            }
+
+            if (PayloadText() != asked)
+            {
+                SaveStatus = "Not saved: the bill changed while the question was open. Check it and save again.";
+                return;
+            }
+        }
 
         // The server refuses an edit to a posted bill without an admin session.
         string? adminToken = null;
@@ -1044,6 +1082,52 @@ public partial class InvoiceViewModel : ObservableObject
         => Lines.FirstOrDefault(line => !line.IsEmpty && line.KaratUnknown) is { } line
             ? $"Line {line.RowNumber}: {line.UnknownKaratMessage}"
             : null;
+
+    /// <summary>
+    /// The lines whose item is not one of the saved items. Such a line is saved with the name as
+    /// typed, at the wastage and labour it shows. That is allowed (a one-off piece; on a gold line
+    /// Tally's stock item, and the name printed, come from the karat), but it is also what a name cut
+    /// short when Save was pressed looks like ("Rin" for "Ring"), so Save asks first. Empty while no
+    /// items are saved at all: then there is nothing to pick from.
+    /// </summary>
+    private List<BillLineViewModel> ItemsNotSaved()
+    {
+        var saved = ItemMasters
+            .Select(master => master.Name?.Trim())
+            .Where(name => !string.IsNullOrEmpty(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return saved.Count == 0
+            ? []
+            : Lines.Where(line => !line.IsEmpty && !saved.Contains(line.ItemName.Trim())).ToList();
+    }
+
+    private string? ItemsNotSavedSentence() => ItemsNotSaved() switch
+    {
+        [] => null,
+        [var one] => $"Not saved: “{one.ItemName.Trim()}” on line {one.RowNumber} is not one of the saved items.",
+        var several => $"Not saved: {several.Count} lines have an item that is not one of the saved items.",
+    };
+
+    // What Save would send, as text, to tell whether the bill changed while a question was open.
+    private string PayloadText() => System.Text.Json.JsonSerializer.Serialize(BuildPayload());
+
+    private static ConfirmRequest ItemsAsTypedQuestion(IReadOnlyList<BillLineViewModel> asTyped)
+    {
+        // Every one is listed: the one cut short may be the last of several one-off pieces.
+        var facts = asTyped
+            .Select(line => new ConfirmFact($"Line {line.RowNumber}", line.ItemName.Trim()))
+            .ToList();
+        var one = asTyped.Count == 1;
+        return new ConfirmRequest(
+            one ? $"Save “{asTyped[0].ItemName.Trim()}” as typed?" : $"Save {asTyped.Count} items as typed?",
+            one
+                ? $"“{asTyped[0].ItemName.Trim()}” on line {asTyped[0].RowNumber} is not one of the saved items. The bill keeps it as typed, at the price the line shows."
+                : "These items are not saved items. The bill keeps each as typed, at the price its line shows.",
+            "Save as typed",
+            IsWarning: true,
+            Note: "If a name was cut short, go back and pick the item from the list.",
+            Facts: one ? null : facts);
+    }
 
     private string? ValidateForSave()
     {

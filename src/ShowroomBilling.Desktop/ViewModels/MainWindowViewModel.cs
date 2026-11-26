@@ -401,11 +401,19 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         _ = RefreshHealthAsync(forceTallyCompany: true);
     }
 
+    // Not behind an open question or dialog: Save asks before it saves, and a row removed while the
+    // question is open would be gone from the bill the operator then said yes to.
     [RelayCommand(CanExecute = nameof(CanAddInvoiceRow))]
-    private void AddInvoiceRow() => Invoice.AddRowCommand.Execute(null);
+    private void AddInvoiceRow()
+    {
+        if (!IsAnyDialogOpen) Invoice.AddRowCommand.Execute(null);
+    }
 
     [RelayCommand(CanExecute = nameof(CanRemoveInvoiceRow))]
-    private void RemoveInvoiceRow() => Invoice.RemoveFocusedRowCommand.Execute(null);
+    private void RemoveInvoiceRow()
+    {
+        if (!IsAnyDialogOpen) Invoice.RemoveFocusedRowCommand.Execute(null);
+    }
 
     /// <summary>Esc: answers the confirm question, cancels a prompt, closes the dialog, or discards a Settings edit.</summary>
     [RelayCommand]

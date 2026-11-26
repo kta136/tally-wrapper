@@ -342,6 +342,10 @@ public sealed class SuggestBox : Control
         }
         else if (SelectedItem is { } current && !string.Equals(TextOf(current, TextPath), text, StringComparison.OrdinalIgnoreCase))
         {
+            // The text goes to the source first. Freed while the source still held the entry's own
+            // name, a line took the entry back by that name, and with it the entry's default wastage
+            // and labour over what had been typed on the line.
+            GetBindingExpression(TextProperty)?.UpdateSource();
             SetCurrentValue(SelectedItemProperty, null);
         }
     }

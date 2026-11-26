@@ -123,6 +123,42 @@ public sealed class InvoiceCatalogViewTests
     }
 
     [Fact]
+    public void A_name_typed_over_an_item_keeps_the_wastage_typed_on_the_line()
+    {
+        var seen = WpfTestHost.Run(() =>
+        {
+            var settings = OfflineApi.Settings();
+            settings.Publish(
+                items: [TestMasters.Item("Gold Ring", wastage: 8m)],
+                karats: [TestMasters.Karat("22K", 91.6m)]);
+            var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings)
+            {
+                Rate24Kt = 10_000m,
+            };
+            var view = Hosted(invoice);
+            Layout(view);
+            var ring = invoice.Lines[0];
+            ring.ItemMaster = settings.Catalog.Items[0];
+            ring.KaratMaster = settings.Catalog.Karats[0];
+            ring.GrossWeight = 3m;
+            ring.WastagePercent = 4m;   // typed over the item's 8 %
+            Layout(view);
+
+            // "Gold Ri" typed over the item, then Ctrl+S, which settles the cell at once.
+            var cell = Cells(view, "ItemBox")[0];
+            ((TextBox)cell.Template.FindName("PART_TextBox", cell)).Text = "Gold Ri";
+            cell.CommitText();
+            WpfTestHost.DrainDispatcher();
+
+            return (ring.ItemName, ring.ItemMaster is null, ring.WastagePercent);
+        });
+
+        // Free text, no longer the item, and the wastage typed on the line is still there: the line
+        // used to take the item back by its old name, between the two, with the item's 8 %.
+        Assert.Equal(("Gold Ri", true, 4m), seen);
+    }
+
+    [Fact]
     public void A_bill_that_is_there_before_the_screen_is_built_shows_its_items_and_karats_by_name()
     {
         // The cells get their selection, their text and the property that names an entry's text in
