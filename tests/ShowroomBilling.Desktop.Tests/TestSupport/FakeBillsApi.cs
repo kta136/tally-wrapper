@@ -155,15 +155,56 @@ internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
     /// <summary>The reason a retry or repost reports when <see cref="PostingLeaves"/> is failed.</summary>
     public string? PostingError { get; set; }
 
+    /// <summary>The number Tally filed a pushed voucher under, as the server read it back; null when it is not known.</summary>
+    public string? PushFiledAs { get; set; }
+
+    /// <summary>The fiscal year the pushed bill is of, when a test needs another than the sample's.</summary>
+    public string? PushFiscalYear { get; set; }
+
+    /// <summary>What the push-order check answers: the bills to push first. None by default.</summary>
+    public List<UnpushedEarlierBill> EarlierUnpushed { get; } = [];
+
+    /// <summary>Set to make the push-order check fail, as a server without it does.</summary>
+    public Exception? PushOrderFailure { get; set; }
+
+    /// <summary>The bill ids each push-order check was asked about, in order.</summary>
+    public List<IReadOnlyList<Guid>> PushOrderChecks { get; } = [];
+
+    /// <summary>The order the check gives the bills in; the order asked when null.</summary>
+    public Func<IReadOnlyList<Guid>, IReadOnlyList<Guid>>? PushOrderOf { get; set; }
+
+    /// <summary>When set, the check's whole answer, as a server could send it.</summary>
+    public BillPushOrderResponse? PushOrderAnswer { get; set; }
+
+    /// <summary>The ids each push of ticked bills sent, in order.</summary>
+    public List<IReadOnlyList<Guid>> PushedSelections { get; } = [];
+
+    public Task<BillPushOrderResponse> GetPushOrderAsync(BillPushOrderRequest request, CancellationToken cancellationToken = default)
+    {
+        PushOrderChecks.Add(request.BillIds);
+        return PushOrderFailure is null
+            ? Task.FromResult(PushOrderAnswer ?? new BillPushOrderResponse(
+                EarlierUnpushed.ToList(),
+                PushOrderOf?.Invoke(request.BillIds) ?? request.BillIds))
+            : Task.FromException<BillPushOrderResponse>(PushOrderFailure);
+    }
+
     public Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default)
-        => Write($"push:{billId}", () => Bill(billId, PostingLeaves));
+        => Write($"push:{billId}", () =>
+        {
+            var bill = Bill(billId, PostingLeaves);
+            return bill with { TallyVoucherNumber = PushFiledAs, FiscalYear = PushFiscalYear ?? bill.FiscalYear };
+        });
 
     /// <summary>What a push of the ticked bills answers, when a test wants something other than "all pushed".</summary>
     public BillBatchPushResponse? PushSelectedResponse { get; set; }
 
     public Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default)
-        => Write("push-selected", () => PushSelectedResponse
+    {
+        PushedSelections.Add(request.BillIds);
+        return Write("push-selected", () => PushSelectedResponse
             ?? new BillBatchPushResponse(request.BillIds.Count, request.BillIds.Count, 0, false, null, null, []));
+    }
 
     public Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default)
         => Write("push-pending", () => new BillBatchPushResponse(0, 0, 0, false, null, null, []));

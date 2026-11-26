@@ -75,6 +75,9 @@
                     <DataTrigger Binding="{Binding SelectedSectionScope}" Value="AdminOnly">
                         <Setter Property="Text" Value="&#xE785;" />
                     </DataTrigger>
+                    <DataTrigger Binding="{Binding SelectedSectionScope}" Value="Checks">
+                        <Setter Property="Text" Value="&#xE890;" />
+                    </DataTrigger>
                     <DataTrigger Binding="{Binding IsDirtyDraftSection}" Value="True">
                         <Setter Property="Text" Value="●" />
                         <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
@@ -169,6 +172,10 @@
                                 <Setter TargetName="SectionIcon" Property="Text" Value="&#xE713;" />
                                 <Setter TargetName="SectionLabel" Property="Text" Value="Advanced" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.TallyCheck}">
+                                <Setter TargetName="SectionIcon" Property="Text" Value="&#xE73E;" />
+                                <Setter TargetName="SectionLabel" Property="Text" Value="Tally check" />
+                            </DataTrigger>
                             <DataTrigger Binding="{Binding}" Value="{x:Static vm:SettingsSectionKey.Admin}">
                                 <Setter TargetName="SectionIcon" Property="Text" Value="&#xE7EF;" />
                                 <Setter TargetName="SectionLabel" Property="Text" Value="Admin" />
@@ -255,6 +262,26 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <!--  Tally check: when it last compared, and Compare  -->
+                    <StackPanel Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Visibility="{Binding IsTallyCheckVisible, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Margin="0,0,14,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding TallyCheck.HasLastCompared, Converter={StaticResource BoolToVis}}">
+                            <TextBlock HorizontalAlignment="Right"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="{Binding TallyCheck.LastComparedLine}" />
+                            <TextBlock HorizontalAlignment="Right"
+                                       Foreground="{StaticResource InkMutedBrush}"
+                                       Text="{Binding TallyCheck.LastComparedCounts}" />
+                        </StackPanel>
+                        <Button Command="{Binding TallyCheck.CompareCommand}"
+                                Content="{Binding TallyCheck.CompareButtonText}"
+                                Style="{StaticResource BtnPrimary}" />
+                    </StackPanel>
+
                     <!--  The print layout is saved on its own  -->
                     <StackPanel Grid.Column="1"
                                 VerticalAlignment="Center"
@@ -286,6 +313,8 @@
                     <settingsViews:HandoverSettingsSectionView DataContext="{Binding Handover}"
                                                                Visibility="{Binding DataContext.IsHandoverVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdvancedSettingsSectionView Visibility="{Binding IsAdvancedVisible, Converter={StaticResource BoolToVis}}" />
+                    <settingsViews:TallyCheckSettingsSectionView DataContext="{Binding TallyCheck}"
+                                                                 Visibility="{Binding DataContext.IsTallyCheckVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
                     <settingsViews:AdminSettingsSectionView Visibility="{Binding IsAdminVisible, Converter={StaticResource BoolToVis}}" />
                 </Grid>
             </ScrollViewer>

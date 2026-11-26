@@ -25,6 +25,7 @@ internal sealed class SettingsSectionCoordinator(ISettingsSectionHost host)
     public bool IsAdvancedVisible => host.SelectedSection == SettingsSectionKey.Advanced;
     public bool IsHandoverVisible => host.SelectedSection == SettingsSectionKey.Handover;
     public bool IsAdminVisible => host.SelectedSection == SettingsSectionKey.Admin;
+    public bool IsTallyCheckVisible => host.SelectedSection == SettingsSectionKey.TallyCheck;
     public bool IsPreviewVisible => IsInvoiceVisible || IsPrintLayoutVisible;
 
     public void OnSelectedSectionChanged()

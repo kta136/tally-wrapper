@@ -54,6 +54,92 @@ public static class InvoiceNumberFormatter
     }
 
     /// <summary>
+    /// True when two numbers differ at most by zeros in front of their runs of digits, and in the
+    /// case of their letters. Tally writes "SR/2026-27/051" for "SR/2026-27/51" when its voucher
+    /// type fills numbers to a width, and the core need not be last ("SR/051/26-27").
+    /// </summary>
+    public static bool SameIgnoringPadding(string? a, string? b) =>
+        a is not null && b is not null && string.Equals(PaddingFreeKey(a), PaddingFreeKey(b), StringComparison.Ordinal);
+
+    /// <summary>
+    /// The number with the zeros in front of each run of digits taken off and its letters in upper
+    /// case: two numbers <see cref="SameIgnoringPadding"/> calls the same have the same key, so a
+    /// list of numbers can be looked up by it.
+    /// </summary>
+    public static string PaddingFreeKey(string number) =>
+        string.Concat(Runs(number).Select(run => IsDigits(run) ? TrimZeros(run) : run.ToUpperInvariant()));
+
+    /// <summary>
+    /// How many numbers <paramref name="to"/> comes after <paramref name="from"/> (negative when
+    /// before), when the two are alike but for the value of one run of digits: "SR/0012" is one
+    /// after "SR/0011", and so is "SR/12/26-27" after "SR/11/26-27". Zero when they differ only by
+    /// padding; null when they differ in anything else, or in more than one run.
+    /// </summary>
+    public static long? StepBetween(string? from, string? to)
+    {
+        if (from is null || to is null)
+        {
+            return null;
+        }
+
+        var left = Runs(from);
+        var right = Runs(to);
+        if (left.Count != right.Count)
+        {
+            return null;
+        }
+
+        long? step = 0;
+        foreach (var (l, r) in left.Zip(right))
+        {
+            if (SameRun(l, r))
+            {
+                continue;
+            }
+
+            if (step != 0 || !IsDigits(l) || !IsDigits(r)
+                || !long.TryParse(l, out var lv) || !long.TryParse(r, out var rv))
+            {
+                return null;
+            }
+
+            step = rv - lv;
+        }
+
+        return step;
+    }
+
+    /// <summary>The text cut into runs of digits and runs of anything else.</summary>
+    private static List<string> Runs(string text)
+    {
+        var runs = new List<string>();
+        var start = 0;
+        for (var i = 1; i <= text.Length; i++)
+        {
+            if (i == text.Length || char.IsAsciiDigit(text[i]) != char.IsAsciiDigit(text[i - 1]))
+            {
+                runs.Add(text[start..i]);
+                start = i;
+            }
+        }
+
+        return runs;
+    }
+
+    private static bool IsDigits(string run) => run.Length > 0 && char.IsAsciiDigit(run[0]);
+
+    private static bool SameRun(string a, string b) =>
+        IsDigits(a) && IsDigits(b)
+            ? string.Equals(TrimZeros(a), TrimZeros(b), StringComparison.Ordinal)
+            : string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static string TrimZeros(string digits)
+    {
+        var trimmed = digits.TrimStart('0');
+        return trimmed.Length == 0 ? "0" : trimmed;
+    }
+
+    /// <summary>
     /// Returns the Indian fiscal-year label (e.g. <c>2026-27</c>) for the given instant, read on the IST calendar:
     /// the fiscal year turns over at 00:00 IST on 1 April, not 00:00 UTC.
     /// </summary>

@@ -106,12 +106,14 @@ public partial class BillsViewModel : ObservableObject
 
         // Each of these is one BillActions call on the rows it applies to, run through RunAsync.
         // The commands this class implements itself are the [RelayCommand] methods further down.
+        // Ticked bills go to Tally oldest date first, then lowest number, whatever order they were
+        // ticked in: Tally numbers a day's vouchers in the order they arrive.
         PushSelectedCommand = SelectionCommand(
-            (rows, busy, ct) => _actions.PushSelectedAsync(rows.Select(row => row.Id).ToArray(), busy, ct), x => x.IsPendingLike, needsTally: true);
+            (rows, busy, ct) => _actions.PushSelectedAsync(InPushOrder(rows).Select(row => row.Id).ToArray(), busy, ct), x => x.IsPendingLike, needsTally: true);
         PushAllPendingCommand = new AsyncRelayCommand(
             ct => RunAsync(busy => _actions.PushAllPendingAsync(busy, ct), ct), () => CanAct && IsTallyPushAllowed);
         RetrySelectedCommand = SelectionCommand(
-            (rows, busy, ct) => _actions.RetryAsync(Refs(rows), "Retry selected from Bills tab", busy, ct), x => x.IsRetryable, needsTally: true);
+            (rows, busy, ct) => _actions.RetryAsync(Refs(InPushOrder(rows)), "Retry selected from Bills tab", busy, ct), x => x.IsRetryable, needsTally: true);
         RepostSelectedCommand = SelectionCommand(
             (rows, busy, ct) => _actions.RepostAsync(Refs(rows), "Batch repost from Bills tab", busy, ct), x => x.CanBeReposted, needsTally: true);
 
@@ -137,6 +139,10 @@ public partial class BillsViewModel : ObservableObject
     }
 
     private static BillRef[] Refs(IReadOnlyList<BillListRowViewModel> rows) => rows.Select(BillRef.Of).ToArray();
+
+    /// <summary>The order bills should reach Tally in: by date, then by number.</summary>
+    private static BillListRowViewModel[] InPushOrder(IReadOnlyList<BillListRowViewModel> rows) =>
+        rows.OrderBy(row => row.BillDate ?? DateOnly.MaxValue).ThenBy(row => row.InvoiceNumberSortKey).ToArray();
 
     public ObservableCollection<BillListRowViewModel> Items { get; }
 

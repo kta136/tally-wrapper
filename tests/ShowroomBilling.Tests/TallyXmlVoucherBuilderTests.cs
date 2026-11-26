@@ -18,10 +18,26 @@ public sealed class TallyXmlVoucherBuilderTests
         Assert.Equal("Sales", voucher.Attribute("VCHTYPE")?.Value);
         Assert.Null(voucher.Attribute("TAGNAME"));
         Assert.Null(voucher.Attribute("TAGVALUE"));
-        // A create is sent as it always was: the alter's date and view markers are not on it.
         Assert.Null(voucher.Attribute("DATE"));
-        Assert.Null(voucher.Attribute("OBJVIEW"));
-        Assert.Null(voucher.Element("PERSISTEDVIEW"));
+    }
+
+    /// <summary>
+    /// Without the markers Tally picks the view itself (a live company holds the
+    /// app's vouchers in both), and a later alter replaces lines only in the
+    /// accounting view; with them the voucher is kept there (TallyPrime 7.2,
+    /// 25 November 2026), the same lines either way.
+    /// </summary>
+    [Theory]
+    [InlineData(TallyPostOperation.Create)]
+    [InlineData(TallyPostOperation.Alter)]
+    public void Build_SendsEveryVoucherInTheAccountingView(TallyPostOperation operation)
+    {
+        var xml = TallyXmlVoucherBuilder.Build(Request(operation, "MASTER ID", "101"), Ledgers(), "Acme Jewellers");
+
+        var voucher = xml.Descendants("VOUCHER").Single();
+        Assert.Equal("Accounting Voucher View", voucher.Attribute("OBJVIEW")?.Value);
+        Assert.Equal("PERSISTEDVIEW", voucher.Elements().First().Name.LocalName);
+        Assert.Equal("Accounting Voucher View", voucher.Element("PERSISTEDVIEW")?.Value);
     }
 
     [Fact]

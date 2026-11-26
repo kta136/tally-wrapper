@@ -21,6 +21,16 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
     public DateTimeOffset UpdatedAtUtc => Item.UpdatedAtUtc;
     public bool EditedAfterPush => Item.EditedAfterPush;
 
+    /// <summary>
+    /// The number Tally filed the bill's voucher under, when that is not the bill's own number
+    /// (with Automatic numbering Tally gives its own); null otherwise, or when it is not known.
+    /// </summary>
+    public string? TallyNumberWhenDifferent =>
+        !string.IsNullOrWhiteSpace(Item.TallyVoucherNumber)
+        && !string.Equals(Item.TallyVoucherNumber, Item.InvoiceNumber, StringComparison.Ordinal)
+            ? Item.TallyVoucherNumber
+            : null;
+
     // Numeric sort key parsed from the trailing digits of InvoiceNumber so the
     // Bills list orders bills naturally (93 above 92) instead of by CreatedAt
     // (which floats a just-edited bill above peers with a higher number). Bills
@@ -43,8 +53,12 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
 
     public string RowNote => State switch
     {
+        // An edit of a pushed bill alters the voucher Tally filed it under.
+        BillStates.Pending when EditedAfterPush && TallyNumberWhenDifferent is { } held => $"Awaiting push · in Tally as {held}",
         BillStates.Pending or BillStates.Draft => "Awaiting Tally push",
         BillStates.Posting => "Posting in progress",
+        BillStates.Posted when TallyNumberWhenDifferent is { } inTally =>
+            EditedAfterPush ? $"Edited after push · in Tally as {inTally}" : $"In Tally as {inTally}",
         BillStates.Posted => EditedAfterPush ? "Edited after push" : "—",
         BillStates.Failed => "Push failed. Open details for the reason",
         BillStates.ReconciliationRequired => "Verify the voucher in Tally before another write",
@@ -53,8 +67,14 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
         _ => "—"
     };
 
-    /// <summary>"err" when the note says something has to be done before the bill can move on; the list draws it in red.</summary>
-    public string NoteTone => BillStateDisplay.Tone(State) == BillStateDisplay.ToneErr ? BillStateDisplay.ToneErr : BillStateDisplay.ToneNeutral;
+    /// <summary>
+    /// "err" when the note says something has to be done before the bill can move on; the list draws
+    /// it in red. "warn" when Tally holds the voucher under another number, drawn in amber.
+    /// </summary>
+    public string NoteTone => BillStateDisplay.Tone(State) == BillStateDisplay.ToneErr ? BillStateDisplay.ToneErr
+        : TallyNumberWhenDifferent is not null && (State == BillStates.Posted || State == BillStates.Pending && EditedAfterPush)
+            ? BillStateDisplay.ToneWarn
+        : BillStateDisplay.ToneNeutral;
 
     public bool IsVoided => State == BillStates.Voided;
 

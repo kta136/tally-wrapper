@@ -120,6 +120,7 @@ public partial class App : System.Windows.Application
         builder.Services.AddApiClient<IHealthApiClient, HealthApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddApiClient<IAdminApiClient, AdminApiClient>();
         builder.Services.AddApiClient<IPrintAssetApiClient, PrintAssetApiClient>();
+        builder.Services.AddApiClient<ITallyCheckApiClient, TallyCheckApiClient>(TallyCheckApiClient.CompareTimeout);
         builder.Services.AddApiClient<IClientPresenceApiClient, ClientPresenceApiClient>(TimeSpan.FromSeconds(5));
         builder.Services.AddHostedService<ClientPresenceHeartbeatService>();
         builder.Services.AddSingleton<AdminTokenStore>();
@@ -153,6 +154,7 @@ public partial class App : System.Windows.Application
             sp.GetRequiredService<ISettingsApiClient>(),
             sp.GetRequiredService<IMastersApiClient>(),
             sp.GetRequiredService<IPrintAssetApiClient>(),
+            sp.GetRequiredService<ITallyCheckApiClient>(),
             sp.GetRequiredService<IDialogService>(),
             sp.GetRequiredService<IPrintDispatcher>(),
             sp.GetRequiredService<IPrintPreferencesStore>(),

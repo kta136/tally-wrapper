@@ -44,6 +44,9 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
     public Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default)
         => httpClient.PostApiAsync<BillBatchGetResponse>("/api/bills/batch", request, cancellationToken);
 
+    public Task<BillPushOrderResponse> GetPushOrderAsync(BillPushOrderRequest request, CancellationToken cancellationToken = default)
+        => httpClient.PostApiAsync<BillPushOrderResponse>("/api/bills/push-order", request, cancellationToken);
+
     public Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
         => httpClient.GetApiOrNullAsync<BillAuditResponse>($"/api/bills/{billId}/audit", cancellationToken);
 

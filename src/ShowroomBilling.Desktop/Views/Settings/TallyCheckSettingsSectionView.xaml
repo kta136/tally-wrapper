@@ -1,0 +1,263 @@
+<UserControl x:Class="ShowroomBilling.Desktop.Views.Settings.TallyCheckSettingsSectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:ShowroomBilling.Desktop.Shell"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ShowroomBilling.Desktop.ViewModels.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:TallyCheckViewModel, IsDesignTimeCreatable=False}">
+    <!--  This year's bills set against the sales vouchers in Tally: what differs, and a way to open each
+          bill. The Compare button is in the section's heading. Nothing here changes anything.  -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsViewResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="Head" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="12,0" />
+            </Style>
+            <Style x:Key="Cell" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                <Setter Property="Margin" Value="12,0" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            </Style>
+            <Style x:Key="BannerText" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="LineHeight" Value="20" />
+            </Style>
+            <Style x:Key="BannerGlyph" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                <Setter Property="Margin" Value="0,2,12,0" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+                <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+                <Setter Property="FontSize" Value="16" />
+            </Style>
+            <!--  The table's columns, shared by the heading and every row.  -->
+            <Style x:Key="TableColumns" TargetType="Grid">
+                <Setter Property="Margin" Value="4,0" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <!--  Never compared  -->
+        <Border Style="{StaticResource SettingsCard}" Visibility="{Binding IsNotRun, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource CardTitle}" Text="Not compared yet" />
+                <TextBlock Margin="0,8,0,0"
+                           Style="{StaticResource CardHint}"
+                           Text="{Binding NotRunText}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!--  Comparing  -->
+        <Border Style="{StaticResource SettingsCard}" Visibility="{Binding IsComparing, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <TextBlock Style="{StaticResource CardTitle}" Text="Reading vouchers from Tally…" />
+                <ProgressBar Margin="0,12,0,0" IsIndeterminate="{Binding IsComparing}" />
+                <TextBlock Margin="0,12,0,0"
+                           Style="{StaticResource CardHint}"
+                           Text="Counters can keep billing meanwhile. A push made now may wait for this read, a few seconds at most."
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!--  Tally could not be asked  -->
+        <StackPanel Margin="0,0,0,16" Visibility="{Binding IsFailed, Converter={StaticResource BoolToVis}}">
+            <Border Margin="0" Style="{StaticResource AdminBannerErr}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left"
+                               Foreground="{StaticResource ErrInkBrush}"
+                               Style="{StaticResource BannerGlyph}"
+                               Text="&#xEA39;" />
+                    <TextBlock Foreground="{StaticResource ErrInkBrush}"
+                               Style="{StaticResource BannerText}"
+                               shell:RichText.Markup="{Binding FailureMarkup}" />
+                </DockPanel>
+            </Border>
+            <Button Margin="0,12,0,0"
+                    HorizontalAlignment="Left"
+                    Command="{Binding CompareCommand}"
+                    Content="Try again" />
+        </StackPanel>
+
+        <!--  Everything matches  -->
+        <Border Margin="0,0,0,16"
+                Style="{StaticResource AdminBannerOk}"
+                Visibility="{Binding ShowsAllMatch, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           Foreground="{StaticResource OkInkBrush}"
+                           Style="{StaticResource BannerGlyph}"
+                           Text="&#xE73E;" />
+                <TextBlock Foreground="{StaticResource OkInkBrush}"
+                           Style="{StaticResource BannerText}"
+                           shell:RichText.Markup="{Binding AllMatchMarkup}" />
+            </DockPanel>
+        </Border>
+
+        <!--  Bills of another company, a push made while comparing  -->
+        <Border Margin="0,0,0,16"
+                Style="{StaticResource AdminBannerInfo}"
+                Visibility="{Binding HasResultNote, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left"
+                           Foreground="{StaticResource InfoInkBrush}"
+                           Style="{StaticResource BannerGlyph}"
+                           Text="&#xE946;" />
+                <TextBlock Foreground="{StaticResource InfoInkBrush}"
+                           Style="{StaticResource BannerText}"
+                           Text="{Binding ResultNote}" />
+            </DockPanel>
+        </Border>
+
+        <!--  What differs  -->
+        <StackPanel Visibility="{Binding ShowsDifferences, Converter={StaticResource BoolToVis}}">
+            <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerWarn}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left"
+                               Foreground="{StaticResource WarnInkBrush}"
+                               Style="{StaticResource BannerGlyph}"
+                               Text="&#xE7BA;" />
+                    <TextBlock Foreground="{StaticResource WarnInkBrush}"
+                               Style="{StaticResource BannerText}"
+                               shell:RichText.Markup="{Binding SummaryMarkup}" />
+                </DockPanel>
+            </Border>
+
+            <ItemsControl Margin="0,0,0,8" ItemsSource="{Binding Filters}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:TallyCheckFilterViewModel}">
+                        <RadioButton AutomationProperties.Name="{Binding Label}"
+                                     Command="{Binding DataContext.SelectFilterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                     CommandParameter="{Binding Key}"
+                                     GroupName="TallyCheckFilter"
+                                     IsChecked="{Binding IsSelected}"
+                                     Style="{StaticResource ChipToggle}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Label}" />
+                                <TextBlock Margin="6,0,0,0"
+                                           FontWeight="Bold"
+                                           Text="{Binding Count}" />
+                            </StackPanel>
+                        </RadioButton>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Border Style="{StaticResource Panel}">
+                <StackPanel>
+                    <Border Height="38"
+                            Background="{StaticResource BgSunkenBrush}"
+                            BorderBrush="{StaticResource DividerBrush}"
+                            BorderThickness="0,0,0,1"
+                            CornerRadius="8,8,0,0">
+                        <Grid Style="{StaticResource TableColumns}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="164" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" MinWidth="150" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Style="{StaticResource Head}" Text="Difference" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource Head}" Text="Bill" />
+                            <TextBlock Grid.Column="2" Style="{StaticResource Head}" Text="In Tally" />
+                            <shell:FillCell Grid.Column="3">
+                                <TextBlock Style="{StaticResource Head}" Text="What it means" />
+                            </shell:FillCell>
+                        </Grid>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding ShownRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:TallyCheckRowViewModel}">
+                                <Border Padding="0,12"
+                                        BorderBrush="{StaticResource DividerBrush}"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid Style="{StaticResource TableColumns}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="164" />
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="*" MinWidth="150" />
+                                            <ColumnDefinition Width="100" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0"
+                                                Margin="12,0,4,0"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Top"
+                                                Style="{StaticResource ToneChip}"
+                                                Tag="{Binding Tone}">
+                                            <TextBlock Style="{StaticResource ToneChipText}"
+                                                       Tag="{Binding Tone}"
+                                                       Text="{Binding Kind}" />
+                                        </Border>
+                                        <!--  The bill and its voucher side by side: number, then date and total.  -->
+                                        <StackPanel Grid.Column="1" Margin="0,3,0,0">
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Style="{StaticResource Cell}"
+                                                       Text="{Binding Bill}" />
+                                            <TextBlock Margin="12,2,12,0"
+                                                       Foreground="{StaticResource InkMutedBrush}"
+                                                       Style="{StaticResource Cell}"
+                                                       Text="{Binding BillDetail}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Margin="0,3,0,0">
+                                            <TextBlock Style="{StaticResource Cell}" Text="{Binding InTallyNumber}" />
+                                            <TextBlock Margin="12,2,12,0"
+                                                       Foreground="{StaticResource InkMutedBrush}"
+                                                       Style="{StaticResource Cell}"
+                                                       Text="{Binding InTallyDetail}" />
+                                        </StackPanel>
+                                        <shell:FillCell Grid.Column="3">
+                                            <TextBlock Margin="12,3,12,0"
+                                                       Foreground="{StaticResource InkMutedBrush}"
+                                                       LineHeight="19"
+                                                       Style="{StaticResource Cell}"
+                                                       Text="{Binding Meaning}"
+                                                       TextTrimming="None"
+                                                       TextWrapping="Wrap" />
+                                        </shell:FillCell>
+                                        <Button Grid.Column="4"
+                                                Margin="0,-4,12,0"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                AutomationProperties.Name="{Binding Bill, StringFormat='Open bill {0}'}"
+                                                Command="{Binding DataContext.OpenBillCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                Content="Open bill"
+                                                Style="{StaticResource BtnSm}"
+                                                Visibility="{Binding HasBill, Converter={StaticResource BoolToVis}}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <DockPanel Margin="16,10" Visibility="{Binding HasMoreRows, Converter={StaticResource BoolToVis}}">
+                        <Button DockPanel.Dock="Right"
+                                Command="{Binding ShowMoreRowsCommand}"
+                                Content="Show more"
+                                Style="{StaticResource BtnSm}" />
+                        <TextBlock VerticalAlignment="Center"
+                                   Style="{StaticResource TxtHint}"
+                                   Text="{Binding MoreRowsText}" />
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Margin="0,12,0,0"
+                       Style="{StaticResource TxtHint}"
+                       Text="A bill is compared when Tally should hold its voucher: posted, edited after a push, or waiting for reconciliation. It is matched to its voucher by the id its push recorded; a bill marked as pushed by hand, by its number."
+                       TextWrapping="Wrap" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

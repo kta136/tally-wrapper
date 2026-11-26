@@ -36,6 +36,7 @@ public partial class SettingsViewModel : ObservableObject,
         ISettingsApiClient settingsApi,
         IMastersApiClient mastersApi,
         IPrintAssetApiClient printAssetApi,
+        ITallyCheckApiClient tallyCheckApi,
         IDialogService dialogs,
         IPrintDispatcher? printDispatcher = null,
         IPrintPreferencesStore? printPreferences = null,
@@ -46,6 +47,7 @@ public partial class SettingsViewModel : ObservableObject,
     {
         _settingsApi = settingsApi;
         Handover = new HandoverSettingsViewModel(handoverKeys ?? new HandoverKeyStore(), dialogs);
+        TallyCheck = new TallyCheckViewModel(tallyCheckApi);
         Draft = new SettingsDraft();
         Draft.PropertyChanged += OnDraftPropertyChanged;
 
@@ -63,7 +65,8 @@ public partial class SettingsViewModel : ObservableObject,
         // Admin is added conditionally once AdminVm is wired and unlocked —
         // see SyncAdminSection. This keeps the sidebar from advertising admin
         // capabilities to an operator who doesn't have a session.
-        // In the order the sidebar groups them: what every counter shares, then what is this PC's own.
+        // In the order the sidebar groups them: what every counter shares, what is this PC's own,
+        // then the checks.
         Sections = new ObservableCollection<SettingsSectionKey>
         {
             SettingsSectionKey.Connection,
@@ -74,6 +77,7 @@ public partial class SettingsViewModel : ObservableObject,
             SettingsSectionKey.Server,
             SettingsSectionKey.Handover,
             SettingsSectionKey.Advanced,
+            SettingsSectionKey.TallyCheck,
         };
         SectionGroups = new ListCollectionView(Sections);
         SectionGroups.GroupDescriptions.Add(new PropertyGroupDescription(null, SettingsSectionGroupConverter.Instance));
@@ -156,6 +160,9 @@ public partial class SettingsViewModel : ObservableObject,
 
     /// <summary>Settings → Hand-over: this PC's hand-over key.</summary>
     public HandoverSettingsViewModel Handover { get; }
+
+    /// <summary>Settings → Tally check: this year's bills set against the vouchers in Tally.</summary>
+    public TallyCheckViewModel TallyCheck { get; }
     public MasterDataSettingsViewModel MasterData { get; }
     public SettingsDraft Draft { get; }
     public PrintLayoutViewModel PrintLayout { get; }
@@ -210,6 +217,7 @@ public partial class SettingsViewModel : ObservableObject,
     public bool IsAdvancedVisible => _sectionCoordinator.IsAdvancedVisible;
     public bool IsHandoverVisible => _sectionCoordinator.IsHandoverVisible;
     public bool IsAdminVisible => _sectionCoordinator.IsAdminVisible;
+    public bool IsTallyCheckVisible => _sectionCoordinator.IsTallyCheckVisible;
 
     /// <summary>Show the live preview pane only for Invoice and Print Layout sections.</summary>
     public bool IsPreviewVisible => _sectionCoordinator.IsPreviewVisible;
@@ -233,8 +241,8 @@ public partial class SettingsViewModel : ObservableObject,
     /// <summary>The chip turns amber with "Unsaved changes" while a draft section has edits not yet saved.</summary>
     public bool IsDirtyDraftSection => IsDirty && SettingsSections.IsEditedAsDraft(SelectedSection);
 
-    /// <summary>The sections of the shared group have a band under the title, with the section's buttons in it.</summary>
-    public bool HasHeaderBand => SelectedSectionScope == SettingsSectionScope.Shared;
+    /// <summary>The sections of the shared group, and the checks, have a band under the title, with the section's buttons in it.</summary>
+    public bool HasHeaderBand => SelectedSectionScope is SettingsSectionScope.Shared or SettingsSectionScope.Checks;
 
     /// <summary>Refresh and Edit, then Discard and Save all: for the sections edited as one draft.</summary>
     public bool ShowsDraftButtons => SettingsSections.IsEditedAsDraft(SelectedSection);
@@ -249,6 +257,11 @@ public partial class SettingsViewModel : ObservableObject,
             if (SelectedSection == SettingsSectionKey.PrintLayout)
             {
                 return $"Used by the preview, printing and PDF export · Updated {FormatUpdated(PrintLayout.UpdatedAtUtc)}";
+            }
+
+            if (SelectedSection == SettingsSectionKey.TallyCheck)
+            {
+                return "Compares this year's bills with the sales vouchers in Tally. Nothing is changed in either.";
             }
 
             if (!ShowsDraftButtons)
@@ -315,6 +328,7 @@ public partial class SettingsViewModel : ObservableObject,
         OnPropertyChanged(nameof(IsAdvancedVisible));
         OnPropertyChanged(nameof(IsHandoverVisible));
         OnPropertyChanged(nameof(IsAdminVisible));
+        OnPropertyChanged(nameof(IsTallyCheckVisible));
         OnPropertyChanged(nameof(IsPreviewVisible));
     }
 
@@ -433,5 +447,6 @@ public enum SettingsSectionKey
     Masters,
     Advanced,
     Handover,
+    TallyCheck,
     Admin,
 }

@@ -52,7 +52,7 @@ internal static class DesignSample
         => new(new DateTime(2026, 10, day, hour, minute, 0, DateTimeKind.Unspecified), TimeZoneInfo.Local.GetUtcOffset(new DateTime(2026, 10, day, hour, minute, 0)));
 
     /// <summary>The settings of the sample showroom: its company, ledgers, ten items and three karats, loaded as the server would send them.</summary>
-    public static SettingsViewModel CreateSettings(IDialogService? dialogs = null)
+    public static SettingsViewModel CreateSettings(IDialogService? dialogs = null, ITallyCheckApiClient? tallyCheckApi = null)
     {
         ItemMasterEntry Item(string name, decimal wastage, decimal labour, string mapping, string mode = PricingModes.Both, string category = ItemCategories.GoldBased, string unit = ItemUnits.Gram)
             => new(name, unit, wastage, category, mode, labour, mapping);
@@ -103,7 +103,8 @@ internal static class DesignSample
         var settings = OfflineApi.Settings(
             new SampleSettingsApi(fromServer),
             new DesktopBootstrapOptions { ApiBaseUrl = "http://192.168.1.20:5108" },
-            dialogs: dialogs);
+            dialogs: dialogs,
+            tallyCheckApi: tallyCheckApi);
         settings.ApplyEffectiveSettings(fromServer);
 
         var master = settings.MasterData;

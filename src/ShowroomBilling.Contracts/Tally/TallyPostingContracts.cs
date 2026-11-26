@@ -40,6 +40,11 @@ public enum TallyPostOutcome
 /// The Tally company the voucher went to, on a voucher Tally accepted. A master
 /// id names a voucher only within its company, so an Alter must go to the same one.
 /// </param>
+/// <param name="UpdatedExistingVoucher">
+/// A create that Tally answered by changing a voucher it already had: one made
+/// earlier with the same <c>REMOTEID</c>, whose answer was lost or which was
+/// sent again. TallyPrime 7.2 updates that voucher rather than making a second.
+/// </param>
 public sealed record TallyPostResponse(
     TallyPostOutcome Outcome,
     string? RemoteId,
@@ -48,15 +53,18 @@ public sealed record TallyPostResponse(
     string? RequestExcerpt,
     string? ResponseExcerpt,
     string? TallyMasterId = null,
-    string? Company = null)
+    string? Company = null,
+    bool UpdatedExistingVoucher = false)
 {
     /// <summary>Tally accepted the voucher.</summary>
     public static TallyPostResponse Posted(
         string? remoteId,
         string? requestExcerpt = null,
         string? responseExcerpt = null,
-        string? tallyMasterId = null) =>
-        new(TallyPostOutcome.Posted, remoteId, null, null, requestExcerpt, responseExcerpt, tallyMasterId);
+        string? tallyMasterId = null,
+        bool updatedExistingVoucher = false) =>
+        new(TallyPostOutcome.Posted, remoteId, null, null, requestExcerpt, responseExcerpt, tallyMasterId,
+            UpdatedExistingVoucher: updatedExistingVoucher);
 
     /// <summary>Tally definitely does not hold the voucher: it was rejected, or never sent.</summary>
     public static TallyPostResponse Failed(

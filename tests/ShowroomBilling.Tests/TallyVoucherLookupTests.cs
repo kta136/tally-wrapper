@@ -48,7 +48,25 @@ public sealed class TallyVoucherLookupTests
         var found = await Lookup(Collection(Voucher(" 4521", Number, "Sales", amount: "-1000.000")))
             .FindByNumberAsync(Number, FiscalYear, TestContext.Current.CancellationToken);
 
-        Assert.Equal([new TallyVoucherRef("4521", April15, 1000m, "Acme Jewellers")], found);
+        Assert.Equal([new TallyVoucherRef("4521", April15, 1000m, "Acme Jewellers", Number)], found);
+    }
+
+    [Fact]
+    public async Task The_years_sales_vouchers_are_asked_for_by_type_and_read_with_their_numbers()
+    {
+        var client = new TallyPosterTests.FakeXmlClient(Collection(
+            Voucher("4521", "DEV-26/0001", "Sales"),
+            Voucher("4522", "DEV-26/0002", "Sales", date: "20260416"),
+            Voucher("4600", "R/1", "Receipt"),
+            Voucher("4400", "DEV-25/0099", "Sales", date: "20260331")));
+
+        var (destination, found) = await Lookup(client).ListSalesVouchersAsync(FiscalYear, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Sales", destination.VoucherType);
+        Assert.Equal("$VoucherTypeName = \"Sales\"", client.LastRequest!.Descendants("SYSTEM").Single().Value);
+        Assert.Contains("Amount", client.LastRequest.Descendants("FETCH").Single().Value);
+        // Another type, and a voucher of the year before, are not the year's sales.
+        Assert.Equal([("4521", "DEV-26/0001"), ("4522", "DEV-26/0002")], found.Select(v => (v.MasterId, v.Number!)));
     }
 
     [Fact]
@@ -259,7 +277,7 @@ public sealed class TallyVoucherLookupTests
         var found = await Lookup(Collection(Voucher(" 4521", "DEV-26/0002", "Sales", date: "20260430")))
             .FindByMasterIdAsync("4521", FiscalYear, TestContext.Current.CancellationToken);
 
-        Assert.Equal(new TallyVoucherRef("4521", new DateOnly(2026, 4, 30), 100m, "Acme Jewellers"), found);
+        Assert.Equal(new TallyVoucherRef("4521", new DateOnly(2026, 4, 30), 100m, "Acme Jewellers", "DEV-26/0002"), found);
     }
 
     [Fact]

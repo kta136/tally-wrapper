@@ -224,7 +224,11 @@ public sealed class TallyPoster(
             remoteId,
             requestExcerpt: requestExcerpt,
             responseExcerpt: responseExcerpt,
-            tallyMasterId: tallyMasterId);
+            tallyMasterId: tallyMasterId,
+            // A create Tally answered with ALTERED and no CREATED: it already had a
+            // voucher with this REMOTEID (an earlier push whose answer was lost, or
+            // the same version sent again) and changed it instead of making another.
+            updatedExistingVoucher: request.Operation == TallyPostOperation.Create && createdCount == 0 && alteredCount > 0);
     }
 
     private static string? FindFirst(XElement response, string localName)

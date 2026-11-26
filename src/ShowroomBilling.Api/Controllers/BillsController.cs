@@ -84,6 +84,16 @@ public sealed class BillsController(
         return response is null ? NotFound() : Ok(response);
     }
 
+    /// <summary>
+    /// A read, asked before a push or retry: the bills that should go to Tally first, so that Tally,
+    /// which numbers a day's vouchers in the order they arrive, files each under its own number.
+    /// </summary>
+    [HttpPost("push-order")]
+    public async Task<ActionResult<BillPushOrderResponse>> GetPushOrder(
+        [FromBody] BillPushOrderRequest request,
+        CancellationToken cancellationToken)
+        => Ok(await billService.FindEarlierUnpushedAsync(request, cancellationToken));
+
     [HttpPost("batch")]
     public async Task<ActionResult<BillBatchGetResponse>> GetMany(
         [FromBody] BillBatchGetRequest request,

@@ -1,23 +1,31 @@
 # A stand-in for TallyPrime's XML endpoint. run-scratch.ps1 starts it; it is
 # for the scratch environment only and keeps nothing.
 #
-# It answers the three things the API asks Tally for:
+# It answers the four things the API asks Tally for:
 #   - the four master collections (companies, ledgers, stock items, voucher types)
 #   - a voucher import (Create or Alter)
 #   - which voucher has a given master id, or which vouchers carry a given
-#     number (asked before an edited bill is pushed); it knows the vouchers of
-#     this run only
+#     number (asked before an edited bill is pushed, and after every push to
+#     read back the number the voucher was filed under)
+#   - every sales voucher (Settings -> Tally check)
+# It knows the vouchers of this run only.
 #
 # An Alter is matched the way TallyPrime matches it: by its TAGVALUE master id
 # together with its DATE attribute, which must be the date the voucher has now.
 # When they do not match a voucher, it creates a new one (CREATED=1), as
 # TallyPrime does, and the API reports the bill as needing reconciliation.
+# A Create whose REMOTEID a voucher of the company already carries updates that
+# voucher instead (ALTERED=1), as TallyPrime does: a repeated create makes no
+# second voucher.
 #
 # To see the bill states that need Tally to misbehave, put one of these words in
 # the bill's party name or note (both go into the voucher narration):
 #   FAIL     Tally refuses the voucher with a line error  -> bill becomes "failed"
 #   UNKNOWN  Tally keeps the voucher but answers with a server error
 #                                                         -> bill needs reconciliation
+#   RENUMBER Tally files a new voucher one number later, as Automatic numbering
+#            does when a voucher was inserted earlier
+#                                                         -> the Bills row says "In Tally as ..."
 # After UNKNOWN, Mark as Pushed is the true answer: edit the bill (take the word
 # out) and push, and the voucher is found by its number and altered.
 
@@ -123,6 +131,9 @@ function Get-Collection([string]$body) {
     } elseif ($body -match '<ID>TW_VoucherById</ID>') {
         $wanted = if ($body -match '\$MasterID = (\d+)') { $Matches[1] } else { '' }
         $vouchers.GetEnumerator() | Where-Object { $_.Value.company -eq $company -and $_.Key -eq $wanted } | ForEach-Object { Get-VoucherRow $_.Key $_.Value }
+    } elseif ($body -match '<ID>TW_SalesVouchers</ID>') {
+        $wanted = if ($body -match '\$VoucherTypeName = "([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '' }
+        $vouchers.GetEnumerator() | Where-Object { $_.Value.company -eq $company -and $_.Value.type -eq $wanted } | ForEach-Object { Get-VoucherRow $_.Key $_.Value }
     } else {
         return $null
     }
@@ -136,6 +147,18 @@ function Get-ImportResult([int]$created, [int]$altered, [int]$errors, [string]$l
     "<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DATA><IMPORTRESULT>" +
         "<CREATED>$created</CREATED><ALTERED>$altered</ALTERED><DELETED>0</DELETED>$last" +
         "<ERRORS>$errors</ERRORS><EXCEPTIONS>0</EXCEPTIONS>$line</IMPORTRESULT></DATA></BODY></ENVELOPE>"
+}
+
+# The next number after this one: its core, the last of its longest runs of digits,
+# goes up by one with its width kept. SR/2026-27/0012 -> SR/2026-27/0013, and
+# SR/0051/26-27 -> SR/0052/26-27 (not the year after the core).
+function Get-NextNumber([string]$number) {
+    $runs = @([regex]::Matches($number, '[0-9]+'))
+    if ($runs.Count -eq 0) { return $number }
+    $longest = ($runs | Measure-Object -Property Length -Maximum).Maximum
+    $core = $runs | Where-Object { $_.Length -eq $longest } | Select-Object -Last 1
+    $next = ([long]$core.Value + 1).ToString().PadLeft($core.Length, '0')
+    $number.Substring(0, $core.Index) + $next + $number.Substring($core.Index + $core.Length)
 }
 
 function Write-Log([string]$message) {
@@ -168,6 +191,7 @@ try {
                 $number = if ($body -match '<VOUCHERNUMBER>(.*?)</VOUCHERNUMBER>') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '?' }
                 $type = if ($body -match '<VOUCHER\b[^>]*\bVCHTYPE="([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { 'Sales' }
                 $target = if ($body -match '<VOUCHER\b[^>]*\bTAGVALUE="(\d+)"') { $Matches[1] } else { '' }
+                $remoteId = if ($body -match '<VOUCHER\b[^>]*\bREMOTEID="([^"]*)"') { [System.Net.WebUtility]::HtmlDecode($Matches[1]) } else { '' }
                 $dateNamed = if ($body -match '<VOUCHER\b[^>]*\bDATE="(\d{8})"') { $Matches[1] } else { '' }
                 $date = if ($body -match '<DATE>(\d{8})</DATE>') { $Matches[1] } else { '' }
                 # The voucher's total as Tally lists it: the party line, the first ledger line the API sends.
@@ -176,6 +200,14 @@ try {
                 # TallyPrime finds the voucher to alter by master id and the date it has now, within the company.
                 $matched = $action -eq 'Alter' -and $target -and $vouchers.Contains($target) -and
                     $vouchers[$target].company -eq $company -and $dateNamed -eq $vouchers[$target].date
+                # A Create with a REMOTEID the company already has updates that voucher.
+                if ($action -eq 'Create' -and $remoteId) {
+                    $sameRemote = $vouchers.GetEnumerator() | Where-Object { $_.Value.company -eq $company -and $_.Value.remoteId -eq $remoteId } | Select-Object -First 1
+                    if ($sameRemote) {
+                        $target = $sameRemote.Key
+                        $matched = $true
+                    }
+                }
                 if ($narration -cmatch 'FAIL') {
                     $answer = Get-ImportResult 0 0 1 'Stand-in Tally refused this voucher: the party name or note contains FAIL.' ''
                     Write-Log "voucher $action $number -> line error (FAIL in narration)"
@@ -183,10 +215,13 @@ try {
                     # Tally takes the voucher, whether or not its answer gets back.
                     $voucherId = ''
                     if ($matched) {
-                        $vouchers[$target] = @{ number = $number; type = $type; date = $date; amount = $amount; company = $company }
+                        # An altered voucher keeps its number when Tally numbers vouchers itself.
+                        $kept = if ($narration -cmatch 'RENUMBER') { $vouchers[$target].number } else { $number }
+                        $vouchers[$target] = @{ number = $kept; type = $type; date = $date; amount = $amount; company = $company; remoteId = $vouchers[$target].remoteId }
                     } else {
                         $voucherId = "$nextVoucherId"
-                        $vouchers[$voucherId] = @{ number = $number; type = $type; date = $date; amount = $amount; company = $company }
+                        $filed = if ($narration -cmatch 'RENUMBER') { Get-NextNumber $number } else { $number }
+                        $vouchers[$voucherId] = @{ number = $filed; type = $type; date = $date; amount = $amount; company = $company; remoteId = $remoteId }
                         $nextVoucherId++
                     }
 
@@ -196,7 +231,11 @@ try {
                         Write-Log "voucher $action $number -> kept, but HTTP 500 (UNKNOWN in narration)"
                     } elseif ($matched) {
                         $answer = Get-ImportResult 0 1 0 '' $target
-                        Write-Log "voucher Alter $number -> altered, voucher id $target"
+                        if ($action -eq 'Create') {
+                            Write-Log "voucher Create $number -> REMOTEID already in Tally: altered voucher id $target, as TallyPrime does"
+                        } else {
+                            Write-Log "voucher Alter $number -> altered, voucher id $target"
+                        }
                     } else {
                         $answer = Get-ImportResult 1 0 0 '' $voucherId
                         if ($action -eq 'Alter') {

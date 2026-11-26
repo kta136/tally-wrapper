@@ -82,6 +82,12 @@ public sealed class BillService
         CancellationToken cancellationToken = default)
         => _read.GetManyAsync(request, cancellationToken);
 
+    /// <summary>The bills that should reach Tally before these; see <see cref="BillPushOrderResponse"/>.</summary>
+    public Task<BillPushOrderResponse> FindEarlierUnpushedAsync(
+        BillPushOrderRequest request,
+        CancellationToken cancellationToken = default)
+        => _read.FindEarlierUnpushedAsync(request, cancellationToken);
+
     public Task<BillListResponse> SearchAsync(
         BillSearchFilter filter,
         CancellationToken cancellationToken = default)

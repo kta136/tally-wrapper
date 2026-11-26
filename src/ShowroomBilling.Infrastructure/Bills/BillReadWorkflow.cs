@@ -47,6 +47,92 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         return row is null ? null : BillSerialization.MapResponse(row.bill, row.rev);
     }
 
+    /// <summary>
+    /// The bills that should reach Tally before the ones named: see <see cref="BillPushOrderResponse"/>.
+    /// Only a bill whose push makes a voucher counts on either side; an edited bill's push alters the
+    /// voucher it already has, which keeps its place.
+    /// </summary>
+    internal async Task<BillPushOrderResponse> FindEarlierUnpushedAsync(
+        BillPushOrderRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var ids = BillAdminSelection.NormalizeOrderedIds(request.BillIds).ToArray();
+        if (ids.Length > MaxBatchGetIds)
+        {
+            throw new RequestValidationException(
+                $"At most {MaxBatchGetIds} bills can be checked at once (got {ids.Length}).");
+        }
+
+        string[] notInTally = [BillStates.Pending, BillStates.Draft, BillStates.Failed];
+        var requested = ids.Length == 0
+            ? []
+            : await dbContext.Bills.AsNoTracking()
+                .Where(bill => ids.Contains(bill.Id))
+                .Select(bill => new
+                {
+                    bill.Id,
+                    bill.FiscalYear,
+                    bill.InvoiceCore,
+                    bill.State,
+                    bill.EditedAfterPush,
+                    BillDate = dbContext.BillRevisions.Where(r => r.Id == bill.CurrentRevisionId).Select(r => r.BillDate).FirstOrDefault(),
+                })
+                .ToListAsync(cancellationToken);
+
+        // The order to push in: by date, then number, from what the database holds now.
+        var known = requested.ToDictionary(r => r.Id);
+        var pushOrder = ids
+            .Select((id, index) => (Id: id, Index: index, Bill: known.GetValueOrDefault(id)))
+            .OrderBy(x => x.Bill is null)
+            .ThenBy(x => x.Bill?.BillDate ?? DateOnly.MaxValue)
+            .ThenBy(x => x.Bill?.InvoiceCore ?? long.MaxValue)
+            .ThenBy(x => x.Index)
+            .Select(x => x.Id)
+            .ToList();
+
+        // The bills about to make a voucher; an edited bill's push alters the one it has.
+        var targets = requested
+            .Where(r => r.InvoiceCore is not null && r.FiscalYear is not null && !r.EditedAfterPush && notInTally.Contains(r.State))
+            .Select(r => new { r.FiscalYear, Core = r.InvoiceCore!.Value, r.BillDate })
+            .ToList();
+        if (targets.Count == 0)
+        {
+            return new BillPushOrderResponse([], pushOrder);
+        }
+
+        var years = targets.Select(t => t.FiscalYear).Distinct().ToArray();
+        var highestCore = targets.Max(t => t.Core);
+        var candidates = await dbContext.Bills.AsNoTracking()
+            .Where(bill => years.Contains(bill.FiscalYear)
+                && !ids.Contains(bill.Id)
+                && bill.InvoiceCore != null
+                && bill.InvoiceCore < highestCore
+                && !bill.EditedAfterPush
+                && notInTally.Contains(bill.State))
+            .Select(bill => new
+            {
+                bill.Id,
+                bill.InvoiceNumber,
+                bill.State,
+                bill.FiscalYear,
+                Core = bill.InvoiceCore!.Value,
+                BillDate = dbContext.BillRevisions.Where(r => r.Id == bill.CurrentRevisionId).Select(r => r.BillDate).FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+
+        // A bill without a date on either side is held to its number alone, so it is not missed.
+        var earlier = candidates
+            .Where(c => targets.Any(t => t.FiscalYear == c.FiscalYear
+                && c.Core < t.Core
+                && (c.BillDate is null || t.BillDate is null || c.BillDate <= t.BillDate)))
+            .OrderBy(c => c.BillDate ?? DateOnly.MinValue)
+            .ThenBy(c => c.Core)
+            .Select(c => new UnpushedEarlierBill(c.Id, c.InvoiceNumber ?? string.Empty, c.BillDate, c.State))
+            .ToList();
+        return new BillPushOrderResponse(earlier, pushOrder);
+    }
+
     internal async Task<BillBatchGetResponse> GetManyAsync(
         BillBatchGetRequest request,
         CancellationToken cancellationToken = default)
@@ -195,9 +281,71 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
             total = skip + rows.Count + (hasMore ? 1 : 0);
         }
 
-        return new BillListResponse(total, skip, take, rows, hasMore);
+        return new BillListResponse(total, skip, take, await WithTallyNumbersAsync(rows, cancellationToken), hasMore);
     }
 
+    /// <summary>
+    /// Adds the number Tally filed each bill's voucher under, from the read-back
+    /// after its last push (<c>tally.voucher.filed</c>), while that push is still
+    /// the latest word on what Tally holds: a later push, Mark as Pushed or Mark
+    /// as Pending makes it stale, so it is left out then. A read-back counts only
+    /// for the voucher its push recorded, since it is written after the push has
+    /// settled and another counter may have pushed or marked the bill meanwhile.
+    /// </summary>
+    private async Task<IReadOnlyList<BillSummaryItem>> WithTallyNumbersAsync(
+        List<BillSummaryItem> rows,
+        CancellationToken cancellationToken)
+    {
+        if (rows.Count == 0)
+        {
+            return rows;
+        }
+
+        var ids = rows.Select(r => r.Id.ToString()).ToList();
+        var events = await dbContext.AuditEvents.AsNoTracking()
+            .Where(e => e.EntityType == "bill"
+                && ids.Contains(e.EntityId)
+                && (e.EventType == BillAuditEvents.TallyPosted
+                    || e.EventType == BillAuditEvents.MarkPosted
+                    || e.EventType == BillAuditEvents.MarkPending
+                    || e.EventType == BillAuditEvents.TallyVoucherFiled))
+            .Select(e => new
+            {
+                e.EntityId,
+                e.EventType,
+                e.CreatedAtUtc,
+                e.Id,
+                PayloadJson = e.EventType == BillAuditEvents.TallyVoucherFiled ? e.PayloadJson : null,
+            })
+            .ToListAsync(cancellationToken);
+
+        var filedAs = new Dictionary<string, string?>();
+        foreach (var trail in events.GroupBy(e => e.EntityId))
+        {
+            var ordered = trail.OrderBy(e => e.CreatedAtUtc).ThenBy(e => e.Id).ToList();
+            var lastTruth = ordered.LastOrDefault(e => e.EventType != BillAuditEvents.TallyVoucherFiled);
+            if (lastTruth?.EventType != BillAuditEvents.TallyPosted)
+            {
+                continue;
+            }
+
+            // Only the read made for that very push: a read of an earlier push of the same
+            // voucher can be written late, after a newer push has settled.
+            var pushAuditId = lastTruth.Id.ToString();
+            var filed = ordered.LastOrDefault(e => e.EventType == BillAuditEvents.TallyVoucherFiled
+                && string.Equals(BillAuditStore.ReadDetailsString(e.PayloadJson, "pushAuditId"), pushAuditId, StringComparison.OrdinalIgnoreCase));
+            if (filed is not null)
+            {
+                filedAs[trail.Key] = BillAuditStore.ReadDetailsString(filed.PayloadJson, "voucherNumberInTally");
+            }
+        }
+
+        return rows
+            .Select(r => filedAs.TryGetValue(r.Id.ToString(), out var number) && number is not null
+                ? r with { TallyVoucherNumber = number }
+                : r)
+            .ToList();
+    }
 
     private static string NormalizeSort(string? sort)
     {

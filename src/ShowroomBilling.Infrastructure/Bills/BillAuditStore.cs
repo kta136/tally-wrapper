@@ -11,7 +11,8 @@ internal sealed class BillAuditStore(
     ShowroomBillingDbContext dbContext,
     IAuditActorContext? actorContext = null)
 {
-    internal void Write(
+    /// <returns>The written row, so a later row can name it and a failed save can let it go.</returns>
+    internal AuditEventEntity Write(
         Guid billId,
         string eventType,
         string state,
@@ -19,8 +20,9 @@ internal sealed class BillAuditStore(
         object? details = null)
     {
         var actor = actorContext?.Current ?? AuditRow.System;
-        dbContext.AuditEvents.Add(AuditRow.Create(
-            "bill", billId.ToString(), eventType, actor, at, BuildPayload(state, details)));
+        var row = AuditRow.Create("bill", billId.ToString(), eventType, actor, at, BuildPayload(state, details));
+        dbContext.AuditEvents.Add(row);
+        return row;
     }
 
     /// <summary>The <c>{ state, details }</c> shape every bill event carries; the Desktop reads <c>details</c>.</summary>

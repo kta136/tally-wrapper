@@ -20,6 +20,16 @@ public sealed class TallyPosterTests
         Assert.Equal(TallyPostOutcome.Posted, response.Outcome);
         Assert.Equal("101", response.RemoteId);
         Assert.Equal("101", response.TallyMasterId);
+        // Tally had a voucher with this REMOTEID already and changed it (TallyPrime 7.2 does that, it makes no second one).
+        Assert.True(response.UpdatedExistingVoucher);
+    }
+
+    [Fact]
+    public async Task PostAsync_ACreateThatMadeAVoucherDidNotUpdateAnExistingOne()
+    {
+        var response = await BuildPoster(Response(created: 1, altered: 0, lastVoucherId: "101")).PostAsync(Request());
+
+        Assert.False(response.UpdatedExistingVoucher);
     }
 
     [Theory]

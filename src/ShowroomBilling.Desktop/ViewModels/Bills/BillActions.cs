@@ -1,3 +1,4 @@
+using System.Globalization;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Contracts.Settings;
@@ -70,6 +71,7 @@ internal sealed class BillActions(
     public async Task<BillActionResult?> PushAsync(BillRef bill, string? note, Action<string> busy, CancellationToken cancellationToken)
     {
         if (!await TallyReadyAsync(cancellationToken)) return null;
+        if (await InPushOrderAsync([bill.Id], cancellationToken) is null) return null;
 
         return await SendAsync(
             $"Pushing {bill.Name}…",
@@ -78,7 +80,13 @@ internal sealed class BillActions(
             async () =>
             {
                 var pushed = await api.PushAsync(bill.Id, new PushBillRequest(note), cancellationToken);
-                return Outcome("Pushed", bill.Name, pushed.State) with { Bill = pushed };
+                return FiledAs(
+                    Outcome("Pushed", bill.Name, pushed.State),
+                    pushed.InvoiceNumber,
+                    pushed.TallyVoucherNumber,
+                    // Tally check compares the current year only.
+                    inTallyCheck: pushed.FiscalYear is null
+                        || pushed.FiscalYear == InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow)) with { Bill = pushed };
             });
     }
 
@@ -86,13 +94,14 @@ internal sealed class BillActions(
     {
         if (billIds.Count == 0) return null;
         if (!await TallyReadyAsync(cancellationToken)) return null;
+        if (await InPushOrderAsync(billIds, cancellationToken) is not { } ordered) return null;
 
         return await SendAsync(
             $"Pushing {billIds.Count} selected bill(s)…",
             "Push selected failed",
             busy,
             async () => BatchPushOutcome(await api.PushSelectedAsync(
-                new PushSelectedBillsRequest(billIds.ToArray(), "Selected push from Bills tab"),
+                new PushSelectedBillsRequest(ordered.ToArray(), "Selected push from Bills tab"),
                 cancellationToken)));
     }
 
@@ -106,12 +115,27 @@ internal sealed class BillActions(
         var stoppedAt = response.Failed > 0 ? response.Items.LastOrDefault(item => !item.Succeeded) : null;
         if (stoppedAt is null)
         {
-            var only = response is { Matched: 1, Succeeded: 1 } ? response.Items.FirstOrDefault()?.InvoiceNumber : null;
-            return new BillActionResult(
-                only is null ? BillsStatusFormatter.FormatBatchPushStatus(response) : $"Pushed {only}.",
+            var only = response is { Matched: 1, Succeeded: 1 } ? response.Items.FirstOrDefault() : null;
+            // A batch answer does not say which year its bills are of, and Tally check shows
+            // the current one only, so it is not named here; the row says what Tally holds.
+            if (only is { InvoiceNumber: { } onlyNumber })
+            {
+                return FiledAs(new BillActionResult($"Pushed {onlyNumber}."), onlyNumber, only.TallyVoucherNumber, inTallyCheck: false);
+            }
+
+            var filedElsewhere = response.Items.Count(item => item.Succeeded && NumberedOtherwise(item.InvoiceNumber, item.TallyVoucherNumber));
+            var result = new BillActionResult(
+                BillsStatusFormatter.FormatBatchPushStatus(response),
                 Tone: response.Failed > 0 ? BillStateDisplay.ToneErr
                     : response.Cancelled || response.Succeeded == 0 ? BillStateDisplay.ToneWarn
                     : BillStateDisplay.ToneOk);
+            return filedElsewhere == 0 || result.Tone != BillStateDisplay.ToneOk
+                ? result
+                : result with
+                {
+                    Message = $"{result.Message} Tally filed {filedElsewhere} under another number: their rows say which.",
+                    Tone = BillStateDisplay.ToneWarn,
+                };
         }
 
         var name = stoppedAt.InvoiceNumber ?? "a bill";
@@ -127,13 +151,13 @@ internal sealed class BillActions(
     {
         var confirmed = await dialogs.ConfirmAsync(new ConfirmRequest(
             "Push all pending bills?",
-            "Every pending and draft bill goes to Tally, oldest first. The run stops at the first failure.",
+            "Every pending and draft bill goes to Tally, by date and then number. The run stops at the first failure.",
             "Push all"));
         if (!confirmed) return null;
         if (!await TallyReadyAsync(cancellationToken)) return null;
 
         return await SendAsync(
-            "Pushing all pending bills (oldest first)…",
+            "Pushing all pending bills (by date and number)…",
             "Push all pending failed",
             busy,
             async () =>
@@ -151,15 +175,21 @@ internal sealed class BillActions(
     {
         if (bills.Count == 0) return null;
         if (!await TallyReadyAsync(cancellationToken)) return null;
+        if (await InPushOrderAsync(bills.Select(bill => bill.Id).ToArray(), cancellationToken) is not { } ordered) return null;
+        var byId = bills.ToDictionary(bill => bill.Id);
+        var inOrder = ordered.Select(id => byId[id]).ToArray();
 
+        // A bill Tally refuses stays out, so the next one would take its number: stop there, as
+        // a push of ticked bills does.
         return await ForEachAsync(
-            bills,
+            inOrder,
             bill => bill.Name,
             "Retrying",
             "Retry",
             busy,
             bill => api.RetryAsync(bill.Id, new RetryBillPostingRequest(note), cancellationToken),
-            sent => PostingOutcome("Retried", bills, sent));
+            sent => PostingOutcome("Retried", inOrder, sent),
+            stopAfter: status => status.BillState != BillStates.Posted);
     }
 
     public async Task<BillActionResult?> RepostAsync(IReadOnlyList<BillRef> bills, string? note, Action<string> busy, CancellationToken cancellationToken)
@@ -198,6 +228,24 @@ internal sealed class BillActions(
             Tone: BillStateDisplay.ToneWarn),
     };
 
+    /// <summary>
+    /// A push Tally took and filed under a number of its own (Automatic numbering ignores the number
+    /// sent) is said so, with where to look, instead of a plain "Pushed".
+    /// </summary>
+    private static BillActionResult FiledAs(BillActionResult result, string? invoiceNumber, string? tallyNumber, bool inTallyCheck = true) =>
+        result.Tone == BillStateDisplay.ToneOk && NumberedOtherwise(invoiceNumber, tallyNumber)
+            ? result with
+            {
+                Message = inTallyCheck
+                    ? $"{result.Message} Tally filed it as {tallyNumber}: see Settings → Tally check."
+                    : $"{result.Message} Tally filed it as {tallyNumber}.",
+                Tone = BillStateDisplay.ToneWarn,
+            }
+            : result;
+
+    private static bool NumberedOtherwise(string? invoiceNumber, string? tallyNumber) =>
+        !string.IsNullOrWhiteSpace(tallyNumber) && !string.Equals(tallyNumber, invoiceNumber, StringComparison.Ordinal);
+
     private static BillActionResult PostingOutcome(string done, IReadOnlyList<BillRef> bills, IReadOnlyList<BillPostingStatusResponse> sent)
     {
         if (bills.Count == 1)
@@ -206,6 +254,12 @@ internal sealed class BillActions(
         }
 
         var posted = sent.Count(status => status.BillState == BillStates.Posted);
+        if (sent.Count < bills.Count)
+        {
+            return BillActionResult.Failed(
+                $"{done} {sent.Count} of {bills.Count} bill(s), then stopped: {bills[sent.Count - 1].Name} did not go to Tally. The list shows why.");
+        }
+
         return posted == sent.Count
             ? new BillActionResult($"{done} {sent.Count} bill(s).")
             : BillActionResult.Failed($"{done} {sent.Count} bill(s): {posted} went to Tally, {sent.Count - posted} did not. The list shows which.");
@@ -428,6 +482,43 @@ internal sealed class BillActions(
     private async Task<bool> TallyReadyAsync(CancellationToken cancellationToken)
         => tallyReady is null || await tallyReady(cancellationToken);
 
+    /// <summary>
+    /// The bills to push or retry, in the order they should reach Tally, or null when the operator
+    /// chose not to go ahead. Tally numbers vouchers by date and, within a day, in the order they
+    /// arrive, so a bill pushed while an earlier-numbered bill of its day (or of an earlier day) is
+    /// not in Tally yet is filed under that bill's number: the server names such bills and gives the
+    /// order (by date, then number, as the bills are now), and the operator is asked before going
+    /// ahead. A server that cannot answer (an older one, or none) leaves the bills as given, and the
+    /// push itself then says what is wrong.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>?> InPushOrderAsync(IReadOnlyList<Guid> billIds, CancellationToken cancellationToken)
+    {
+        BillPushOrderResponse? order;
+        try
+        {
+            order = await api.GetPushOrderAsync(new BillPushOrderRequest(billIds), cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return billIds;
+        }
+
+        // Only an order of exactly these bills is used.
+        var ordered = order?.PushOrder is { } given
+            && given.Count == billIds.Count
+            && given.ToHashSet().SetEquals(billIds)
+                ? given
+                : billIds;
+        var earlier = order?.EarlierBills ?? [];
+        return earlier.Count == 0 || await dialogs.ConfirmAsync(BillConfirmations.PushOrder(earlier))
+            ? ordered
+            : null;
+    }
+
     /// <summary>The admin token, or why there is none: a result to show, or null when the operator just closed the unlock.</summary>
     private async Task<(string? Token, BillActionResult? Stopped)> AdminTokenAsync(CancellationToken cancellationToken)
     {
@@ -461,6 +552,7 @@ internal sealed class BillActions(
     /// ("<paramref name="verb"/> SR/1…", "<paramref name="what"/> failed"); several are counted
     /// ("<paramref name="verb"/> 2 of 5…", "<paramref name="what"/> stopped").
     /// </summary>
+    /// <param name="stopAfter">When it says so for a bill's answer, the bills after it are not sent.</param>
     private static Task<BillActionResult> ForEachAsync<T, TSent>(
         IReadOnlyList<T> bills,
         Func<T, string> name,
@@ -468,7 +560,8 @@ internal sealed class BillActions(
         string what,
         Action<string> busy,
         Func<T, Task<TSent>> send,
-        Func<IReadOnlyList<TSent>, BillActionResult> done)
+        Func<IReadOnlyList<TSent>, BillActionResult> done,
+        Func<TSent, bool>? stopAfter = null)
     {
         string Progress(int index) => bills.Count == 1 ? $"{verb} {name(bills[0])}…" : $"{verb} {index + 1} of {bills.Count}…";
 
@@ -482,7 +575,12 @@ internal sealed class BillActions(
                 for (var index = 0; index < bills.Count; index++)
                 {
                     busy(Progress(index));
-                    sent.Add(await send(bills[index]));
+                    var answer = await send(bills[index]);
+                    sent.Add(answer);
+                    if (stopAfter?.Invoke(answer) == true)
+                    {
+                        break;
+                    }
                 }
 
                 return done(sent);
@@ -503,6 +601,32 @@ internal static class BillConfirmations
             IsWarning: true,
             Note: "Repost only after the original voucher has been deleted in Tally.")
         : new ConfirmRequest($"Repost {what}?", "The bill goes to Tally again as a new voucher.", "Repost to Tally");
+
+    /// <summary>Asked before a push or retry that would go past bills that should reach Tally first.</summary>
+    public static ConfirmRequest PushOrder(IReadOnlyList<UnpushedEarlierBill> earlier)
+    {
+        const int shown = 5;
+        var facts = earlier
+            .Take(shown)
+            .Select(b => new ConfirmFact(
+                b.InvoiceNumber,
+                $"{(b.BillDate is { } date ? date.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) : "no date")} · {BillStateDisplay.Label(b.State, editedAfterPush: false)}"))
+            .ToList();
+        if (earlier.Count > shown)
+        {
+            facts.Add(new ConfirmFact("And", $"{earlier.Count - shown} more"));
+        }
+
+        return new ConfirmRequest(
+            earlier.Count == 1 ? $"Push before {earlier[0].InvoiceNumber}?" : $"Push before {earlier.Count} earlier bills?",
+            earlier.Count == 1
+                ? $"{earlier[0].InvoiceNumber} has an earlier number and is not in Tally yet. Tally numbers a day's vouchers in the order they arrive, so pushed now, this bill would be filed under an earlier number than its own."
+                : "These bills have earlier numbers and are not in Tally yet. Tally numbers a day's vouchers in the order they arrive, so pushed now, this would be filed under an earlier number than its own.",
+            "Push anyway",
+            IsWarning: true,
+            Note: "Push or retry the earlier bills first.",
+            Facts: facts);
+    }
 
     public static ConfirmRequest Void(string what)
         => new(

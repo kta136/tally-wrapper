@@ -443,8 +443,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
         Assert.Equal("MASTER ID", poster.LastRequest.TargetTagName);
         Assert.Equal("101", poster.LastRequest.TargetTagValue);
-        // The recorded voucher was read from Tally before anything was sent.
-        Assert.Equal(["101"], lookup.AskedById);
+        // Read back after the first push, read before the alter was sent, and
+        // read back after it.
+        Assert.Equal(["101", "101", "101"], lookup.AskedById);
         Assert.Empty(lookup.Asked);
     }
 
@@ -560,7 +561,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
 
-        Assert.Equal(["101"], lookup.AskedById);
+        // The first push's read-back, the read before the alter, and the alter's read-back.
+        Assert.Equal(alters ? ["101", "101", "101"] : ["101", "101"], lookup.AskedById);
         if (alters)
         {
             Assert.Equal(BillStates.Posted, pushed.State);
@@ -591,7 +593,8 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("push-edited"));
 
-        Assert.Empty(lookup.AskedById);
+        // Only the first push's read-back asked for 101; the alter target was found by number.
+        Assert.Equal(["101", "4521"], lookup.AskedById);
         Assert.Equal([(bill.InvoiceNumber!, bill.FiscalYear!)], lookup.Asked);
         Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal("4521", poster.LastRequest!.TargetTagValue);
@@ -764,10 +767,208 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited-again", 160m)), callerIsAdmin: true);
         await service.PushAsync(bill.Id, new PushBillRequest("push-edited-again"));
 
+        // Read back after the first alter, read before the second, read back after it.
         Assert.Single(lookup.Asked);
-        Assert.Equal(["4521"], lookup.AskedById);
+        Assert.Equal(["4521", "4521", "4521"], lookup.AskedById);
         Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
         Assert.Equal("4521", poster.LastRequest.TargetTagValue);
+    }
+
+    [Fact]
+    public async Task Push_ReadsTheVoucherBackAndRecordsTheNumberTallyFiledItUnder()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        // With Automatic numbering Tally gives the voucher a number of its own.
+        var lookup = new FakeVoucherLookup { VoucherNumber = "TALLY/2", VoucherAmount = 100m };
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Equal("TALLY/2", pushed.TallyVoucherNumber);
+        Assert.Equal(["101"], lookup.AskedById);
+        await using var check = CreateDbContext();
+        var filed = AuditDetails(await check.AuditEvents.SingleAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyVoucherFiled));
+        var posted = await check.AuditEvents.SingleAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyPosted);
+        Assert.Equal(posted.Id.ToString(), filed.GetProperty("pushAuditId").GetString());
+        Assert.Equal("TALLY/2", filed.GetProperty("voucherNumberInTally").GetString());
+        Assert.Equal("101", filed.GetProperty("tallyMasterId").GetString());
+        Assert.True(filed.GetProperty("numberDiffers").GetBoolean());
+        Assert.Equal(SampleBillDate.ToString("yyyy-MM-dd"), filed.GetProperty("voucherDateInTally").GetString());
+        Assert.Equal(100m, filed.GetProperty("totalInTally").GetDecimal());
+        Assert.Equal(bill.InvoiceNumber, filed.GetProperty("invoiceNumber").GetString());
+
+        var listed = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
+        Assert.Equal("TALLY/2", Assert.Single(listed.Items).TallyVoucherNumber);
+    }
+
+    [Fact]
+    public async Task Push_VoucherFiledUnderTheBillsOwnNumber_IsRecordedAsTheSame()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var lookup = new FakeVoucherLookup();
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        lookup.VoucherNumber = bill.InvoiceNumber;
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        Assert.Equal(bill.InvoiceNumber, pushed.TallyVoucherNumber);
+        var filed = AuditDetails(await db.AuditEvents.AsNoTracking()
+            .SingleAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyVoucherFiled));
+        Assert.False(filed.GetProperty("numberDiffers").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Push_VoucherTallyShowsNoNumberFor_IsRecordedAsNotUnderTheBillsNumber()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        // VoucherNumber left null: Tally lists the voucher without a number.
+        var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup());
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        var filed = AuditDetails(await db.AuditEvents.AsNoTracking()
+            .SingleAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyVoucherFiled));
+        Assert.True(filed.GetProperty("numberDiffers").GetBoolean());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, filed.GetProperty("voucherNumberInTally").ValueKind);
+    }
+
+    [Fact]
+    public async Task Push_VoucherCannotBeReadBack_ThePushStands()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var lookup = new FakeVoucherLookup { ByIdFailure = new HttpRequestException("No connection could be made") };
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Null(pushed.TallyVoucherNumber);
+        Assert.Equal(["101"], lookup.AskedById);
+        Assert.False(await db.AuditEvents.AnyAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyVoucherFiled));
+    }
+
+    [Fact]
+    public async Task Push_VoucherReadBackInAnotherCompany_IsNotUsed()
+    {
+        await using var db = CreateDbContext();
+        // Settings named another company by the time the voucher was read back:
+        // id 101 there is somebody else's sale.
+        var poster = new FakeTallyPoster(tallyMasterId: "101") { Company = "Company A" };
+        var lookup = new FakeVoucherLookup { Company = "Company B", VoucherNumber = "OTHER/1" };
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Null(pushed.TallyVoucherNumber);
+        Assert.False(await db.AuditEvents.AnyAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyVoucherFiled));
+    }
+
+    [Fact]
+    public async Task Push_NoIdFromTally_NothingIsReadBack()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(remoteId: "post-key", tallyMasterId: null);
+        var lookup = new FakeVoucherLookup { VoucherNumber = "TALLY/2" };
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Null(pushed.TallyVoucherNumber);
+        Assert.Empty(lookup.AskedById);
+    }
+
+    [Fact]
+    public async Task List_NumberTallyFiledTheBillUnder_IsDroppedOnceMarkAsPendingSaysTallyNoLongerHoldsIt()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup { VoucherNumber = "TALLY/2" });
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        await service.MarkPendingAsync(bill.Id, new MarkBillStateRequest("voucher deleted in Tally"));
+
+        var listed = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
+        Assert.Null(Assert.Single(listed.Items).TallyVoucherNumber);
+    }
+
+    [Fact]
+    public async Task List_AReadBackCountsOnlyForThePushItBelongsTo()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(new[]
+        {
+            TallyPostResponse.Posted("first", tallyMasterId: "101"),
+            TallyPostResponse.Posted("repost", tallyMasterId: "202"),
+        });
+        var lookup = new FakeVoucherLookup { VoucherNumber = "TALLY/2" };
+        lookup.Gone.Add("202");
+        var service = BuildService(db, poster, voucherLookup: lookup);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        // The repost made voucher 202, which could not be read back.
+        await service.RepostAsync(bill.Id, new RepostBillRequest("repost", "again"));
+        // A read-back of the first push that finished late, after the repost settled.
+        db.AuditEvents.Add(new ShowroomBilling.Infrastructure.Persistence.Entities.AuditEventEntity
+        {
+            Id = Guid.CreateVersion7(),
+            EntityType = "bill",
+            EntityId = bill.Id.ToString(),
+            EventType = BillAuditEvents.TallyVoucherFiled,
+            ActorType = "system",
+            PayloadJson = "{\"state\":\"posted\",\"details\":{\"tallyMasterId\":\"101\",\"voucherNumberInTally\":\"TALLY/9\"}}",
+            CreatedAtUtc = DateTimeOffset.UtcNow.AddMinutes(1),
+        });
+        await db.SaveChangesAsync();
+
+        var listed = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
+
+        Assert.Null(Assert.Single(listed.Items).TallyVoucherNumber);
+    }
+
+    [Fact]
+    public async Task PushSelected_EachItemCarriesTheNumberTallyFiledItUnder()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster(tallyMasterId: "101");
+        var service = BuildService(db, poster, voucherLookup: new FakeVoucherLookup { VoucherNumber = "TALLY/2" });
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        var response = await service.PushSelectedAsync(new PushSelectedBillsRequest([bill.Id], "selected"));
+
+        Assert.Equal("TALLY/2", Assert.Single(response.Items).TallyVoucherNumber);
+    }
+
+    [Fact]
+    public async Task Push_ACreateTallyTookAsAnAlterOfAnExistingVoucher_IsRecordedAsSuch()
+    {
+        await using var db = CreateDbContext();
+        // Tally already had a voucher with this REMOTEID: it updated that one.
+        var poster = new FakeTallyPoster(new[]
+        {
+            TallyPostResponse.Posted("FAKE-VCH-1", tallyMasterId: "101", updatedExistingVoucher: true)
+        });
+        var service = BuildService(db, poster);
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+
+        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+
+        var posted = AuditDetails(await db.AuditEvents.AsNoTracking()
+            .SingleAsync(a => a.EntityId == bill.Id.ToString() && a.EventType == BillAuditEvents.TallyPosted));
+        Assert.True(posted.GetProperty("updatedExistingVoucher").GetBoolean());
     }
 
     [Fact]
@@ -900,9 +1101,10 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(2, postedAudits.Count);
         Assert.Contains("\"tallyAction\":\"Alter\"", postedAudits[^1].PayloadJson);
         var trail = await service.GetAuditAsync(bill.Id);
+        // The alter is read back from Tally once it is saved.
         Assert.Equal(
-            ["bill.edit.reopened", "bill.push.requested", "tally.posted"],
-            trail!.Events.TakeLast(3).Select(x => x.EventType).ToArray());
+            ["bill.edit.reopened", "bill.push.requested", "tally.posted", "tally.voucher.filed"],
+            trail!.Events.TakeLast(4).Select(x => x.EventType).ToArray());
         Assert.Contains("\"tallyMasterId\":\"101\"", postedAudits[^1].PayloadJson);
     }
 
@@ -1096,15 +1298,15 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     public async Task PushPending_StopsAtFirstFailure_AndLeavesLaterPendingBillsUntouched()
     {
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = BuildService(db, new FakeTallyPoster(
+        [
+            TallyPostResponse.Posted("FAKE-VCH-1"),
+            TallyPostResponse.Failed("LINEERROR", "Ledger missing."),
+        ]));
 
         var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("First", 100m)));
         var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Second", 200m)));
         var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Third", 300m)));
-
-        var broken = await db.Bills.FirstAsync(x => x.Id == second.Id);
-        broken.CurrentRevisionId = null;
-        await db.SaveChangesAsync();
 
         var response = await service.PushPendingAsync(new PushPendingBillsRequest("pending-stop", 10));
 
@@ -1118,6 +1320,26 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var reloadedThird = await service.GetAsync(third.Id);
         Assert.Equal(BillStates.Posted, reloadedFirst!.State);
         Assert.Equal(BillStates.Pending, reloadedThird!.State);
+    }
+
+    [Fact]
+    public async Task PushPending_GoesByBillDate_ThenNumber_NotByWhenTheBillWasSaved()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var service = BuildService(db, poster);
+        var day = new DateOnly(2026, 10, 11);
+        // Saved first, but dated a day later: Tally files it after the other two.
+        var later = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Later", 100m) with { BillDate = day.AddDays(1) }));
+        var a = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m) with { BillDate = day }));
+        var b = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m) with { BillDate = day }));
+        // A renumbered above B since it was saved.
+        await db.Bills.Where(x => x.Id == a.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.InvoiceCore, (long?)10));
+
+        var response = await service.PushPendingAsync(new PushPendingBillsRequest("in order", 10));
+
+        Assert.Equal(3, response.Succeeded);
+        Assert.Equal([b.Id, a.Id, later.Id], poster.Requests.Select(r => r.BillId));
     }
 
     [Fact]
@@ -2022,6 +2244,13 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
     private static DateOnly SampleBillDate => DateOnly.FromDateTime(DateTime.UtcNow.Date);
 
+    /// <summary>
+    /// An audit row's <c>details</c>. Parsed, not matched as text: a row read
+    /// back from PostgreSQL is jsonb, written with spaces after the colons.
+    /// </summary>
+    private static System.Text.Json.JsonElement AuditDetails(ShowroomBilling.Infrastructure.Persistence.Entities.AuditEventEntity row) =>
+        System.Text.Json.JsonDocument.Parse(row.PayloadJson).RootElement.GetProperty("details").Clone();
+
     private const string TestCompany = "Test Company";
 
     private static BillPayloadDto SamplePayload(string party, decimal grandTotal) =>
@@ -2072,6 +2301,10 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         public decimal? VoucherAmount { get; init; }
         /// <summary>The company Settings names, which the lookup asks in.</summary>
         public string? Company { get; init; } = TestCompany;
+        /// <summary>The number every voucher carries in Tally.</summary>
+        public string? VoucherNumber { get; set; }
+        /// <summary>Fails only the read-back after a push, by master id.</summary>
+        public Exception? ByIdFailure { get; init; }
 
         public Task<TallyVoucherDestination> DestinationAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new TallyVoucherDestination(Company, "Sales"));
@@ -2089,7 +2322,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             WhenAsked?.Invoke();
             return Failure is null
                 ? Task.FromResult<IReadOnlyList<TallyVoucherRef>>(
-                    numberedMasterIds.Select(id => new TallyVoucherRef(id, VoucherDate, VoucherAmount, Company)).ToList())
+                    numberedMasterIds.Select(id => new TallyVoucherRef(id, VoucherDate, VoucherAmount, Company, VoucherNumber ?? voucherNumber)).ToList())
                 : Task.FromException<IReadOnlyList<TallyVoucherRef>>(Failure);
         }
 
@@ -2100,10 +2333,18 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         {
             AskedById.Add(masterId);
             WhenAsked?.Invoke();
-            return Failure is null
-                ? Task.FromResult(Gone.Contains(masterId) ? null : new TallyVoucherRef(masterId, VoucherDate, VoucherAmount, Company))
-                : Task.FromException<TallyVoucherRef?>(Failure);
+            var failure = Failure ?? ByIdFailure;
+            return failure is null
+                ? Task.FromResult(Gone.Contains(masterId) ? null : new TallyVoucherRef(masterId, VoucherDate, VoucherAmount, Company, VoucherNumber))
+                : Task.FromException<TallyVoucherRef?>(failure);
         }
+
+        public Task<TallyVoucherList> ListSalesVouchersAsync(
+            string fiscalYear,
+            CancellationToken cancellationToken = default) =>
+            Failure is null
+                ? Task.FromResult(new TallyVoucherList(new TallyVoucherDestination(Company, "Sales"), []))
+                : Task.FromException<TallyVoucherList>(Failure);
     }
 
     private static void AssertVersion7(Guid id) =>
@@ -2164,7 +2405,10 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
                 ? responses.Dequeue()
                 : outcome switch
                 {
-                    TallyPostOutcome.Posted => PostedResponse(remoteId, tallyMasterId),
+                    // Tally answers an Alter with the id of the voucher it altered.
+                    TallyPostOutcome.Posted => PostedResponse(
+                        remoteId,
+                        request.Operation == TallyPostOperation.Alter ? request.TargetTagValue : tallyMasterId),
                     TallyPostOutcome.Unknown => UnknownResponse("FAKE_UNKNOWN", "fake outcome unknown"),
                     _ => FailedResponse("FAKE_ERROR", "fake failure")
                 };

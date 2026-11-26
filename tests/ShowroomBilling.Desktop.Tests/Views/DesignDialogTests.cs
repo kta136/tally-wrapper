@@ -166,6 +166,17 @@ public sealed class DesignDialogTests
                 return new SyntheticBatchDialog();
             });
 
+            Capture(found, bindingErrors, "Design-Dialog-Confirm-PushOrder", shell =>
+            {
+                shell.ConfirmDialog.Cancel();
+                _ = shell.ConfirmDialog.ShowAsync(BillConfirmations.PushOrder(
+                [
+                    new UnpushedEarlierBill(Guid.NewGuid(), "SR/2026-27/0006", new DateOnly(2026, 10, 11), BillStates.Pending),
+                    new UnpushedEarlierBill(Guid.NewGuid(), "SR/2026-27/0007", new DateOnly(2026, 10, 11), BillStates.Failed),
+                ]));
+                return new ConfirmDialog();
+            });
+
             Capture(found, bindingErrors, "Design-Dialog-Confirm-Batch", shell =>
             {
                 shell.ConfirmDialog.Cancel();

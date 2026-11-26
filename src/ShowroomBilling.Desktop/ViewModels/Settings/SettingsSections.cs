@@ -15,6 +15,9 @@ public enum SettingsSectionScope
 
     /// <summary>Visible only while an admin session is unlocked.</summary>
     AdminOnly,
+
+    /// <summary>Holds no values: a check that reads and changes nothing.</summary>
+    Checks,
 }
 
 /// <summary>
@@ -27,6 +30,7 @@ public static class SettingsSections
     {
         SettingsSectionKey.Server or SettingsSectionKey.Handover or SettingsSectionKey.Advanced => SettingsSectionScope.ThisPc,
         SettingsSectionKey.Admin => SettingsSectionScope.AdminOnly,
+        SettingsSectionKey.TallyCheck => SettingsSectionScope.Checks,
         _ => SettingsSectionScope.Shared,
     };
 
@@ -34,6 +38,7 @@ public static class SettingsSections
     {
         SettingsSectionKey.PrintLayout => "Print layout",
         SettingsSectionKey.Handover => "Hand-over",
+        SettingsSectionKey.TallyCheck => "Tally check",
         _ => section.ToString(),
     };
 
@@ -42,6 +47,7 @@ public static class SettingsSections
     {
         SettingsSectionScope.Shared => "Shared by every counter",
         SettingsSectionScope.ThisPc => "This PC only",
+        SettingsSectionScope.Checks => "Reads only",
         _ => "Admin only",
     };
 
@@ -50,6 +56,7 @@ public static class SettingsSections
     {
         SettingsSectionScope.Shared => "Shared by every counter",
         SettingsSectionScope.ThisPc => "This PC only",
+        SettingsSectionScope.Checks => "Checks",
         _ => "Admin, unlocked",
     };
 

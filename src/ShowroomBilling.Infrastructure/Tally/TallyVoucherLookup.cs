@@ -6,16 +6,24 @@ namespace ShowroomBilling.Infrastructure.Tally;
 
 /// <summary>
 /// A sales voucher Tally holds: its master id, the date it carries now, its
-/// total (the party amount, without its sign) when Tally gave one, and the
-/// company it was asked for in.
+/// total (the party amount, without its sign) when Tally gave one, the company
+/// it was asked for in, and the number Tally files it under.
 /// </summary>
-public sealed record TallyVoucherRef(string MasterId, DateOnly Date, decimal? Amount = null, string? Company = null);
+public sealed record TallyVoucherRef(
+    string MasterId,
+    DateOnly Date,
+    decimal? Amount = null,
+    string? Company = null,
+    string? Number = null);
 
 /// <summary>
 /// Where a voucher read is asked, and so where an Alter built on it has to go:
 /// the company and the sales voucher type Settings name.
 /// </summary>
 public sealed record TallyVoucherDestination(string? Company, string VoucherType);
+
+/// <summary>A year's sales vouchers, with the company and voucher type they were read in.</summary>
+public sealed record TallyVoucherList(TallyVoucherDestination Destination, IReadOnlyList<TallyVoucherRef> Vouchers);
 
 /// <summary>
 /// Asks Tally about the voucher an edited bill's push has to change. An Alter
@@ -49,6 +57,17 @@ public interface ITallyVoucherLookup
         string fiscalYear,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Every voucher of the configured sales voucher type dated inside
+    /// <paramref name="fiscalYear"/>, for setting them against the bills
+    /// (Settings → Tally check). One read of the whole year. The company and
+    /// type come with it, from the same read of Settings, since master ids
+    /// are the company's own.
+    /// </summary>
+    Task<TallyVoucherList> ListSalesVouchersAsync(
+        string fiscalYear,
+        CancellationToken cancellationToken = default);
+
     /// <summary>The company and voucher type the reads above are asked in (Settings, not Tally).</summary>
     Task<TallyVoucherDestination> DestinationAsync(CancellationToken cancellationToken = default);
 }
@@ -61,6 +80,8 @@ public sealed class TallyVoucherLookup(
     private const string ByNumberFilter = "TW_VoucherNumberIs";
     private const string ByIdCollection = "TW_VoucherById";
     private const string ByIdFilter = "TW_VoucherIdIs";
+    private const string ByTypeCollection = "TW_SalesVouchers";
+    private const string ByTypeFilter = "TW_VoucherTypeIs";
 
     public async Task<IReadOnlyList<TallyVoucherRef>> FindByNumberAsync(
         string voucherNumber,
@@ -119,6 +140,30 @@ public sealed class TallyVoucherLookup(
             voucher => TallyIds.NormalizePositiveInteger(ReadChild(voucher, "MASTERID")) == id,
             $"with master id {id}");
         return found.Count == 0 ? null : found[0];
+    }
+
+    public async Task<TallyVoucherList> ListSalesVouchersAsync(
+        string fiscalYear,
+        CancellationToken cancellationToken = default)
+    {
+        var (company, voucherType) = await ReadSettingsAsync(cancellationToken);
+        if (voucherType.Contains('"'))
+        {
+            throw new InvalidOperationException(
+                "A voucher type that contains a double quote cannot be looked up in Tally.");
+        }
+
+        var period = PeriodOf(fiscalYear);
+        var request = BuildRequest(
+            ByTypeCollection,
+            ByTypeFilter,
+            $"$VoucherTypeName = \"{voucherType}\"",
+            company,
+            period);
+        var response = await xmlClient.SendAsync(request, cancellationToken);
+        return new TallyVoucherList(
+            new TallyVoucherDestination(string.IsNullOrWhiteSpace(company) ? null : company.Trim(), voucherType),
+            ReadVouchers(response, voucherType, period, company, _ => true, $"of type {voucherType}"));
     }
 
     public async Task<TallyVoucherDestination> DestinationAsync(CancellationToken cancellationToken = default)
@@ -198,6 +243,8 @@ public sealed class TallyVoucherLookup(
         EnsureCollectionAnswer(response);
 
         var found = new List<TallyVoucherRef>();
+        // By id as well, so a year's list is not searched once per voucher.
+        var byId = new Dictionary<string, TallyVoucherRef>(StringComparer.Ordinal);
         foreach (var voucher in response.DescendantsAndSelf()
             .Where(x => string.Equals(x.Name.LocalName, "VOUCHER", StringComparison.OrdinalIgnoreCase)))
         {
@@ -250,10 +297,16 @@ public sealed class TallyVoucherLookup(
                 ? Math.Abs(signed)
                 : (decimal?)null;
 
-            var same = found.Find(x => x.MasterId == masterId);
-            if (same is null)
+            if (!byId.TryGetValue(masterId, out var same))
             {
-                found.Add(new TallyVoucherRef(masterId, date, amount, string.IsNullOrWhiteSpace(company) ? null : company.Trim()));
+                var read = new TallyVoucherRef(
+                    masterId,
+                    date,
+                    amount,
+                    string.IsNullOrWhiteSpace(company) ? null : company.Trim(),
+                    ReadChild(voucher, "VOUCHERNUMBER"));
+                found.Add(read);
+                byId.Add(masterId, read);
             }
             else if (same.Date != date)
             {

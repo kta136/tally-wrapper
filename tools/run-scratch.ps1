@@ -294,7 +294,7 @@ try {
     Write-Host 'Starting the app. This window waits until it is closed.' -ForegroundColor Green
     Write-Host "  settings:  $($env:SHOWROOM_BILLING_APPDATA)"
     Write-Host "  database:  $($state.host):$($state.port)/$($state.database) (marked DEV)"
-    Write-Host '  In a bill, a party name or note containing FAIL or UNKNOWN makes the stand-in Tally refuse or drop the voucher.'
+    Write-Host '  In a bill, a party name or note containing FAIL or UNKNOWN makes the stand-in Tally refuse or drop the voucher; RENUMBER makes it file the voucher one number later.'
     $app = Start-Process -FilePath $desktopExe -WorkingDirectory $desktopDir -PassThru
     $app.WaitForExit()
 }

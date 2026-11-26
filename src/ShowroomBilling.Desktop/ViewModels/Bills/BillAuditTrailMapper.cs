@@ -16,6 +16,7 @@ internal static class BillAuditTrailMapper
             BillAuditEvents.PushRequested
                 or BillAuditEvents.TallyOutcomeUnknown
                 or BillAuditEvents.PostingRecovered => "warn",
+            BillAuditEvents.TallyVoucherFiled when FiledUnderAnotherNumber(audit) => "warn",
             _ => "info"
         };
 
@@ -44,11 +45,26 @@ internal static class BillAuditTrailMapper
         BillAuditEvents.TallyPosted => "Posted to Tally",
         BillAuditEvents.TallyFailed => "Tally rejected the voucher",
         BillAuditEvents.TallyOutcomeUnknown => "Tally outcome unknown",
+        BillAuditEvents.TallyVoucherFiled => "Read back from Tally",
         _ => null
     };
 
+    /// <summary>The read-back after a push found Tally holding the voucher under another number than the bill's.</summary>
+    private static bool FiledUnderAnotherNumber(BillAuditEventDto audit) =>
+        string.Equals(TryGetNestedString(audit.Payload, "details", "numberDiffers"), "true", StringComparison.OrdinalIgnoreCase);
+
     private static string BuildAuditDetail(BillAuditEventDto audit)
     {
+        if (audit.EventType == BillAuditEvents.TallyVoucherFiled)
+        {
+            var number = TryGetNestedString(audit.Payload, "details", "voucherNumberInTally");
+            return string.IsNullOrWhiteSpace(number)
+                ? "Tally shows no number for the voucher"
+                : FiledUnderAnotherNumber(audit)
+                    ? $"Tally filed it as {number}, not under the bill's number"
+                    : $"Tally filed it as {number}";
+        }
+
         var errorMessage = TryGetNestedString(audit.Payload, "details", "errorMessage");
         var errorCode = TryGetNestedString(audit.Payload, "details", "errorCode");
         if (!string.IsNullOrWhiteSpace(errorMessage) || !string.IsNullOrWhiteSpace(errorCode))

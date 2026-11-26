@@ -2,6 +2,7 @@ using System.Net;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Health;
+using ShowroomBilling.Contracts.Numbering;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels;
@@ -538,6 +539,223 @@ public sealed class BillsActionTests
     }
 
     [Fact]
+    public async Task A_push_past_an_earlier_bill_not_in_Tally_asks_first_and_no_sends_nothing()
+    {
+        var (vm, api, asked) = await LoadedAsync(answer: false, Summary("SR/25-26/0002"));
+        api.EarlierUnpushed.Add(new UnpushedEarlierBill(Guid.NewGuid(), "SR/25-26/0001", new DateOnly(2026, 4, 25), BillStates.Pending));
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        var question = Assert.Single(asked);
+        Assert.Equal("Push before SR/25-26/0001?", question.Title);
+        Assert.Equal("Push anyway", question.ConfirmText);
+        Assert.True(question.IsWarning);
+        Assert.Contains("Tally numbers a day's vouchers in the order they arrive", question.Message);
+        Assert.Equal(("SR/25-26/0001", "25 Apr 2026 · Pending"), (question.Facts![0].Label, question.Facts[0].Value));
+        Assert.Empty(api.Calls);
+    }
+
+    [Fact]
+    public async Task Push_anyway_pushes()
+    {
+        var (vm, api, asked) = await LoadedAsync(answer: true, Summary("SR/25-26/0002"));
+        api.EarlierUnpushed.Add(new UnpushedEarlierBill(Guid.NewGuid(), "SR/25-26/0001", new DateOnly(2026, 4, 25), BillStates.Pending));
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Single(asked);
+        Assert.Equal([$"push:{vm.Items[0].Id}"], api.Calls);
+    }
+
+    [Fact]
+    public async Task With_nothing_earlier_waiting_the_push_asks_nothing()
+    {
+        var (vm, api, asked) = await LoadedAsync(answer: false, Summary("SR/25-26/0001"));
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Empty(asked);
+        Assert.Equal([$"push:{vm.Items[0].Id}"], api.Calls);
+        Assert.Equal([vm.Items[0].Id], Assert.Single(api.PushOrderChecks));
+    }
+
+    [Fact]
+    public async Task A_server_that_cannot_answer_the_order_check_does_not_stop_the_push()
+    {
+        var (vm, api, asked) = await LoadedAsync(answer: false, Summary("SR/25-26/0001"));
+        api.PushOrderFailure = new ApiException(HttpStatusCode.NotFound, "Not Found", null, null);
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Empty(asked);
+        Assert.Equal([$"push:{vm.Items[0].Id}"], api.Calls);
+    }
+
+    [Fact]
+    public async Task Ticked_bills_go_to_Tally_by_date_then_number_whatever_the_tick_order()
+    {
+        var (vm, api, _) = await LoadedAsync(
+            answer: true,
+            Summary("SR/25-26/0003") with { BillDate = new DateOnly(2026, 4, 25) },
+            Summary("SR/25-26/0001") with { BillDate = new DateOnly(2026, 4, 26) },
+            Summary("SR/25-26/0002") with { BillDate = new DateOnly(2026, 4, 25) });
+        foreach (var row in vm.Items.Reverse()) row.IsSelected = true;
+        var byNumber = vm.Items.ToDictionary(row => row.InvoiceNumber!, row => row.Id);
+
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            [byNumber["SR/25-26/0002"], byNumber["SR/25-26/0003"], byNumber["SR/25-26/0001"]],
+            Assert.Single(api.PushOrderChecks));
+    }
+
+    [Fact]
+    public async Task A_retry_past_an_earlier_bill_not_in_Tally_asks_too()
+    {
+        var (vm, api, asked) = await LoadedAsync(answer: false, Summary("SR/25-26/0002", BillStates.Failed));
+        api.EarlierUnpushed.Add(new UnpushedEarlierBill(Guid.NewGuid(), "SR/25-26/0001", new DateOnly(2026, 4, 25), BillStates.Failed));
+        api.EarlierUnpushed.Add(new UnpushedEarlierBill(Guid.NewGuid(), "SR/25-26/0000", new DateOnly(2026, 4, 24), BillStates.Pending));
+
+        await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
+
+        var question = Assert.Single(asked);
+        Assert.Equal("Push before 2 earlier bills?", question.Title);
+        Assert.Empty(api.Calls);
+    }
+
+    [Fact]
+    public async Task Ticked_bills_go_in_the_order_the_server_gives()
+    {
+        // The server reads the bills as they are now; another counter may have renumbered one.
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"), Summary("SR/25-26/0002"));
+        api.PushOrderOf = ids => ids.Reverse().ToArray();
+        vm.ToggleVisibleSelection(true);
+
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(Assert.Single(api.PushOrderChecks).Reverse(), Assert.Single(api.PushedSelections));
+    }
+
+    [Fact]
+    public async Task An_order_check_answer_that_does_not_fit_neither_stops_nor_reorders_the_push()
+    {
+        var (vm, api, asked) = await LoadedAsync(answer: false, Summary("SR/25-26/0001"), Summary("SR/25-26/0002"));
+        api.PushOrderAnswer = new BillPushOrderResponse(null!, [Guid.NewGuid()]);
+        vm.ToggleVisibleSelection(true);
+
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+
+        Assert.Empty(asked);
+        Assert.Equal(Assert.Single(api.PushOrderChecks), Assert.Single(api.PushedSelections));
+    }
+
+    [Fact]
+    public async Task Retry_selected_stops_at_the_first_bill_that_does_not_reach_Tally()
+    {
+        // The next bill would take the number of the one Tally refused.
+        var (vm, api, _) = await LoadedAsync(
+            answer: true,
+            Summary("SR/25-26/0001", BillStates.Failed),
+            Summary("SR/25-26/0002", BillStates.Failed),
+            Summary("SR/25-26/0003", BillStates.Failed));
+        api.PostingLeaves = BillStates.Failed;
+        vm.ToggleVisibleSelection(true);
+
+        await vm.RetrySelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal([$"retry:{vm.Items.Single(row => row.InvoiceNumber == "SR/25-26/0001").Id}"], api.Calls);
+        Assert.Equal(
+            ("Retried 1 of 3 bill(s), then stopped: SR/25-26/0001 did not go to Tally. The list shows why.", "err"),
+            (vm.FooterNotice, vm.FooterNoticeTone));
+    }
+
+    [Fact]
+    public async Task A_push_Tally_filed_under_another_number_says_so_and_where_to_look()
+    {
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"));
+        api.PushFiledAs = "SR/25-26/0002";
+        api.PushFiscalYear = InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow);
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal(
+            ("Pushed SR/25-26/0001. Tally filed it as SR/25-26/0002: see Settings → Tally check.", "warn"),
+            (vm.FooterNotice, vm.FooterNoticeTone));
+    }
+
+    [Fact]
+    public async Task A_bill_of_an_earlier_year_Tally_filed_under_another_number_is_not_sent_to_Tally_check()
+    {
+        // Tally check compares the current year only.
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"));
+        api.PushFiledAs = "SR/25-26/0002";
+        api.PushFiscalYear = "2001-02";
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal(("Pushed SR/25-26/0001. Tally filed it as SR/25-26/0002.", "warn"), (vm.FooterNotice, vm.FooterNoticeTone));
+    }
+
+    [Fact]
+    public async Task A_push_Tally_filed_under_the_bills_own_number_is_a_plain_push()
+    {
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"));
+        api.PushFiledAs = "SR/25-26/0001";
+
+        await vm.PushRowCommand.ExecuteAsync(vm.Items[0]);
+
+        Assert.Equal(("Pushed SR/25-26/0001.", "ok"), (vm.FooterNotice, vm.FooterNoticeTone));
+    }
+
+    [Fact]
+    public async Task Pushing_ticked_bills_counts_those_Tally_filed_under_another_number()
+    {
+        var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001"), Summary("SR/25-26/0002"));
+        var ids = vm.Items.Select(row => row.Id).ToArray();
+
+        // One ticked bill: named, with Tally's number.
+        api.PushSelectedResponse = new BillBatchPushResponse(
+            1, 1, 0, false, null, null,
+            [new BillBatchPushItemResult(ids[0], true, BillStates.Posted, "SR/25-26/0001", null, "SR/25-26/0003")]);
+        vm.Items[0].IsSelected = true;
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+        // A batch answer does not say the bill's year, and Tally check shows the current one only.
+        Assert.Equal(("Pushed SR/25-26/0001. Tally filed it as SR/25-26/0003.", "warn"), (vm.FooterNotice, vm.FooterNoticeTone));
+
+        // Two: counted.
+        api.PushSelectedResponse = new BillBatchPushResponse(
+            2, 2, 0, false, null, null,
+            [
+                new BillBatchPushItemResult(ids[0], true, BillStates.Posted, "SR/25-26/0001", null, "SR/25-26/0001"),
+                new BillBatchPushItemResult(ids[1], true, BillStates.Posted, "SR/25-26/0002", null, "SR/25-26/0003"),
+            ]);
+        foreach (var row in vm.Items) row.IsSelected = true;
+        await vm.PushSelectedCommand.ExecuteAsync(null);
+        Assert.Equal(
+            ("Pushed 2 bill(s). Tally filed 1 under another number: their rows say which.", "warn"),
+            (vm.FooterNotice, vm.FooterNoticeTone));
+    }
+
+    [Theory]
+    [InlineData(BillStates.Posted, false, "SR/25-26/0002", "In Tally as SR/25-26/0002", "warn")]
+    [InlineData(BillStates.Posted, true, "SR/25-26/0002", "Edited after push · in Tally as SR/25-26/0002", "warn")]
+    [InlineData(BillStates.Posted, false, "SR/25-26/0001", "—", "neutral")]
+    [InlineData(BillStates.Posted, false, null, "—", "neutral")]
+    [InlineData(BillStates.Pending, true, "SR/25-26/0002", "Awaiting push · in Tally as SR/25-26/0002", "warn")]
+    [InlineData(BillStates.Pending, false, "SR/25-26/0002", "Awaiting Tally push", "neutral")]
+    public void A_rows_note_names_the_number_Tally_holds_the_bill_under_when_it_is_another(
+        string state, bool editedAfterPush, string? inTally, string note, string tone)
+    {
+        var row = new BillListRowViewModel(Summary("SR/25-26/0001", state) with
+        {
+            EditedAfterPush = editedAfterPush,
+            TallyVoucherNumber = inTally,
+        });
+
+        Assert.Equal((note, tone), (row.RowNote, row.NoteTone));
+    }
+
+    [Fact]
     public async Task Details_push_names_the_bill_and_shows_it_as_the_server_returned_it()
     {
         var (details, api, _) = await DetailsLoadedAsync(answer: true);
@@ -610,7 +828,7 @@ public sealed class BillsActionTests
 
         vm.ToggleVisibleSelection(true);
         await vm.RetrySelectedCommand.ExecuteAsync(null);
-        Assert.Contains("Retried 2 bill(s): 0 went to Tally, 2 did not. The list shows which.", statuses);
+        Assert.Contains("Retried 1 of 2 bill(s), then stopped: SR/25-26/0001 did not go to Tally. The list shows why.", statuses);
     }
 
     [Fact]

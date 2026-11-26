@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Settings;
@@ -32,6 +33,10 @@ public sealed partial class TallyXmlClient(
 
     [GeneratedRegex(@"&#(x[0-9a-fA-F]+|[0-9]+);")]
     private static partial Regex NumericCharRefs();
+
+    // A prefix on an element name (<UDF:NAME.LIST, </UDF:NAME.LIST) or an attribute name ( UDF:X=).
+    [GeneratedRegex(@"(?:</?|\s)([A-Za-z_][A-Za-z0-9_.\-]*):[A-Za-z_][A-Za-z0-9_.\-]*")]
+    private static partial Regex NamePrefixes();
 
     public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default) =>
         SendCoreAsync(request, isVoucherWrite: false, cancellationToken);
@@ -75,7 +80,38 @@ public sealed partial class TallyXmlClient(
         {
             throw new InvalidOperationException("Tally returned an empty XML response.");
         }
-        return XElement.Parse(StripInvalidXmlControlChars(body));
+        return ParseResponse(StripInvalidXmlControlChars(body));
+    }
+
+    /// <summary>
+    /// Reads Tally's answer. Tally writes the user-defined fields of a voucher or master as
+    /// <c>&lt;UDF:NAME.LIST …&gt;</c> without declaring the <c>UDF</c> prefix, which a strict
+    /// parser refuses ("'UDF' is an undeclared prefix"); a list of a whole year's vouchers is
+    /// where they turn up. So <c>UDF</c> is declared as Tally's own namespace (the one a voucher
+    /// import names), and any other prefix the answer uses without declaring gets one of its own.
+    /// Everything that reads an answer matches names by their local part, so this changes nothing
+    /// else.
+    /// </summary>
+    public static XElement ParseResponse(string body)
+    {
+        var names = new XmlNamespaceManager(new NameTable());
+        names.AddNamespace("UDF", "TallyUDF");
+        foreach (var prefix in NamePrefixes().Matches(body).Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal))
+        {
+            if (prefix is not ("xml" or "xmlns") && names.LookupNamespace(prefix) is null)
+            {
+                names.AddNamespace(prefix, $"urn:tally-wrapper:undeclared:{prefix}");
+            }
+        }
+
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreWhitespace = true,
+        };
+        using var reader = XmlReader.Create(new StringReader(body), settings, new XmlParserContext(null, names, null, XmlSpace.None));
+        return XElement.Load(reader);
     }
 
     public static string StripInvalidXmlControlChars(string input)

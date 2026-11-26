@@ -154,6 +154,12 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
             // would hide the bills the operator has asked to see.
             Bills.ClearFiltersCommand.Execute(null);
         };
+        // "Open bill" on a row of Settings → Tally check: the bill is fixed from Bill details.
+        Settings.TallyCheck.OpenBillRequested += (_, billId) =>
+        {
+            ActiveDialog = ShellDialogs.BillDetails;
+            _ = BillDetails.LoadAsync(billId);
+        };
 
         // What Bills needs of the shell that is not a dialog: the Invoice tab, the health
         // check, and the two commands its row menu binds. Dialogs it reaches by itself.

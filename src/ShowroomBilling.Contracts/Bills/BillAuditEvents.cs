@@ -26,11 +26,17 @@ public static class BillAuditEvents
     public const string TallyFailed = "tally.failed";
     public const string TallyOutcomeUnknown = "tally.outcome.unknown";
 
+    /// <summary>
+    /// The voucher a successful push made or changed, read back from Tally
+    /// straight after it: the number, date and total Tally filed it under.
+    /// </summary>
+    public const string TallyVoucherFiled = "tally.voucher.filed";
+
     /// <summary>Every event type above, for code that must handle them all.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
         PendingCreated, PendingUpdated, Revised, Voided, EditReopened, NumberChanged,
         MarkPosted, MarkPending, Deleted, PushRequested, PushCancelled, PostingRecovered,
-        TallyPosted, TallyFailed, TallyOutcomeUnknown,
+        TallyPosted, TallyFailed, TallyOutcomeUnknown, TallyVoucherFiled,
     ];
 }

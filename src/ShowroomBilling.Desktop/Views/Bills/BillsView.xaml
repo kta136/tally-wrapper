@@ -610,6 +610,9 @@
                                                 <DataTrigger Binding="{Binding NoteTone}" Value="err">
                                                     <Setter Property="Foreground" Value="{StaticResource ErrTextBrush}" />
                                                 </DataTrigger>
+                                                <DataTrigger Binding="{Binding NoteTone}" Value="warn">
+                                                    <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+                                                </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </TextBlock.Style>

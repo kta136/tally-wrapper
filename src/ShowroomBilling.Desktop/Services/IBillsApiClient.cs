@@ -15,6 +15,8 @@ public interface IBillsApiClient
     /// <summary>The bill a create with this <c>ClientOperationId</c> made, or null when there is none.</summary>
     Task<BillResponse?> GetByOperationAsync(Guid operationId, CancellationToken cancellationToken = default);
     Task<BillBatchGetResponse> GetManyAsync(BillBatchGetRequest request, CancellationToken cancellationToken = default);
+    /// <summary>The bills that should reach Tally before these (a read, asked before a push or retry).</summary>
+    Task<BillPushOrderResponse> GetPushOrderAsync(BillPushOrderRequest request, CancellationToken cancellationToken = default);
     Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default);
     Task<BillPostingStatusResponse> RetryAsync(Guid billId, RetryBillPostingRequest request, CancellationToken cancellationToken = default);
     Task<BillPostingStatusResponse> RepostAsync(Guid billId, RepostBillRequest request, CancellationToken cancellationToken = default);

@@ -34,6 +34,11 @@ internal sealed class BillPostingWorkflow(
     // as long as the budget itself, and must not eat into the outcome save.
     private static readonly TimeSpan SettleBudget = TimeSpan.FromSeconds(30);
 
+    // The read-back after an accepted voucher. Tally has just answered, so it
+    // is quick (0.1-0.2 s measured); the budget only stops a hung read from
+    // holding up the answer to the operator.
+    private static readonly TimeSpan ReadBackBudget = TimeSpan.FromSeconds(10);
+
     internal Task<BillResponse> PushAsync(
         Guid billId,
         PushBillRequest request,
@@ -65,10 +70,23 @@ internal sealed class BillPostingWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var maxBills = Math.Clamp(request.MaxBills ?? 200, 1, 500);
+        // By date, then number: Tally numbers a day's vouchers in the order they arrive, and a
+        // bill renumbered since it was saved no longer sits where its creation time puts it.
         var targetIds = await dbContext.Bills
             .AsNoTracking()
             .Where(x => x.State == BillStates.Pending || x.State == BillStates.Draft)
-            .OrderBy(x => x.CreatedAtUtc)
+            .Select(x => new
+            {
+                x.Id,
+                x.CreatedAtUtc,
+                x.InvoiceCore,
+                BillDate = dbContext.BillRevisions.Where(r => r.Id == x.CurrentRevisionId).Select(r => r.BillDate).FirstOrDefault(),
+            })
+            .OrderBy(x => x.BillDate == null)
+            .ThenBy(x => x.BillDate)
+            .ThenBy(x => x.InvoiceCore == null)
+            .ThenBy(x => x.InvoiceCore)
+            .ThenBy(x => x.CreatedAtUtc)
             .Select(x => x.Id)
             .Take(maxBills)
             .ToListAsync(cancellationToken);
@@ -256,6 +274,8 @@ internal sealed class BillPostingWorkflow(
                 fiscalYear = bill.FiscalYear,
                 reason = trimmedReason,
                 tallyAction = operation.ToString(),
+                // The voucher an Alter names; none for a Create.
+                targetTagValue,
                 // Set when the voucher to alter was found by asking Tally for this number.
                 voucherLookedUpAs = alterTarget.LookedUpNumber,
                 // The date the voucher to alter had in Tally, which the Alter names it by.
@@ -320,6 +340,7 @@ internal sealed class BillPostingWorkflow(
         }
 
         var settleAt = DateTimeOffset.UtcNow;
+        AuditEventEntity? postedRow = null;
         if (tallyResult.Outcome == TallyPostOutcome.Posted)
         {
             bill.State = BillStates.Posted;
@@ -328,7 +349,7 @@ internal sealed class BillPostingWorkflow(
                 bill.EditedAfterPush = false;
             }
             bill.UpdatedAtUtc = settleAt;
-            auditStore.Write(
+            postedRow = auditStore.Write(
                 bill.Id,
                 BillAuditEvents.TallyPosted,
                 bill.State,
@@ -342,11 +363,16 @@ internal sealed class BillPostingWorkflow(
                     targetTagValue,
                     invoiceNumber = bill.InvoiceNumber,
                     // The id above names a voucher only within this company.
-                    company = tallyResult.Company
+                    company = tallyResult.Company,
+                    // Tally already had a voucher with this REMOTEID and changed it.
+                    updatedExistingVoucher = tallyResult.UpdatedExistingVoucher
                 });
             logger.LogInformation(
-                "Tally push succeeded. Invoice {InvoiceNumber} (bill {BillId}) accepted as remote {RemoteId}.",
-                bill.InvoiceNumber, bill.Id, tallyResult.RemoteId);
+                "Tally push succeeded. Invoice {InvoiceNumber} (bill {BillId}) accepted as remote {RemoteId}{Existing}.",
+                bill.InvoiceNumber,
+                bill.Id,
+                tallyResult.RemoteId,
+                tallyResult.UpdatedExistingVoucher ? ", updating the voucher Tally already had for it" : string.Empty);
         }
         else if (tallyResult.Outcome == TallyPostOutcome.Failed)
         {
@@ -409,7 +435,105 @@ internal sealed class BillPostingWorkflow(
         using var settleCts = new CancellationTokenSource(SettleBudget, _timeProvider);
         await dbContext.SaveChangesAsync(settleCts.Token);
 
-        return BillSerialization.MapResponse(bill, currentRevision);
+        // The outcome is saved; now read the voucher back to see what Tally
+        // filed it under. With Automatic numbering Tally ignores the number sent
+        // and gives its own, which drifts from the bill's when a voucher is
+        // inserted or deleted earlier in the year.
+        var filedAs = postedRow is not null
+            && TallyIds.NormalizePositiveInteger(tallyResult.TallyMasterId ?? targetTagValue) is { } filedId
+                ? await RecordVoucherAsFiledAsync(bill, filedId, tallyResult.Company, postedRow.Id)
+                : null;
+
+        return BillSerialization.MapResponse(bill, currentRevision) with { TallyVoucherNumber = filedAs };
+    }
+
+    /// <summary>
+    /// Reads a voucher Tally has just accepted back by its id and records the
+    /// number, date and total Tally filed it under (<c>tally.voucher.filed</c>).
+    /// The push stands whatever happens here: a read that fails or finds
+    /// nothing is logged and the number is left unknown. A master id names a
+    /// voucher only within its company, so the read is used only when it was
+    /// made in the company the push went to.
+    /// </summary>
+    private async Task<string?> RecordVoucherAsFiledAsync(BillEntity bill, string masterId, string? pushedToCompany, Guid pushAuditId)
+    {
+        if (tallyVoucherLookup is null)
+        {
+            return null;
+        }
+
+        TallyVoucherRef? voucher;
+        try
+        {
+            using var readCts = new CancellationTokenSource(ReadBackBudget, _timeProvider);
+            voucher = await tallyVoucherLookup.FindByMasterIdAsync(masterId, bill.FiscalYear!, readCts.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Invoice {InvoiceNumber} (bill {BillId}) was pushed, but its voucher {MasterId} could not be read back from Tally.",
+                bill.InvoiceNumber, bill.Id, masterId);
+            return null;
+        }
+
+        if (voucher is null)
+        {
+            logger.LogWarning(
+                "Invoice {InvoiceNumber} (bill {BillId}) was pushed, but Tally did not list voucher {MasterId} when it was read back.",
+                bill.InvoiceNumber, bill.Id, masterId);
+            return null;
+        }
+
+        if (pushedToCompany is not null
+            && !string.Equals(pushedToCompany, voucher.Company, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning(
+                "Invoice {InvoiceNumber} (bill {BillId}) was pushed to the Tally company '{PushedTo}', but its voucher was read back in '{ReadIn}'; the read is not used.",
+                bill.InvoiceNumber, bill.Id, pushedToCompany, voucher.Company);
+            return null;
+        }
+
+        // A voucher Tally shows no number for is not filed under the bill's either.
+        var numberDiffers = !string.Equals(voucher.Number, bill.InvoiceNumber, StringComparison.Ordinal);
+        var filedRow = auditStore.Write(
+            bill.Id,
+            BillAuditEvents.TallyVoucherFiled,
+            bill.State,
+            DateTimeOffset.UtcNow,
+            new
+            {
+                tallyMasterId = voucher.MasterId,
+                voucherNumberInTally = voucher.Number,
+                voucherDateInTally = voucher.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                totalInTally = voucher.Amount,
+                invoiceNumber = bill.InvoiceNumber,
+                numberDiffers,
+                // The tally.posted row of the push this read belongs to: the Bills list uses the
+                // read only while that push is the latest word on what Tally holds.
+                pushAuditId
+            });
+        try
+        {
+            using var saveCts = new CancellationTokenSource(SettleBudget, _timeProvider);
+            await dbContext.SaveChangesAsync(saveCts.Token);
+        }
+        catch (Exception ex)
+        {
+            // Let the row go: a batch push saves the next bill on this same context, and a row
+            // left behind would be saved, or fail, with it.
+            dbContext.Entry(filedRow).State = EntityState.Detached;
+            logger.LogWarning(ex, "The number Tally filed bill {BillId} under could not be recorded.", bill.Id);
+        }
+
+        if (numberDiffers)
+        {
+            logger.LogWarning(
+                "Tally filed the voucher of invoice {InvoiceNumber} (bill {BillId}) as {VoucherNumber}.",
+                bill.InvoiceNumber, bill.Id, voucher.Number);
+        }
+
+        return voucher.Number;
     }
 
     private async Task<BillBatchPushResponse> PushBatchAsync(
@@ -469,7 +593,8 @@ internal sealed class BillPostingWorkflow(
                     true,
                     response.State,
                     response.InvoiceNumber,
-                    null));
+                    null,
+                    response.TallyVoucherNumber));
                 succeeded++;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -151,8 +151,10 @@ Quirks the parser must handle:
 
 Mitigation (`TallyXmlClient.StripInvalidXmlControlChars`):
 
-- before `XElement.Parse`, regex-strip raw `[\x00-\x08\x0B\x0C\x0E-\x1F]` bytes from the response body. Tab (`\x09`), LF (`\x0A`), CR (`\x0D`) are preserved.
+- before parsing, regex-strip raw `[\x00-\x08\x0B\x0C\x0E-\x1F]` bytes from the response body. Tab (`\x09`), LF (`\x0A`), CR (`\x0D`) are preserved.
 - then regex-match every `&#<decimal>;` / `&#x<hex>;` in the body; drop the reference when the code point is invalid for XML 1.0 (C0 except tab/LF/CR, and C1 except NEL `U+0085`). Valid references (e.g. `&#65;` for `A`) pass through unchanged.
+
+**Tally also writes prefixes it never declares.** User-defined fields come as `<UDF:NAME.LIST DESC="…" ISLIST="YES" TYPE="String" INDEX="…">` with no `xmlns:UDF` anywhere in the answer, which `XElement.Parse` refuses (`'UDF' is an undeclared prefix`). The master lists and the single-voucher lookups never carried one, but the first live read of a whole year's sales vouchers did (26 November 2026), and Settings → Tally check answered "Nothing was compared". `TallyXmlClient.ParseResponse` therefore reads the answer with `UDF` declared as `TallyUDF` (the namespace a voucher import names) and gives any other undeclared prefix on an element or attribute a namespace of its own. Every reader matches names by their local part, so the namespaces change nothing else. With it the same live read returned the whole year's vouchers in under a second. `TallyXmlResponseParseTests` holds it.
 
 ### 3.6 Sentinel values (treat as missing)
 
@@ -239,7 +241,8 @@ This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` prod
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <VOUCHER REMOTEID="{IdempotencyKey}" VCHTYPE="{SalesVoucherType}" ACTION="Create">
+          <VOUCHER REMOTEID="{IdempotencyKey}" VCHTYPE="{SalesVoucherType}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+            <PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>
             <DATE>{yyyyMMdd}</DATE>
             <EFFECTIVEDATE>{yyyyMMdd}</EFFECTIVEDATE>
             <VOUCHERTYPENAME>{SalesVoucherType}</VOUCHERTYPENAME>
@@ -328,7 +331,7 @@ Tally finds the voucher to alter by `TAGVALUE` **together with the `DATE` attrib
 | An invoice-view voucher, alter with `OBJVIEW` + `<PERSISTEDVIEW>` as above | `ALTERED=1` | Lines replaced, voucher now in the accounting view |
 | `REMOTEID` = the voucher's GUID, or a `<GUID>` child, no `TAGNAME` | `CREATED=1` | A second voucher |
 
-Vouchers the app creates have so far been kept in the accounting view by the live company; the view markers make an alter replace the lines whichever view a voucher is in. Creates are sent without them, as before.
+Every voucher is sent in the accounting view, creates too: `OBJVIEW="Accounting Voucher View"` on `<VOUCHER>` and `<PERSISTEDVIEW>` as its first child. Without the markers a live company stored the app's creates in either view, about half in each, and an alter replaces the lines only of a voucher in the accounting view (an alter carrying the markers converts an invoice-view one, as the table shows). On TallyPrime 7.2 with a copy of a test company (25 November 2026) a create with the markers was stored in the accounting view with the same ledger and inventory lines as one without.
 
 The date comes from Tally, never from the bill: before every alter (and before the bill is claimed) the API reads the voucher. The id is the one the last successful pre-edit `tally.posted` audit records, preferring `details.tallyMasterId` and falling back to numeric legacy `details.remoteId`, and Tally is asked for the voucher with that id:
 
@@ -405,11 +408,62 @@ These are all bugs that caused real failed pushes during Tally Wrapper bring-up 
 
 ### 4.4 `REMOTEID` idempotency
 
-`REMOTEID` on create imports is `post:{billId:N}:{revisionId:N}`; an explicit repost sends the caller's own key instead. Tally enforces uniqueness on this field per company, so if a push happens twice against the same bill revision (e.g. network glitch, retry), Tally rejects the second import with `ERRORS > 0` — classified as `TALLY_ERRORS`, landing the bill in `failed`. The operator checks Tally and then decides: Mark as Pushed (admin, local-only) when Tally holds the voucher, or Retry (same `REMOTEID`; Tally rejects it again while it holds the first voucher). An edit saves a new revision, so the next push carries a fresh `REMOTEID`; if Tally still holds the first voucher that creates a second one.
+`REMOTEID` on create imports is `post:{billId:N}:{revisionId:N}`; an explicit repost sends the caller's own key instead.
+
+**A create sent again with a `REMOTEID` that a voucher of the company already carries makes no second voucher and is not refused: Tally alters that voucher** (`CREATED=0 ALTERED=1`, the same master id in `LASTVCHID`), even when the content differs. Found on TallyPrime 7.2 with a copy of a test company on 25 November 2026. Until then this section said Tally refused the repeat with `ERRORS > 0`; that had never been tried. `TallyPoster` takes the answer as accepted and the `tally.posted` audit records it as `updatedExistingVoucher: true`, so it can be told apart from a voucher made new. So a push repeated on one revision (a Retry, or a push whose answer was lost) overwrites the voucher it made the first time, and a Repost with a key Tally has seen overwrites that voucher. An edit saves a new revision, and with it a fresh `REMOTEID`; a bill Tally holds is then pushed as an alter (§4.3), never as a create.
 
 Live finding (April 11, 2026): after an import that failed with `EXCEPTIONS=1`, a second, otherwise valid import that reused the same `REMOTEID` failed too, and one with a fresh `REMOTEID` succeeded. Tally's documentation offers a reason that has not been checked here: the first voucher may have been kept as an exception (§6.3).
 
-Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"` + `DATE="{the date it has in Tally}"` (§4.3). Tally replaces the `REMOTEID` a create sent with its own GUID, so a voucher read back never shows `post:…`, and a re-import naming that GUID creates another voucher rather than altering it.
+Edited-after-push alter requests do not send `REMOTEID`; they target the old voucher with `TAGNAME="MASTER ID"` + `TAGVALUE="{oldTallyMasterId}"` + `DATE="{the date it has in Tally}"` (§4.3). An export shows Tally's own GUID in a voucher's `REMOTEID`, never `post:…`, and a re-import naming that GUID creates another voucher rather than altering it; yet Tally still matches a later create on the `REMOTEID` the first one sent (above).
+
+### 4.4.1 How Tally numbers the voucher, and reading it back
+
+Tally may file a voucher under another number than the bill's. What the voucher type's numbering method does with the `<VOUCHERNUMBER>` sent (TallyPrime 7.2: a copy of a test company on 25 November 2026, and a live company on 26 November 2026 for Auto Retain):
+
+| Numbering method | The number sent | Other vouchers |
+|---|---|---|
+| Automatic, Auto Renumber (renumber on insertion and deletion) | Ignored | Numbered by date, and within a day in the order the vouchers were created. A voucher dated earlier than others, or one deleted, renumbers every later voucher |
+| Automatic, Auto Retain (retain the original voucher number) | Ignored | Each voucher keeps the number it was given when created; numbers are handed out in creation order, whatever the dates |
+| Automatic (Manual Override), Manual | Kept | Never renumbered. A repeated number is accepted without a word; with Prevent Duplicates on, it is kept as an exception (`EXCEPTIONS=1`) |
+
+Under Auto Renumber the order within a day is the order of creation, so two bills of one day pushed out of number order get each other's numbers in Tally (bill 2 pushed before bill 1 is filed as 1). Tally check shows these as same-day swaps. Pushing a day's bills in number order avoids them: **Push all pending** goes by bill date and then number, **Push selected** and **Retry selected** send the ticked bills in that order too (the server gives it, from the bills as they are now; a retry of several stops at the first bill Tally does not take), and since 26 November 2026 a push or retry that would go past an earlier-numbered bill of the same or an earlier day that is not in Tally yet asks first ("Push before …?", **Push anyway** or Cancel; `POST /api/bills/push-order`, [09](09_api_spec.md)). An earlier day counts too: when that bill does reach Tally, Auto Renumber moves every later voucher up by one, and the numbers already read back for them are no longer what Tally shows. With the zero fill on, Tally also writes its own numbers to a fixed width ("…/051" for "…/51").
+
+**Do not change the numbering method of a company that has vouchers.** Under Auto Renumber Tally keeps no number on the voucher; it works the numbers out. Changing the method wipes them, and changing it back deals them out again:
+
+- By XML on a copy of a test company (25 November 2026), Auto Renumber → Manual Override blanked the numbers of the vouchers made under Auto Renumber, and changing it back renumbered every voucher.
+- Through Tally's own screen on a live company (26 November 2026), the same change blanked every sales voucher number of the year. Changing the method back to Automatic came back as **Auto Retain**, which dealt the numbers out in creation order: a bill dated in October whose voucher was created in September took a September number, and every bill after it moved up by one. Setting the sub-method back to **Auto Renumber** dealt them out by date again and gave back exactly the numbers the vouchers had before. No voucher, date or amount was lost at any step.
+
+So the voucher type stays on Automatic / Auto Renumber. The app does not depend on Tally keeping its number: it reads every voucher back (below) and Settings → Tally check lists any number Tally files differently.
+
+The setting can be read without changing anything, with a collection export of the voucher type (the envelope of the lookup by number in §4.3, no period needed):
+
+```xml
+<COLLECTION NAME="TW_VchTypeNumbering">
+  <TYPE>VoucherType</TYPE>
+  <FETCH>Name, Parent, NumberingMethod, PreventDuplicates, PrefillZero, VoucherNumberSeries</FETCH>
+  <FILTER>TW_TypeIs</FILTER>
+</COLLECTION>
+<SYSTEM TYPE="Formulae" NAME="TW_TypeIs">$Name = "{SalesVoucherType}"</SYSTEM>
+```
+
+The answer holds a `VOUCHERNUMBERSERIES.LIST` named `Default` with `NUMBERINGMETHOD` (`Automatic`, …), `NUMBERINGSUBMETHOD` (`Auto Renumber` or `Auto Retain`), `WIDTHOFNUMBER`, `PREFILLZERO` and the prefix list. The voucher type's own `NUMBERINGMETHOD` can read `None` while the series says `Automatic`; the series is what counts.
+
+After every push Tally accepts, the API reads the voucher back by its master id (the `TW_VoucherById` request of §4.3, the id from `LASTVCHID`, or the alter's target) and records what Tally filed it under in a `tally.voucher.filed` audit event: `tallyMasterId`, `voucherNumberInTally`, `voucherDateInTally`, `totalInTally`, `invoiceNumber`, `numberDiffers` (also true for a voucher Tally shows no number for) and `pushAuditId`, the id of the push's own `tally.posted` row. The push's answer then carries that number as `tallyVoucherNumber` and the Bills list shows it ([09](09_api_spec.md)), for as long as that push is the latest word on what Tally holds and the read-back names the voucher the push recorded (another counter may push or mark the bill while the read runs). The read happens after the outcome is saved and changes nothing: one that fails, finds nothing, or was made in another company than the push went to is logged at warning and the number is left unknown. It is bounded at 10 seconds; on the lab copy it took about 0.13 s.
+
+### 4.4.2 The year's sales vouchers (Settings → Tally check)
+
+`GET /api/tally-check/compare` asks Tally for every sales voucher of a fiscal year in one request, the envelope of the lookup by number in §4.3 with this collection:
+
+```xml
+<COLLECTION NAME="TW_SalesVouchers">
+  <TYPE>Voucher</TYPE>
+  <FETCH>MasterID, VoucherNumber, VoucherTypeName, Date, Amount</FETCH>
+  <FILTER>TW_VoucherTypeIs</FILTER>
+</COLLECTION>
+<SYSTEM TYPE="Formulae" NAME="TW_VoucherTypeIs">$VoucherTypeName = "{SalesVoucherType}"</SYSTEM>
+```
+
+Each voucher in the answer goes through the same checks on this side as the lookups (its type, its date inside the fiscal year, not deleted, an id and a date it can be named by). A voucher type whose name holds a double quote is refused, since the formula cannot carry it. The server then sets the vouchers against the bills: a bill is matched by the master id its last push recorded, or by its number (allowing zeros in front of the last digits) when no push recorded one; see [05 §4](05_tally_integration_contract.md#settings--tally-check).
 
 ### 4.5 Response classification
 
@@ -522,5 +576,5 @@ To settle it: push one voucher that names a ledger the test company does not hav
 ### 6.4 What no page answers
 
 - **Whether Tally takes more than one request at a time.** Nothing official. The vendor guide says the listener handles requests one after another and that a large export holds up the rest.
-- **Whether the import settings apply to XML over HTTP.** Alt+O → Configuration has a setting for overwriting a voucher that has the same GUID and one for ignoring errors during import. If they do apply, what a repeated `REMOTEID` does depends on how the Tally PC is set up. The Stack Overflow answer says a known `REMOTEID` updates the voucher, the opposite of §4.4.
+- **Whether the import settings apply to XML over HTTP.** Alt+O → Configuration has a setting for overwriting a voucher that has the same GUID and one for ignoring errors during import. If they do apply, what a repeated `REMOTEID` does depends on how the Tally PC is set up. The Stack Overflow answer says a known `REMOTEID` updates the voucher; on TallyPrime 7.2 with its settings as installed it does (§4.4).
 - **How to read one voucher back by master id or GUID.** The only object export shown is a ledger. The lookup of §4.3 is a filtered collection for that reason.

@@ -2,6 +2,7 @@ using System.Net.Http;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Contracts.PrintAssets;
 using ShowroomBilling.Contracts.Settings;
+using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Desktop.Configuration;
 using ShowroomBilling.Desktop.Services;
 using ShowroomBilling.Desktop.ViewModels;
@@ -24,11 +25,13 @@ internal static class OfflineApi
         ISettingsApiClient? settingsApi = null,
         DesktopBootstrapOptions? bootstrapOptions = null,
         HandoverKeyStore? handoverKeys = null,
-        IDialogService? dialogs = null)
+        IDialogService? dialogs = null,
+        ITallyCheckApiClient? tallyCheckApi = null)
         => new(
             settingsApi ?? new OfflineSettingsApi(),
             new OfflineMastersApi(),
             new OfflinePrintAssetApi(),
+            tallyCheckApi ?? new OfflineTallyCheckApi(),
             dialogs ?? new FakeDialogs(),
             bootstrapOptions: bootstrapOptions,
             handoverKeys: handoverKeys);
@@ -78,6 +81,12 @@ internal sealed class OfflineMastersApi : IMastersApiClient
         MasterRefreshRequest request,
         CancellationToken cancellationToken = default)
         => OfflineApi.Fail<IReadOnlyList<TallyMasterRefreshResult>>();
+}
+
+internal sealed class OfflineTallyCheckApi : ITallyCheckApiClient
+{
+    public Task<TallyComparisonResponse> CompareAsync(string? fiscalYear = null, CancellationToken cancellationToken = default)
+        => OfflineApi.Fail<TallyComparisonResponse>();
 }
 
 internal sealed class OfflinePrintAssetApi : IPrintAssetApiClient

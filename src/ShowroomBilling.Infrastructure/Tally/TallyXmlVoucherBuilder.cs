@@ -97,10 +97,6 @@ public static class TallyXmlVoucherBuilder
             voucherAttributes.Add(new XAttribute("ACTION", "Alter"));
             voucherAttributes.Add(new XAttribute("TAGNAME", request.TargetTagName.Trim()));
             voucherAttributes.Add(new XAttribute("TAGVALUE", request.TargetTagValue.Trim()));
-            // The lines sent replace the voucher's lines only in the
-            // accounting view; a voucher kept in the invoice view takes the
-            // narration and drops the ledger and item lines without a word.
-            voucherAttributes.Add(new XAttribute("OBJVIEW", AccountingVoucherView));
         }
         else
         {
@@ -109,11 +105,14 @@ public static class TallyXmlVoucherBuilder
             voucherAttributes.Add(new XAttribute("ACTION", "Create"));
         }
 
+        // Every voucher is sent, and kept, in the accounting view. An alter
+        // replaces a voucher's lines only in that view (one kept in the invoice
+        // view takes the narration and drops the ledger and item lines without a
+        // word), and without the markers Tally picks the view by itself: a live
+        // company holds the app's vouchers in both, with the same data.
+        voucherAttributes.Add(new XAttribute("OBJVIEW", AccountingVoucherView));
         var voucherElement = new XElement("VOUCHER", voucherAttributes);
-        if (isAlter)
-        {
-            voucherElement.Add(new XElement("PERSISTEDVIEW", AccountingVoucherView));
-        }
+        voucherElement.Add(new XElement("PERSISTEDVIEW", AccountingVoucherView));
         voucherElement.Add(
             new XElement("DATE", FormatTallyDate(bill.BillDate)),
             new XElement("EFFECTIVEDATE", FormatTallyDate(bill.BillDate)),

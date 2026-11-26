@@ -86,6 +86,7 @@ Each screen has a picture; compare against it, not against the prototype.
 | Bills | [Bills.png](design/redesign/Bills.png), [Bills-Actions.png](design/redesign/Bills-Actions.png) |
 | Limited mode | [Limited-Mode.png](design/redesign/Limited-Mode.png) |
 | Settings: Connection, Invoice, Print layout, Ledgers, Masters, Server, Hand-over, Advanced, Admin | `Settings-*.png` (Hand-over has no picture here; see the next row) |
+| Settings → Tally check (under Checks, chip "Reads only"): never compared, comparing, the differences with their filter pills and table, everything matching, Tally not answering | no picture in this folder; `TallyCheckViewTests` saves each as `TallyCheck-*.png`. What it compares: [05 §4](05_tally_integration_contract.md#settings--tally-check) |
 | Dialogs: Confirm, Reason, Change number, Admin unlock, Shortcuts, System health, Bill details, Print preview, First-launch setup, Batch data scheduler | `Dialog-*.png` |
 | Bill hand-over: the toast, the result dialog in each case, the admin unlock for a bill in Tally, the key dialog, Settings → Hand-over | no picture in this folder; `HandoverViewSnapshotTests` saves each as `Handover-*.png`. What they say: [18 §6, §8](18_bill_handover.md) |
 
