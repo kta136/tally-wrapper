@@ -92,11 +92,19 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <settingsViews:LedgerField Grid.Row="0" Grid.Column="0" Label="CGST ledger" Options="{Binding LedgerOptions}" Text="{Binding Draft.CgstLedger, UpdateSourceTrigger=LostFocus}" />
                     <settingsViews:LedgerField Grid.Row="0" Grid.Column="2" Label="SGST ledger" Options="{Binding LedgerOptions}" Text="{Binding Draft.SgstLedger, UpdateSourceTrigger=LostFocus}" />
                     <settingsViews:LedgerField Grid.Row="1" Grid.Column="0" Label="Round-off ledger" Options="{Binding LedgerOptions}" Text="{Binding Draft.RoundOffLedger, UpdateSourceTrigger=LostFocus}" />
                     <settingsViews:LedgerField Grid.Row="1" Grid.Column="2" Label="Discount ledger" Options="{Binding LedgerOptions}" Text="{Binding Draft.DiscountLedger, UpdateSourceTrigger=LostFocus}" />
+                    <settingsViews:LedgerField Grid.Row="2"
+                                               Grid.Column="0"
+                                               Label="Bank charges ledger"
+                                               Note="Needed only for bills that have bank charges."
+                                               Options="{Binding LedgerOptions}"
+                                               Placeholder="Not chosen yet"
+                                               Text="{Binding Draft.BankChargesLedger, UpdateSourceTrigger=LostFocus}" />
                 </Grid>
             </StackPanel>
         </Border>

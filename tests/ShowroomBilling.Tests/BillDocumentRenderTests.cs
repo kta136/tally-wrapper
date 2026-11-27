@@ -33,16 +33,20 @@ public class BillDocumentRenderTests
     [InlineData(100.00, 97.09, 0, 2.92, -0.01, 100, 0)]
     [InlineData(100.40, 97.48, 0, 2.92, -0.40, 100, -0.40)]
     [InlineData(1000.00, 970.87, 100.25, 29.13, 0.25, 900, 0.25)]
+    // Bank charges are a line of the summary too: 1,000 − 100.25 + 50.40 = 950.15, rounded down.
+    [InlineData(1000.00, 970.87, 100.25, 29.13, -0.15, 950, -0.15, 50.40)]
     public void The_summarys_round_off_takes_the_figures_above_it_to_the_total(
-        double itemsTotal, double subtotal, double discount, double tax, double storedRoundOff, double grandTotal, double printed)
+        double itemsTotal, double subtotal, double discount, double tax, double storedRoundOff, double grandTotal, double printed,
+        double bankCharges = 0)
     {
-        var totals = new BillTotalsDto((decimal)subtotal, (decimal)discount, (decimal)tax, (decimal)storedRoundOff, (decimal)grandTotal);
+        var totals = new BillTotalsDto(
+            (decimal)subtotal, (decimal)discount, (decimal)tax, (decimal)storedRoundOff, (decimal)grandTotal, (decimal)bankCharges);
 
         var roundOff = BillDocument.SummaryRoundOff((decimal)itemsTotal, totals);
 
         Assert.Equal((decimal)printed, roundOff);
         // What the customer adds up by hand comes to the total printed below it.
-        Assert.Equal(totals.GrandTotal, (decimal)itemsTotal - totals.DiscountTotal + roundOff);
+        Assert.Equal(totals.GrandTotal, (decimal)itemsTotal - totals.DiscountTotal + totals.BankCharges + roundOff);
     }
 
     [Fact]
@@ -141,6 +145,27 @@ public class BillDocumentRenderTests
 
         AssertPdfMagic(pdf);
         KeepSample("sample_invoice.pdf", pdf);
+    }
+
+    /// <summary>The same invoice with bank charges, kept as <c>sample_invoice_bank_charges.pdf</c>.</summary>
+    [Fact]
+    public void Sample_invoice_with_bank_charges_renders()
+    {
+        var content = RichContent();
+        // Worked out as the Invoice tab does, so the summary adds up: the items with GST,
+        // 3,000 off, 6,200 of bank charges on, to the rupee.
+        var totals = ShowroomBilling.Application.Bills.BillCalculator.BuildTotals(
+            content.Lines.Sum(line => line.LineTotal), discount: 3000m, bankCharges: 6200m);
+        content = content with
+        {
+            Totals = new BillTotalsDto(
+                totals.SubtotalBase, totals.Discount, totals.Cgst + totals.Sgst, totals.RoundOff, totals.GrandTotal, totals.BankCharges),
+        };
+
+        var pdf = Renderer.GeneratePdf(PrintDocumentOptions.ForInvoice(content, [CopyLabel.Original], StructuredLayout()));
+
+        AssertPdfMagic(pdf);
+        KeepSample("sample_invoice_bank_charges.pdf", pdf);
     }
 
     [Fact]

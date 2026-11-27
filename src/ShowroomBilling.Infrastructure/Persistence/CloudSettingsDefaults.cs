@@ -38,6 +38,9 @@ internal static class CloudSettingsDefaults
             SgstLedger = "SGST",
             RoundOffLedger = "Round Off",
             DiscountLedger = "Discount",
+            // None until one is chosen: a guessed name that Tally does not have would only fail
+            // in Tally, at the first push of a bill with bank charges.
+            BankChargesLedger = string.Empty,
             SalesVoucherType = "Sales",
             ItemMasterDataJson = "[]",
             KaratMappingDataJson = "[]",

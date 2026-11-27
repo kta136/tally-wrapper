@@ -410,7 +410,9 @@ pages through section dispatchers. The default order remains:
    space-based wraps in the fixed-width columns. `Making` is narrower than the
    old wide column but still fits the rare percentage+labour value.
 5. Right-aligned summary: `Items Total (Incl. GST)`, optional `Discount`,
-   optional `Round Off`, bold `Total Amount (Incl. GST)`.
+   optional `Bank Charges` (`+`, added after GST), optional `Round Off`, bold
+   `Total Amount (Incl. GST)`. The printed round-off is what takes those
+   figures to the total (`BillDocument.SummaryRoundOff`).
 6. GST breakup box: HSN Code (defaults to `711319` when blank) / Taxable Value /
    `CGST @ 1.5%` / `SGST @ 1.5%` / Total GST.
    (CGST/SGST percentages are hardcoded to mirror the V1 default; making them

@@ -21,6 +21,7 @@
     <conv:CountWordConverter x:Key="CountWord" />
     <conv:BillStateLabelConverter x:Key="BillStateLabel" />
     <conv:GroupedNumberConverter x:Key="GroupedNumber" />
+    <conv:MoneyTextConverter x:Key="MoneyText" />
     <conv:DotToStatusWordConverter x:Key="DotToStatusWord" />
     <conv:MasterTypeLabelConverter x:Key="MasterTypeLabel" />
     <conv:FreshnessLabelConverter x:Key="FreshnessLabel" />

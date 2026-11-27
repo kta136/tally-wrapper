@@ -29,6 +29,11 @@ public sealed record PrintSettingsDto(
     int PrintFontSize,
     int PrintTermsFontSize);
 
+/// <param name="BankChargesLedger">
+/// The ledger a bill's bank charges are credited to; empty until one is chosen, and needed only by a
+/// bill that has bank charges. In a save, null means the sender does not know the field (a counter
+/// older than it), so the server keeps what it holds; a string, empty included, is what to keep.
+/// </param>
 public sealed record LedgerMappingsDto(
     string SalesLedger,
     string CashLedger,
@@ -37,7 +42,8 @@ public sealed record LedgerMappingsDto(
     string SgstLedger,
     string RoundOffLedger,
     string DiscountLedger,
-    string SalesVoucherType);
+    string SalesVoucherType,
+    string? BankChargesLedger = null);
 
 public sealed record MasterDataSettingsDto(
     string ItemMasterDataJson,

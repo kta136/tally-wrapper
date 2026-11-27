@@ -27,6 +27,14 @@ public partial class LedgerField : UserControl
         nameof(MissingHint), typeof(string), typeof(LedgerField),
         new PropertyMetadata("Not in the Tally ledger list. Refresh from Tally, or check the spelling."));
 
+    /// <summary>A line under the field that is always shown, for a field that needs saying when it is needed.</summary>
+    public static readonly DependencyProperty NoteProperty = DependencyProperty.Register(
+        nameof(Note), typeof(string), typeof(LedgerField), new PropertyMetadata(string.Empty));
+
+    /// <summary>The grey hint shown while the field is empty.</summary>
+    public static readonly DependencyProperty PlaceholderProperty = DependencyProperty.Register(
+        nameof(Placeholder), typeof(string), typeof(LedgerField), new PropertyMetadata(null));
+
     private static readonly DependencyPropertyKey MatchStatePropertyKey = DependencyProperty.RegisterReadOnly(
         nameof(MatchState), typeof(LedgerMatchState), typeof(LedgerField), new PropertyMetadata(LedgerMatchState.Unknown));
 
@@ -59,6 +67,18 @@ public partial class LedgerField : UserControl
     {
         get => (string)GetValue(MissingHintProperty);
         set => SetValue(MissingHintProperty, value);
+    }
+
+    public string Note
+    {
+        get => (string)GetValue(NoteProperty);
+        set => SetValue(NoteProperty, value);
+    }
+
+    public string? Placeholder
+    {
+        get => (string?)GetValue(PlaceholderProperty);
+        set => SetValue(PlaceholderProperty, value);
     }
 
     public LedgerMatchState MatchState => (LedgerMatchState)GetValue(MatchStateProperty);

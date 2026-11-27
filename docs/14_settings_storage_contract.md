@@ -17,7 +17,7 @@ This note is the implementation-level reminder for the Tally Wrapper foundation 
 - Tally connection settings (host, port, active company, timeout)
 - numbering settings (prefix, suffix)
 - print settings (company info, bank details, T&C, copy defaults)
-- ledger mappings (sales, cash, credit/debit, CGST, SGST, round-off, discount)
+- ledger mappings (sales, cash, credit/debit, CGST, SGST, round-off, discount, and bank charges, which may be left empty)
 - voucher type settings
 - item master data
 - karat/stock mappings

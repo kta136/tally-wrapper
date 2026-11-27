@@ -48,6 +48,11 @@ public partial class BillDetailsViewModel
 
     public string DiscountDisplay => Totals is { DiscountTotal: > 0 } totals ? "−" + UiCulture.Amount(totals.DiscountTotal) : Amount(Totals?.DiscountTotal);
 
+    /// <summary>Most bills have none, so the line is shown only on a bill that has them.</summary>
+    public bool HasBankCharges => Totals is { BankCharges: > 0 };
+
+    public string BankChargesDisplay => Totals is { BankCharges: > 0 } totals ? "+" + UiCulture.Amount(totals.BankCharges) : Amount(Totals?.BankCharges);
+
     public string RoundOffDisplay => Amount(Totals?.RoundOff);
 
     public string GrandTotalDisplay => Totals is { } totals ? "₹" + UiCulture.Rupees(totals.GrandTotal) : "—";
@@ -118,6 +123,8 @@ public partial class BillDetailsViewModel
         OnPropertyChanged(nameof(TaxDisplay));
         OnPropertyChanged(nameof(HasDiscount));
         OnPropertyChanged(nameof(DiscountDisplay));
+        OnPropertyChanged(nameof(HasBankCharges));
+        OnPropertyChanged(nameof(BankChargesDisplay));
         OnPropertyChanged(nameof(RoundOffDisplay));
         OnPropertyChanged(nameof(GrandTotalDisplay));
         OnPropertyChanged(nameof(StateNote));

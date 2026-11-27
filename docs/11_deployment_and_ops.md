@@ -397,6 +397,12 @@ The release after 21 November 2026 carries one migration, `AddBatchHours`: it ad
 
 That release also changes how the first row of `cloud_settings` is made, so that requests arriving together on a new database add one row and not one each. It has no migration and an existing database needs nothing done. A database first used by an older build may hold a second, unused settings row; [10_database_schema.md §1.7](10_database_schema.md) has the query that shows it and the statement that removes it.
 
+The release after 27 November 2026 brings **bank charges** on a bill (a typed amount added after GST, credited to its own Tally ledger) and carries one migration, `AddBankChargesLedger`: it adds the column `BankChargesLedger` (varchar 256, default `''`) to `cloud_settings` ([10_database_schema.md §1.7](10_database_schema.md)). It only adds, like `AddBatchHours`: **apply it by hand, as the owner role, before the new server build is started** (a new server on a database without the column cannot read the settings row); an older server runs on the migrated database as before, so it can be applied while the old server is running. Its `Down` drops the column and the ledger chosen in it. The order of the rest matters, because a bill's bank charges are new data the older builds do not know:
+
+1. **The server first.** An older server refuses a bill with bank charges (its balance check does not know them), so nothing is stored wrong, but no counter can save one until the server is new.
+2. **Every counter before the first bill with bank charges.** An older Desktop reads such a bill without them: Bill Details and a reprint fold them into the round-off, and an edit saved from it drops them from the bill. A newer Desktop against an older server keeps working for bills without bank charges.
+3. **Choose the ledger in Settings → Ledgers** ("Bank charges ledger") before the first bill with bank charges is pushed. Until one is chosen, such a push is refused before anything is sent (`CONFIG_MISSING_BANK_CHARGES_LEDGER`); bills without bank charges never need it. An older counter's settings save leaves the chosen ledger as it is.
+
 **Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
 
 ```powershell

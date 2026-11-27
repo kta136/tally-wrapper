@@ -209,6 +209,7 @@ The desktop's Push button stays busy for the full duration of one Tally round-tr
 | Unregistered/consumer sales policy | `<GSTREGISTRATIONTYPE>Unregistered/Consumer</GSTREGISTRATIONTYPE>`; no `<PARTYGSTIN>` / `<CONSIGNEEGSTIN>` is emitted by this app | always |
 | `Ledgers.CgstLedger` + `Ledgers.SgstLedger` | Credit ledgers for the CGST / SGST halves of `BillTotals.TaxTotal` (`JewelleryGst.Split`, the split the printed invoice uses) | each only when its half is not zero |
 | `Ledgers.DiscountLedger` | Debit ledger for `BillTotals.DiscountTotal` | only when `DiscountTotal != 0` |
+| `Ledgers.BankChargesLedger` | Credit ledger for `BillTotals.BankCharges` (charged on top of the bill, after GST, with no GST of its own; the party leg's debit includes it). With none chosen the push is refused before anything is sent (`CONFIG_MISSING_BANK_CHARGES_LEDGER`) | only when `BankCharges != 0` |
 | `Ledgers.RoundOffLedger` | Credit/debit ledger for `BillTotals.RoundOff` | only when `RoundOff != 0` |
 | `Connection.ActiveCompanyName` | `<SVCURRENTCOMPANY>` scope for the import | always |
 | `Print.CompanyState` | `<STATENAME>`, `<PLACEOFSUPPLY>`, `<CONSIGNEESTATENAME>` GST transaction state fields | when configured |
@@ -293,7 +294,8 @@ This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` prod
             <!-- SGST: same as CGST -->
 
             <!-- 4. Discount (Dr contra): AMOUNT is NEGATIVE (only if DiscountTotal > 0) -->
-            <!-- 5. Round-off: AMOUNT preserves sign (positive = Cr income; negative = Dr expense) -->
+            <!-- 5. Bank charges (Cr): AMOUNT is POSITIVE, ISDEEMEDPOSITIVE No (only if BankCharges > 0) -->
+            <!-- 6. Round-off: AMOUNT preserves sign (positive = Cr income; negative = Dr expense) -->
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>
@@ -389,7 +391,7 @@ The read by id (`$MasterID` filter) was run read-only against a live TallyPrime 
 **Sign convention (Accounting Invoice view).** Tally's voucher import interprets the `AMOUNT` sign as the net change from the company's Cr-side perspective, not directly as Dr/Cr:
 
 - **Dr legs** (Cash/party receiving, Discount expense) → **negative** `AMOUNT`
-- **Cr legs** (Sales revenue, CGST, SGST, positive Round-off income) → **positive** `AMOUNT`
+- **Cr legs** (Sales revenue, CGST, SGST, bank charges, positive Round-off income) → **positive** `AMOUNT`
 - **Round-off** preserves sign: `+0.01` posts Cr 0.01 (income); `-0.01` posts Dr 0.01 (expense)
 - **Inventory `AMOUNT` matches its parent sales ledger entry** (positive for a Cr sale). Per-line amounts are the *net* share of Subtotal, not the gross `LineTotal` — otherwise the voucher double-counts tax and fails to balance.
 

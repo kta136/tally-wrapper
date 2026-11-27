@@ -252,6 +252,58 @@ public sealed class TallyXmlVoucherBuilderTests
         TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers(), "Acme Jewellers");
     }
 
+    [Theory]
+    [InlineData(TallyPostOperation.Create)]
+    [InlineData(TallyPostOperation.Alter)]
+    public void Build_CreditsBankChargesToTheirLedgerAndBalances(TallyPostOperation operation)
+    {
+        // 1,000 of lines with GST, 100.25 off, 50.40 of bank charges on, rounded down by 0.15.
+        var payload = Payload() with
+        {
+            BillDate = ShowroomBilling.Contracts.IndiaTime.Today(),
+            Lines = [new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", 100m, 1000m, "22K", null)],
+            Totals = new BillTotalsDto(970.87m, 100.25m, 29.13m, -0.15m, 950m, BankCharges: 50.40m)
+        };
+        ShowroomBilling.Application.Bills.BillValidator.Validate(payload);
+
+        var xml = TallyXmlVoucherBuilder.Build(
+            Request(operation, operation == TallyPostOperation.Alter ? "MASTERID" : null, operation == TallyPostOperation.Alter ? "77" : null, payload),
+            Ledgers() with { BankChargesLedger = "Bank Charges Collected" },
+            "Acme Jewellers");
+
+        var entries = xml.Descendants("ALLLEDGERENTRIES.LIST").ToList();
+        var bankCharges = entries.Single(e => e.Element("LEDGERNAME")?.Value == "Bank Charges Collected");
+        Assert.Equal("50.40", bankCharges.Element("AMOUNT")!.Value);
+        Assert.Equal("No", bankCharges.Element("ISDEEMEDPOSITIVE")!.Value);
+        var party = entries.Single(e => e.Element("ISPARTYLEDGER")?.Value == "Yes");
+        Assert.Equal("-950.00", party.Element("AMOUNT")!.Value);
+        Assert.Equal(0m, entries.Sum(e => decimal.Parse(e.Element("AMOUNT")!.Value, System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
+    public void Build_SendsNoBankChargesLegAndNeedsNoLedgerForABillWithout()
+    {
+        var xml = TallyXmlVoucherBuilder.Build(Request(), Ledgers(), "Acme Jewellers");
+
+        Assert.Equal(
+            ["Cash", "Sales"],
+            xml.Descendants("ALLLEDGERENTRIES.LIST").Select(e => e.Element("LEDGERNAME")!.Value).ToArray());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Build_RefusesBankChargesWithNoLedgerChosen(string? ledger)
+    {
+        var payload = Payload() with { Totals = new BillTotalsDto(1000m, 0m, 0m, 0m, 1050m, BankCharges: 50m) };
+
+        var ex = Assert.Throws<VoucherBuildException>(() =>
+            TallyXmlVoucherBuilder.Build(Request(payload: payload), Ledgers() with { BankChargesLedger = ledger }, "Acme Jewellers"));
+
+        Assert.Equal("CONFIG_MISSING_BANK_CHARGES_LEDGER", ex.ErrorCode);
+    }
+
     private static TallyPostRequest Request(
         TallyPostOperation operation = TallyPostOperation.Create,
         string? targetTagName = null,

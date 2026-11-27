@@ -103,6 +103,26 @@ public sealed class DialogDisplayTests
     }
 
     [Fact]
+    public void Bill_details_show_bank_charges_only_on_a_bill_that_has_them()
+    {
+        var details = new BillDetailsViewModel(new FakeBillsApi(), new FakeDialogs());
+        var created = new DateTimeOffset(2026, 10, 11, 15, 12, 0, TimeSpan.Zero);
+        BillResponse BillWith(BillTotalsDto totals) => new(
+            Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null, created, created,
+            new BillRevisionResponse(Guid.NewGuid(), 1, created, null, new BillPayloadDto(
+                "Customer", null, null, null, new DateOnly(2026, 10, 11),
+                [new BillLineItemDto("Diamond Ring", null, 10m, "ct", 100m, 1000m, null, null)],
+                totals, null, "Cash", null)));
+
+        details.Bill = BillWith(new BillTotalsDto(970.87m, 0m, 29.12m, -0.24m, 1040m, BankCharges: 40.25m));
+        Assert.True(details.HasBankCharges);
+        Assert.Equal("+40.25", details.BankChargesDisplay);
+
+        details.Bill = BillWith(new BillTotalsDto(970.87m, 0m, 29.12m, 0.01m, 1000m));
+        Assert.False(details.HasBankCharges);
+    }
+
+    [Fact]
     public void The_bill_details_lines_read_the_way_the_operator_does()
     {
         var details = new BillDetailsViewModel(new FakeBillsApi(), new FakeDialogs());

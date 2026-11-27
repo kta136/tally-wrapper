@@ -124,7 +124,9 @@ public static class BillValidator
         AddPaise(errors, nameof(totals.TaxTotal), totals.TaxTotal);
         AddPaise(errors, nameof(totals.RoundOff), totals.RoundOff);
         AddPaise(errors, nameof(totals.GrandTotal), totals.GrandTotal);
+        AddPaise(errors, nameof(totals.BankCharges), totals.BankCharges);
         AddNonNegative(errors, nameof(totals.DiscountTotal), totals.DiscountTotal);
+        AddNonNegative(errors, nameof(totals.BankCharges), totals.BankCharges);
         AddNonNegative(errors, nameof(totals.Subtotal), totals.Subtotal);
         AddNonNegative(errors, nameof(totals.TaxTotal), totals.TaxTotal);
         if (Math.Abs(totals.RoundOff) > RoundOffCap)
@@ -137,29 +139,29 @@ public static class BillValidator
         }
 
         // Lines (GST-inclusive) must add up to what the customer is billed,
-        // modulo discount and round-off.
+        // modulo discount, bank charges and round-off.
         var lineSumTolerance = LineSumTolerancePerLine * payload.Lines.Count + 0.01m + LineSumFlatTolerance;
-        var expectedLineSum = totals.GrandTotal + totals.DiscountTotal - totals.RoundOff;
+        var expectedLineSum = totals.GrandTotal + totals.DiscountTotal - totals.BankCharges - totals.RoundOff;
         if (Math.Abs(runningSubtotal - expectedLineSum) > lineSumTolerance)
         {
             errors.Add(
-                $"Sum of line totals {runningSubtotal} does not match GrandTotal + Discount - RoundOff = {expectedLineSum} "
+                $"Sum of line totals {runningSubtotal} does not match GrandTotal + Discount - BankCharges - RoundOff = {expectedLineSum} "
                 + $"(tolerance {lineSumTolerance}).");
         }
 
         // Tax math balances independently of the line-sum check: catches a
         // client that sends an inflated GrandTotal without matching it to
         // Subtotal + Tax (e.g. a buggy client that forgets to apply discount).
-        // These five amounts are the voucher's ledger legs, and the voucher
+        // These six amounts are the voucher's ledger legs, and the voucher
         // builder refuses legs that do not net to zero, so the comparison is
         // exact: with any tolerance a bill could be stored and numbered that
         // no push could ever send. (Each amount is whole paise, checked above.)
-        var expectedGrand = totals.Subtotal - totals.DiscountTotal + totals.TaxTotal + totals.RoundOff;
+        var expectedGrand = totals.Subtotal - totals.DiscountTotal + totals.TaxTotal + totals.BankCharges + totals.RoundOff;
         if (totals.GrandTotal != expectedGrand)
         {
             errors.Add(
                 $"GrandTotal {totals.GrandTotal} does not balance. "
-                + $"Expected Subtotal - Discount + Tax + RoundOff = {expectedGrand}, to the paisa.");
+                + $"Expected Subtotal - Discount + Tax + BankCharges + RoundOff = {expectedGrand}, to the paisa.");
         }
 
         if (errors.Count > 0)

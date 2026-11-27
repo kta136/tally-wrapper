@@ -42,7 +42,8 @@ public static class BillCalculator
         decimal Sgst,
         decimal Discount,
         decimal RoundOff,
-        decimal GrandTotal);
+        decimal GrandTotal,
+        decimal BankCharges = 0m);
 
     public static decimal ComputeEffectiveRate(LineInputs line)
     {
@@ -86,35 +87,39 @@ public static class BillCalculator
         return new LineResult(effRate, lineIncl);
     }
 
-    public static BillTotals BuildTotals(IEnumerable<decimal> lineInclusiveTotals, decimal discount)
+    public static BillTotals BuildTotals(IEnumerable<decimal> lineInclusiveTotals, decimal discount, decimal bankCharges = 0m)
     {
-        return BuildTotals(lineInclusiveTotals.Sum(), discount);
+        return BuildTotals(lineInclusiveTotals.Sum(), discount, bankCharges);
     }
 
-    public static BillTotals BuildTotals(decimal lineInclusiveTotal, decimal discount)
+    /// <summary>
+    /// The bill's totals. The discount is taken off and the bank charges are added after GST, so
+    /// neither changes the GST; the grand total is the rest to the whole rupee.
+    /// </summary>
+    public static BillTotals BuildTotals(decimal lineInclusiveTotal, decimal discount, decimal bankCharges = 0m)
     {
         var subBase = Math.Round(lineInclusiveTotal / GstFactor, 2, MidpointRounding.AwayFromZero);
         var cgst = Math.Round(subBase * CgstRate, 2, MidpointRounding.AwayFromZero);
         var sgst = Math.Round(subBase * SgstRate, 2, MidpointRounding.AwayFromZero);
-        var preRound = subBase + cgst + sgst - discount;
+        var preRound = subBase + cgst + sgst - discount + bankCharges;
         var grand = Math.Round(preRound, 0, MidpointRounding.AwayFromZero);
         var roundOff = grand - preRound;
 
-        return new BillTotals(subBase, cgst, sgst, discount, roundOff, grand);
+        return new BillTotals(subBase, cgst, sgst, discount, roundOff, grand, bankCharges);
     }
 
     /// <summary>
     /// The discount that brings a bill to <paramref name="finalAmount"/> (whole rupees), as the Invoice
-    /// tab's Final amount box works it out: what the bill comes to with GST, less the final amount, to
-    /// the paisa. None when the bill already comes to the final amount or less.
+    /// tab's Final amount box works it out: what the bill comes to with GST and its bank charges, less
+    /// the final amount, to the paisa. None when the bill already comes to the final amount or less.
     /// </summary>
-    public static decimal FinalAmountDiscount(decimal lineInclusiveTotal, decimal finalAmount)
+    public static decimal FinalAmountDiscount(decimal lineInclusiveTotal, decimal finalAmount, decimal bankCharges = 0m)
     {
-        var undiscounted = BuildTotals(lineInclusiveTotal, 0m);
+        var undiscounted = BuildTotals(lineInclusiveTotal, 0m, bankCharges);
         if (finalAmount >= undiscounted.GrandTotal)
             return 0m;
 
-        var preDiscountTotal = undiscounted.SubtotalBase + undiscounted.Cgst + undiscounted.Sgst;
+        var preDiscountTotal = undiscounted.SubtotalBase + undiscounted.Cgst + undiscounted.Sgst + bankCharges;
         return Math.Round(Math.Max(0m, preDiscountTotal - finalAmount), 2, MidpointRounding.AwayFromZero);
     }
 }

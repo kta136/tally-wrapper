@@ -61,6 +61,8 @@ public static class CloudSettingsValidator
         Require(ledgers.SgstLedger, "Ledgers.SgstLedger", 256);
         Require(ledgers.RoundOffLedger, "Ledgers.RoundOffLedger", 256);
         Require(ledgers.DiscountLedger, "Ledgers.DiscountLedger", 256);
+        // Not required: only a bill with bank charges needs it, and the push says so.
+        Max(ledgers.BankChargesLedger, "Ledgers.BankChargesLedger", 256);
         Require(ledgers.SalesVoucherType, "Ledgers.SalesVoucherType", 256);
 
         ValidateJsonArray(masters.ItemMasterDataJson, "Masters.ItemMasterDataJson");

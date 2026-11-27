@@ -190,6 +190,26 @@ public sealed class SettingsReloadTests
         Assert.Equal(1, changes);
     }
 
+    [Fact]
+    public void The_bank_charges_ledger_is_optional_and_always_sent()
+    {
+        var draft = new SettingsDraft();
+        // A server older than the field sends none.
+        var loaded = Response(Items()).Settings;
+        draft.LoadFrom(loaded);
+        Assert.Equal(string.Empty, draft.BankChargesLedger);
+
+        Assert.True(draft.TryBuildDto(loaded, out var withNone, out var error), error);
+        Assert.Equal(string.Empty, withNone.Ledgers.BankChargesLedger);
+
+        draft.BankChargesLedger = "  Bank Charges Collected ";
+        Assert.True(draft.TryBuildDto(loaded, out var withOne, out _));
+        Assert.Equal("Bank Charges Collected", withOne.Ledgers.BankChargesLedger);
+
+        draft.LoadFrom(withOne);
+        Assert.Equal("Bank Charges Collected", draft.BankChargesLedger);
+    }
+
     private static string Items(params ItemMasterEntry[] items) => JsonSerializer.Serialize(items);
 
     private static string Karats(params string[] labels) => Karats(91.6m, labels);

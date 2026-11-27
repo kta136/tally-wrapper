@@ -144,6 +144,10 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private decimal discount;
     [ObservableProperty] private bool discountEnabled;
     [ObservableProperty] private string discountPercentHint = string.Empty;
+
+    /// <summary>Charged to the customer for paying through the bank, added after GST. Typed on each bill.</summary>
+    [ObservableProperty] private decimal bankCharges;
+    [ObservableProperty] private bool bankChargesEnabled;
     [ObservableProperty] private string narration = string.Empty;
 
     [ObservableProperty] private decimal subtotal;
@@ -295,6 +299,34 @@ public partial class InvoiceViewModel : ObservableObject
     {
         if (_syncingLinkedTotals) return;
         if (!value) Discount = 0m;
+        else RecomputeTotalsFromCurrentLines();
+    }
+
+    partial void OnBankChargesChanged(decimal value)
+    {
+        if (_syncingLinkedTotals) return;
+        MarkChanged();
+
+        if (value < 0m)
+        {
+            SetFromLinkedTotals(() => BankCharges = 0m);
+            SaveStatus = "Bank charges cannot be negative.";
+            RecomputeTotalsFromCurrentLines();
+            return;
+        }
+
+        if (value > 0m && !BankChargesEnabled)
+        {
+            SetFromLinkedTotals(() => BankChargesEnabled = true);
+        }
+
+        RecomputeTotalsFromCurrentLines();
+    }
+
+    partial void OnBankChargesEnabledChanged(bool value)
+    {
+        if (_syncingLinkedTotals) return;
+        if (!value) BankCharges = 0m;
         else RecomputeTotalsFromCurrentLines();
     }
 
@@ -612,8 +644,11 @@ public partial class InvoiceViewModel : ObservableObject
         var effectiveDiscount = Math.Round(Math.Max(0m, Discount), 2, MidpointRounding.AwayFromZero);
         if (effectiveDiscount != Discount)
             SetFromLinkedTotals(() => Discount = effectiveDiscount);
+        var effectiveBankCharges = EffectiveBankCharges();
+        if (effectiveBankCharges != BankCharges)
+            SetFromLinkedTotals(() => BankCharges = effectiveBankCharges);
 
-        var totals = BillCalculator.BuildTotals(inclusiveTotal, effectiveDiscount);
+        var totals = BillCalculator.BuildTotals(inclusiveTotal, effectiveDiscount, effectiveBankCharges);
         Subtotal = totals.SubtotalBase;
         Cgst = totals.Cgst;
         Sgst = totals.Sgst;
@@ -626,6 +661,10 @@ public partial class InvoiceViewModel : ObservableObject
             : string.Empty;
         UpdateFocusExplanation();
     }
+
+    /// <summary>Bank charges are money too: to the paisa, and never below none.</summary>
+    private decimal EffectiveBankCharges()
+        => Math.Round(Math.Max(0m, BankCharges), 2, MidpointRounding.AwayFromZero);
 
     private (decimal InclusiveTotal, int Count) SummarizeCurrentLines()
     {
@@ -647,7 +686,9 @@ public partial class InvoiceViewModel : ObservableObject
     {
         var targetGrand = Math.Round(Math.Max(0m, requestedFinalAmount), 0, MidpointRounding.AwayFromZero);
         var (inclusiveTotal, _) = SummarizeCurrentLines();
-        var undiscounted = BillCalculator.BuildTotals(inclusiveTotal, 0m);
+        // The final amount is what the customer pays, bank charges included.
+        var bankCharges = EffectiveBankCharges();
+        var undiscounted = BillCalculator.BuildTotals(inclusiveTotal, 0m, bankCharges);
 
         if (targetGrand >= undiscounted.GrandTotal)
         {
@@ -660,7 +701,7 @@ public partial class InvoiceViewModel : ObservableObject
             return;
         }
 
-        var computedDiscount = BillCalculator.FinalAmountDiscount(inclusiveTotal, targetGrand);
+        var computedDiscount = BillCalculator.FinalAmountDiscount(inclusiveTotal, targetGrand, bankCharges);
 
         if (!DiscountEnabled)
             SetFromLinkedTotals(() => DiscountEnabled = true);
@@ -842,7 +883,8 @@ public partial class InvoiceViewModel : ObservableObject
         Cgst,
         Sgst,
         RoundOff,
-        GrandTotal);
+        GrandTotal,
+        BankCharges);
 
     private void RefreshQuickAddResults()
     {
@@ -954,6 +996,8 @@ public partial class InvoiceViewModel : ObservableObject
         Narration = string.Empty;
         Discount = 0m;
         DiscountEnabled = false;
+        BankCharges = 0m;
+        BankChargesEnabled = false;
         SaveStatus = string.Empty;
         LastSavedAtUtc = null;
         RateMissing = false;
@@ -1008,6 +1052,8 @@ public partial class InvoiceViewModel : ObservableObject
             Narration = payload.Notes ?? string.Empty;
             Discount = payload.Totals.DiscountTotal;
             DiscountEnabled = payload.Totals.DiscountTotal > 0m;
+            BankCharges = payload.Totals.BankCharges;
+            BankChargesEnabled = payload.Totals.BankCharges > 0m;
             Rate24Kt = payload.Rate24Kt;
             ReplaceLines(InvoiceEditMapper.CreateRows(payload, ItemMasters, KaratMasters));
             _suspendDirtyTracking = false;

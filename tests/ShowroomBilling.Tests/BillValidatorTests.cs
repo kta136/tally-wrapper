@@ -186,6 +186,53 @@ public sealed class BillValidatorTests
         Assert.StartsWith("Bill payload is invalid: ", ex.Message);
     }
 
+    [Fact]
+    public void A_balanced_bill_with_bank_charges_is_accepted()
+    {
+        // 103,000 of lines, 1,000 off, 2,060.40 of bank charges added, rounded down by 0.40.
+        var payload = Bill(totals: new BillTotalsDto(
+            Subtotal: 100_000m, DiscountTotal: 1_000m, TaxTotal: 3_000m, RoundOff: -0.40m, GrandTotal: 104_060m, BankCharges: 2_060.40m));
+
+        BillValidator.Validate(payload);
+    }
+
+    [Fact]
+    public void Bank_charges_that_were_not_added_to_the_grand_total_are_rejected()
+    {
+        var payload = Bill(totals: new BillTotalsDto(
+            Subtotal: 100_000m, DiscountTotal: 0m, TaxTotal: 3_000m, RoundOff: 0m, GrandTotal: 103_000m, BankCharges: 500m));
+
+        AssertRejected(payload, "does not balance");
+    }
+
+    [Fact]
+    public void A_grand_total_raised_without_bank_charges_to_show_for_it_is_rejected()
+    {
+        // Subtotal + tax + "bank charges" balance, but the lines do not reach the billed amount.
+        var payload = Bill(totals: new BillTotalsDto(
+            Subtotal: 100_000m, DiscountTotal: 0m, TaxTotal: 3_000m, RoundOff: 0m, GrandTotal: 103_500m));
+
+        AssertRejected(payload, "does not balance");
+    }
+
+    [Fact]
+    public void Negative_bank_charges_are_rejected()
+    {
+        var payload = Bill(totals: new BillTotalsDto(
+            Subtotal: 100_000m, DiscountTotal: 0m, TaxTotal: 3_000m, RoundOff: 0m, GrandTotal: 102_500m, BankCharges: -500m));
+
+        AssertRejected(payload, "BankCharges");
+    }
+
+    [Fact]
+    public void Bank_charges_with_a_third_decimal_are_rejected()
+    {
+        var payload = Bill(totals: new BillTotalsDto(
+            Subtotal: 100_000m, DiscountTotal: 0m, TaxTotal: 3_000m, RoundOff: -0.005m, GrandTotal: 103_100m, BankCharges: 100.005m));
+
+        AssertRejected(payload, "BankCharges");
+    }
+
     private static void AssertRejected(BillPayloadDto payload, string expectedFragment)
     {
         var ex = Assert.Throws<BillValidationException>(() => BillValidator.Validate(payload));

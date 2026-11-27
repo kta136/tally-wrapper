@@ -2,12 +2,18 @@ using System.Text.Json;
 
 namespace ShowroomBilling.Contracts.Bills;
 
+/// <param name="BankCharges">
+/// What the customer is charged for paying through the bank (a card machine, for instance), added
+/// after GST as the discount is taken off after it, with no GST of its own. Last and optional, so a
+/// bill saved before it existed reads as none.
+/// </param>
 public sealed record BillTotalsDto(
     decimal Subtotal,
     decimal DiscountTotal,
     decimal TaxTotal,
     decimal RoundOff,
-    decimal GrandTotal);
+    decimal GrandTotal,
+    decimal BankCharges = 0m);
 
 public sealed record BillLineItemDto(
     string ItemName,

@@ -104,6 +104,8 @@ The age is checked when the link arrives. Try again (§6) does not check it agai
 
 **A final amount** (version 2) changes only the totals: the lines are priced as below, then the bill's discount is what typing the final amount into the Invoice tab's Final amount box gives (`BillCalculator.FinalAmountDiscount`): the bill's total with GST less the final amount, to the paisa, so the bill comes to the final amount exactly; that takes the lines' discounts in. A bill that already comes to the final amount or less gets no discount. The discount is the bill's, as typed on the Invoice tab, not a line's, so lines are still billed as typed (§4) under it.
 
+**Bank charges** are not part of a hand-over: a handed-over bill has none. The counter can add them on the Invoice tab afterwards, as on any bill; a hand-over of the same save that comes again later replaces the bill with what it sends, and so drops them, as it drops any other change made at the counter.
+
 A line fails its bill, with the reason on its row, when its item is not in the item master ("No item named “X” in Tally Wrapper’s items."), its karat is not in the karat master ("No karat “X” in Tally Wrapper’s karats."), or it has no quantity. A line with no stamp takes the item's own karat. Tally Wrapper's items have no karat field, so that is the one karat whose Tally stock item is the item's Tally stock item; with none (or more than one), the bill fails.
 
 **The line rule.** The Invoice tab prices a gold line as `quantity × round(24K rate × purity % + wastage + labour) + extra`, with one 24K rate for the whole bill and the purity of the line's karat; a diamond line as `quantity × flat rate + extra`.

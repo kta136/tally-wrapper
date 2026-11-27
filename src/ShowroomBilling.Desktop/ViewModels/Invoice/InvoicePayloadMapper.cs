@@ -33,7 +33,8 @@ internal static class InvoicePayloadMapper
         decimal cgst,
         decimal sgst,
         decimal roundOff,
-        decimal grandTotal)
+        decimal grandTotal,
+        decimal bankCharges = 0m)
     {
         var mappedLines = lines
             .Where(l => !l.IsEmpty)
@@ -62,7 +63,8 @@ internal static class InvoicePayloadMapper
             DiscountTotal: discount,
             TaxTotal: cgst + sgst,
             RoundOff: roundOff,
-            GrandTotal: grandTotal);
+            GrandTotal: grandTotal,
+            BankCharges: bankCharges);
 
         return new BillPayloadDto(
             PartyName: string.IsNullOrWhiteSpace(partyName) ? null : partyName.Trim(),

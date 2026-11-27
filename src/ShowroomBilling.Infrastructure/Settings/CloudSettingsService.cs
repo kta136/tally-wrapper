@@ -66,6 +66,11 @@ public sealed class CloudSettingsService(
         entity.SgstLedger = request.Settings.Ledgers.SgstLedger.Trim();
         entity.RoundOffLedger = request.Settings.Ledgers.RoundOffLedger.Trim();
         entity.DiscountLedger = request.Settings.Ledgers.DiscountLedger.Trim();
+        // A counter older than the field sends none; what is stored stays.
+        if (request.Settings.Ledgers.BankChargesLedger is { } bankChargesLedger)
+        {
+            entity.BankChargesLedger = bankChargesLedger.Trim();
+        }
         entity.SalesVoucherType = request.Settings.Ledgers.SalesVoucherType.Trim();
         entity.ItemMasterDataJson = NormalizeJson(request.Settings.Masters.ItemMasterDataJson);
         entity.KaratMappingDataJson = NormalizeJson(request.Settings.Masters.KaratMappingDataJson);
@@ -292,7 +297,8 @@ public sealed class CloudSettingsService(
                     entity.SgstLedger,
                     entity.RoundOffLedger,
                     entity.DiscountLedger,
-                    entity.SalesVoucherType),
+                    entity.SalesVoucherType,
+                    entity.BankChargesLedger),
                 Masters: new MasterDataSettingsDto(entity.ItemMasterDataJson, entity.KaratMappingDataJson)),
             CloudOwnedCategories:
             [

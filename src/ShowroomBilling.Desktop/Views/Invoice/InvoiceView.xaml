@@ -1200,7 +1200,6 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <StackPanel.Resources>
@@ -1215,8 +1214,9 @@
                             <Setter Property="FontSize" Value="16" />
                             <Setter Property="FontWeight" Value="Medium" />
                         </Style>
+                        <!--  10 px either side, so the bar with bank charges fits the narrowest window (1100 px).  -->
                         <Style x:Key="SumOperator" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                            <Setter Property="Margin" Value="14,0" />
+                            <Setter Property="Margin" Value="10,0" />
                             <Setter Property="VerticalAlignment" Value="Bottom" />
                             <Setter Property="FontSize" Value="16" />
                             <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
@@ -1238,28 +1238,23 @@
                     </StackPanel>
                     <TextBlock Style="{StaticResource SumOperator}" Text="−" />
 
-                    <!--  Discount and the final amount drive each other: type either one.  -->
+                    <!--  Discount, bank charges and the final amount drive each other: type any one.  -->
                     <StackPanel VerticalAlignment="Bottom">
-                        <Grid Margin="0,0,0,5">
-                            <CheckBox VerticalAlignment="Center"
-                                      FontSize="{DynamicResource FontSizeLabel}"
-                                      Foreground="{StaticResource InkMutedBrush}"
-                                      IsChecked="{Binding DiscountEnabled}">
-                                <TextBlock FontSize="{DynamicResource FontSizeLabel}" Foreground="{StaticResource InkMutedBrush}" Text="Discount" />
-                            </CheckBox>
-                            <TextBlock Margin="70,0,0,0"
-                                       HorizontalAlignment="Right"
-                                       VerticalAlignment="Center"
-                                       Style="{StaticResource SumLabel}"
-                                       Text="Final amount" />
-                        </Grid>
+                        <CheckBox Margin="0,0,0,5"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  FontSize="{DynamicResource FontSizeLabel}"
+                                  Foreground="{StaticResource InkMutedBrush}"
+                                  IsChecked="{Binding DiscountEnabled}">
+                            <TextBlock FontSize="{DynamicResource FontSizeLabel}" Foreground="{StaticResource InkMutedBrush}" Text="Discount" />
+                        </CheckBox>
                         <StackPanel Orientation="Horizontal">
                             <TextBox Width="112"
                                      FontWeight="SemiBold"
                                      IsEnabled="{Binding DiscountEnabled}"
                                      Padding="32,0,10,0"
                                      TextAlignment="Right"
-                                     Text="{Binding Discount, StringFormat=N0, UpdateSourceTrigger=PropertyChanged}">
+                                     Text="{Binding Discount, Converter={StaticResource MoneyText}}">
                                 <shell:FieldAdorn.Prefix>
                                     <TextBlock Foreground="{StaticResource ErrTextBrush}" Text="−₹" />
                                 </shell:FieldAdorn.Prefix>
@@ -1270,6 +1265,36 @@
                                        FontSize="{DynamicResource FontSizeLabel}"
                                        Foreground="{StaticResource InkMutedBrush}"
                                        Text="{Binding DiscountPercentHint}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!--  Added after GST, as the discount is taken off after it.  -->
+                    <TextBlock Margin="0,0,10,0" Style="{StaticResource SumOperator}" Text="+" />
+                    <StackPanel VerticalAlignment="Bottom">
+                        <CheckBox Margin="0,0,0,5"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  FontSize="{DynamicResource FontSizeLabel}"
+                                  Foreground="{StaticResource InkMutedBrush}"
+                                  IsChecked="{Binding BankChargesEnabled}">
+                            <TextBlock FontSize="{DynamicResource FontSizeLabel}" Foreground="{StaticResource InkMutedBrush}" Text="Bank charges" />
+                        </CheckBox>
+                        <TextBox Width="112"
+                                 FontWeight="SemiBold"
+                                 IsEnabled="{Binding BankChargesEnabled}"
+                                 Padding="32,0,10,0"
+                                 TextAlignment="Right"
+                                 Text="{Binding BankCharges, Converter={StaticResource MoneyText}}">
+                            <shell:FieldAdorn.Prefix>
+                                <TextBlock Foreground="{StaticResource InkMutedBrush}" Text="+₹" />
+                            </shell:FieldAdorn.Prefix>
+                        </TextBox>
+                    </StackPanel>
+
+                    <!--  What the customer pays, bank charges included.  -->
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Bottom">
+                        <TextBlock Margin="0,0,0,5" Style="{StaticResource SumLabel}" Text="Final amount" />
+                        <StackPanel Orientation="Horizontal">
                             <TextBlock Margin="0,0,8,0"
                                        VerticalAlignment="Center"
                                        FontFamily="{StaticResource IconFontFamily}"
@@ -1304,27 +1329,34 @@
                     <TextBlock Style="{StaticResource SumOperator}" Text="=" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
-                    <TextBlock HorizontalAlignment="Right"
-                               FontSize="{DynamicResource FontSizeLabel}"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource InkMutedBrush}"
-                               Text="Grand total" />
-                    <TextBlock HorizontalAlignment="Right"
-                               FontSize="{StaticResource FontSizeTotal}"
-                               FontWeight="Bold"
-                               Text="{Binding GrandTotal, StringFormat=₹{0:N0}, Mode=OneWay}">
-                        <TextBlock.Style>
-                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding ItemCount}" Value="0">
-                                        <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </StackPanel>
+                <!--  Shrinks only when the window is too narrow for the figures and a total in lakhs (1100 px).  -->
+                <Viewbox Grid.Column="1"
+                         Margin="12,0,0,0"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Bottom"
+                         StretchDirection="DownOnly">
+                    <StackPanel>
+                        <TextBlock HorizontalAlignment="Right"
+                                   FontSize="{DynamicResource FontSizeLabel}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource InkMutedBrush}"
+                                   Text="Grand total" />
+                        <TextBlock HorizontalAlignment="Right"
+                                   FontSize="{StaticResource FontSizeTotal}"
+                                   FontWeight="Bold"
+                                   Text="{Binding GrandTotal, StringFormat=₹{0:N0}, Mode=OneWay}">
+                            <TextBlock.Style>
+                                <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ItemCount}" Value="0">
+                                            <Setter Property="Foreground" Value="{StaticResource InkDisabledBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Viewbox>
             </Grid>
         </Border>
 

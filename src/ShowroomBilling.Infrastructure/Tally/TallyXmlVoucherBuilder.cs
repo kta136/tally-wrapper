@@ -69,6 +69,13 @@ public static class TallyXmlVoucherBuilder
                 "CONFIG_MISSING_DISCOUNT_LEDGER",
                 "Bill has a non-zero discount but no discount ledger is mapped in Settings.");
         }
+        if (bill.Totals.BankCharges != 0m)
+        {
+            Require(
+                ledgers.BankChargesLedger,
+                "CONFIG_MISSING_BANK_CHARGES_LEDGER",
+                "Bill has bank charges but no bank charges ledger is chosen in Settings → Ledgers.");
+        }
 
         var voucherType = SalesVoucherTypeOf(ledgers);
 
@@ -158,7 +165,7 @@ public static class TallyXmlVoucherBuilder
 
         // Tally voucher-XML sign convention (Accounting Invoice view):
         //   Dr legs (party receiving, discount expense) -> AMOUNT is NEGATIVE
-        //   Cr legs (sales, CGST, SGST, round-off income) -> AMOUNT is POSITIVE
+        //   Cr legs (sales, CGST, SGST, bank charges, round-off income) -> AMOUNT is POSITIVE
         //   Round-off sign preserved as-is: positive => Cr, negative => Dr
         voucherElement.Add(BuildLedgerEntry(partyLedger, -bill.Totals.GrandTotal, deemedPositive: true, isPartyLedger: true));
 
@@ -183,6 +190,13 @@ public static class TallyXmlVoucherBuilder
         {
             voucherElement.Add(BuildLedgerEntry(ledgers.DiscountLedger, -bill.Totals.DiscountTotal, deemedPositive: false));
         }
+        if (bill.Totals.BankCharges != 0m)
+        {
+            // Charged to the customer on top of the bill, with no GST of its own: a credit, as
+            // the GST legs are, which the party leg's larger debit pays for.
+            // Required above whenever there are bank charges.
+            voucherElement.Add(BuildLedgerEntry(ledgers.BankChargesLedger!, bill.Totals.BankCharges, deemedPositive: false));
+        }
         if (bill.Totals.RoundOff != 0m)
         {
             voucherElement.Add(BuildLedgerEntry(ledgers.RoundOffLedger, bill.Totals.RoundOff, deemedPositive: false));
@@ -196,7 +210,7 @@ public static class TallyXmlVoucherBuilder
         {
             throw new VoucherBuildException(
                 "VOUCHER_UNBALANCED",
-                $"Bill totals do not balance for Tally (off by {imbalance.ToString("0.00", CultureInfo.InvariantCulture)}): grand total must equal subtotal - discount + tax + round-off to the paisa. Edit and save the bill again.");
+                $"Bill totals do not balance for Tally (off by {imbalance.ToString("0.00", CultureInfo.InvariantCulture)}): grand total must equal subtotal - discount + tax + bank charges + round-off to the paisa. Edit and save the bill again.");
         }
 
         return new XElement("ENVELOPE",

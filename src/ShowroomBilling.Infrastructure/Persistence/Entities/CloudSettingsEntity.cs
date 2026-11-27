@@ -72,6 +72,12 @@ public sealed class CloudSettingsEntity
 
     public string DiscountLedger { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The ledger bank charges are credited to. Empty, which is also the column's default, until one
+    /// is chosen; only a bill with bank charges needs it.
+    /// </summary>
+    public string BankChargesLedger { get; set; } = string.Empty;
+
     public string SalesVoucherType { get; set; } = string.Empty;
 
     public string ItemMasterDataJson { get; set; } = "[]";

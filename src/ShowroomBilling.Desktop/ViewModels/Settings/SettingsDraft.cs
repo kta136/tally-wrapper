@@ -47,6 +47,7 @@ public partial class SettingsDraft : ObservableObject
     [ObservableProperty] private string sgstLedger = string.Empty;
     [ObservableProperty] private string roundOffLedger = string.Empty;
     [ObservableProperty] private string discountLedger = string.Empty;
+    [ObservableProperty] private string bankChargesLedger = string.Empty;
     [ObservableProperty] private string salesVoucherType = string.Empty;
 
     public ObservableCollection<ItemMasterRowVm> ItemMasterRows { get; } = new();
@@ -102,6 +103,7 @@ public partial class SettingsDraft : ObservableObject
         SgstLedger = dto.Ledgers.SgstLedger;
         RoundOffLedger = dto.Ledgers.RoundOffLedger;
         DiscountLedger = dto.Ledgers.DiscountLedger;
+        BankChargesLedger = dto.Ledgers.BankChargesLedger ?? string.Empty;
         SalesVoucherType = dto.Ledgers.SalesVoucherType;
 
         ReplaceRows(ItemMasterRows, MasterDataJson.ParseItemsOrEmpty(dto.Masters.ItemMasterDataJson).Select(ItemMasterRowVm.FromEntry));
@@ -224,7 +226,9 @@ public partial class SettingsDraft : ObservableObject
                 SgstLedger: SgstLedger.Trim(),
                 RoundOffLedger: RoundOffLedger.Trim(),
                 DiscountLedger: DiscountLedger.Trim(),
-                SalesVoucherType: SalesVoucherType.Trim()),
+                SalesVoucherType: SalesVoucherType.Trim(),
+                // Optional, unlike the others above: only a bill with bank charges needs it.
+                BankChargesLedger: BankChargesLedger.Trim()),
             Masters: new MasterDataSettingsDto(
                 ItemMasterDataJson: JsonSerializer.Serialize(itemEntries, JsonOptions),
                 KaratMappingDataJson: JsonSerializer.Serialize(karatEntries, JsonOptions)));

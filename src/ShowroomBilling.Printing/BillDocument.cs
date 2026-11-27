@@ -493,15 +493,15 @@ public sealed class BillDocument : IDocument
 
     /// <summary>
     /// The round-off the summary prints: what takes the customer from the
-    /// figures above it (the items' total, less the discount) to the total
-    /// amount. It is not always the bill's stored round-off. That one rounds
+    /// figures above it (the items' total, less the discount, plus the bank
+    /// charges) to the total amount. It is not always the bill's stored round-off. That one rounds
     /// the taxable value plus CGST plus SGST, and those three, each rounded
     /// to the paisa, can come to a paisa more or less than the lines they
     /// were worked back from. Printing the stored figure left the column a
     /// paisa out when added up by hand.
     /// </summary>
     public static decimal SummaryRoundOff(decimal itemsTotalInclusive, BillTotalsDto totals) =>
-        totals.GrandTotal - (itemsTotalInclusive - totals.DiscountTotal);
+        totals.GrandTotal - (itemsTotalInclusive - totals.DiscountTotal + totals.BankCharges);
 
     private void ComposeSummary(IContainer container)
     {
@@ -526,6 +526,15 @@ public sealed class BillDocument : IDocument
                     {
                         r.RelativeItem().Text("Discount").FontSize(_bodyFont);
                         r.ConstantItem(110).AlignRight().Text(FormatSigned(-totals.DiscountTotal)).FontSize(_bodyFont);
+                    });
+                }
+
+                if (totals.BankCharges != 0m)
+                {
+                    c.Item().PaddingTop(V(1)).Row(r =>
+                    {
+                        r.RelativeItem().Text("Bank Charges").FontSize(_bodyFont);
+                        r.ConstantItem(110).AlignRight().Text(FormatSigned(totals.BankCharges)).FontSize(_bodyFont);
                     });
                 }
 

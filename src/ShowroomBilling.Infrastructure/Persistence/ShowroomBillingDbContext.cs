@@ -68,6 +68,8 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.Property(x => x.SgstLedger).HasMaxLength(256);
             entity.Property(x => x.RoundOffLedger).HasMaxLength(256);
             entity.Property(x => x.DiscountLedger).HasMaxLength(256);
+            // Defaulted in the database too, as BatchHoursJson is below.
+            entity.Property(x => x.BankChargesLedger).HasMaxLength(256).HasDefaultValue(string.Empty);
             entity.Property(x => x.SalesVoucherType).HasMaxLength(256);
             entity.Property(x => x.ItemMasterDataJson).HasColumnType("jsonb");
             entity.Property(x => x.KaratMappingDataJson).HasColumnType("jsonb");

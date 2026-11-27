@@ -20,7 +20,7 @@ Settings tab, left-hand sections (`SettingsSectionKey`; views under `src/Showroo
 | Connection | Tally host, port, timeout; the active company. |
 | Invoice | Company and bank details, invoice prefix / suffix / padding, copy defaults, font sizes, terms and conditions. |
 | Print Layout | Margins, density, border, section order and visibility, logo / signature / watermark. Saved by its own **Save** button. |
-| Ledgers | Ledger mappings and the sales voucher type. |
+| Ledgers | Ledger mappings and the sales voucher type. Every ledger is required except the bank charges ledger, which only a bill with bank charges needs; its push is refused until one is chosen. |
 | Masters | Bill items and karats. |
 | Advanced | UI density (local to the PC) and the log / app-data / install folders. |
 | Admin | Shown only while admin is unlocked: change the passcode, open the Batch Data Scheduler, and set the shop hours a batch keeps to (opening and closing time, a weekly closed day, the fewest minutes between two bills), which have a **Save hours** button of their own. |
