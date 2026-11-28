@@ -187,11 +187,11 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         await Invoice.LoadBillForEditAsync(billId, cancellationToken);
     }
 
-    private async void OnInvoiceSaveCompletedReadyForPrint(object? sender, Guid billId)
+    private async void OnInvoiceSaveCompletedReadyForPrint(object? sender, InvoicePrintSnapshot saved)
     {
         try
         {
-            await _printCoordinator.HandleInvoiceSaveCompletedAsync();
+            await _printCoordinator.HandleInvoiceSaveCompletedAsync(saved);
         }
         catch (Exception ex)
         {

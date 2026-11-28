@@ -2,6 +2,8 @@ using ShowroomBilling.Contracts.Bills;
 
 namespace ShowroomBilling.Desktop.Services;
 
+public sealed record BillsPageQuery(string? State, DateOnly? FromDate, DateOnly? ToDate, int Skip, int Take, string? Search);
+
 public interface IBillsApiClient
 {
     Task<BillResponse> CreateDraftAsync(CreateBillDraftRequest request, CancellationToken cancellationToken = default);
@@ -10,7 +12,7 @@ public interface IBillsApiClient
     Task<BillResponse> PushAsync(Guid billId, PushBillRequest request, CancellationToken cancellationToken = default);
     Task<BillBatchPushResponse> PushSelectedAsync(PushSelectedBillsRequest request, CancellationToken cancellationToken = default);
     Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default);
-    Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default);
+    Task<BillListResponse> SearchAsync(BillsPageQuery filter, CancellationToken cancellationToken = default);
     Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default);
     /// <summary>The bill a create with this <c>ClientOperationId</c> made, or null when there is none.</summary>
     Task<BillResponse?> GetByOperationAsync(Guid operationId, CancellationToken cancellationToken = default);

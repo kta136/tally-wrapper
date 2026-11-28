@@ -10,21 +10,14 @@ internal sealed class BillsAdminTokenGate(AdminTokenStore? adminTokens, IDialogS
 {
     public async Task<(string? Token, string? StatusMessage)> EnsureAsync(CancellationToken cancellationToken)
     {
-        var current = adminTokens?.Current?.Token;
-        if (!string.IsNullOrWhiteSpace(current)) return (current, null);
-
         try
         {
-            await dialogs.RequestAdminUnlockAsync(cancellationToken);
+            var token = await AdminTokenPrompt.GetAsync(adminTokens, dialogs.RequestAdminUnlockAsync, cancellationToken);
+            return string.IsNullOrWhiteSpace(token) ? (null, "Admin unlock cancelled.") : (token, null);
         }
         catch (OperationCanceledException)
         {
             return (null, null);
         }
-
-        var after = adminTokens?.Current?.Token;
-        return string.IsNullOrWhiteSpace(after)
-            ? (null, "Admin unlock cancelled.")
-            : (after, null);
     }
 }

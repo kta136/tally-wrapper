@@ -517,7 +517,7 @@ public sealed class BillsActionTests
         vm.ToggleVisibleSelection(true);
         await vm.MarkPostedSelectedCommand.ExecuteAsync(null);
 
-        Assert.Equal("Mark pushed blocked: every selected bill must be pending, draft, or failed.", vm.FooterNotice);
+        Assert.Equal("Mark pushed blocked: every selected bill must be pending or failed.", vm.FooterNotice);
         Assert.Empty(api.Calls);
 
         // The dry run before a delete could not be made.

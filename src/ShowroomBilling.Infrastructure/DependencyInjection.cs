@@ -33,21 +33,17 @@ public static class DependencyInjection
     /// </summary>
     public static string ApplyPoolDefaults(string connectionString)
     {
-        var supplied = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
-        if (!HasAnyKey(supplied, "Minimum Pool Size", "MinPoolSize", "Min Pool Size"))
+        if (!builder.ShouldSerialize("Minimum Pool Size"))
         {
             builder.MinPoolSize = 2;
         }
-        if (!HasAnyKey(supplied, "Keepalive", "Keep Alive"))
+        if (!builder.ShouldSerialize("Keepalive"))
         {
             builder.KeepAlive = 30;
         }
         return builder.ConnectionString;
     }
-
-    private static bool HasAnyKey(System.Data.Common.DbConnectionStringBuilder builder, params string[] keys) =>
-        keys.Any(builder.ContainsKey);
 
     public static IServiceCollection AddInfrastructureLayer(this IServiceCollection services, IConfiguration configuration)
     {

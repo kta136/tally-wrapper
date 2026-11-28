@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.ViewModels.Invoice;
 using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop.ViewModels.Bills;
@@ -50,7 +51,7 @@ public partial class BillDetailsViewModel : ObservableObject
     public BillPayloadDto? Payload => Bill?.CurrentRevision?.Payload;
     public BillTotalsDto? Totals => Payload?.Totals;
     public bool HasAuditTrail => AuditTrail.Count > 0;
-    public bool IsPendingLike => BillStateCapabilities.IsPendingLike(Bill?.State);
+    public bool IsPending => BillStateCapabilities.IsPending(Bill?.State);
     public bool IsPosted => BillStateCapabilities.IsPosted(Bill?.State);
     public bool IsFailed => BillStateCapabilities.IsFailed(Bill?.State);
     public bool CanVoidNow => BillStateCapabilities.CanVoid(Bill?.State);
@@ -68,26 +69,25 @@ public partial class BillDetailsViewModel : ObservableObject
         CompanyProfile company,
         IReadOnlyList<KaratMasterEntry>? karatMappings = null)
     {
-        if (Bill is null || Payload is null || Totals is null)
-        {
-            return null;
-        }
-
-        return BillDetailsPrintMapper.CreatePrintContent(Bill, company, karatMappings);
+        return Bill is null ? null : CreatePrintContent(Bill, company, karatMappings);
     }
 
     public static BillPrintContent? CreatePrintContent(
         BillResponse bill,
         CompanyProfile company,
         IReadOnlyList<KaratMasterEntry>? karatMappings = null)
-        => BillDetailsPrintMapper.CreatePrintContent(bill, company, karatMappings);
+    {
+        if (bill.CurrentRevision?.Payload is not { Totals: not null } payload) return null;
+        return new InvoicePrintSnapshot(bill.InvoiceNumber ?? bill.Id.ToString("N")[..8], payload, karatMappings)
+            .ToPrintContent(company);
+    }
 
     partial void OnBillChanged(BillResponse? value)
     {
         OnPropertyChanged(nameof(Lines));
         OnPropertyChanged(nameof(Payload));
         OnPropertyChanged(nameof(Totals));
-        OnPropertyChanged(nameof(IsPendingLike));
+        OnPropertyChanged(nameof(IsPending));
         OnPropertyChanged(nameof(IsPosted));
         OnPropertyChanged(nameof(IsFailed));
         OnPropertyChanged(nameof(CanVoidNow));

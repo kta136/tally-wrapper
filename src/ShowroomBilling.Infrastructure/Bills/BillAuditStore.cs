@@ -40,6 +40,7 @@ public sealed class BillAuditStore(
             .Where(e => e.EntityType == "bill" && e.EntityId == billIdText)
             .OrderBy(e => e.CreatedAtUtc)
             .ThenBy(e => e.Id)
+            .Select(e => new { e.Id, e.EventType, e.ActorType, e.ActorId, e.PayloadJson, e.CreatedAtUtc })
             .ToListAsync(cancellationToken);
         if (raw.Count == 0) return null;
 
@@ -48,8 +49,6 @@ public sealed class BillAuditStore(
             e.EventType,
             e.ActorType,
             e.ActorId,
-            e.EntityType,
-            e.EntityId,
             ParsePayload(e.PayloadJson),
             e.CreatedAtUtc)).ToList();
 

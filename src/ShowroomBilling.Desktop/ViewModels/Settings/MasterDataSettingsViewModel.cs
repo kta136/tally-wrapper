@@ -23,11 +23,11 @@ internal interface IMasterDataSettingsShell
     Task LoadAsync(CancellationToken cancellationToken = default);
 }
 
-public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMasterSnapshotHost
+public partial class MasterDataSettingsViewModel : ObservableObject
 {
     private readonly IMastersApiClient _mastersApi;
     private readonly IMasterDataSettingsShell _shell;
-    private readonly SettingsMasterSnapshotWorkflow _masterWorkflow;
+    private readonly ISettingsApiClient _settingsApi;
 
     internal MasterDataSettingsViewModel(
         ISettingsApiClient settingsApi,
@@ -36,47 +36,17 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
     {
         _mastersApi = mastersApi;
         _shell = shell;
-        _masterWorkflow = new SettingsMasterSnapshotWorkflow(settingsApi, mastersApi, this, shell.LoadAsync);
+        _settingsApi = settingsApi;
 
         Companies = new ObservableCollection<CompanySnapshotItem>();
         LedgerOptions = new ObservableCollection<LedgerSnapshotItem>();
         VoucherTypeOptions = new ObservableCollection<VoucherTypeSnapshotItem>();
         StockItems = new ObservableCollection<StockItemSnapshotItem>();
-
     }
 
     public SettingsDraft Draft => _shell.Draft;
     public bool IsEditing => _shell.IsEditing;
     public string ActiveCompanyName => _shell.ActiveCompanyName;
-
-    public string StatusMessage
-    {
-        get => _shell.StatusMessage;
-        set
-        {
-            if (_shell.StatusMessage == value) return;
-            _shell.StatusMessage = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public string SettingsSource
-    {
-        get => _shell.SettingsSource;
-        set => _shell.SettingsSource = value;
-    }
-
-    public string Summary
-    {
-        get => _shell.Summary;
-        set => _shell.Summary = value;
-    }
-
-    public DateTimeOffset? UpdatedAtUtc
-    {
-        get => _shell.UpdatedAtUtc;
-        set => _shell.UpdatedAtUtc = value;
-    }
 
     public ObservableCollection<CompanySnapshotItem> Companies { get; }
     public ObservableCollection<LedgerSnapshotItem> LedgerOptions { get; }
@@ -131,31 +101,15 @@ public partial class MasterDataSettingsViewModel : ObservableObject, ISettingsMa
 
     private bool CanRequestStockItemRefresh => !IsFetchingStockItems;
 
-    [RelayCommand(CanExecute = nameof(CanRequestCompanyRefresh))]
-    private Task RequestCompanyRefreshAsync(CancellationToken cancellationToken)
-        => _masterWorkflow.RequestCompanyRefreshAsync(cancellationToken);
-
-    [RelayCommand(CanExecute = nameof(CanSetActiveCompany))]
-    private Task SetActiveCompanyAsync(CancellationToken cancellationToken)
-        => _masterWorkflow.SetActiveCompanyAsync(cancellationToken);
-
-    [RelayCommand(CanExecute = nameof(CanRequestLedgerRefresh))]
-    private Task RequestLedgerRefreshAsync(CancellationToken cancellationToken)
-        => _masterWorkflow.RequestLedgerRefreshAsync(cancellationToken);
-
-    [RelayCommand(CanExecute = nameof(CanRequestStockItemRefresh))]
-    private Task RequestStockItemRefreshAsync(CancellationToken cancellationToken)
-        => _masterWorkflow.RequestStockItemRefreshAsync(cancellationToken);
-
     public async Task LoadMissingSnapshotsAsync(CancellationToken cancellationToken)
     {
         var snapshotLoads = new List<Task>(capacity: 3);
         if (Companies.Count == 0)
-            snapshotLoads.Add(_masterWorkflow.FetchCompaniesAsync(cancellationToken));
+            snapshotLoads.Add(FetchCompaniesAsync(cancellationToken));
         if (LedgerOptions.Count == 0)
-            snapshotLoads.Add(_masterWorkflow.FetchLedgersAndVoucherTypesAsync(cancellationToken));
+            snapshotLoads.Add(FetchLedgersAndVoucherTypesAsync(cancellationToken));
         if (StockItems.Count == 0)
-            snapshotLoads.Add(_masterWorkflow.FetchStockItemsAsync(cancellationToken));
+            snapshotLoads.Add(FetchStockItemsAsync(cancellationToken));
 
         if (snapshotLoads.Count > 0)
             await Task.WhenAll(snapshotLoads);

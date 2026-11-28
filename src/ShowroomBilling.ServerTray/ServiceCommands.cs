@@ -18,8 +18,6 @@ internal enum ServiceCommand
 /// </summary>
 internal static class ServiceCommands
 {
-    private static readonly TimeSpan Wait = TimeSpan.FromSeconds(20);
-
     /// <summary>The word for an action on the command line of the elevated copy.</summary>
     public static string Verb(ServiceCommand action) => action switch
     {
@@ -48,8 +46,9 @@ internal static class ServiceCommands
     }
 
     /// <summary>Does it and waits for the service to get there. Throws when Windows refuses or the service does not follow.</summary>
-    public static void Apply(string serviceName, ServiceCommand action)
+    public static void Apply(string serviceName, ServiceCommand action, int timeoutSeconds = 20)
     {
+        var timeout = TimeSpan.FromSeconds(timeoutSeconds);
         using var service = new ServiceController(serviceName);
         service.Refresh();
 
@@ -60,7 +59,7 @@ internal static class ServiceCommands
                 service.Stop();
             }
 
-            service.WaitForStatus(ServiceControllerStatus.Stopped, Wait);
+            service.WaitForStatus(ServiceControllerStatus.Stopped, timeout);
             service.Refresh();
         }
 
@@ -68,7 +67,7 @@ internal static class ServiceCommands
         {
             if (service.Status == ServiceControllerStatus.StopPending)
             {
-                service.WaitForStatus(ServiceControllerStatus.Stopped, Wait);
+                service.WaitForStatus(ServiceControllerStatus.Stopped, timeout);
                 service.Refresh();
             }
 
@@ -77,7 +76,7 @@ internal static class ServiceCommands
                 service.Start();
             }
 
-            service.WaitForStatus(ServiceControllerStatus.Running, Wait);
+            service.WaitForStatus(ServiceControllerStatus.Running, timeout);
         }
     }
 

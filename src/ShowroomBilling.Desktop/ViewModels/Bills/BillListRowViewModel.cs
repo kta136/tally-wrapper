@@ -38,7 +38,7 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
     // numbered peers within the same day.
     public long InvoiceNumberSortKey => InvoiceNumberFormatter.TryParseTrailingCore(Item.InvoiceNumber) ?? 0L;
 
-    public bool IsPendingLike => BillStateCapabilities.IsPendingLike(State);
+    public bool IsPending => BillStateCapabilities.IsPending(State);
     public bool IsRetryable => BillStateCapabilities.CanRetry(State);
 
     public bool CanBePushed => BillStateCapabilities.CanPush(State);
@@ -55,7 +55,7 @@ public partial class BillListRowViewModel(BillSummaryItem item) : ObservableObje
     {
         // An edit of a pushed bill alters the voucher Tally filed it under.
         BillStates.Pending when EditedAfterPush && TallyNumberWhenDifferent is { } held => $"Awaiting push · in Tally as {held}",
-        BillStates.Pending or BillStates.Draft => "Awaiting Tally push",
+        BillStates.Pending => "Awaiting Tally push",
         BillStates.Posting => "Posting in progress",
         BillStates.Posted when TallyNumberWhenDifferent is { } inTally =>
             EditedAfterPush ? $"Edited after push · in Tally as {inTally}" : $"In Tally as {inTally}",

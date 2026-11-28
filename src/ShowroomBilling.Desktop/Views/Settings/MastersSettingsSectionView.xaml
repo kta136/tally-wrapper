@@ -157,9 +157,9 @@
                                            Foreground="{StaticResource InkSoftBrush}"
                                            IsHitTestVisible="False"
                                            Text="Flat rate per ct"
-                                           Visibility="{Binding ItemCategory, Converter={StaticResource StringEqualsVis}, ConverterParameter={x:Static contracts:ItemCategories.Diamond}, FallbackValue=Collapsed}" />
+                                           Visibility="{Binding ItemCategory, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static contracts:ItemCategories.Diamond}, FallbackValue=Collapsed}" />
                                 <Border Grid.Column="4" Grid.ColumnSpan="2" Background="{StaticResource BgSunkenBrush}" IsHitTestVisible="False"
-                                        Visibility="{Binding ItemCategory, Converter={StaticResource StringEqualsVis}, ConverterParameter={x:Static contracts:ItemCategories.Diamond}, FallbackValue=Collapsed}">
+                                        Visibility="{Binding ItemCategory, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static contracts:ItemCategories.Diamond}, FallbackValue=Collapsed}">
                                     <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource InkDisabledBrush}" Text="—" />
                                 </Border>
                                 <TextBox Grid.Column="4"

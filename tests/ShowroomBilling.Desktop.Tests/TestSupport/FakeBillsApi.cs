@@ -17,7 +17,7 @@ internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
 
     // List and single-bill reads
     public BillListResponse Response { get; set; } = new(0, 0, 50, []);
-    public BillSearchFilter? LastFilter { get; private set; }
+    public BillsPageQuery? LastFilter { get; private set; }
     public int SearchCount { get; private set; }
     public BillResponse? GetResponse { get; set; }
     public BillAuditResponse? Audit { get; set; }
@@ -73,7 +73,7 @@ internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
     /// <summary>Searches that answer only when the test completes them, taken in order before <see cref="Response"/>.</summary>
     public Queue<TaskCompletionSource<BillListResponse>> PendingSearches { get; } = new();
 
-    public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
+    public Task<BillListResponse> SearchAsync(BillsPageQuery filter, CancellationToken cancellationToken = default)
     {
         LastFilter = filter;
         SearchCount++;
@@ -256,7 +256,7 @@ internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
         AdminTokens.Add(adminToken);
         return Write(
             request.DryRun ? $"delete-check:{billId}" : $"delete:{billId}",
-            () => new DeleteBillResponse(billId, !request.DryRun, DeleteDryRunSaysTallyDiverges, null, null));
+            () => new DeleteBillResponse(billId, !request.DryRun, DeleteDryRunSaysTallyDiverges));
     }
 
     public Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(DeleteSelectedBillsRequest request, string adminToken, CancellationToken cancellationToken = default)

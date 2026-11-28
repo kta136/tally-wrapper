@@ -41,7 +41,6 @@ public partial class InvoiceViewModel : ObservableObject
     private Guid? _createOperationId;
     // The bill exactly as the server stored it on the last save; post-save
     // printing uses this, not the live form.
-    private BillResponse? _lastSavedBill;
     // Shown until the server assigns a number, including on an estimate
     // printed before the bill is saved. Deliberately not shaped like a real
     // number: the old placeholder carried a prefix and a past fiscal year.
@@ -106,7 +105,7 @@ public partial class InvoiceViewModel : ObservableObject
     [ObservableProperty] private bool rateMissing;
     [ObservableProperty] private bool isEditingPosted;
 
-    public event EventHandler<Guid>? SaveCompletedReadyForPrint;
+    public event EventHandler<InvoicePrintSnapshot>? SaveCompletedReadyForPrint;
     public event EventHandler<BillLineViewModel>? QuickAddCommitted;
 
     /// <summary>Raised when <see cref="NewBillCommand"/> has emptied the form, so the view can put the cursor back at the top.</summary>
@@ -789,7 +788,7 @@ public partial class InvoiceViewModel : ObservableObject
 
         IsSaving = true;
         SaveStatus = _draftBillId is null ? "Saving bill…" : "Updating bill…";
-        Guid? savedBillId = null;
+        InvoicePrintSnapshot? saved = null;
         try
         {
             var payload = BuildPayload();
@@ -851,8 +850,11 @@ public partial class InvoiceViewModel : ObservableObject
                 InvoiceNumber = bill.InvoiceNumber!;
             _hasUnsavedChanges = false;
             SaveStatus = $"Saved · {bill.State} · {InvoiceNumber}";
-            savedBillId = bill.Id;
-            _lastSavedBill = bill;
+            var savedPayload = bill.CurrentRevision?.Payload ?? payload;
+            saved = new InvoicePrintSnapshot(
+                bill.InvoiceNumber ?? InvoiceNumberPlaceholder,
+                savedPayload.Payment is null ? savedPayload with { Payment = payload.Payment } : savedPayload,
+                BuildKaratMappings());
         }
         catch (Exception ex)
         {
@@ -863,9 +865,9 @@ public partial class InvoiceViewModel : ObservableObject
             IsSaving = false;
         }
 
-        if (savedBillId is { } id)
+        if (saved is not null)
         {
-            SaveCompletedReadyForPrint?.Invoke(this, id);
+            SaveCompletedReadyForPrint?.Invoke(this, saved);
         }
     }
 
@@ -982,7 +984,6 @@ public partial class InvoiceViewModel : ObservableObject
         _draftBillId = null;
         _draftRevisionId = null;
         _createOperationId = null;
-        _lastSavedBill = null;
         CurrentBillState = null;
         InvoiceNumber = InvoiceNumberPlaceholder;
         // The VM is a singleton: without this, a new bill keeps the date and
@@ -1058,9 +1059,8 @@ public partial class InvoiceViewModel : ObservableObject
 
             _draftBillId = bill.Id;
             _draftRevisionId = bill.CurrentRevisionId;
-            _lastSavedBill = null;
             CurrentBillState = bill.State;
-            IsEditingPosted = !BillStateCapabilities.IsPendingLike(bill.State);
+            IsEditingPosted = !BillStateCapabilities.IsPending(bill.State);
             RateMissing = false;
             if (!string.IsNullOrWhiteSpace(bill.InvoiceNumber))
                 InvoiceNumber = bill.InvoiceNumber!;
@@ -1079,40 +1079,15 @@ public partial class InvoiceViewModel : ObservableObject
         }
     }
 
-    public BillPrintContent? BuildPrintContent(CompanyProfile company)
-    {
-        if (ItemCount == 0) return null;
-        var payload = BuildPayload();
-        return InvoicePayloadMapper.BuildPrintContent(
-            string.IsNullOrWhiteSpace(InvoiceNumber) ? InvoiceNumberPlaceholder : InvoiceNumber,
-            payload,
-            Payment,
-            company,
-            BuildKaratMappings());
-    }
+    public BillPrintContent? BuildPrintContent(CompanyProfile company) => GetPrintSnapshot()?.ToPrintContent(company);
 
-    /// <summary>
-    /// Print content for the bill as it was last saved. Anything typed into
-    /// the form while the save was in flight was not saved, so it must not be
-    /// printed as if it were. Falls back to the live form if nothing was saved.
-    /// </summary>
-    public BillPrintContent? BuildSavedPrintContent(CompanyProfile company)
-    {
-        if (_lastSavedBill?.CurrentRevision?.Payload is not { } payload)
-        {
-            return BuildPrintContent(company);
-        }
-
-        return InvoicePayloadMapper.BuildPrintContent(
-            _lastSavedBill.InvoiceNumber ?? InvoiceNumberPlaceholder,
-            payload,
-            payload.Payment ?? Payment,
-            company,
-            BuildKaratMappings());
-    }
+    internal InvoicePrintSnapshot? GetPrintSnapshot() => ItemCount == 0 ? null : new(
+        string.IsNullOrWhiteSpace(InvoiceNumber) ? InvoiceNumberPlaceholder : InvoiceNumber,
+        BuildPayload(),
+        BuildKaratMappings());
 
     private IReadOnlyList<KaratMasterEntry>? BuildKaratMappings()
-        => KaratMasters.Count == 0 ? null : KaratMasters;
+        => KaratMasters.Count == 0 ? null : KaratMasters.ToArray();
 
     /// <summary>
     /// Why the bill cannot be priced as it stands: a line's karat is not one of the saved karats.

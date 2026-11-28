@@ -1,21 +1,7 @@
 namespace ShowroomBilling.Contracts.Runtime;
 
-/// <summary>
-/// The state of the API's database configuration. It never carries the
-/// connection string itself, only <see cref="MaskedConnectionString"/>.
-/// </summary>
-public sealed record DatabaseConfigurationResponse(
-    string Provider,
-    string MaskedConnectionString,
-    string ConfigPath,
-    bool IsLocalOverridePresent,
-    bool RequiresApiRestart,
-    string EnvironmentName = "");
+public sealed record DatabaseConfigurationRequest(string ConnectionString);
 
-public sealed record UpdateDatabaseConfigurationRequest(string ConnectionString);
+public sealed record DatabaseConfigurationResponse(string MaskedConnectionString, bool RequiresApiRestart);
 
-public sealed record TestDatabaseConfigurationRequest(string ConnectionString);
-
-public sealed record DatabaseConfigurationTestResponse(
-    bool Success,
-    string Message);
+public sealed record DatabaseConfigurationTestResponse(bool Success, string Message);

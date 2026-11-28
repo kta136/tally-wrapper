@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Data;
@@ -16,14 +15,10 @@ using ShowroomBilling.Desktop.ViewModels.Admin;
 
 namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
-public partial class SettingsViewModel : ObservableObject,
-    ISettingsEditWorkflowHost,
-    ISettingsSectionHost,
-    IMasterDataSettingsShell
+public partial class SettingsViewModel : ObservableObject, IMasterDataSettingsShell
 {
     private readonly ISettingsApiClient _settingsApi;
-    private readonly SettingsEditWorkflow _editWorkflow;
-    private readonly SettingsSectionCoordinator _sectionCoordinator;
+    private bool _printLayoutLoaded;
     private readonly object _loadGate = new();
     private Task? _loadTask;
 
@@ -57,8 +52,6 @@ public partial class SettingsViewModel : ObservableObject,
             restartApplication,
             hasUnsavedSettingsEdits: () => IsDirty);
         MasterData = new MasterDataSettingsViewModel(_settingsApi, mastersApi, this);
-        _editWorkflow = new SettingsEditWorkflow(_settingsApi, this);
-        _sectionCoordinator = new SettingsSectionCoordinator(this);
 
         PrintLayout = new PrintLayoutViewModel(settingsApi, printAssetApi);
 
@@ -81,7 +74,6 @@ public partial class SettingsViewModel : ObservableObject,
         };
         SectionGroups = new ListCollectionView(Sections);
         SectionGroups.GroupDescriptions.Add(new PropertyGroupDescription(null, SettingsSectionGroupConverter.Instance));
-        SelectedSection = SettingsSectionKey.Server;
         PrintLayout.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PrintLayoutViewModel.UpdatedAtUtc))
@@ -93,7 +85,7 @@ public partial class SettingsViewModel : ObservableObject,
         Preview = previewFactory is not null
             ? previewFactory(Draft, PrintLayout, this)
             : new SettingsPreviewViewModel(Draft, PrintLayout, this, printDispatcher, printAssetApi, printPreferences);
-        _sectionCoordinator.UpdatePreviewActivation();
+        Preview.SetActive(IsPreviewVisible);
 
         DensityOptions = UiDensityManager.All;
         UiDensity = UiDensityManager.CurrentDensity;
@@ -126,7 +118,7 @@ public partial class SettingsViewModel : ObservableObject,
             }
 
             OnPropertyChanged(nameof(AdminVm));
-            _sectionCoordinator.SyncAdminSection(_adminVm);
+            SyncAdminSection();
         }
     }
     private AdminUnlockViewModel? _adminVm;
@@ -135,7 +127,20 @@ public partial class SettingsViewModel : ObservableObject,
     {
         if (e.PropertyName is nameof(AdminUnlockViewModel.IsUnlocked) or nameof(AdminUnlockViewModel.IsLocked))
         {
-            _sectionCoordinator.SyncAdminSection(_adminVm);
+            SyncAdminSection();
+        }
+    }
+
+    private void SyncAdminSection()
+    {
+        if (AdminVm?.IsUnlocked == true)
+        {
+            if (!Sections.Contains(SettingsSectionKey.Admin)) Sections.Add(SettingsSectionKey.Admin);
+        }
+        else
+        {
+            if (SelectedSection == SettingsSectionKey.Admin) SelectedSection = SettingsSectionKey.Server;
+            Sections.Remove(SettingsSectionKey.Admin);
         }
     }
 
@@ -168,7 +173,9 @@ public partial class SettingsViewModel : ObservableObject,
     public PrintLayoutViewModel PrintLayout { get; }
     public SettingsPreviewViewModel Preview { get; }
 
-    [ObservableProperty] private SettingsSectionKey selectedSection;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPreviewVisible))]
+    private SettingsSectionKey selectedSection = SettingsSectionKey.Server;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RefreshCommand), nameof(BeginEditCommand), nameof(DiscardChangesCommand), nameof(SaveAllCommand))]
@@ -208,25 +215,20 @@ public partial class SettingsViewModel : ObservableObject,
     public IReadOnlyList<string> CloudOwnedCategories { get; private set; } = Array.Empty<string>();
     public IReadOnlyList<string> LocalOnlyCategories { get; private set; } = Array.Empty<string>();
 
-    public bool IsConnectionVisible => _sectionCoordinator.IsConnectionVisible;
-    public bool IsServerVisible => _sectionCoordinator.IsServerVisible;
-    public bool IsInvoiceVisible => _sectionCoordinator.IsInvoiceVisible;
-    public bool IsPrintLayoutVisible => _sectionCoordinator.IsPrintLayoutVisible;
-    public bool IsLedgersVisible => _sectionCoordinator.IsLedgersVisible;
-    public bool IsMastersVisible => _sectionCoordinator.IsMastersVisible;
-    public bool IsAdvancedVisible => _sectionCoordinator.IsAdvancedVisible;
-    public bool IsHandoverVisible => _sectionCoordinator.IsHandoverVisible;
-    public bool IsAdminVisible => _sectionCoordinator.IsAdminVisible;
-    public bool IsTallyCheckVisible => _sectionCoordinator.IsTallyCheckVisible;
-
     /// <summary>Show the live preview pane only for Invoice and Print Layout sections.</summary>
-    public bool IsPreviewVisible => _sectionCoordinator.IsPreviewVisible;
+    public bool IsPreviewVisible => SelectedSection is SettingsSectionKey.Invoice or SettingsSectionKey.PrintLayout;
 
     public string ActiveCompanyName => Settings?.Connection.ActiveCompanyName ?? string.Empty;
 
     partial void OnSelectedSectionChanged(SettingsSectionKey value)
     {
-        _sectionCoordinator.OnSelectedSectionChanged();
+        if (IsPreviewVisible && !_printLayoutLoaded && !PrintLayout.IsBusy)
+        {
+            _printLayoutLoaded = true;
+            _ = PrintLayout.LoadAsync();
+        }
+
+        Preview?.SetActive(IsPreviewVisible);
         RaiseSectionHeader();
     }
 
@@ -317,24 +319,9 @@ public partial class SettingsViewModel : ObservableObject,
         MasterData.NotifyShellStateChanged();
     }
 
-    public void NotifySectionPropertiesChanged()
-    {
-        OnPropertyChanged(nameof(IsConnectionVisible));
-        OnPropertyChanged(nameof(IsServerVisible));
-        OnPropertyChanged(nameof(IsInvoiceVisible));
-        OnPropertyChanged(nameof(IsPrintLayoutVisible));
-        OnPropertyChanged(nameof(IsLedgersVisible));
-        OnPropertyChanged(nameof(IsMastersVisible));
-        OnPropertyChanged(nameof(IsAdvancedVisible));
-        OnPropertyChanged(nameof(IsHandoverVisible));
-        OnPropertyChanged(nameof(IsAdminVisible));
-        OnPropertyChanged(nameof(IsTallyCheckVisible));
-        OnPropertyChanged(nameof(IsPreviewVisible));
-    }
-
     private void OnDraftPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        _editWorkflow.MarkDirtyIfEditing();
+        if (IsEditing) IsDirty = true;
     }
 
     public void ApplyEffectiveSettings(EffectiveSettingsResponse response)
@@ -426,15 +413,59 @@ public partial class SettingsViewModel : ObservableObject,
 
     [RelayCommand(CanExecute = nameof(CanBeginEdit))]
     private void BeginEdit()
-        => _editWorkflow.BeginEdit();
+    {
+        if (Settings is null) return;
+        Draft.LoadFrom(Settings);
+        IsDirty = false;
+        IsEditing = true;
+        StatusMessage = string.Empty;
+    }
 
     [RelayCommand(CanExecute = nameof(CanDiscardChanges))]
     private void DiscardChanges()
-        => _editWorkflow.DiscardChanges();
+    {
+        if (Settings is null) return;
+        Draft.LoadFrom(Settings);
+        IsDirty = false;
+        IsEditing = false;
+        StatusMessage = "Changes discarded.";
+    }
 
     [RelayCommand(CanExecute = nameof(CanSaveAll))]
-    private Task SaveAllAsync(CancellationToken cancellationToken)
-        => _editWorkflow.SaveAsync(cancellationToken);
+    private async Task SaveAllAsync(CancellationToken cancellationToken)
+    {
+        if (Settings is null) return;
+
+        if (!Draft.TryBuildDto(Settings, out var dto, out var error))
+        {
+            StatusMessage = error;
+            return;
+        }
+
+        IsSaving = true;
+        StatusMessage = "Saving settings…";
+        try
+        {
+            var response = await _settingsApi.SaveEffectiveSettingsAsync(
+                new UpdateEffectiveSettingsRequest(dto), cancellationToken);
+            SettingsSource = response.SettingsSource;
+            Summary = response.Summary;
+            UpdatedAtUtc = response.UpdatedAtUtc;
+            Settings = dto;
+            Draft.LoadFrom(dto);
+            IsDirty = false;
+            IsEditing = false;
+            StatusMessage = $"Saved · {response.SavedSections.Count} section(s)";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Save failed: {ApiResponseReader.FormatError(ex)}";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
 }
 
 public enum SettingsSectionKey

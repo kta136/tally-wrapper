@@ -26,9 +26,9 @@ internal sealed class SettingsPreviewAssetCache(
         if (assets is null || printLayout is null) return;
 
         var generation = Volatile.Read(ref _generation);
-        var logoId = printLayout.LogoAssetId;
-        var signatureId = printLayout.SignatureAssetId;
-        var watermarkId = printLayout.WatermarkAssetId;
+        var logoId = printLayout.Logo.AssetId;
+        var signatureId = printLayout.Signature.AssetId;
+        var watermarkId = printLayout.Watermark.AssetId;
 
         try
         {

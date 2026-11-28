@@ -49,8 +49,7 @@ public sealed class BillPostingWorkflow(
             billId,
             request.Reason,
             requireTallyPreflight: true,
-            allowPostedSource: false,
-            idempotencyKeyOverride: null,
+            repostKey: null,
             cancellationToken);
     }
 
@@ -74,7 +73,7 @@ public sealed class BillPostingWorkflow(
         // bill renumbered since it was saved no longer sits where its creation time puts it.
         var targetIds = await dbContext.Bills
             .AsNoTracking()
-            .Where(x => x.State == BillStates.Pending || x.State == BillStates.Draft)
+            .Where(x => x.State == BillStates.Pending)
             .Select(x => new
             {
                 x.Id,
@@ -101,7 +100,7 @@ public sealed class BillPostingWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State != BillStates.Failed)
+        if (!BillStateCapabilities.CanRetry(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; retry is only allowed from 'failed'.");
@@ -111,8 +110,7 @@ public sealed class BillPostingWorkflow(
             billId,
             reason: request.Reason ?? "retry",
             requireTallyPreflight: false,
-            allowPostedSource: false,
-            idempotencyKeyOverride: null,
+            repostKey: null,
             cancellationToken);
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
@@ -133,7 +131,7 @@ public sealed class BillPostingWorkflow(
         }
 
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (BillStates.Posted or BillStates.Failed))
+        if (!BillStateCapabilities.CanRepost(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}'; repost is only allowed from 'posted' or 'failed'.");
@@ -145,8 +143,7 @@ public sealed class BillPostingWorkflow(
             billId,
             reason: request.Reason ?? "repost",
             requireTallyPreflight: false,
-            allowPostedSource: true,
-            idempotencyKeyOverride: request.IdempotencyKey.Trim(),
+            repostKey: request.IdempotencyKey.Trim(),
             cancellationToken);
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
@@ -155,8 +152,7 @@ public sealed class BillPostingWorkflow(
         Guid billId,
         string? reason,
         bool requireTallyPreflight,
-        bool allowPostedSource,
-        string? idempotencyKeyOverride,
+        string? repostKey,
         CancellationToken cancellationToken)
     {
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
@@ -164,17 +160,15 @@ public sealed class BillPostingWorkflow(
             ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
             : null;
 
-        // Already-posted / mid-posting short-circuits.
         if (bill.State is BillStates.Posting)
         {
             return BillSerialization.MapResponse(bill, currentRevision);
         }
 
-        // Allowed: pending / draft / failed (retry goes through here too), plus
-        // posted only for the explicit repost path.
-        var sourceStateAllowed = bill.State is BillStates.Pending or BillStates.Draft or BillStates.Failed
-            || allowPostedSource && bill.State == BillStates.Posted;
-        if (!sourceStateAllowed)
+        string[] sourceStates = repostKey is null
+            ? [.. BillStateCapabilities.PushOrRetryStates]
+            : [.. BillStateCapabilities.PushOrRetryStates, BillStates.Posted];
+        if (!sourceStates.Contains(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}' and cannot be pushed by this operation.");
@@ -196,43 +190,64 @@ public sealed class BillPostingWorkflow(
             await EnsureTallyReadyAsync(cancellationToken);
         }
 
-        // An Alter needs the id of the voucher Tally holds and the date it has
-        // there now. They are worked out before the bill is claimed: that
-        // means asking Tally, which can take as long as Tally's own timeout,
-        // and nothing has been written yet, so a caller who goes away
-        // meanwhile leaves the bill as it was.
+        // Resolve the target before claiming. A caller can still cancel a slow lookup without changing the bill.
         uint? alterVersion = bill.EditedAfterPush ? bill.RowVersion : null;
         var alterTarget = alterVersion.HasValue
             ? await FindAlterTargetAsync(bill, cancellationToken)
             : default;
 
-        var now = DateTimeOffset.UtcNow;
+        var claimedAt = DateTimeOffset.UtcNow;
         var sourceState = bill.State;
+        var concurrentBill = await ClaimForPostingAsync(
+            bill, currentRevision.Id, alterVersion, sourceStates, claimedAt, cancellationToken);
+        if (concurrentBill is not null)
+        {
+            return concurrentBill;
+        }
 
-        // Flip to `posting` atomically BEFORE calling Tally. Two concerns:
-        //   1. Race: two concurrent push requests on the same bill must not both
-        //      reach Tally. A conditional UPDATE gated on the pre-flip states
-        //      ensures only one caller wins.
-        //      The claim is also gated on the revision loaded above, so an edit
-        //      that lands during Tally preflight cannot be overtaken by a push
-        //      of the older revision. An Alter also checks the row version: a
-        //      rename or admin mark can change its target without a new revision.
-        //   2. Crash recovery: `posting` must be visible in the DB before the
-        //      Tally round-trip, so StuckPostingRecoveryHostedService can heal
-        //      a stuck row if the API crashes mid-call. Do NOT wrap this flip
-        //      and the Tally call in a single transaction.
-        var claimedRevisionId = currentRevision.Id;
+        var operation = bill.EditedAfterPush ? TallyPostOperation.Alter : TallyPostOperation.Create;
+        await RecordPushRequestAsync(bill, sourceState, operation, alterTarget, reason, claimedAt, cancellationToken);
+
+        var request = new TallyPostRequest(
+            BillId: bill.Id,
+            InvoiceNumber: bill.InvoiceNumber!,
+            IdempotencyKey: repostKey ?? $"post:{bill.Id:N}:{currentRevision.Id:N}",
+            Payload: BillSerialization.DeserializePayload(currentRevision),
+            Operation: operation,
+            TargetTagName: operation == TallyPostOperation.Alter ? TallyAlterTargetTagName : null,
+            TargetTagValue: operation == TallyPostOperation.Alter ? alterTarget.MasterId : null,
+            TargetVoucherDate: alterTarget.VoucherDate,
+            TargetCompany: alterTarget.Destination?.Company,
+            TargetVoucherType: alterTarget.Destination?.VoucherType);
+        var tallyResult = await PostToTallyAsync(request, alterTarget.Failure, cancellationToken);
+        var postedRow = await SavePushOutcomeAsync(bill, request, tallyResult);
+
+        var filedAs = postedRow is null ? null : await RecordVoucherAsFiledAsync(
+            bill, tallyResult.TallyMasterId ?? request.TargetTagValue, tallyResult.Company, postedRow.Id);
+
+        return BillSerialization.MapResponse(bill, currentRevision) with { TallyVoucherNumber = filedAs };
+    }
+
+    /// <returns>The current bill if another operation won the claim, or null when this caller owns it.</returns>
+    private async Task<BillResponse?> ClaimForPostingAsync(
+        BillEntity bill,
+        Guid claimedRevisionId,
+        uint? alterVersion,
+        string[] sourceStates,
+        DateTimeOffset claimedAt,
+        CancellationToken cancellationToken)
+    {
+        // Commit the claim before contacting Tally so concurrent pushes see it and crash recovery can find it.
+        // A changed revision invalidates any push. On an Alter, a rename or admin mark can also
+        // invalidate the resolved voucher without creating a revision, so check xmin as well.
         var rowsAffected = await dbContext.Bills
-            .Where(b => b.Id == billId
+            .Where(b => b.Id == bill.Id
                 && b.CurrentRevisionId == claimedRevisionId
                 && (alterVersion == null || b.RowVersion == alterVersion)
-                && (b.State == BillStates.Pending
-                    || b.State == BillStates.Draft
-                    || b.State == BillStates.Failed
-                    || allowPostedSource && b.State == BillStates.Posted))
+                && sourceStates.Contains(b.State))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(b => b.State, BillStates.Posting)
-                .SetProperty(b => b.UpdatedAtUtc, now),
+                .SetProperty(b => b.UpdatedAtUtc, claimedAt),
                 cancellationToken);
 
         if (rowsAffected == 0)
@@ -241,12 +256,12 @@ public sealed class BillPostingWorkflow(
             // Reload and return whatever is current; caller sees the same
             // shape as the "already posting" short-circuit above.
             dbContext.ChangeTracker.Clear();
-            var refreshed = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-            var staleAlter = alterVersion.HasValue && refreshed.State == sourceState;
+            var refreshed = await dbContext.LoadTrackedBillAsync(bill.Id, cancellationToken);
+            var staleAlter = alterVersion.HasValue && refreshed.State == bill.State;
             if ((refreshed.CurrentRevisionId != claimedRevisionId || staleAlter) && refreshed.State != BillStates.Posting)
             {
                 throw new BillStateConflictException(
-                    $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' changed while the push was starting. Review the latest version and push again.");
+                    $"Bill '{refreshed.InvoiceNumber ?? bill.Id.ToString()}' changed while the push was starting. Review the latest version and push again.");
             }
             var refreshedRevision = refreshed.CurrentRevisionId is Guid rid
                 ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == rid, cancellationToken)
@@ -257,20 +272,26 @@ public sealed class BillPostingWorkflow(
         // Sync tracked entity snapshot with the row we just updated so the
         // final settle-state SaveChanges does not replay the posting flip.
         await dbContext.Entry(bill).ReloadAsync(CancellationToken.None);
+        return null;
+    }
 
+    private async Task RecordPushRequestAsync(
+        BillEntity bill,
+        string sourceState,
+        TallyPostOperation operation,
+        AlterTarget alterTarget,
+        string? reason,
+        DateTimeOffset claimedAt,
+        CancellationToken cancellationToken)
+    {
         using var claimCts = new CancellationTokenSource(SettleBudget, _timeProvider);
-        var claimToken = claimCts.Token;
-
-        var operation = bill.EditedAfterPush ? TallyPostOperation.Alter : TallyPostOperation.Create;
-        var targetTagName = operation == TallyPostOperation.Alter ? TallyAlterTargetTagName : null;
-        var targetTagValue = bill.EditedAfterPush ? alterTarget.MasterId : null;
 
         var trimmedReason = string.IsNullOrWhiteSpace(reason) ? "manual-push" : reason.Trim();
         auditStore.Write(
             bill.Id,
             BillAuditEvents.PushRequested,
             bill.State,
-            now,
+            claimedAt,
             new
             {
                 invoiceNumber = bill.InvoiceNumber,
@@ -278,13 +299,13 @@ public sealed class BillPostingWorkflow(
                 reason = trimmedReason,
                 tallyAction = operation.ToString(),
                 // The voucher an Alter names; none for a Create.
-                targetTagValue,
+                targetTagValue = operation == TallyPostOperation.Alter ? alterTarget.MasterId : null,
                 // Set when the voucher to alter was found by asking Tally for this number.
                 voucherLookedUpAs = alterTarget.LookedUpNumber,
                 // The date the voucher to alter had in Tally, which the Alter names it by.
                 voucherDateInTally = alterTarget.VoucherDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             });
-        await dbContext.SaveChangesAsync(claimToken);
+        await dbContext.SaveChangesAsync(claimCts.Token);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -298,72 +319,60 @@ public sealed class BillPostingWorkflow(
                 bill.State,
                 bill.UpdatedAtUtc,
                 new { reason = "request cancelled before sending to Tally" });
-            await dbContext.SaveChangesAsync(claimToken);
+            await dbContext.SaveChangesAsync(claimCts.Token);
             cancellationToken.ThrowIfCancellationRequested();
         }
+    }
 
-        // Call Tally synchronously. No queue, no retry.
-        var payload = BillSerialization.DeserializePayload(currentRevision);
-        var idempotencyKey = idempotencyKeyOverride ?? $"post:{bill.Id:N}:{currentRevision.Id:N}";
-        TallyPostRequest? postRequest = null;
-
-        TallyPostResponse tallyResult;
-        if (operation == TallyPostOperation.Alter && (targetTagValue is null || alterTarget.VoucherDate is null))
+    private async Task<TallyPostResponse> PostToTallyAsync(
+        TallyPostRequest request,
+        TallyPostResponse? targetFailure,
+        CancellationToken cancellationToken)
+    {
+        if (request.Operation == TallyPostOperation.Alter && (request.TargetTagValue is null || request.TargetVoucherDate is null))
         {
-            tallyResult = alterTarget.Failure ?? TallyPostResponse.Failed(
+            return targetFailure ?? TallyPostResponse.Failed(
                 "TALLY_ALTER_TARGET_MISSING",
                 "Edited bill cannot be pushed because the original Tally voucher master id is unavailable.");
         }
-        else
+
+        try
         {
-            postRequest = new TallyPostRequest(
-                BillId: bill.Id,
-                InvoiceNumber: bill.InvoiceNumber!,
-                IdempotencyKey: idempotencyKey,
-                Payload: payload,
-                Operation: operation,
-                TargetTagName: targetTagName,
-                TargetTagValue: targetTagValue,
-                TargetVoucherDate: alterTarget.VoucherDate,
-                TargetCompany: alterTarget.Destination?.Company,
-                TargetVoucherType: alterTarget.Destination?.VoucherType);
-
-            try
-            {
-                tallyResult = await tallyPoster.PostAsync(postRequest, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                // Once the poster has been invoked, an unexpected exception may have
-                // happened after Tally accepted the voucher. Require reconciliation.
-                tallyResult = TallyPostResponse.Unknown(
-                    "TALLY_UNEXPECTED",
-                    ex.Message);
-            }
+            return await tallyPoster.PostAsync(request, cancellationToken);
         }
+        catch (Exception ex)
+        {
+            // Tally may already have accepted the voucher. Require reconciliation.
+            return TallyPostResponse.Unknown("TALLY_UNEXPECTED", ex.Message);
+        }
+    }
 
-        var settleAt = DateTimeOffset.UtcNow;
+    private async Task<AuditEventEntity?> SavePushOutcomeAsync(
+        BillEntity bill,
+        TallyPostRequest request,
+        TallyPostResponse tallyResult)
+    {
+        bill.UpdatedAtUtc = DateTimeOffset.UtcNow;
         AuditEventEntity? postedRow = null;
         if (tallyResult.Outcome == TallyPostOutcome.Posted)
         {
             bill.State = BillStates.Posted;
-            if (operation == TallyPostOperation.Alter)
+            if (request.Operation == TallyPostOperation.Alter)
             {
                 bill.EditedAfterPush = false;
             }
-            bill.UpdatedAtUtc = settleAt;
             postedRow = auditStore.Write(
                 bill.Id,
                 BillAuditEvents.TallyPosted,
                 bill.State,
-                settleAt,
+                bill.UpdatedAtUtc,
                 new
                 {
                     remoteId = tallyResult.RemoteId,
-                    tallyMasterId = tallyResult.TallyMasterId ?? targetTagValue,
-                    tallyAction = operation.ToString(),
-                    targetTagName,
-                    targetTagValue,
+                    tallyMasterId = tallyResult.TallyMasterId ?? request.TargetTagValue,
+                    tallyAction = request.Operation.ToString(),
+                    request.TargetTagName,
+                    request.TargetTagValue,
                     invoiceNumber = bill.InvoiceNumber,
                     // The id above names a voucher only within this company.
                     company = tallyResult.Company,
@@ -380,19 +389,18 @@ public sealed class BillPostingWorkflow(
         else if (tallyResult.Outcome == TallyPostOutcome.Failed)
         {
             bill.State = BillStates.Failed;
-            bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,
                 BillAuditEvents.TallyFailed,
                 bill.State,
-                settleAt,
+                bill.UpdatedAtUtc,
                 new
                 {
                     errorCode = tallyResult.ErrorCode,
                     errorMessage = tallyResult.ErrorMessage,
-                    tallyAction = operation.ToString(),
-                    targetTagName,
-                    targetTagValue,
+                    tallyAction = request.Operation.ToString(),
+                    request.TargetTagName,
+                    request.TargetTagValue,
                     requestExcerpt = tallyResult.RequestExcerpt,
                     responseExcerpt = tallyResult.ResponseExcerpt
                 });
@@ -407,20 +415,19 @@ public sealed class BillPostingWorkflow(
         else
         {
             bill.State = BillStates.ReconciliationRequired;
-            bill.UpdatedAtUtc = settleAt;
             auditStore.Write(
                 bill.Id,
                 BillAuditEvents.TallyOutcomeUnknown,
                 bill.State,
-                settleAt,
+                bill.UpdatedAtUtc,
                 new
                 {
                     errorCode = tallyResult.ErrorCode,
                     errorMessage = tallyResult.ErrorMessage,
-                    idempotencyKey,
-                    tallyAction = operation.ToString(),
-                    targetTagName,
-                    targetTagValue,
+                    request.IdempotencyKey,
+                    tallyAction = request.Operation.ToString(),
+                    request.TargetTagName,
+                    request.TargetTagValue,
                     requestExcerpt = tallyResult.RequestExcerpt,
                     responseExcerpt = tallyResult.ResponseExcerpt
                 });
@@ -437,17 +444,7 @@ public sealed class BillPostingWorkflow(
         // timeout, and the bill would stay in `posting` with no outcome.
         using var settleCts = new CancellationTokenSource(SettleBudget, _timeProvider);
         await dbContext.SaveChangesAsync(settleCts.Token);
-
-        // The outcome is saved; now read the voucher back to see what Tally
-        // filed it under. With Automatic numbering Tally ignores the number sent
-        // and gives its own, which drifts from the bill's when a voucher is
-        // inserted or deleted earlier in the year.
-        var filedAs = postedRow is not null
-            && TallyIds.NormalizePositiveInteger(tallyResult.TallyMasterId ?? targetTagValue) is { } filedId
-                ? await RecordVoucherAsFiledAsync(bill, filedId, tallyResult.Company, postedRow.Id)
-                : null;
-
-        return BillSerialization.MapResponse(bill, currentRevision) with { TallyVoucherNumber = filedAs };
+        return postedRow;
     }
 
     /// <summary>
@@ -458,9 +455,9 @@ public sealed class BillPostingWorkflow(
     /// voucher only within its company, so the read is used only when it was
     /// made in the company the push went to.
     /// </summary>
-    private async Task<string?> RecordVoucherAsFiledAsync(BillEntity bill, string masterId, string? pushedToCompany, Guid pushAuditId)
+    private async Task<string?> RecordVoucherAsFiledAsync(BillEntity bill, string? tallyMasterId, string? pushedToCompany, Guid pushAuditId)
     {
-        if (tallyVoucherLookup is null)
+        if (tallyVoucherLookup is null || TallyIds.NormalizePositiveInteger(tallyMasterId) is not { } masterId)
         {
             return null;
         }
@@ -572,8 +569,7 @@ public sealed class BillPostingWorkflow(
                     billId,
                     reason,
                     requireTallyPreflight: false,
-                    allowPostedSource: false,
-                    idempotencyKeyOverride: null,
+                    repostKey: null,
                     cancellationToken);
                 if (response.State != BillStates.Posted)
                 {

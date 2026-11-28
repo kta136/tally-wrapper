@@ -47,12 +47,12 @@ public sealed class BillLifecycleWorkflow(
         BillValidator.Validate(request.Payload);
 
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
+        if (BillStateCapabilities.HasOpenTallyOutcome(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot be edited while its Tally outcome is unresolved.");
         }
-        if (bill.State is BillStates.Voided or BillStates.Revised)
+        if (!BillStateCapabilities.CanEdit(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{bill.State}' and cannot be edited.");
@@ -85,7 +85,7 @@ public sealed class BillLifecycleWorkflow(
                 $"Bill {bill.InvoiceNumber ?? billId.ToString()} was changed elsewhere after you opened it (now revision {current?.RevisionNo.ToString() ?? "?"}). Reload it from Bills before saving.");
         }
 
-        var reopenFrom = bill.State is not (BillStates.Pending or BillStates.Draft)
+        var reopenFrom = !BillStateCapabilities.IsPending(bill.State)
             ? bill.State
             : null;
 
@@ -147,7 +147,7 @@ public sealed class BillLifecycleWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var priorBill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (priorBill.State is not (BillStates.Pending or BillStates.Draft))
+        if (!BillStateCapabilities.CanRevise(priorBill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' is in state '{priorBill.State}'; revise is currently only supported from 'pending'.");
@@ -224,10 +224,10 @@ public sealed class BillLifecycleWorkflow(
         ArgumentNullException.ThrowIfNull(request);
 
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is not (BillStates.Pending or BillStates.Draft or BillStates.Failed))
+        if (!BillStateCapabilities.CanVoid(bill.State))
         {
             throw new BillStateConflictException(
-                $"Bill '{billId}' is in state '{bill.State}'; void is only allowed from pending/draft/failed in this phase.");
+                $"Bill '{billId}' is in state '{bill.State}'; void is only allowed from pending or failed in this phase.");
         }
 
         // Void never contacts Tally. A bill whose voucher Tally still holds

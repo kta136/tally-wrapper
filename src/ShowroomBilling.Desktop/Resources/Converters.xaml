@@ -19,7 +19,7 @@
     <conv:MasterOptionLabelConverter x:Key="MasterLabel" />
     <conv:FreshnessToneConverter x:Key="FreshnessTone" />
     <conv:SentenceCaseConverter x:Key="SentenceCase" />
-    <conv:StringEqualsToVisibilityConverter x:Key="StringEqualsVis" />
+    <conv:EqualsToVisibilityConverter x:Key="EqualsVis" />
     <conv:CountWordConverter x:Key="CountWord" />
     <conv:BillStateLabelConverter x:Key="BillStateLabel" />
     <conv:GroupedNumberConverter x:Key="GroupedNumber" />

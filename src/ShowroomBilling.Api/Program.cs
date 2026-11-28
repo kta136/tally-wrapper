@@ -32,8 +32,8 @@ if (!builder.Environment.IsDevelopment()
 // Precedence (last wins): env var > local DPAPI-encrypted override > appsettings.
 string? databaseOverrideLoadError = null;
 var overrideConnectionString =
-    DatabaseConfigurationStore.GetEnvironmentConnectionString() is { Length: > 0 } envCs ? envCs
-    : DatabaseConfigurationStore.LoadPostgresConnectionString(builder.Environment.EnvironmentName, out databaseOverrideLoadError);
+    DatabaseConfigurationStore.GetEnvironmentConnectionString()
+    ?? DatabaseConfigurationStore.LoadPostgresConnectionString(builder.Environment.EnvironmentName, out databaseOverrideLoadError);
 
 if (!string.IsNullOrWhiteSpace(overrideConnectionString))
 {
@@ -42,7 +42,6 @@ if (!string.IsNullOrWhiteSpace(overrideConnectionString))
         ["ConnectionStrings:Postgres"] = overrideConnectionString
     });
 }
-DatabaseConnectionStringConfiguration.NormalizePostgresConnectionString(builder.Configuration);
 
 builder.Logging.AddRollingFile(builder.Configuration, filePrefix: "api");
 

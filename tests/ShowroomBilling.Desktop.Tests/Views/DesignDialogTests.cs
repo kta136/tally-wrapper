@@ -257,7 +257,7 @@ public sealed class DesignDialogTests
                     "Cash",
                     7780m);
                 shell.BillDetails.Bill = new BillResponse(
-                    Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, Guid.NewGuid(),
+                    Guid.NewGuid(), BillStates.Pending, "SR/2026-27/0009", "2026-27", null, Guid.NewGuid(),
                     created, created,
                     new BillRevisionResponse(Guid.NewGuid(), 1, created, null, payload));
                 shell.BillDetails.AuditTrail.Add(new BillAuditTrailItemViewModel(Guid.NewGuid(), created, "Bill created", "Saved as a draft with 4 lines", "info", null!));

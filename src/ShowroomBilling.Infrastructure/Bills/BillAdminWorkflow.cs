@@ -26,7 +26,7 @@ public sealed class BillAdminWorkflow(
         }
 
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
+        if (!BillStateCapabilities.CanChangeNumber(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot change number while its Tally outcome is unresolved.");
@@ -272,7 +272,7 @@ public sealed class BillAdminWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
         var bill = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-        if (bill.State is BillStates.Posting or BillStates.ReconciliationRequired)
+        if (!BillStateCapabilities.CanDelete(bill.State))
         {
             throw new BillStateConflictException(
                 $"Bill '{billId}' cannot be deleted while its Tally outcome is unresolved.");
@@ -286,9 +286,7 @@ public sealed class BillAdminWorkflow(
             return new DeleteBillResponse(
                 BillId: bill.Id,
                 Committed: false,
-                TallyDiverges: tallyDiverges,
-                LastState: bill.State,
-                InvoiceNumber: bill.InvoiceNumber);
+                TallyDiverges: tallyDiverges);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -344,9 +342,7 @@ public sealed class BillAdminWorkflow(
         return new DeleteBillResponse(
             BillId: billId,
             Committed: true,
-            TallyDiverges: tallyDiverges,
-            LastState: lastState,
-            InvoiceNumber: invoiceNumber);
+            TallyDiverges: tallyDiverges);
     }
 
     public async Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(

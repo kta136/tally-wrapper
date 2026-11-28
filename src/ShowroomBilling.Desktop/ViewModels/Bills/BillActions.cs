@@ -151,7 +151,7 @@ internal sealed class BillActions(
     {
         var confirmed = await dialogs.ConfirmAsync(new ConfirmRequest(
             "Push all pending bills?",
-            "Every pending and draft bill goes to Tally, by date and then number. The run stops at the first failure.",
+            "Every pending bill goes to Tally, by date and then number. The run stops at the first failure.",
             "Push all"));
         if (!confirmed) return null;
         if (!await TallyReadyAsync(cancellationToken)) return null;
@@ -360,7 +360,7 @@ internal sealed class BillActions(
     private static readonly MarkAction MarkPushed = new(
         "pushed",
         "Mark as pushed",
-        "Mark pushed blocked: every selected bill must be pending, draft, or failed.",
+        "Mark pushed blocked: every selected bill must be pending or failed.",
         "as posted **without contacting Tally**.",
         "Do it only after you have checked that the voucher is already in Tally.",
         row => row.CanMarkPosted,

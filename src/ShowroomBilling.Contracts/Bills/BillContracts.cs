@@ -15,6 +15,7 @@ public sealed record BillTotalsDto(
     decimal GrandTotal,
     decimal BankCharges = 0m);
 
+/// <param name="RawJson">Optional line metadata retained when reading older revisions.</param>
 public sealed record BillLineItemDto(
     string ItemName,
     string? HsnCode,
@@ -23,7 +24,7 @@ public sealed record BillLineItemDto(
     decimal Rate,
     decimal LineTotal,
     string? Karat,
-    string? RawJson,
+    string? RawJson = null,
     string? StockName = null,
     decimal? GrossWeight = null,
     decimal? LessWeight = null,
@@ -139,7 +140,7 @@ public sealed record BillPushOrderRequest(IReadOnlyList<Guid> BillIds);
 
 /// <summary>
 /// The bills that should go to Tally before the ones asked about: of the same fiscal year, an
-/// earlier number, dated the same day or earlier, and not in Tally yet (pending, draft or failed,
+/// earlier number, dated the same day or earlier, and not in Tally yet (pending or failed,
 /// not edited after a push). Tally numbers vouchers by date and, within a day, in the order they
 /// arrive, so pushing past one of them files a bill under an earlier bill's number. Oldest first.
 /// </summary>
@@ -172,7 +173,7 @@ public sealed record BillSearchFilter(
 /// <summary>The orders <see cref="BillSearchFilter.Sort"/> takes; anything else is <see cref="Workflow"/>.</summary>
 public static class BillSearchSorts
 {
-    /// <summary>The Bills tab's order: pending and draft bills first, then the highest invoice number.</summary>
+    /// <summary>The Bills tab's order: pending bills first, then the highest invoice number.</summary>
     public const string Workflow = "workflow";
 
     /// <summary>The bill made last first.</summary>
@@ -214,8 +215,6 @@ public sealed record BillAuditEventDto(
     string EventType,
     string ActorType,
     string? ActorId,
-    string EntityType,
-    string EntityId,
     JsonElement Payload,
     DateTimeOffset CreatedAtUtc);
 
@@ -245,9 +244,7 @@ public sealed record DeleteBillRequest(string? Reason, bool DryRun = false);
 public sealed record DeleteBillResponse(
     Guid BillId,
     bool Committed,
-    bool TallyDiverges,
-    string? LastState,
-    string? InvoiceNumber);
+    bool TallyDiverges);
 
 public sealed record DeleteSelectedBillsRequest(
     IReadOnlyList<Guid> BillIds,

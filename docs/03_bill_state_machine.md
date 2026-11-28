@@ -7,7 +7,6 @@ New bills enter `pending` when saved. The API owns state changes and records the
 | State | Meaning |
 |---|---|
 | `pending` | Saved bill awaiting a push or an update to an existing voucher |
-| `draft` | Treated like `pending` wherever it is found; a new bill is saved as `pending` |
 | `posting` | API is mid-call to Tally right now (typically seconds; briefly visible while the HTTP post is in flight) |
 | `posted` | Tally accepted the voucher or an admin verified it and marked the bill as pushed |
 | `failed` | Latest attempt failed with a known outcome. The operator can correct the issue and retry. |
@@ -20,15 +19,15 @@ New bills enter `pending` when saved. The API owns state changes and records the
 | Event | From | To | Notes |
 |---|---|---|---|
 | Create bill | new bill | `pending` | The API reserves the invoice number when it creates the bill |
-| **Manual push** (operator click) | `pending`, `draft`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | API calls Tally XML synchronously via `ITallyPoster`; first pushes create a voucher, edited-after-push bills alter the prior Tally voucher. Transport timeouts/unreadable responses are ambiguous, not ordinary failures. |
+| **Manual push** (operator click) | `pending`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | API calls Tally XML synchronously via `ITallyPoster`; first pushes create a voucher, edited-after-push bills alter the prior Tally voucher. Transport timeouts/unreadable responses are ambiguous, not ordinary failures. |
 | Manual retry | `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | Same sync path as push. |
 | Manual repost | `posted`, `failed` | `posting` → `posted` \| `failed` \| `reconciliation_required` | Same sync path; the caller-supplied repost idempotency key becomes the Tally `REMOTEID` for create/import. |
-| Revise bill content | `pending`, `draft` | `revised` + new `pending` | The old bill becomes superseded; the new bill gets its own invoice number |
-| **Edit in place** | `pending`, `draft`, `failed`; `posted` with an admin session | Current state for an existing `pending` or legacy `draft`, otherwise `pending` | Appends a revision and keeps the invoice number. `EditedAfterPush=true` only when Tally holds the bill's voucher, so the next push alters it; a bill whose first push was rejected is pushed again as a create. Without an admin session an edit to a `posted` bill is `403 Admin session required`. Refused in `posting`, `reconciliation_required`, `voided` and `revised`. |
-| **Mark as Pushed** (admin-gated) | `pending`, `draft`, `failed`, `reconciliation_required` | `posted` | Local-only attestation — does not call Tally. This is one of the two explicit reconciliation exits. The Desktop asks for a reason of at least 4 characters. |
+| Revise bill content | `pending` | `revised` + new `pending` | The old bill becomes superseded; the new bill gets its own invoice number |
+| **Edit in place** | `pending`, `failed`; `posted` with an admin session | `pending` | Appends a revision and keeps the invoice number. `EditedAfterPush=true` only when Tally holds the bill's voucher, so the next push alters it; a bill whose first push was rejected is pushed again as a create. Without an admin session an edit to a `posted` bill is `403 Admin session required`. Refused in `posting`, `reconciliation_required`, `voided` and `revised`. |
+| **Mark as Pushed** (admin-gated) | `pending`, `failed`, `reconciliation_required` | `posted` | Local-only attestation — does not call Tally. This is one of the two explicit reconciliation exits. The Desktop asks for a reason of at least 4 characters. |
 | **Mark as Pending** (admin-gated) | `posted`, `failed`, `reconciliation_required` | `pending` | Local-only revert — does not touch Tally. This is the other explicit reconciliation exit. Clears `EditedAfterPush`. |
 | **Change bill number** (admin-gated) | any except `posting`, `reconciliation_required` | same state; a bill whose voucher Tally holds becomes `pending` with `EditedAfterPush=true` | Updates `bill.InvoiceNumber` and `InvoiceCore`. Warnings: `LeavesGap`, `TallyDiverges`. 409 on uniqueness conflict. |
-| Void before posting | `pending`, `draft`, `failed` | `voided` | Refused while Tally holds the bill's voucher. The Desktop asks for confirmation first. |
+| Void before posting | `pending`, `failed` | `voided` | Refused while Tally holds the bill's voucher. The Desktop asks for confirmation first. |
 | **Delete local** (admin-gated, hard-delete) | any except `posting`, `reconciliation_required` | (row removed) | Cascades bill_revisions. Keeps the append-only audit history and a final `bill.deleted` tombstone. |
 
 ## Posting and recovery

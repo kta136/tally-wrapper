@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-The visual and interaction target for the Tally Wrapper desktop UI is the **Ledger Clear** redesign: 28 pictures in [docs/design/redesign/](design/redesign/), one per screen, state or dialog, plus two boards of the tokens and components. The older HTML/CSS/React prototype in [docs/design/](design/) is kept for its sample data and its keyboard rules; where it disagrees with the pictures, the pictures win.
+The visual and interaction target for the Tally Wrapper desktop UI is the **Ledger Clear** redesign: 28 pictures in [docs/design/redesign/](design/redesign/), one per screen, state or dialog, plus two boards of the tokens and components.
 
 This document is the contract between the pictures and the WPF code: what the UI should look and feel like, and which resource or control carries each part. The tokens are in [Resources/DesignTokens.xaml](../src/ShowroomBilling.Desktop/Resources/DesignTokens.xaml), the button, text and input styles in [Resources/Styles.xaml](../src/ShowroomBilling.Desktop/Resources/Styles.xaml), and the templated controls in [Resources/Controls.xaml](../src/ShowroomBilling.Desktop/Resources/Controls.xaml).
 
@@ -77,7 +77,7 @@ Sizes that do not change with density: `FontSizeTotal` 32, `FontSizeTitle` 22, `
 
 ## 5. Screens
 
-Each screen has a picture; compare against it, not against the prototype.
+Each screen has a reference picture.
 
 | Screen | Picture |
 |---|---|
@@ -90,7 +90,7 @@ Each screen has a picture; compare against it, not against the prototype.
 | Dialogs: Confirm, Reason, Change number, Admin unlock, Shortcuts, System health, Bill details, Print preview, First-launch setup, Batch data scheduler | `Dialog-*.png` |
 | Bill hand-over: the toast, the result dialog in each case, the admin unlock for a bill in Tally, the key dialog, Settings → Hand-over | no picture in this folder; `HandoverViewSnapshotTests` saves each as `Handover-*.png`. What they say: [18 §6, §8](18_bill_handover.md) |
 
-### 5.1 Behaviour the pictures add to the prototype
+### 5.1 Screen behaviour
 
 - **Estimate table.** The row that holds keyboard focus is `ResultTintActive` with an indigo zone line; the strip under the table says how that line was priced (`LineExplainer`) and which rate it used (`RateLadder`). A gold line with no karat says so in its karat cell (a red fill and the word "Karat"). A karat that is typed but is not one of the saved karats, such as "20K", has no purity: its cell gets the same red edge with the text left readable, the strip says it is not one of the karats, and neither Save nor Print estimate goes ahead until one is picked from the list (`BillLineViewModel.KaratUnknown`, set by the invoice each time it prices the line). Before this the line was priced, and saved, with no gold in it. An item name that is not one of the saved items is allowed (a one-off piece; on a gold line Tally's stock item comes from the karat), but Save asks first ("Save “…” as typed?", **Save as typed** or Cancel), because it is also what a name cut short when Ctrl+S was pressed looks like, and the bill would keep it. Cancel leaves the reason beside Save until each such line is given a saved item. No question while no items are saved at all; Print estimate does not ask. A yes saves only the bill that was asked about: if the bill changed behind the question (a row shortcut, settings arriving), Save stops and says so. (A line prints the Tally item its karat or item names; only a line with neither prints the typed name.) Typing over an item keeps the wastage and labour typed on the line: the cell writes its text before it lets go of the item, because a line let go first took the item back by its old name, with the item's defaults.
 - **Totals.** Subtotal before GST, CGST, SGST, discount (with its percentage of the total), bank charges, final amount, round off and the grand total at 32 px. Discount and bank charges each sit behind a tick box (ticked by hand, or by typing an amount); the discount and bank charges amounts are read when their box is left, as the line cells are (`MoneyTextConverter`: paise kept and shown, an empty box is none); the final amount is what the customer pays, bank charges included, and typing it works out the discount. The `+`/`−` signs between the figures have 10 px either side so the bar fits the 1100 px minimum window.
@@ -179,9 +179,9 @@ The one banner under the top bar is `BannerView`: a note (information, can be di
 
 ## 10. Deliberate departures from the pictures
 
-- **Tweaks panel** of the prototype: review-only. Density lives in Settings (workstation-local; see [14_settings_storage_contract.md](14_settings_storage_contract.md)); system state comes from real health signals; keyboard hints stay on; accent is fixed at indigo.
+- **Display preferences.** Density lives in Settings (workstation-local; see [14_settings_storage_contract.md](14_settings_storage_contract.md)); system state comes from real health signals; keyboard hints stay on; accent is fixed at indigo.
 - **Window buttons** are drawn by the top bar, because the window uses `WindowStyle="None"` with `WindowChrome`.
-- **Settings → Server** replaces the prototype's cloud-onboarding form: the server address, the address in use, **Test server**, **Find server** and **Save and restart Billing**. The database connection is set from the tray on the server PC.
+- **Settings → Server** shows the server address, the address in use, **Test server**, **Find server** and **Save and restart Billing**. The database connection is set from the tray on the server PC.
 - **Bill details** keeps **Revise…** (the mockup omits it) because the action exists for pending bills.
 - **Bills "last error" note** is generic text for a failed row: the list item carries no error text, and adding it is a server change.
 - **Picker popup** shows names only: the item master has no karat to filter or price by.

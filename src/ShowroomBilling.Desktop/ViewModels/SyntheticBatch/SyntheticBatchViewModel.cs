@@ -626,21 +626,17 @@ public partial class SyntheticBatchViewModel : ObservableObject
 
     private async Task<string?> EnsureAdminTokenAsync(CancellationToken cancellationToken)
     {
-        var current = _adminTokens?.Current?.Token;
-        if (!string.IsNullOrWhiteSpace(current)) return current;
         try
         {
-            await _dialogs.RequestAdminUnlockAsync(cancellationToken);
+            return await AdminTokenPrompt.GetAsync(_adminTokens, PromptAsync, cancellationToken);
         }
         catch (OperationCanceledException) { return null; }
-        finally
-        {
-            // The unlock dialog took this dialog's place. It comes back, so the run and what it
-            // comes to are in front of the operator who started it.
-            _dialogs.Show(ShellDialogs.SyntheticBatch);
-        }
 
-        return _adminTokens?.Current?.Token;
+        async Task PromptAsync(CancellationToken token)
+        {
+            try { await _dialogs.RequestAdminUnlockAsync(token); }
+            finally { _dialogs.Show(ShellDialogs.SyntheticBatch); }
+        }
     }
 }
 

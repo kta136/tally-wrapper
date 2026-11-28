@@ -10,7 +10,6 @@ namespace ShowroomBilling.Contracts.Bills;
 /// </summary>
 public static class BillStates
 {
-    public const string Draft = "draft";
     public const string Pending = "pending";
     public const string Posting = "posting";
     public const string Posted = "posted";

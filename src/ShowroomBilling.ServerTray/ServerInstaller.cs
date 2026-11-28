@@ -69,7 +69,7 @@ public static class ServerInstaller
             && !ApiExecutableChanged(options.ApiExecutablePath))
         {
             EnsureTrayStartup(options);
-            EnsureServiceRunning(options.ServiceName);
+            TryControlService(options.ServiceName, ServiceCommand.Start);
             return InstallOutcome.Done;
         }
 
@@ -130,7 +130,7 @@ public static class ServerInstaller
             if (apiChanged && wasInstalled)
             {
                 Log(options, "Embedded API differs; stopping service before replacement.");
-                StopService(options.ServiceName);
+                TryControlService(options.ServiceName, ServiceCommand.Stop);
                 if (TryGetServiceStatus(options.ServiceName) is { } status and not ServiceControllerStatus.Stopped)
                 {
                     // A running exe can be renamed, so the swap below would
@@ -162,12 +162,12 @@ public static class ServerInstaller
             // Whatever failed, start it again with the API that is in place:
             // the old one, unless the swap had already been made.
             Log(options, "Install/repair failed; starting the service again with the API that is in place.");
-            EnsureServiceRunning(options.ServiceName);
+            TryControlService(options.ServiceName, ServiceCommand.Start);
             throw;
         }
 
         Log(options, "Starting service if needed.");
-        EnsureServiceRunning(options.ServiceName);
+        TryControlService(options.ServiceName, ServiceCommand.Start);
         Log(options, "Install/repair completed.");
     }
 
@@ -384,41 +384,13 @@ public static class ServerInstaller
         }
     }
 
-    private static void EnsureServiceRunning(string serviceName)
+    private static void TryControlService(string serviceName, ServiceCommand action)
     {
-        try
-        {
-            using var service = new ServiceController(serviceName);
-            if (service.Status == ServiceControllerStatus.Running)
-            {
-                return;
-            }
-
-            service.Start();
-            service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-        }
+        try { ServiceCommands.Apply(serviceName, action, timeoutSeconds: 30); }
         catch
         {
-            // Service status is also shown in the tray; do not prevent the tray from opening.
-        }
-    }
-
-    private static void StopService(string serviceName)
-    {
-        try
-        {
-            using var service = new ServiceController(serviceName);
-            if (service.Status == ServiceControllerStatus.Stopped)
-            {
-                return;
-            }
-
-            service.Stop();
-            service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
-        }
-        catch
-        {
-            // Replacement will fail if the binary is still locked; that error is more useful.
+            // Installation can continue. The dashboard reports service status and a locked file
+            // produces a specific error if replacement fails.
         }
     }
 

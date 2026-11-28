@@ -36,7 +36,6 @@ public static class PreviewSampleProvider
                     Rate: 6550m,
                     LineTotal: 146359.75m,
                     Karat: "22K",
-                    RawJson: null,
                     GrossWeight: 22.800m,
                     LessWeight: 0.455m,     // triggers Gross/Less columns
                     WastagePercent: 12.50m,
@@ -49,8 +48,7 @@ public static class PreviewSampleProvider
                     Unit: "g",
                     Rate: 45000m,
                     LineTotal: 157500m,
-                    Karat: "18K",
-                    RawJson: null),
+                    Karat: "18K"),
             },
             Totals: new BillTotalsDto(
                 Subtotal: 303859.75m,

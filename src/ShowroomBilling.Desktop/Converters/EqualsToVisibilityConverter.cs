@@ -6,13 +6,12 @@ using System.Windows.Data;
 namespace ShowroomBilling.Desktop.Converters;
 
 /// <summary>
-/// Visible when the bound string equals the converter parameter, collapsed otherwise. A view uses it
-/// to show a control for one value of a tone or a mode without a style trigger per control.
+/// Shows a control when its bound value equals the converter parameter.
 /// </summary>
-public sealed class StringEqualsToVisibilityConverter : IValueConverter
+public sealed class EqualsToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => string.Equals(value as string, parameter as string, StringComparison.Ordinal)
+        => Equals(value, parameter)
             ? Visibility.Visible
             : Visibility.Collapsed;
 

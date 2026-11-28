@@ -76,21 +76,21 @@ public sealed class PrintLayoutViewModelTests
         var picker = new FakeImagePicker(new PrintLayoutImageSelection("brand.png", bytes));
         var vm = new PrintLayoutViewModel(new FakeSettingsApi(), assets, picker);
 
-        await vm.UploadWatermarkCommand.ExecuteAsync(null);
+        await vm.Watermark.UploadCommand.ExecuteAsync(null);
 
-        Assert.NotNull(vm.WatermarkAssetId);
-        Assert.Same(bytes, vm.PendingWatermarkBytes);
-        Assert.Equal("brand.png", vm.WatermarkFileName);
-        Assert.Equal(PrintLayoutDefaults.WatermarkOffsetXCm, vm.WatermarkOffsetXCm);
-        Assert.Equal(PrintLayoutDefaults.WatermarkOffsetYCm, vm.WatermarkOffsetYCm);
-        Assert.Equal(PrintLayoutDefaults.WatermarkOpacityPercent, vm.WatermarkOpacityPercent);
+        Assert.NotNull(vm.Watermark.AssetId);
+        Assert.Same(bytes, vm.Watermark.PendingBytes);
+        Assert.Equal("brand.png", vm.Watermark.FileName);
+        Assert.Equal(PrintLayoutDefaults.WatermarkOffsetXCm, vm.Watermark.OffsetXCm);
+        Assert.Equal(PrintLayoutDefaults.WatermarkOffsetYCm, vm.Watermark.OffsetYCm);
+        Assert.Equal(PrintLayoutDefaults.WatermarkOpacityPercent, vm.Watermark.OpacityPercent);
         Assert.Equal(PrintAssetKinds.Watermark, assets.LastUpload!.AssetKind);
 
-        await vm.DeleteWatermarkCommand.ExecuteAsync(null);
+        await vm.Watermark.DeleteCommand.ExecuteAsync(null);
 
-        Assert.Null(vm.WatermarkAssetId);
-        Assert.Null(vm.PendingWatermarkBytes);
-        Assert.Equal("—", vm.WatermarkFileName);
+        Assert.Null(vm.Watermark.AssetId);
+        Assert.Null(vm.Watermark.PendingBytes);
+        Assert.Equal("—", vm.Watermark.FileName);
         Assert.Single(assets.DeletedIds);
     }
 
@@ -112,13 +112,13 @@ public sealed class PrintLayoutViewModelTests
         var settings = new FakeSettingsApi();
         var vm = new PrintLayoutViewModel(settings, assets, picker);
 
-        await vm.UploadWatermarkCommand.ExecuteAsync(null);
+        await vm.Watermark.UploadCommand.ExecuteAsync(null);
 
-        Assert.Null(vm.WatermarkAssetId);
-        Assert.Same(bytes, vm.PendingWatermarkBytes);
-        Assert.Equal("watermark.png", vm.WatermarkFileName);
-        Assert.True(vm.HasWatermark);
-        Assert.True(vm.DeleteWatermarkCommand.CanExecute(null));
+        Assert.Null(vm.Watermark.AssetId);
+        Assert.Same(bytes, vm.Watermark.PendingBytes);
+        Assert.Equal("watermark.png", vm.Watermark.FileName);
+        Assert.True(vm.Watermark.HasAsset);
+        Assert.True(vm.Watermark.DeleteCommand.CanExecute(null));
         Assert.Contains("connected server", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("local preview", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
 
@@ -127,11 +127,11 @@ public sealed class PrintLayoutViewModelTests
         Assert.Null(settings.LastUpdate);
         Assert.Contains("browse the file again", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
 
-        await vm.DeleteWatermarkCommand.ExecuteAsync(null);
+        await vm.Watermark.DeleteCommand.ExecuteAsync(null);
 
-        Assert.Null(vm.PendingWatermarkBytes);
-        Assert.False(vm.HasWatermark);
-        Assert.Equal("—", vm.WatermarkFileName);
+        Assert.Null(vm.Watermark.PendingBytes);
+        Assert.False(vm.Watermark.HasAsset);
+        Assert.Equal("—", vm.Watermark.FileName);
         Assert.Empty(assets.DeletedIds);
     }
 
@@ -163,7 +163,7 @@ public sealed class PrintLayoutViewModelTests
         vm.SectionLayouts.Single(row => row.SectionKey == PrintLayoutSectionKeys.BankDetails).IsVisible = false;
         vm.SectionLayouts.Single(row => row.SectionKey == PrintLayoutSectionKeys.Terms).SpacingBeforeMm = 5;
         vm.MoveSection(PrintLayoutSectionKeys.Terms, PrintLayoutSectionKeys.Logo);
-        vm.WatermarkOpacityPercent = 27;
+        vm.Watermark.OpacityPercent = 27;
 
         await vm.SaveCommand.ExecuteAsync(null);
 
@@ -182,7 +182,7 @@ public sealed class PrintLayoutViewModelTests
         Assert.Equal(PrintPageDensity.Compact, reloaded.PageDensity);
         Assert.Equal(PrintLayoutSectionKeys.Terms, reloaded.SectionLayouts[1].SectionKey);
         Assert.False(reloaded.SectionLayouts.Single(row => row.SectionKey == PrintLayoutSectionKeys.BankDetails).IsVisible);
-        Assert.Equal(27, reloaded.WatermarkOpacityPercent);
+        Assert.Equal(27, reloaded.Watermark.OpacityPercent);
     }
 
     private sealed class FakeImagePicker(PrintLayoutImageSelection? selection) : IPrintLayoutImagePicker

@@ -504,7 +504,6 @@ public sealed class SyntheticBillPlanner
             Rate: pricing.Rate,
             LineTotal: lineTotal,
             Karat: karatEntry.Label,
-            RawJson: null,
             StockName: stockName,
             GrossWeight: weight,
             LessWeight: 0m,

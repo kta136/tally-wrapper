@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http;
-using System.Windows.Forms;
 using ShowroomBilling.ServerTray;
+using ShowroomBilling.ServerTray.Ui;
 
 namespace ShowroomBilling.Desktop.Tests.ServerTray;
 
@@ -13,9 +13,9 @@ public sealed class StatusFormReportTests
     {
         var report = Report(HttpStatusCode.OK, """{"success":true,"message":"Connection succeeded. Database identity: PROD."}""");
 
-        Assert.Equal(MessageBoxIcon.Information, report.Icon);
-        Assert.StartsWith("Test database succeeded.", report.Message);
-        Assert.EndsWith("Connection succeeded. Database identity: PROD.", report.Message);
+        Assert.Equal(Tone.Ok, report.Tone);
+        Assert.StartsWith("Test database succeeded.", report.Title);
+        Assert.EndsWith("Connection succeeded. Database identity: PROD.", report.Details);
     }
 
     [Fact]
@@ -23,9 +23,9 @@ public sealed class StatusFormReportTests
     {
         var report = Report(HttpStatusCode.OK, """{"success":false,"message":"Connection failed: timeout"}""");
 
-        Assert.Equal(MessageBoxIcon.Error, report.Icon);
-        Assert.StartsWith("Test database failed.", report.Message);
-        Assert.EndsWith("Connection failed: timeout", report.Message);
+        Assert.Equal(Tone.Err, report.Tone);
+        Assert.StartsWith("Test database failed.", report.Title);
+        Assert.EndsWith("Connection failed: timeout", report.Details);
     }
 
     [Theory]
@@ -39,8 +39,9 @@ public sealed class StatusFormReportTests
     {
         var report = Report(HttpStatusCode.BadRequest, body);
 
-        Assert.Equal(MessageBoxIcon.Error, report.Icon);
-        Assert.Equal($"Test database failed: HTTP 400\r\n\r\n{expected}", report.Message);
+        Assert.Equal(Tone.Err, report.Tone);
+        Assert.Equal("Test database failed: HTTP 400", report.Title);
+        Assert.Equal(expected, report.Details);
     }
 
     [Fact]
@@ -50,20 +51,11 @@ public sealed class StatusFormReportTests
             HttpStatusCode.OK,
             """{"provider":"PostgreSQL","maskedConnectionString":"Host=db;Database=sample_billing;Password=***","requiresApiRestart":true}""");
 
-        Assert.Equal(MessageBoxIcon.Information, report.Icon);
+        Assert.Equal(Tone.Ok, report.Tone);
         Assert.Equal(
-            "Test database succeeded.\r\n\r\nStored: Host=db;Database=sample_billing;Password=***"
+            "Stored: Host=db;Database=sample_billing;Password=***"
             + "\r\n\r\nThe server starts using it when the Windows service restarts.",
-            report.Message);
-    }
-
-    [Theory]
-    [InlineData("Save succeeded.\r\n\r\nStored: Host=db\r\n\r\nRestart.", "Save succeeded.", "Stored: Host=db\n\nRestart.")]
-    [InlineData("The server is installed and running.", "The server is installed and running.", null)]
-    [InlineData("  Setup failed.\n\n  ", "Setup failed.", null)]
-    public void A_message_is_shown_as_a_title_and_the_rest(string message, string title, string? details)
-    {
-        Assert.Equal((title, details), CopyableMessageDialog.Split(message));
+            report.Details);
     }
 
     [Fact]
@@ -71,11 +63,11 @@ public sealed class StatusFormReportTests
     {
         var report = Report(HttpStatusCode.OK, """{"provider":"PostgreSQL"}""");
 
-        Assert.Equal(MessageBoxIcon.Information, report.Icon);
-        Assert.EndsWith("""{"provider":"PostgreSQL"}""", report.Message);
+        Assert.Equal(Tone.Ok, report.Tone);
+        Assert.EndsWith("""{"provider":"PostgreSQL"}""", report.Details);
     }
 
-    private static StatusForm.OperationReport Report(HttpStatusCode status, string body)
+    private static TrayMessage Report(HttpStatusCode status, string body)
     {
         using var response = new HttpResponseMessage(status);
         return StatusForm.BuildOperationReport("Test database", response, body);

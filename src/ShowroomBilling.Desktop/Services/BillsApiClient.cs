@@ -20,18 +20,14 @@ public sealed class BillsApiClient(HttpClient httpClient) : IBillsApiClient
     public Task<BillBatchPushResponse> PushPendingAsync(PushPendingBillsRequest request, CancellationToken cancellationToken = default)
         => httpClient.PostApiAsync<BillBatchPushResponse>("/api/bills/push-pending", request, cancellationToken);
 
-    public Task<BillListResponse> SearchAsync(BillSearchFilter filter, CancellationToken cancellationToken = default)
+    public Task<BillListResponse> SearchAsync(BillsPageQuery filter, CancellationToken cancellationToken = default)
     {
-        var qp = new List<string>();
+        var qp = new List<string> { $"skip={filter.Skip}", $"take={filter.Take}", "includeTotal=false" };
         if (!string.IsNullOrWhiteSpace(filter.State)) qp.Add($"state={Uri.EscapeDataString(filter.State!)}");
         if (filter.FromDate is not null) qp.Add($"fromDate={filter.FromDate:yyyy-MM-dd}");
         if (filter.ToDate is not null) qp.Add($"toDate={filter.ToDate:yyyy-MM-dd}");
-        if (filter.Skip is not null) qp.Add($"skip={filter.Skip}");
-        if (filter.Take is not null) qp.Add($"take={filter.Take}");
-        if (!string.IsNullOrWhiteSpace(filter.Sort)) qp.Add($"sort={Uri.EscapeDataString(filter.Sort!)}");
-        if (filter.IncludeTotal is not null) qp.Add($"includeTotal={filter.IncludeTotal.Value.ToString().ToLowerInvariant()}");
         if (!string.IsNullOrWhiteSpace(filter.Search)) qp.Add($"search={Uri.EscapeDataString(filter.Search!)}");
-        var url = qp.Count == 0 ? "/api/bills" : $"/api/bills?{string.Join('&', qp)}";
+        var url = $"/api/bills?{string.Join('&', qp)}";
         return httpClient.GetApiAsync<BillListResponse>(url, cancellationToken);
     }
 

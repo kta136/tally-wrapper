@@ -125,18 +125,18 @@ public class SettingsPreviewViewModelTests
         vm.SetActive(true);
 
         var logoId = Guid.NewGuid();
-        settings.PrintLayout.LogoAssetId = logoId;
+        settings.PrintLayout.Logo.AssetId = logoId;
         await Task.Delay(DebounceSettleMs);
 
         // Same id fired multiple times — no additional downloads.
-        settings.PrintLayout.LogoAssetId = logoId;
-        settings.PrintLayout.LogoAssetId = logoId;
+        settings.PrintLayout.Logo.AssetId = logoId;
+        settings.PrintLayout.Logo.AssetId = logoId;
         await Task.Delay(DebounceSettleMs);
 
         Assert.Equal(1, assets.DownloadCount);
 
         // Different id triggers one more.
-        settings.PrintLayout.LogoAssetId = Guid.NewGuid();
+        settings.PrintLayout.Logo.AssetId = Guid.NewGuid();
         await Task.Delay(DebounceSettleMs);
 
         Assert.Equal(2, assets.DownloadCount);
@@ -146,7 +146,7 @@ public class SettingsPreviewViewModelTests
     public async Task Activation_downloads_existing_logo_for_first_render()
     {
         var (vm, dispatcher, assets, settings) = BuildVm();
-        settings.PrintLayout.LogoAssetId = Guid.NewGuid();
+        settings.PrintLayout.Logo.AssetId = Guid.NewGuid();
 
         vm.SetActive(true);
         await Task.Delay(DebounceSettleMs);
@@ -159,7 +159,7 @@ public class SettingsPreviewViewModelTests
     public async Task Activation_downloads_watermark_and_pending_bytes_take_preview_precedence()
     {
         var (vm, dispatcher, assets, settings) = BuildVm();
-        settings.PrintLayout.WatermarkAssetId = Guid.NewGuid();
+        settings.PrintLayout.Watermark.AssetId = Guid.NewGuid();
 
         vm.SetActive(true);
         await dispatcher.WaitForRenderCountAsync(1);
@@ -169,7 +169,7 @@ public class SettingsPreviewViewModelTests
         Assert.NotNull(dispatcher.LastOptions?.Layout.WatermarkBytes);
 
         byte[] pending = [9, 8, 7];
-        settings.PrintLayout.PendingWatermarkBytes = pending;
+        settings.PrintLayout.Watermark.PendingBytes = pending;
         await dispatcher.WaitForRenderCountAsync(2);
 
         Assert.Same(pending, dispatcher.LastOptions!.Layout.WatermarkBytes);
@@ -180,7 +180,7 @@ public class SettingsPreviewViewModelTests
     {
         var (vm, dispatcher, _, settings) = BuildVm();
         byte[] pending = [9, 8, 7];
-        settings.PrintLayout.PendingWatermarkBytes = pending;
+        settings.PrintLayout.Watermark.PendingBytes = pending;
 
         vm.SetActive(true);
         await dispatcher.WaitForRenderCountAsync(1);

@@ -58,15 +58,15 @@ internal static class Program
         var outcome = ServerInstaller.EnsureInstalledInteractive(options);
         if (outcome != InstallOutcome.Done)
         {
-            var (message, icon) = ServerTrayActions.InstallReport(
+            var report = ServerTrayActions.InstallReport(
                 outcome,
                 ServerInstaller.TryGetServiceStatus(options.ServiceName),
                 options.InstallLogPath,
                 ServerInstaller.InstallLogTail(options));
-            CopyableMessageDialog.ShowMessage(
-                null,
-                $"{message}\n\nThe tray icon will still appear, but counters may not be able to bill. Open the dashboard from it to see what is missing.",
-                icon);
+            (report with
+            {
+                Details = $"{report.Details}\n\nThe tray icon will still appear, but counters may not be able to bill. Open the dashboard from it to see what is missing."
+            }).Show(null);
         }
 
         // One tray for this Windows session. Running the exe again is how the

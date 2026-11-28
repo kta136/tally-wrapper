@@ -253,6 +253,8 @@ DROP TABLE IF EXISTS
     public.dropped_20261115_invoice_sequences;
 ```
 
+`RetireDraftBillState` converts legacy draft bills to pending and tightens the state constraint. If it finds any drafts, it records their IDs, current revision IDs and update times in `public.dropped_20261128_bills_draft`. Rolling back restores the draft state for bills that are still pending with the same revision and update time. The table can be removed after the rollback window closes.
+
 These side tables are removed by hand and not by a migration on purpose: a migration that deleted them would also delete the copies a restored older database makes on its way up.
 
 ---

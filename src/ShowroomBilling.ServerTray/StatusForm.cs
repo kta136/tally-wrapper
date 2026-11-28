@@ -324,7 +324,7 @@ public sealed class StatusForm : Form
         catch (Exception ex)
         {
             // Nothing awaits a click handler; an error let out of it would end the tray.
-            CopyableMessageDialog.ShowMessage(this, $"That did not work.\n\n{ex.Message}", MessageBoxIcon.Error);
+            TrayDialog.ShowMessage(this, Tone.Err, "That did not work.", ex.Message);
         }
         finally
         {
@@ -452,7 +452,7 @@ public sealed class StatusForm : Form
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/runtime/database/maintenance/test")
         {
-            Content = JsonContent.Create(new TestDatabaseConfigurationRequest(_connection.Input.Text))
+            Content = JsonContent.Create(new DatabaseConfigurationRequest(_connection.Input.Text))
         };
         request.Headers.Add(MaintenanceTokenConstants.HeaderName, token);
         await SendAndReportAsync(request, "Connection test");
@@ -465,7 +465,7 @@ public sealed class StatusForm : Form
 
         using var request = new HttpRequestMessage(HttpMethod.Put, "/api/runtime/database/maintenance")
         {
-            Content = JsonContent.Create(new UpdateDatabaseConfigurationRequest(_connection.Input.Text))
+            Content = JsonContent.Create(new DatabaseConfigurationRequest(_connection.Input.Text))
         };
         request.Headers.Add(MaintenanceTokenConstants.HeaderName, token);
         if (await SendAndReportAsync(request, "Save"))
@@ -483,13 +483,13 @@ public sealed class StatusForm : Form
             using var response = await _httpClient.SendAsync(request);
             var body = await response.Content.ReadAsStringAsync();
             var report = BuildOperationReport(label, response, body);
-            CopyableMessageDialog.ShowMessage(this, report.Message, report.Icon);
+            report.Show(this);
             await RefreshAsync();
-            return report.Icon != MessageBoxIcon.Error;
+            return report.Tone != Tone.Err;
         }
         catch (Exception ex)
         {
-            CopyableMessageDialog.ShowMessage(this, $"{label} failed.\n\n{ex.Message}", MessageBoxIcon.Error);
+            TrayDialog.ShowMessage(this, Tone.Err, $"{label} failed.", ex.Message);
             return false;
         }
     }
@@ -502,10 +502,8 @@ public sealed class StatusForm : Form
             return File.ReadAllText(path).Trim();
         }
 
-        CopyableMessageDialog.ShowMessage(
-            this,
-            $"This PC's maintenance token is missing.\n\nIt was expected at {path}. Choose Repair installation to create it again.",
-            MessageBoxIcon.Error);
+        TrayDialog.ShowMessage(this, Tone.Err, "This PC's maintenance token is missing.",
+            $"It was expected at {path}. Choose Repair installation to create it again.");
         return null;
     }
 
@@ -515,7 +513,7 @@ public sealed class StatusForm : Form
     /// with what was stored; a refusal answers with ProblemDetails
     /// (<c>title</c> / <c>detail</c>). Anything else is shown as it came.
     /// </summary>
-    internal static OperationReport BuildOperationReport(
+    internal static TrayMessage BuildOperationReport(
         string label,
         HttpResponseMessage response,
         string body)
@@ -523,17 +521,17 @@ public sealed class StatusForm : Form
         var parsed = ParseBody(body);
         if (!response.IsSuccessStatusCode)
         {
-            return new OperationReport(
-                $"{label} failed: HTTP {(int)response.StatusCode}\r\n\r\n{DescribeError(parsed, body)}",
-                MessageBoxIcon.Error);
+            return new TrayMessage(
+                $"{label} failed: HTTP {(int)response.StatusCode}", DescribeError(parsed, body),
+                Tone.Err);
         }
 
         if (parsed?.Success is { } success)
         {
             var message = string.IsNullOrWhiteSpace(parsed.Message) ? body : parsed.Message;
             return success
-                ? new OperationReport($"{label} succeeded.\r\n\r\n{message}", MessageBoxIcon.Information)
-                : new OperationReport($"{label} failed.\r\n\r\n{message}", MessageBoxIcon.Error);
+                ? new TrayMessage($"{label} succeeded.", message, Tone.Ok)
+                : new TrayMessage($"{label} failed.", message, Tone.Err);
         }
 
         if (!string.IsNullOrWhiteSpace(parsed?.MaskedConnectionString))
@@ -541,12 +539,12 @@ public sealed class StatusForm : Form
             var next = parsed.RequiresApiRestart == true
                 ? "\r\n\r\nThe server starts using it when the Windows service restarts."
                 : string.Empty;
-            return new OperationReport(
-                $"{label} succeeded.\r\n\r\nStored: {parsed.MaskedConnectionString}{next}",
-                MessageBoxIcon.Information);
+            return new TrayMessage(
+                $"{label} succeeded.", $"Stored: {parsed.MaskedConnectionString}{next}",
+                Tone.Ok);
         }
 
-        return new OperationReport($"{label} succeeded.\r\n\r\n{body}", MessageBoxIcon.Information);
+        return new TrayMessage($"{label} succeeded.", body, Tone.Ok);
     }
 
     private static string DescribeError(ResponseBody? parsed, string body)
@@ -589,7 +587,6 @@ public sealed class StatusForm : Form
         string? MaskedConnectionString,
         bool? RequiresApiRestart);
 
-    internal sealed record OperationReport(string Message, MessageBoxIcon Icon);
 
     private void HandleActionStatusChanged(object? sender, EventArgs e) => _ = RefreshAsync();
 

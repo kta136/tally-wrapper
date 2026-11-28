@@ -74,7 +74,11 @@ public partial class SettingsPreviewViewModel : ObservableObject
         }
 
         if (_draft is not null) _draft.PropertyChanged += OnSourceChanged;
-        if (_printLayout is not null) _printLayout.PropertyChanged += OnLayoutChanged;
+        if (_printLayout is not null)
+        {
+            _printLayout.PropertyChanged += OnLayoutChanged;
+            foreach (var slot in _printLayout.ImageSlots) slot.PropertyChanged += OnLayoutChanged;
+        }
         if (_settings is not null) _settings.PropertyChanged += OnSettingsChanged;
     }
 
@@ -177,18 +181,14 @@ public partial class SettingsPreviewViewModel : ObservableObject
     {
         switch (e.PropertyName)
         {
-            case nameof(PrintLayoutViewModel.PendingLogoBytes):
-            case nameof(PrintLayoutViewModel.PendingSignatureBytes):
-            case nameof(PrintLayoutViewModel.PendingWatermarkBytes):
+            case nameof(PrintLayoutAssetViewModel.PendingBytes):
                 // Unsaved local bytes; generation bump so any in-flight server
                 // download drops its result rather than overwriting these.
                 _assetCache.IncrementGeneration();
                 EnqueueRefresh();
                 break;
 
-            case nameof(PrintLayoutViewModel.LogoAssetId):
-            case nameof(PrintLayoutViewModel.SignatureAssetId):
-            case nameof(PrintLayoutViewModel.WatermarkAssetId):
+            case nameof(PrintLayoutAssetViewModel.AssetId):
             case nameof(PrintLayoutViewModel.UpdatedAtUtc):
                 // Placement changed or layout saved: refetch server bytes once.
                 _assetCache.IncrementGeneration();

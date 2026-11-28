@@ -67,8 +67,6 @@ public sealed class BillAuditTrailMapperTests
             eventType,
             "system",
             null,
-            "bill",
-            Guid.NewGuid().ToString(),
             document.RootElement.Clone(),
             DateTimeOffset.UtcNow);
     }

@@ -47,20 +47,6 @@ public sealed class DeviceAuthContractTests(PostgresFixture postgres)
         Assert.Equal("test-device", presence!.DeviceId);
     }
 
-    [Fact]
-    public void TrustedLan_matcher_rejects_untrusted_remote_address()
-    {
-        var options = new ShowroomBilling.Api.Options.DeviceAuthOptions
-        {
-            Mode = "TrustedLan",
-            TrustedNetworks = ["192.168.10.0/24"]
-        };
-
-        Assert.False(ShowroomBilling.Api.Security.TrustedNetworkMatcher.IsTrusted(
-            IPAddress.Parse("10.0.0.50"),
-            options));
-    }
-
     private static ClientHeartbeatRequest Heartbeat() =>
         new(
             DeviceId: "test-device",

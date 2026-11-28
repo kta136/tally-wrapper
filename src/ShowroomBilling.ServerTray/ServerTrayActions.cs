@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.ServiceProcess;
+using ShowroomBilling.ServerTray.Ui;
 
 namespace ShowroomBilling.ServerTray;
 
@@ -11,9 +12,9 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
     {
         var outcome = ServerInstaller.EnsureInstalledInteractive(options, forceRepair: true);
         StatusChanged?.Invoke(this, EventArgs.Empty);
-        var (message, icon) = InstallReport(
+        var report = InstallReport(
             outcome, GetServiceStatus(), options.InstallLogPath, ServerInstaller.InstallLogTail(options));
-        CopyableMessageDialog.ShowMessage(owner, message, icon);
+        report.Show(owner);
         return outcome;
     }
 
@@ -22,23 +23,23 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
     /// said only when the service is running: setup finishing does not prove
     /// that, because a service that will not start is not a setup failure.
     /// </summary>
-    internal static (string Message, MessageBoxIcon Icon) InstallReport(
+    internal static TrayMessage InstallReport(
         InstallOutcome outcome,
         ServiceControllerStatus? service,
         string installLogPath,
         string installLogTail) => outcome switch
     {
         InstallOutcome.Done when service == ServiceControllerStatus.Running =>
-            ("The server is installed and running.", MessageBoxIcon.Information),
+            new("The server is installed and running.", null, Tone.Ok),
         InstallOutcome.Done =>
-            ($"The server is installed, but its Windows service is {Describe(service)}.\n\nStart it from the dashboard. If it will not start, the install log has the reason: {installLogPath}",
-                MessageBoxIcon.Warning),
+            new($"The server is installed, but its Windows service is {Describe(service)}.", $"Start it from the dashboard. If it will not start, the install log has the reason: {installLogPath}",
+                Tone.Warn),
         InstallOutcome.NotStarted =>
-            ("Setup did not finish.\n\nIt was cancelled, or Windows did not give permission. Nothing was changed.",
-                MessageBoxIcon.Warning),
+            new("Setup did not finish.", "It was cancelled, or Windows did not give permission. Nothing was changed.",
+                Tone.Warn),
         _ =>
-            ($"Setup failed.\n\nThe end of the install log, {installLogPath}:\n\n{installLogTail}",
-                MessageBoxIcon.Error),
+            new("Setup failed.", $"The end of the install log, {installLogPath}:\n\n{installLogTail}",
+                Tone.Err),
     };
 
     public Task<bool> StartServiceAsync(IWin32Window? owner = null) => ControlServiceAsync(ServiceCommand.Start, owner);
@@ -96,7 +97,7 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
             return true;
         }
 
-        CopyableMessageDialog.ShowMessage(owner, problem, MessageBoxIcon.Error);
+        problem.Show(owner);
         return false;
     }
 
@@ -107,7 +108,7 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
     /// refusal is answered by doing it in an elevated copy of the tray, behind
     /// the same Windows permission prompt as Install.
     /// </summary>
-    private string? TryControlService(ServiceCommand action)
+    private TrayMessage? TryControlService(ServiceCommand action)
     {
         var verb = ServiceCommands.Verb(action);
         try
@@ -120,13 +121,13 @@ public sealed class ServerTrayActions(ServerTrayOptions options)
             return ServerInstaller.ControlServiceElevated(action) switch
             {
                 0 => null,
-                null => $"The service did not {verb}.\n\nWindows asked for permission and it was not given.",
-                _ => $"The service did not {verb}.\n\nThe install log has the reason: {options.InstallLogPath}",
+                null => new($"The service did not {verb}.", "Windows asked for permission and it was not given.", Tone.Err),
+                _ => new($"The service did not {verb}.", $"The install log has the reason: {options.InstallLogPath}", Tone.Err),
             };
         }
         catch (Exception ex)
         {
-            return $"The service did not {verb}.\n\n{ex.Message}";
+            return new($"The service did not {verb}.", ex.Message, Tone.Err);
         }
     }
 

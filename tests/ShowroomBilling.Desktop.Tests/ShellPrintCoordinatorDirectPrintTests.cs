@@ -37,7 +37,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
 
         PopulateInvoice(host.Invoice);
 
-        await coordinator.HandleInvoiceSaveCompletedAsync();
+        await coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
 
         Assert.Equal(1, dispatcher.PrintCount);
         Assert.Equal("Counter Printer", dispatcher.LastPrinterName);
@@ -54,7 +54,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
         PopulateInvoice(host.Invoice);
 
-        var printing = coordinator.HandleInvoiceSaveCompletedAsync();
+        var printing = coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
 
         // Emptied at save, not when the printer is done.
         Assert.Equal(0, host.Invoice.ItemCount);
@@ -79,9 +79,9 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
 
         PopulateInvoice(host.Invoice);
-        var first = coordinator.HandleInvoiceSaveCompletedAsync();
+        var first = coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
         PopulateInvoice(host.Invoice, number: "INV/006", party: "Next Customer");
-        var second = coordinator.HandleInvoiceSaveCompletedAsync();
+        var second = coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
 
         dispatcher.ReleasePrints();
         await Task.WhenAll(first, second);
@@ -98,7 +98,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
         PopulateInvoice(host.Invoice);
 
-        var printing = coordinator.HandleInvoiceSaveCompletedAsync();
+        var printing = coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
         PopulateInvoice(host.Invoice, number: "INV/006", party: "Next Customer");
         dispatcher.ReleasePrints();
         await printing;
@@ -120,7 +120,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
         PopulateInvoice(host.Invoice);
 
-        await coordinator.HandleInvoiceSaveCompletedAsync();
+        await coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
 
         // The message opens with "Saved", which on its own reads as green.
         Assert.StartsWith("Saved · INV/005", host.Invoice.StatusText);
@@ -139,7 +139,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         var coordinator = CreateCoordinator(host, dispatcher, directPrint: true);
         PopulateInvoice(host.Invoice);
 
-        var printing = coordinator.HandleInvoiceSaveCompletedAsync();
+        var printing = coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
         host.ActiveDialog = "adminUnlock";
         dispatcher.ReleasePrints();
         await printing;
@@ -156,7 +156,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         var coordinator = CreateCoordinator(host, dispatcher, directPrint: false);
         PopulateInvoice(host.Invoice);
 
-        await coordinator.HandleInvoiceSaveCompletedAsync();
+        await coordinator.HandleInvoiceSaveCompletedAsync(host.Invoice.GetPrintSnapshot()!);
 
         Assert.Equal(0, host.Invoice.ItemCount);
         Assert.Equal("printPreview", host.ActiveDialog);

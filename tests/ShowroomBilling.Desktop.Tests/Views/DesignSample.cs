@@ -189,7 +189,7 @@ internal static class DesignSample
 
         Bill(BillStates.Posting, 11, "Kavita Iyer", 84250m, 11, 17, 52);
         Bill(BillStates.Pending, 10, "Anand Pillai", 131592m, 11, 16, 40);
-        Bill(BillStates.Draft, 9, "Meera Subramaniam", 289706m, 11, 15, 12);
+        Bill(BillStates.Pending, 9, "Meera Subramaniam", 289706m, 11, 15, 12);
         Bill(BillStates.Posted, 8, "Walk-in Customer", 6464m, 10, 19, 5);
         Bill(BillStates.Failed, 7, "Vijaya Stores", 27500m, 10, 18, 31);
         Bill(BillStates.ReconciliationRequired, 6, "Karthik Ramanathan", 59892m, 10, 15, 48);

@@ -60,7 +60,6 @@ public partial class BillDetailsViewModel
     /// <summary>What state the bill is in, in a sentence, for the foot of the dialog.</summary>
     public string StateNote => Bill?.State switch
     {
-        BillStates.Draft => "Draft. Nothing has been sent to Tally.",
         BillStates.Pending => "Pending. Nothing has been sent to Tally yet.",
         BillStates.Posting => "Posting. Waiting for Tally to answer.",
         BillStates.Posted => "Posted to Tally.",
@@ -104,7 +103,7 @@ public partial class BillDetailsViewModel
 
     private (string Title, string Detail)? NextStep => Bill?.State switch
     {
-        BillStates.Draft or BillStates.Pending
+        BillStates.Pending
             => ("Waiting for Tally", "Nothing has been sent yet. Push it from here or from the Bills tab."),
         BillStates.Failed
             => ("Waiting for a retry", "Tally did not take the voucher. Retry it once the cause is fixed."),

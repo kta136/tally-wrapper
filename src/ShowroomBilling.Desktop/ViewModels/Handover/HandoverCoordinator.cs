@@ -253,27 +253,18 @@ public sealed class HandoverCoordinator
         return await workflow.RunAsync(document, MasterCatalog.From(loaded.Masters), CancellationToken.None);
     }
 
-    private async Task<string?> RequestAdminTokenAsync(BillResponse bill, string context, Func<Task> beforeAsking, CancellationToken cancellationToken)
+    private Task<string?> RequestAdminTokenAsync(BillResponse bill, string context, Func<Task> beforeAsking, CancellationToken cancellationToken)
     {
-        if (_host.AdminTokens.IsUnlocked && _host.AdminTokens.Current?.Token is { } open)
-        {
-            return open;
-        }
+        return AdminTokenPrompt.GetAsync(_host.AdminTokens, PromptAsync, cancellationToken);
 
-        // The operator has to be asked, and may take a while: the bills saved so far print first.
-        await beforeAsking();
-        BringToFront?.Invoke();
-        _host.Admin.HandoverContext = context;
-        try
+        async Task PromptAsync(CancellationToken token)
         {
-            await _host.RequestAdminUnlockAsync(cancellationToken);
+            await beforeAsking();
+            BringToFront?.Invoke();
+            _host.Admin.HandoverContext = context;
+            try { await _host.RequestAdminUnlockAsync(token); }
+            finally { _host.Admin.HandoverContext = null; }
         }
-        finally
-        {
-            _host.Admin.HandoverContext = null;
-        }
-
-        return _host.AdminTokens.IsUnlocked ? _host.AdminTokens.Current?.Token : null;
     }
 
     private async Task<HandoverResultChoice> ShowResultAsync(HandoverReport report)

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using ShowroomBilling.ServerTray;
+using ShowroomBilling.ServerTray.Ui;
 
 namespace ShowroomBilling.Desktop.Tests.ServerTray;
 
@@ -229,10 +230,10 @@ public sealed class ServerInstallerTests
         var stopped = ServerTrayActions.InstallReport(
             InstallOutcome.Done, System.ServiceProcess.ServiceControllerStatus.Stopped, @"C:\logs\install.log", "tail");
 
-        Assert.Equal("The server is installed and running.", running.Message);
-        Assert.Equal(System.Windows.Forms.MessageBoxIcon.Information, running.Icon);
-        Assert.StartsWith("The server is installed, but its Windows service is stopped.", stopped.Message);
-        Assert.Equal(System.Windows.Forms.MessageBoxIcon.Warning, stopped.Icon);
+        Assert.Equal("The server is installed and running.", running.Title);
+        Assert.Equal(Tone.Ok, running.Tone);
+        Assert.StartsWith("The server is installed, but its Windows service is stopped.", stopped.Title);
+        Assert.Equal(Tone.Warn, stopped.Tone);
     }
 
     [Fact]
@@ -242,11 +243,11 @@ public sealed class ServerInstallerTests
         var failed = ServerTrayActions.InstallReport(InstallOutcome.Failed, null, @"C:\logs\install.log", "FAILED firewall");
 
         // Declined or cancelled: the log's last lines are from an earlier run and are not shown.
-        Assert.StartsWith("Setup did not finish.", notStarted.Message);
-        Assert.DoesNotContain("old lines", notStarted.Message);
-        Assert.StartsWith("Setup failed.", failed.Message);
-        Assert.Contains("FAILED firewall", failed.Message);
-        Assert.Equal(System.Windows.Forms.MessageBoxIcon.Error, failed.Icon);
+        Assert.StartsWith("Setup did not finish.", notStarted.Title);
+        Assert.DoesNotContain("old lines", notStarted.Details);
+        Assert.StartsWith("Setup failed.", failed.Title);
+        Assert.Contains("FAILED firewall", failed.Details);
+        Assert.Equal(Tone.Err, failed.Tone);
     }
 
     [Fact]

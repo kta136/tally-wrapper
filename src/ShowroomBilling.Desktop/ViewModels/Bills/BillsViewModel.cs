@@ -14,7 +14,6 @@ namespace ShowroomBilling.Desktop.ViewModels.Bills;
 public partial class BillsViewModel : ObservableObject
 {
     private const int PageSize = 50;
-    private const string SortWorkflow = "workflow";
 
     private readonly IBillsApiClient _billsApi;
     private readonly AdminTokenStore? _adminTokens;
@@ -95,7 +94,6 @@ public partial class BillsViewModel : ObservableObject
         [
             "All",
             BillStates.Pending,
-            BillStates.Draft,
             BillStates.Posting,
             BillStates.Posted,
             BillStates.Failed,
@@ -109,7 +107,7 @@ public partial class BillsViewModel : ObservableObject
         // Ticked bills go to Tally oldest date first, then lowest number, whatever order they were
         // ticked in: Tally numbers a day's vouchers in the order they arrive.
         PushSelectedCommand = SelectionCommand(
-            (rows, busy, ct) => _actions.PushSelectedAsync(InPushOrder(rows).Select(row => row.Id).ToArray(), busy, ct), x => x.IsPendingLike, needsTally: true);
+            (rows, busy, ct) => _actions.PushSelectedAsync(InPushOrder(rows).Select(row => row.Id).ToArray(), busy, ct), x => x.IsPending, needsTally: true);
         PushAllPendingCommand = new AsyncRelayCommand(
             ct => RunAsync(busy => _actions.PushAllPendingAsync(busy, ct), ct), () => CanAct && IsTallyPushAllowed);
         RetrySelectedCommand = SelectionCommand(
@@ -213,7 +211,7 @@ public partial class BillsViewModel : ObservableObject
 
     /// <summary>
     /// When true, date groups in which every bill is already <c>posted</c> are dropped from
-    /// the list — leaves only days that still have unposted (pending/draft/posting/failed) work.
+    /// the list — leaves only days that still have unposted (pending/posting/failed) work.
     /// </summary>
     [ObservableProperty] private bool hideFullyPostedDays = true;
 
@@ -253,8 +251,8 @@ public partial class BillsViewModel : ObservableObject
         set => ToggleVisibleSelection(value == true);
     }
 
-    /// <summary>Bills waiting for the operator to push them (pending or draft).</summary>
-    public int WaitingForTallyCount => Items.Count(x => x.IsPendingLike);
+    /// <summary>Bills waiting for the operator to push them (pending).</summary>
+    public int WaitingForTallyCount => Items.Count(x => x.IsPending);
 
     /// <summary>Bills with a push in flight.</summary>
     public int PostingCount => Items.Count(x => x.State == BillStates.Posting);
@@ -441,7 +439,7 @@ public partial class BillsViewModel : ObservableObject
             var priorFocusedId = SelectedBill?.Id;
 
             var list = await _billsApi.SearchAsync(
-                new BillSearchFilter(state, from, to, Skip, PageSize, SortWorkflow, IncludeTotal: false, SearchQuery),
+                new BillsPageQuery(state, from, to, Skip, PageSize, SearchQuery),
                 cancellationToken);
             if (generation != _loadGeneration)
             {

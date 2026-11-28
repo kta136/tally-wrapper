@@ -64,7 +64,7 @@ public sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
                 $"At most {MaxBatchGetIds} bills can be checked at once (got {ids.Length}).");
         }
 
-        string[] notInTally = [BillStates.Pending, BillStates.Draft, BillStates.Failed];
+        var pushableStates = BillStateCapabilities.PushOrRetryStates.ToArray();
         var requested = ids.Length == 0
             ? []
             : await dbContext.Bills.AsNoTracking()
@@ -93,7 +93,7 @@ public sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
 
         // The bills about to make a voucher; an edited bill's push alters the one it has.
         var targets = requested
-            .Where(r => r.InvoiceCore is not null && r.FiscalYear is not null && !r.EditedAfterPush && notInTally.Contains(r.State))
+            .Where(r => r.InvoiceCore is not null && r.FiscalYear is not null && !r.EditedAfterPush && pushableStates.Contains(r.State))
             .Select(r => new { r.FiscalYear, Core = r.InvoiceCore!.Value, r.BillDate })
             .ToList();
         if (targets.Count == 0)
@@ -109,7 +109,7 @@ public sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
                 && bill.InvoiceCore != null
                 && bill.InvoiceCore < highestCore
                 && !bill.EditedAfterPush
-                && notInTally.Contains(bill.State))
+                && pushableStates.Contains(bill.State))
             .Select(bill => new
             {
                 bill.Id,
@@ -232,7 +232,7 @@ public sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         var includeTotal = filter.IncludeTotal ?? true;
         var total = includeTotal ? await query.CountAsync(cancellationToken) : 0;
         // Workflow sort:
-        //   1. Pending/Draft above everything else (operator's work queue).
+        //   1. Pending above everything else (operator's work queue).
         //   2. Within each state group: highest invoice number first, read
         //      from the stored core so padding and suffixes do not matter.
         //      Legacy numbers without a core come after, longest text first
@@ -247,10 +247,7 @@ public sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         var ordered = sort == SortCreatedDesc
             ? query.OrderByDescending(x => x.bill.CreatedAtUtc)
             : query
-                .OrderBy(x =>
-                    x.bill.State == BillStates.Pending || x.bill.State == BillStates.Draft
-                        ? 0
-                        : 1)
+                .OrderBy(x => x.bill.State == BillStates.Pending ? 0 : 1)
                 .ThenByDescending(x => x.bill.FiscalYear)
                 .ThenByDescending(x => x.bill.InvoiceCore ?? -1L)
                 .ThenByDescending(x => x.bill.InvoiceNumber == null ? 0 : x.bill.InvoiceNumber.Length)

@@ -54,7 +54,7 @@ public partial class InvoiceView : UserControl, IHomeFocus
     /// starts. Queued, because the form is emptied by the shell's handler of the same event; the
     /// print preview that may then open takes the cursor, and gives it back here when it closes.
     /// </summary>
-    private void OnBillSaved(object? sender, Guid billId)
+    private void OnBillSaved(object? sender, InvoicePrintSnapshot saved)
         => Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(FocusHome));
 
     /// <summary>

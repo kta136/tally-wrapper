@@ -17,11 +17,8 @@ public static class DatabaseConfigurationStore
 
     public static string DirectoryPath => AppPaths.DataDirectory;
 
-    public static string ConfigPathForEnvironment(string? environmentName) =>
+    public static string ConfigPathForEnvironment(string environmentName) =>
         Path.Combine(DirectoryPath, $"database.{NormalizeEnvironmentName(environmentName)}.local.json");
-
-    public static bool ExistsForEnvironment(string? environmentName) =>
-        File.Exists(ConfigPathForEnvironment(environmentName));
 
     public static string? GetEnvironmentConnectionString() =>
         Normalize(Environment.GetEnvironmentVariable(PostgresConnectionStringEnvironmentVariable));
@@ -32,42 +29,13 @@ public static class DatabaseConfigurationStore
     /// or it loaded. The caller logs it: without that, the API starts on the
     /// fallback connection string and nothing explains why.
     /// </param>
-    public static string? LoadPostgresConnectionString(string? environmentName, out string? loadError)
+    public static string? LoadPostgresConnectionString(string environmentName, out string? loadError)
     {
-        return TryLoadPostgresConnectionString(ConfigPathForEnvironment(environmentName), out var connectionString, out loadError)
-            ? connectionString
-            : null;
-    }
-
-    public static async Task SavePostgresConnectionStringAsync(
-        string connectionString,
-        string? environmentName = null,
-        CancellationToken cancellationToken = default)
-    {
-        Directory.CreateDirectory(DirectoryPath);
-
-        var protectedBytes = Protect(connectionString.Trim());
-        var payload = new DatabaseConfigurationPayload(
-            Version: 1,
-            Environment: NormalizeEnvironmentName(environmentName),
-            Protection: ProtectionScheme,
-            ConnectionStringProtected: Convert.ToBase64String(protectedBytes));
-
-        await using var stream = File.Create(ConfigPathForEnvironment(environmentName));
-        await JsonSerializer.SerializeAsync(
-            stream,
-            payload,
-            JsonOptions,
-            cancellationToken);
-    }
-
-    private static bool TryLoadPostgresConnectionString(string path, out string? connectionString, out string? loadError)
-    {
-        connectionString = null;
+        var path = ConfigPathForEnvironment(environmentName);
         loadError = null;
         if (!File.Exists(path))
         {
-            return false;
+            return null;
         }
 
         try
@@ -79,12 +47,12 @@ public static class DatabaseConfigurationStore
                 && protectedValue.ValueKind == JsonValueKind.String)
             {
                 var protectedBytes = Convert.FromBase64String(protectedValue.GetString() ?? string.Empty);
-                connectionString = Normalize(Unprotect(protectedBytes));
+                var connectionString = Normalize(Unprotect(protectedBytes));
                 if (connectionString is null)
                 {
                     loadError = "it holds an empty connection string";
                 }
-                return connectionString is not null;
+                return connectionString;
             }
 
             loadError = "it has no protected connection string";
@@ -95,10 +63,37 @@ public static class DatabaseConfigurationStore
             loadError = ex is CryptographicException
                 ? "it could not be decrypted; it was probably saved by a different Windows user"
                 : ex.Message;
-            return false;
         }
 
-        return false;
+        return null;
+    }
+
+    public static async Task SavePostgresConnectionStringAsync(
+        string connectionString,
+        string environmentName,
+        CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(DirectoryPath);
+
+        var protectedBytes = Protect(connectionString.Trim());
+        var payload = new DatabaseConfigurationPayload(
+            Version: 1,
+            Environment: NormalizeEnvironmentName(environmentName),
+            Protection: ProtectionScheme,
+            ConnectionStringProtected: Convert.ToBase64String(protectedBytes));
+
+        var path = ConfigPathForEnvironment(environmentName);
+        var temporary = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(payload, JsonOptions), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
     }
 
     private static byte[] Protect(string connectionString)
@@ -128,18 +123,10 @@ public static class DatabaseConfigurationStore
         return Encoding.UTF8.GetString(bytes);
     }
 
-    private static string GetCurrentEnvironmentName() =>
-        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-        ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-        ?? "Production";
-
-    private static string NormalizeEnvironmentName(string? environmentName)
+    private static string NormalizeEnvironmentName(string environmentName)
     {
-        var normalized = string.IsNullOrWhiteSpace(environmentName)
-            ? GetCurrentEnvironmentName()
-            : environmentName.Trim();
         var invalid = Path.GetInvalidFileNameChars();
-        return new string(normalized.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
+        return new string(environmentName.Trim().Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
     }
 
     private static string? Normalize(string? value) =>

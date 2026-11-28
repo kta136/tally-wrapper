@@ -116,7 +116,7 @@ public sealed class ShowroomBillingDbContext(DbContextOptions<ShowroomBillingDbC
             entity.ToTable("bills", table =>
                 table.HasCheckConstraint(
                     "CK_bills_state",
-                    "\"State\" IN ('draft', 'pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')"));
+                    "\"State\" IN ('pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')"));
             entity.HasKey(x => x.Id);
             entity.Property(x => x.State).HasMaxLength(32);
             entity.Property(x => x.InvoiceNumber).HasMaxLength(128);

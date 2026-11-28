@@ -1,7 +1,6 @@
 using ShowroomBilling.Application.Bills;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
-using ShowroomBilling.Printing;
 
 namespace ShowroomBilling.Desktop.ViewModels.Invoice;
 
@@ -46,7 +45,6 @@ internal static class InvoicePayloadMapper
                 Rate: l.EffectiveRate,
                 LineTotal: l.LineTotal,
                 Karat: l.Karat,
-                RawJson: null,
                 StockName: ResolveStockName(l),
                 GrossWeight: l.GrossWeight,
                 LessWeight: l.LessWeight,
@@ -78,24 +76,6 @@ internal static class InvoicePayloadMapper
             Payment: payment,
             Rate24Kt: rate24Kt);
     }
-
-    public static BillPrintContent BuildPrintContent(
-        string invoiceNumber,
-        BillPayloadDto payload,
-        string payment,
-        CompanyProfile company,
-        IReadOnlyList<KaratMasterEntry>? karatMappings = null) => new(
-            InvoiceNumber: invoiceNumber,
-            BillDate: payload.BillDate,
-            PartyName: payload.PartyName,
-            PartyGstin: payload.PartyGstin,
-            PartyPhone: payload.PartyPhone,
-            PartyAddress: payload.PartyAddress,
-            Payment: payment,
-            Lines: PrintLineSubstitution.WithTallyMappedItemNames(payload.Lines, karatMappings),
-            Totals: payload.Totals,
-            Notes: payload.Notes,
-            Company: company);
 
     public static string? ValidateForSave(IEnumerable<BillLineViewModel> lines, decimal? rate24Kt, out bool rateMissing)
     {

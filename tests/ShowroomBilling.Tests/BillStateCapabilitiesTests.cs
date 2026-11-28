@@ -8,7 +8,6 @@ public sealed class BillStateCapabilitiesTests
     {
         get
         {
-            yield return new object[] { BillStates.Draft, true, true, false, false, true, true, true, true, true, true, false, false };
             yield return new object[] { BillStates.Pending, true, true, false, false, true, true, true, true, true, true, false, false };
             yield return new object[] { BillStates.Posting, false, false, false, false, false, false, false, false, false, false, false, false };
             yield return new object[] { BillStates.Posted, false, false, false, true, false, false, true, true, true, false, true, true };
@@ -37,7 +36,7 @@ public sealed class BillStateCapabilitiesTests
         bool tallyDivergesIfDeleted)
     {
         Assert.True(BillStateCapabilities.IsKnown(state));
-        Assert.Equal(isPendingLike, BillStateCapabilities.IsPendingLike(state));
+        Assert.Equal(isPendingLike, BillStateCapabilities.IsPending(state));
         Assert.Equal(canPush, BillStateCapabilities.CanPush(state));
         Assert.Equal(canRetry, BillStateCapabilities.CanRetry(state));
         Assert.Equal(canRepost, BillStateCapabilities.CanRepost(state));
@@ -59,7 +58,7 @@ public sealed class BillStateCapabilitiesTests
     public void Capabilities_RejectUnknownStates(string? state)
     {
         Assert.False(BillStateCapabilities.IsKnown(state));
-        Assert.False(BillStateCapabilities.IsPendingLike(state));
+        Assert.False(BillStateCapabilities.IsPending(state));
         Assert.False(BillStateCapabilities.CanPush(state));
         Assert.False(BillStateCapabilities.CanRetry(state));
         Assert.False(BillStateCapabilities.CanRepost(state));

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Mvc;
 using Npgsql;
 using ShowroomBilling.Api.Clients;
@@ -16,79 +17,49 @@ public sealed class RuntimeController(
     MaintenanceTokenStore maintenanceTokenStore) : ControllerBase
 {
     [HttpPost("database/maintenance/test")]
-    public async Task<ActionResult<DatabaseConfigurationTestResponse>> TestDatabaseConfigurationForMaintenance(
-        [FromBody] TestDatabaseConfigurationRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (AuthorizeMaintenance() is { } denied)
-        {
-            return denied;
-        }
-
-        if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
-        {
-            return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
-        }
-
-        if (!PostgresConnectionStringNormalizer.TryNormalize(
-            request.ConnectionString,
-            out var connectionString,
-            out var error))
-        {
-            return BadRequest(new DatabaseConfigurationTestResponse(false, error));
-        }
-
-        var verification = await databaseConnectionVerifier.VerifyAsync(
-            connectionString,
-            DatabaseConnectionVerifier.ExpectedIdentityFor(hostEnvironment.EnvironmentName),
-            cancellationToken);
-        return Ok(new DatabaseConfigurationTestResponse(verification.Success, verification.Message));
-    }
+    [ProducesResponseType<DatabaseConfigurationTestResponse>(StatusCodes.Status200OK)]
+    public Task<ActionResult> TestDatabaseConfigurationForMaintenance(
+        [FromBody] DatabaseConfigurationRequest request,
+        CancellationToken cancellationToken) =>
+        VerifyConnectionAsync(request, save: false, cancellationToken);
 
     [HttpPut("database/maintenance")]
-    public async Task<ActionResult<DatabaseConfigurationResponse>> UpdateDatabaseConfigurationForMaintenance(
-        [FromBody] UpdateDatabaseConfigurationRequest request,
-        CancellationToken cancellationToken)
+    [ProducesResponseType<DatabaseConfigurationResponse>(StatusCodes.Status200OK)]
+    public Task<ActionResult> UpdateDatabaseConfigurationForMaintenance(
+        [FromBody] DatabaseConfigurationRequest request,
+        CancellationToken cancellationToken) =>
+        VerifyConnectionAsync(request, save: true, cancellationToken);
+
+    private async Task<ActionResult> VerifyConnectionAsync(
+        DatabaseConfigurationRequest request, bool save, CancellationToken cancellationToken)
     {
         if (AuthorizeMaintenance() is { } denied)
         {
             return denied;
         }
 
-        if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
+        if (string.IsNullOrWhiteSpace(request?.ConnectionString))
         {
             return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
         }
 
-        if (!PostgresConnectionStringNormalizer.TryNormalize(
-            request.ConnectionString,
-            out var connectionString,
-            out var error))
+        if (!TryParseConnection(request.ConnectionString.Trim(), out var candidate, out var error))
         {
-            return ControllerProblemDetails.BadRequest(error);
+            return save
+                ? ControllerProblemDetails.BadRequest(error)
+                : BadRequest(new DatabaseConfigurationTestResponse(false, error));
         }
 
+        var environment = hostEnvironment.EnvironmentName;
         var verification = await databaseConnectionVerifier.VerifyAsync(
-            connectionString,
-            DatabaseConnectionVerifier.ExpectedIdentityFor(hostEnvironment.EnvironmentName),
-            cancellationToken);
-        if (!verification.Success)
-        {
-            return ControllerProblemDetails.BadRequest(verification.Message);
-        }
+            candidate.ConnectionString, DatabaseConnectionVerifier.ExpectedIdentityFor(environment), cancellationToken);
+        if (!save) return Ok(verification);
+        if (!verification.Success) return ControllerProblemDetails.BadRequest(verification.Message);
 
-        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
-            connectionString,
-            hostEnvironment.EnvironmentName,
-            cancellationToken);
-
-        return Ok(new DatabaseConfigurationResponse(
-            Provider: "PostgreSQL",
-            MaskedConnectionString: MaskConnectionString(connectionString),
-            ConfigPath: DatabaseConfigurationStore.ConfigPathForEnvironment(hostEnvironment.EnvironmentName),
-            IsLocalOverridePresent: DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName),
-            RequiresApiRestart: true,
-            EnvironmentName: hostEnvironment.EnvironmentName));
+        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(candidate.ConnectionString, environment, cancellationToken);
+        if (!string.IsNullOrEmpty(candidate.Password)) candidate.Password = "***";
+        if (!string.IsNullOrEmpty(candidate.SslPassword)) candidate.SslPassword = "***";
+        return Ok(new DatabaseConfigurationResponse(candidate.ConnectionString, RequiresApiRestart: true));
     }
 
     private ActionResult? AuthorizeMaintenance()
@@ -108,25 +79,29 @@ public sealed class RuntimeController(
         return null;
     }
 
-    private static string MaskConnectionString(string connectionString)
+    private static bool TryParseConnection(
+        string text,
+        [NotNullWhen(true)] out NpgsqlConnectionStringBuilder? candidate,
+        out string error)
     {
-        if (string.IsNullOrWhiteSpace(connectionString))
+        candidate = null;
+        // An operator may paste the provider's URL, or a psql command containing it.
+        if (text.Contains("postgres://", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("postgresql://", StringComparison.OrdinalIgnoreCase))
         {
-            return string.Empty;
+            error = "A postgres:// URL is not accepted. Enter the connection string as Host=...;Port=...;Database=...;Username=...;Password=...";
+            return false;
         }
-
         try
         {
-            var builder = new NpgsqlConnectionStringBuilder(connectionString);
-            if (!string.IsNullOrEmpty(builder.Password))
-            {
-                builder.Password = "***";
-            }
-            return builder.ConnectionString;
+            candidate = new NpgsqlConnectionStringBuilder(text);
+            error = string.Empty;
+            return true;
         }
-        catch
+        catch (ArgumentException ex)
         {
-            return "<invalid connection string>";
+            error = ex.Message;
+            return false;
         }
     }
 }

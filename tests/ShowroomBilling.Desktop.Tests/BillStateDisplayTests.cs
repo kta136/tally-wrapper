@@ -10,7 +10,6 @@ public sealed class BillStateDisplayTests
     [InlineData(BillStates.Posted, "ok", "Posted", "dot")]
     [InlineData(BillStates.Pending, "warn", "Pending", "half")]
     [InlineData(BillStates.Posting, "warn", "Posting", "half")]
-    [InlineData(BillStates.Draft, "info", "Draft", "ring")]
     [InlineData(BillStates.Failed, "err", "Failed", "x")]
     [InlineData(BillStates.ReconciliationRequired, "err", "Reconcile", "bang")]
     [InlineData(BillStates.Revised, "neutral", "Revised", "redo")]
@@ -27,7 +26,7 @@ public sealed class BillStateDisplayTests
     {
         var states = new[]
         {
-            BillStates.Posted, BillStates.Pending, BillStates.Posting, BillStates.Draft, BillStates.Failed,
+            BillStates.Posted, BillStates.Pending, BillStates.Posting, BillStates.Failed,
             BillStates.ReconciliationRequired, BillStates.Revised, BillStates.Voided,
         };
 

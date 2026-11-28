@@ -1382,6 +1382,27 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     }
 
     [Fact]
+    public async Task PushPending_LeavesFailedBillsForAnExplicitPush()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var bills = BuildWorkflows(db, poster);
+        var draft = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Draft", 100m)));
+        var failed = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Failed", 200m)));
+        (await db.Bills.SingleAsync(b => b.Id == failed.Id)).State = BillStates.Failed;
+        await db.SaveChangesAsync();
+
+        var batch = await bills.Posting.PushPendingAsync(new PushPendingBillsRequest(null, null));
+        Assert.Equal(1, batch.Succeeded);
+        Assert.Equal(draft.Id, Assert.Single(poster.Requests).BillId);
+        Assert.Equal(BillStates.Failed, (await bills.Read.GetAsync(failed.Id))!.State);
+
+        var pushed = await bills.Posting.PushAsync(failed.Id, new PushBillRequest(null));
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Equal([draft.Id, failed.Id], poster.Requests.Select(r => r.BillId));
+    }
+
+    [Fact]
     public async Task PushPending_GoesByBillDate_ThenNumber_NotByWhenTheBillWasSaved()
     {
         await using var db = CreateDbContext();
@@ -1550,16 +1571,15 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         var bills = BuildWorkflows(db);
 
         var pending = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Pending", 100m)));
-        var legacyDraft = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Legacy", 200m)));
+        var laterPending = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Legacy", 200m)));
         var postedEarlier = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Queued-1", 300m)));
         var postedLater = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Queued-2", 400m)));
 
         var pendingEntity = await db.Bills.FirstAsync(x => x.Id == pending.Id);
         pendingEntity.CreatedAtUtc = new DateTimeOffset(2026, 4, 21, 8, 0, 0, TimeSpan.Zero);
 
-        var draftEntity = await db.Bills.FirstAsync(x => x.Id == legacyDraft.Id);
-        draftEntity.State = "draft";
-        draftEntity.CreatedAtUtc = new DateTimeOffset(2026, 4, 21, 9, 0, 0, TimeSpan.Zero);
+        var laterPendingEntity = await db.Bills.FirstAsync(x => x.Id == laterPending.Id);
+        laterPendingEntity.CreatedAtUtc = new DateTimeOffset(2026, 4, 21, 9, 0, 0, TimeSpan.Zero);
 
         var earlierEntity = await db.Bills.FirstAsync(x => x.Id == postedEarlier.Id);
         earlierEntity.CreatedAtUtc = new DateTimeOffset(2026, 4, 21, 10, 0, 0, TimeSpan.Zero);
@@ -1573,11 +1593,11 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         var response = await bills.Read.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
 
-        // legacyDraft has /0002, pending has /0001 — workflow sort puts the
-        // higher invoice number on top within the pending/draft group. The
+        // laterPending has /0002, pending has /0001 — workflow sort puts the
+        // higher invoice number on top within the pending group. The
         // posted group follows, also by invoice number desc.
         Assert.Equal(
-            new[] { legacyDraft.Id, pending.Id, postedLater.Id, postedEarlier.Id },
+            new[] { laterPending.Id, pending.Id, postedLater.Id, postedEarlier.Id },
             response.Items.Select(x => x.Id).ToArray());
     }
 
@@ -1975,6 +1995,30 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         Assert.EndsWith("/0003", third.InvoiceNumber);
         Assert.EndsWith("/0005", fourth.InvoiceNumber);
+    }
+
+    [Fact]
+    public async Task Push_CancelledAfterClaimRestoresTheSourceStateWithoutSending()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var bills = BuildWorkflows(db, poster);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        (await db.Bills.SingleAsync(b => b.Id == bill.Id)).State = BillStates.Failed;
+        await db.SaveChangesAsync();
+
+        using var caller = new CancellationTokenSource();
+        // The conditional UPDATE has claimed the bill. Its first SaveChanges records the request.
+        db.SavedChanges += (_, _) => caller.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => bills.Posting.PushAsync(bill.Id, new PushBillRequest(null), caller.Token));
+
+        Assert.Empty(poster.Requests);
+        Assert.Equal(BillStates.Failed, (await bills.Read.GetAsync(bill.Id))!.State);
+        var events = await db.AuditEvents.Where(e => e.EntityId == bill.Id.ToString())
+            .Select(e => e.EventType).ToListAsync();
+        Assert.Contains(BillAuditEvents.PushRequested, events);
+        Assert.Contains(BillAuditEvents.PushCancelled, events);
     }
 
     [Fact]

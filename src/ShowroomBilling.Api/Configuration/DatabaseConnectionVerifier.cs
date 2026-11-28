@@ -1,50 +1,26 @@
 using Npgsql;
+using ShowroomBilling.Contracts.Runtime;
 
 namespace ShowroomBilling.Api.Configuration;
 
 public interface IDatabaseConnectionVerifier
 {
-    Task<DatabaseConnectionVerificationResult> VerifyAsync(
+    Task<DatabaseConfigurationTestResponse> VerifyAsync(
         string connectionString,
         string expectedDatabaseIdentity,
         CancellationToken cancellationToken = default);
 }
 
-public sealed record DatabaseConnectionVerificationResult(
-    bool Success,
-    string Message,
-    string? DatabaseIdentity = null)
-{
-    public static DatabaseConnectionVerificationResult Failed(string message, string? databaseIdentity = null) =>
-        new(false, message, databaseIdentity);
-
-    public static DatabaseConnectionVerificationResult Succeeded(string message, string? databaseIdentity = null) =>
-        new(true, message, databaseIdentity);
-}
-
 public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
 {
-    public async Task<DatabaseConnectionVerificationResult> VerifyAsync(
+    public async Task<DatabaseConfigurationTestResponse> VerifyAsync(
         string connectionString,
         string expectedDatabaseIdentity,
         CancellationToken cancellationToken = default)
     {
-        NpgsqlConnectionStringBuilder builder;
-        try
-        {
-            if (!PostgresConnectionStringNormalizer.TryNormalize(connectionString, out var normalized, out var error))
-            {
-                return DatabaseConnectionVerificationResult.Failed(error);
-            }
-
-            builder = new NpgsqlConnectionStringBuilder(normalized);
-            builder.Timeout = Math.Min(Math.Max(builder.Timeout, 1), 5);
-            builder.CommandTimeout = 5;
-        }
-        catch (ArgumentException ex)
-        {
-            return DatabaseConnectionVerificationResult.Failed(ex.Message);
-        }
+        // Limit the probe independently of the connection settings saved for the service.
+        var builder = new NpgsqlConnectionStringBuilder(connectionString) { CommandTimeout = 5 };
+        builder.Timeout = Math.Clamp(builder.Timeout, 1, 5);
 
         try
         {
@@ -54,18 +30,16 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
             var databaseIdentity = await ReadDatabaseIdentityAsync(connection, cancellationToken);
             if (!DatabaseIdentityMatches(databaseIdentity, expectedDatabaseIdentity))
             {
-                return DatabaseConnectionVerificationResult.Failed(
-                    $"Connection succeeded, but database identity is {databaseIdentity ?? "unavailable"}; expected {expectedDatabaseIdentity}.",
-                    databaseIdentity);
+                return new DatabaseConfigurationTestResponse(false,
+                    $"Connection succeeded, but database identity is {databaseIdentity ?? "unavailable"}; expected {expectedDatabaseIdentity}.");
             }
 
-            return DatabaseConnectionVerificationResult.Succeeded(
-                $"Connection succeeded. Database identity: {databaseIdentity}.",
-                databaseIdentity);
+            return new DatabaseConfigurationTestResponse(true,
+                $"Connection succeeded. Database identity: {databaseIdentity}.");
         }
         catch (Exception ex) when (ex is NpgsqlException or TimeoutException or InvalidOperationException)
         {
-            return DatabaseConnectionVerificationResult.Failed($"Connection failed: {FormatConnectionFailure(ex)}");
+            return new DatabaseConfigurationTestResponse(false, $"Connection failed: {FormatConnectionFailure(ex)}");
         }
     }
 
@@ -80,11 +54,6 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
         return result as string;
     }
 
-    /// <summary>
-    /// True when the database says which environment it belongs to and it is
-    /// the one this API runs as. A production API must not be pointed at the
-    /// development database, or the other way round.
-    /// </summary>
     /// <summary>The <c>environment</c> marker the database of this environment must carry.</summary>
     internal static string ExpectedIdentityFor(string environmentName) =>
         environmentName.Trim().Equals("Development", StringComparison.OrdinalIgnoreCase)
@@ -93,6 +62,11 @@ public sealed class DatabaseConnectionVerifier : IDatabaseConnectionVerifier
                 ? "PROD"
                 : environmentName.Trim().ToUpperInvariant();
 
+    /// <summary>
+    /// True when the database says which environment it belongs to and it is
+    /// the one this API runs as. A production API must not be pointed at the
+    /// development database, or the other way round.
+    /// </summary>
     internal static bool DatabaseIdentityMatches(string? databaseIdentity, string expectedDatabaseIdentity) =>
         !string.IsNullOrWhiteSpace(databaseIdentity)
         && !databaseIdentity.Trim().Equals("UNSET", StringComparison.OrdinalIgnoreCase)

@@ -57,22 +57,15 @@ internal sealed class ShellPrintCoordinator(
     /// Called when the Invoice tab has saved a bill: frees the form for the
     /// next bill at once, then prints the saved one.
     /// </summary>
-    public Task HandleInvoiceSaveCompletedAsync()
+    public Task HandleInvoiceSaveCompletedAsync(InvoicePrintSnapshot saved)
     {
-        // What to print is taken now, from the bill as it was saved, because
-        // the form is emptied on the next line and the print may have to wait
-        // for the one before it.
-        var content = host.Invoice.BuildSavedPrintContent(companyProfileProvider.Current);
+        var content = saved.ToPrintContent(companyProfileProvider.Current);
         var layout = printLayoutOptionsProvider.Current;
 
         // The bill is saved, so nothing on the form is needed any more. The
         // form used to be emptied only when the print had finished, which
         // wiped whatever the operator had started on the next bill meanwhile.
         host.Invoice.ClearCommand.Execute(null);
-        if (content is null)
-        {
-            return Task.CompletedTask;
-        }
 
         // One print at a time, in the order the bills were saved. A bill
         // saved while another is printing waits its turn; it used to be

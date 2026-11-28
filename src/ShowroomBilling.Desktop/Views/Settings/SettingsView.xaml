@@ -224,7 +224,7 @@
                     <StackPanel Grid.Column="1"
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
-                                Visibility="{Binding IsTallyCheckVisible, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding SelectedSection, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.TallyCheck}, FallbackValue=Collapsed}">
                         <StackPanel Margin="0,0,14,0"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding TallyCheck.HasLastCompared, Converter={StaticResource BoolToVis}}">
@@ -244,7 +244,7 @@
                     <StackPanel Grid.Column="1"
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
-                                Visibility="{Binding IsPrintLayoutVisible, Converter={StaticResource BoolToVis}}">
+                                Visibility="{Binding SelectedSection, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.PrintLayout}, FallbackValue=Collapsed}">
                         <Button Command="{Binding PrintLayout.LoadCommand}" Content="Refresh" />
                         <Button Margin="10,0,0,0"
                                 Command="{Binding PrintLayout.SaveCommand}"
@@ -258,22 +258,22 @@
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <Grid Margin="32,24,32,32">
                     <settingsViews:ConnectionSettingsSectionView DataContext="{Binding MasterData}"
-                                                                 Visibility="{Binding DataContext.IsConnectionVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
-                    <settingsViews:InvoiceSettingsSectionView Visibility="{Binding IsInvoiceVisible, Converter={StaticResource BoolToVis}}" />
+                                                                 Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Connection}, FallbackValue=Collapsed}" />
+                    <settingsViews:InvoiceSettingsSectionView Visibility="{Binding SelectedSection, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Invoice}, FallbackValue=Collapsed}" />
                     <settingsViews:PrintLayoutSettingsSectionView DataContext="{Binding PrintLayout}"
-                                                                   Visibility="{Binding DataContext.IsPrintLayoutVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                                                                   Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.PrintLayout}, FallbackValue=Collapsed}" />
                     <settingsViews:LedgersSettingsSectionView DataContext="{Binding MasterData}"
-                                                              Visibility="{Binding DataContext.IsLedgersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                                                              Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Ledgers}, FallbackValue=Collapsed}" />
                     <settingsViews:MastersSettingsSectionView DataContext="{Binding MasterData}"
-                                                              Visibility="{Binding DataContext.IsMastersVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                                                              Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Masters}, FallbackValue=Collapsed}" />
                     <settingsViews:ServerSettingsSectionView DataContext="{Binding Server}"
-                                                             Visibility="{Binding DataContext.IsServerVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
+                                                             Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Server}, FallbackValue=Collapsed}" />
                     <settingsViews:HandoverSettingsSectionView DataContext="{Binding Handover}"
-                                                               Visibility="{Binding DataContext.IsHandoverVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
-                    <settingsViews:AdvancedSettingsSectionView Visibility="{Binding IsAdvancedVisible, Converter={StaticResource BoolToVis}}" />
+                                                               Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Handover}, FallbackValue=Collapsed}" />
+                    <settingsViews:AdvancedSettingsSectionView Visibility="{Binding SelectedSection, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Advanced}, FallbackValue=Collapsed}" />
                     <settingsViews:TallyCheckSettingsSectionView DataContext="{Binding TallyCheck}"
-                                                                 Visibility="{Binding DataContext.IsTallyCheckVisible, ElementName=SettingsRoot, Converter={StaticResource BoolToVis}}" />
-                    <settingsViews:AdminSettingsSectionView Visibility="{Binding IsAdminVisible, Converter={StaticResource BoolToVis}}" />
+                                                                 Visibility="{Binding DataContext.SelectedSection, ElementName=SettingsRoot, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.TallyCheck}, FallbackValue=Collapsed}" />
+                    <settingsViews:AdminSettingsSectionView Visibility="{Binding SelectedSection, Converter={StaticResource EqualsVis}, ConverterParameter={x:Static vm:SettingsSectionKey.Admin}, FallbackValue=Collapsed}" />
                 </Grid>
             </ScrollViewer>
         </Grid>

@@ -141,7 +141,7 @@
                         Content="Post to Tally"
                         shell:Kbd.Hint="Ctrl+S"
                         Style="{StaticResource BtnPrimary}"
-                        Visibility="{Binding IsPendingLike, Converter={StaticResource BoolToVis}}" />
+                        Visibility="{Binding IsPending, Converter={StaticResource BoolToVis}}" />
                 <!--  A posted bill already has its voucher in Tally: a repost can duplicate it, so the button is the red one.  -->
                 <Button Margin="10,0,0,0"
                         Command="{Binding RepostCommand}"

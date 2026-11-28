@@ -1,14 +1,14 @@
 namespace ShowroomBilling.Contracts.Bills;
 
 /// <summary>
-/// Shared bill-state capability rules for UI affordances and client-side guards.
-/// Server workflows remain authoritative, but callers should use these helpers
-/// instead of repeating state-string combinations.
+/// Shared bill-state rules for the Desktop and server workflows.
 /// </summary>
 public static class BillStateCapabilities
 {
+    public static IReadOnlyList<string> PushOrRetryStates { get; } = [BillStates.Pending, BillStates.Failed];
+
     public static bool IsKnown(string? state) =>
-        IsPendingLike(state)
+        IsPending(state)
         || IsPosting(state)
         || IsPosted(state)
         || IsFailed(state)
@@ -16,8 +16,8 @@ public static class BillStateCapabilities
         || IsRevised(state)
         || IsVoided(state);
 
-    public static bool IsPendingLike(string? state) =>
-        IsState(state, BillStates.Pending) || IsState(state, BillStates.Draft);
+    public static bool IsPending(string? state) =>
+        IsState(state, BillStates.Pending);
 
     private static bool IsPosting(string? state) => IsState(state, BillStates.Posting);
 
@@ -32,24 +32,24 @@ public static class BillStateCapabilities
 
     private static bool IsVoided(string? state) => IsState(state, BillStates.Voided);
 
-    public static bool CanPush(string? state) => IsPendingLike(state);
+    public static bool CanPush(string? state) => IsPending(state);
 
     public static bool CanRetry(string? state) => IsFailed(state);
 
     public static bool CanRepost(string? state) => IsPosted(state) || IsFailed(state);
 
-    public static bool CanRevise(string? state) => IsPendingLike(state);
+    public static bool CanRevise(string? state) => IsPending(state);
 
-    public static bool CanVoid(string? state) => IsPendingLike(state) || IsFailed(state);
+    public static bool CanVoid(string? state) => IsPending(state) || IsFailed(state);
 
-    public static bool CanEdit(string? state) => IsPendingLike(state) || IsFailed(state) || IsPosted(state);
+    public static bool CanEdit(string? state) => IsPending(state) || IsFailed(state) || IsPosted(state);
 
     public static bool CanChangeNumber(string? state) => HasNoOpenTallyOutcome(state);
 
     public static bool CanDelete(string? state) => HasNoOpenTallyOutcome(state);
 
     public static bool CanMarkPosted(string? state) =>
-        IsPendingLike(state) || IsFailed(state) || IsReconciliationRequired(state);
+        IsPending(state) || IsFailed(state) || IsReconciliationRequired(state);
 
     public static bool CanMarkPending(string? state) => HasBeenSentToTally(state);
 
@@ -57,7 +57,9 @@ public static class BillStateCapabilities
 
     // A push is neither in flight nor waiting for the operator to check Tally.
     private static bool HasNoOpenTallyOutcome(string? state) =>
-        IsKnown(state) && !IsPosting(state) && !IsReconciliationRequired(state);
+        IsKnown(state) && !HasOpenTallyOutcome(state);
+
+    public static bool HasOpenTallyOutcome(string? state) => IsPosting(state) || IsReconciliationRequired(state);
 
     // Tally answered, or may have: accepted, rejected, or outcome unknown.
     private static bool HasBeenSentToTally(string? state) =>

@@ -126,12 +126,7 @@ public partial class BatchHoursViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var token = _adminTokens?.Current?.Token;
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                await _dialogs.RequestAdminUnlockAsync(CancellationToken.None);
-                token = _adminTokens?.Current?.Token;
-            }
+            var token = await AdminTokenPrompt.GetAsync(_adminTokens, _dialogs.RequestAdminUnlockAsync, CancellationToken.None);
 
             if (string.IsNullOrWhiteSpace(token))
             {

@@ -108,7 +108,7 @@ public sealed class DialogDisplayTests
         var details = new BillDetailsViewModel(new FakeBillsApi(), new FakeDialogs());
         var created = new DateTimeOffset(2026, 10, 11, 15, 12, 0, TimeSpan.Zero);
         BillResponse BillWith(BillTotalsDto totals) => new(
-            Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null, created, created,
+            Guid.NewGuid(), BillStates.Pending, "SR/2026-27/0009", "2026-27", null, null, created, created,
             new BillRevisionResponse(Guid.NewGuid(), 1, created, null, new BillPayloadDto(
                 "Customer", null, null, null, new DateOnly(2026, 10, 11),
                 [new BillLineItemDto("Diamond Ring", null, 10m, "ct", 100m, 1000m, null, null)],
@@ -137,7 +137,7 @@ public sealed class DialogDisplayTests
             null, "Cash", 7780m);
 
         details.Bill = new BillResponse(
-            Guid.NewGuid(), BillStates.Draft, "SR/2026-27/0009", "2026-27", null, null,
+            Guid.NewGuid(), BillStates.Pending, "SR/2026-27/0009", "2026-27", null, null,
             created, created, new BillRevisionResponse(Guid.NewGuid(), 1, created, null, payload));
 
         Assert.Equal(["12.450 g", "0.500 ct"], details.LineRows.Select(line => line.Net));
@@ -147,7 +147,7 @@ public sealed class DialogDisplayTests
         Assert.Equal("−5,000.00", details.DiscountDisplay);
         Assert.True(details.HasDiscount);
         Assert.Equal("₹7,780 per gram", details.Rate24KtDisplay);
-        Assert.Equal("Draft. Nothing has been sent to Tally.", details.FooterText);
+        Assert.Equal("Pending. Nothing has been sent to Tally yet.", details.FooterText);
 
         // A draft is waiting for Tally, and the timeline says so after what has happened.
         var timeline = details.Timeline;

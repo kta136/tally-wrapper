@@ -39,16 +39,25 @@ public partial class PrintLayoutViewModel : ObservableObject
         Assets = new ObservableCollection<PrintAssetResponse>();
         SectionLayouts = new ObservableCollection<PrintLayoutSectionRowViewModel>();
 
+        Logo = new(PrintAssetKinds.Logo, "Logo", () => IsIdle, UploadAsync, DeleteAsync);
+        Signature = new(PrintAssetKinds.Signature, "Signature", () => IsIdle, UploadAsync, DeleteAsync);
+        Watermark = new(PrintAssetKinds.Watermark, "Watermark", () => IsIdle, UploadAsync, DeleteAsync);
+        ImageSlots = [Logo, Watermark, Signature];
+        Watermark.LoadWatermark(null);
         ApplyPageLayout(null);
     }
 
+    public PrintLayoutAssetViewModel Logo { get; }
+    public PrintLayoutAssetViewModel Signature { get; }
+    public PrintLayoutAssetViewModel Watermark { get; }
+    internal IReadOnlyList<PrintLayoutAssetViewModel> ImageSlots { get; }
     public ObservableCollection<PrintAssetResponse> Assets { get; }
     public ObservableCollection<PrintLayoutSectionRowViewModel> SectionLayouts { get; }
     public IReadOnlyList<string> DensityOptions => PrintPageDensity.All;
 
     // Nothing loads, saves, uploads or deletes while another of them is in flight.
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(LoadCommand), nameof(SaveCommand), nameof(UploadLogoCommand), nameof(UploadSignatureCommand), nameof(UploadWatermarkCommand), nameof(DeleteLogoCommand), nameof(DeleteSignatureCommand), nameof(DeleteWatermarkCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadCommand), nameof(SaveCommand))]
     private bool isBusy;
 
     [ObservableProperty] private string statusMessage = string.Empty;
@@ -59,44 +68,6 @@ public partial class PrintLayoutViewModel : ObservableObject
     [ObservableProperty] private double topMarginCm;
     [ObservableProperty] private double bottomMarginCm;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasLogo))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteLogoCommand))]
-    private Guid? logoAssetId;
-
-    [ObservableProperty] private string logoFileName = "—";
-    [ObservableProperty] private double logoOffsetXCm;
-    [ObservableProperty] private double logoOffsetYCm;
-    [ObservableProperty] private double logoWidthCm;
-    [ObservableProperty] private double logoHeightCm;
-
-    public bool HasLogo => LogoAssetId is not null;
-    public bool HasSignature => SignatureAssetId is not null;
-    public bool HasWatermark => WatermarkAssetId is not null || PendingWatermarkBytes is not null;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSignature))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteSignatureCommand))]
-    private Guid? signatureAssetId;
-
-    [ObservableProperty] private string signatureFileName = "—";
-    [ObservableProperty] private double signatureOffsetXCm;
-    [ObservableProperty] private double signatureOffsetYCm;
-    [ObservableProperty] private double signatureWidthCm;
-    [ObservableProperty] private double signatureHeightCm;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasWatermark))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteWatermarkCommand))]
-    private Guid? watermarkAssetId;
-
-    [ObservableProperty] private string watermarkFileName = "—";
-    [ObservableProperty] private double watermarkOffsetXCm = PrintLayoutDefaults.WatermarkOffsetXCm;
-    [ObservableProperty] private double watermarkOffsetYCm = PrintLayoutDefaults.WatermarkOffsetYCm;
-    [ObservableProperty] private double watermarkWidthCm = PrintLayoutDefaults.WatermarkWidthCm;
-    [ObservableProperty] private double watermarkHeightCm = PrintLayoutDefaults.WatermarkHeightCm;
-    [ObservableProperty] private double watermarkOpacityPercent = PrintLayoutDefaults.WatermarkOpacityPercent;
-
     [ObservableProperty] private string pageDensity = PrintPageDensity.Standard;
     [ObservableProperty] private double invoiceBorderThicknessPt = PrintLayoutDefaults.InvoiceBorderThicknessPt;
 
@@ -104,46 +75,20 @@ public partial class PrintLayoutViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ClearBottomPinCommand))]
     private string? bottomPinnedFromSectionKey = PrintLayoutSectionKeys.GstBreakup;
 
-    /// <summary>Unsaved bytes from the last local upload; cleared on delete. Consumed
-    /// by the live Settings preview so the pane reflects the browse result immediately,
-    /// without waiting for the API round-trip.</summary>
-    [ObservableProperty] private byte[]? pendingLogoBytes;
-    [ObservableProperty] private byte[]? pendingSignatureBytes;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasWatermark))]
-    [NotifyCanExecuteChangedFor(nameof(DeleteWatermarkCommand))]
-    private byte[]? pendingWatermarkBytes;
+    partial void OnIsBusyChanged(bool value)
+    {
+        foreach (var slot in ImageSlots)
+        {
+            slot.UploadCommand.NotifyCanExecuteChanged();
+            slot.DeleteCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     partial void OnBottomPinnedFromSectionKeyChanged(string? value) => UpdatePinnedStates();
 
     private bool IsIdle => !IsBusy;
 
-    private bool CanDeleteLogo => !IsBusy && HasLogo;
-
-    private bool CanDeleteSignature => !IsBusy && HasSignature;
-
-    private bool CanDeleteWatermark => !IsBusy && HasWatermark;
-
     private bool HasBottomPin => BottomPinnedFromSectionKey is not null;
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private Task UploadLogoAsync() => UploadAsync(PrintAssetKinds.Logo);
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private Task UploadSignatureAsync() => UploadAsync(PrintAssetKinds.Signature);
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private Task UploadWatermarkAsync() => UploadAsync(PrintAssetKinds.Watermark);
-
-    [RelayCommand(CanExecute = nameof(CanDeleteLogo))]
-    private Task DeleteLogoAsync() => DeleteByKindAsync(PrintAssetKinds.Logo);
-
-    [RelayCommand(CanExecute = nameof(CanDeleteSignature))]
-    private Task DeleteSignatureAsync() => DeleteByKindAsync(PrintAssetKinds.Signature);
-
-    [RelayCommand(CanExecute = nameof(CanDeleteWatermark))]
-    private Task DeleteWatermarkAsync() => DeleteByKindAsync(PrintAssetKinds.Watermark);
 
     [RelayCommand]
     private void PinBottomFromHere(PrintLayoutSectionRowViewModel? row) => BottomPinnedFromSectionKey = row?.SectionKey;
@@ -170,9 +115,9 @@ public partial class PrintLayoutViewModel : ObservableObject
             TopMarginCm = layout.TopMarginCm;
             BottomMarginCm = layout.BottomMarginCm;
 
-            ApplyPlacement(layout.Logo, isLogo: true);
-            ApplyPlacement(layout.Signature, isLogo: false);
-            ApplyWatermark(layout.Watermark);
+            Logo.Load(layout.Logo);
+            Signature.Load(layout.Signature);
+            Watermark.LoadWatermark(layout.Watermark);
             ApplyPageLayout(layout.PageLayout);
 
             Assets.Clear();
@@ -196,7 +141,7 @@ public partial class PrintLayoutViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private async Task SaveAsync(CancellationToken cancellationToken)
     {
-        if (PendingWatermarkBytes is not null && WatermarkAssetId is null)
+        if (Watermark.PendingBytes is not null && Watermark.AssetId is null)
         {
             StatusMessage =
                 "Watermark is a local preview only because upload failed. Update the connected Tally Wrapper Server, then browse the file again before saving.";
@@ -207,25 +152,7 @@ public partial class PrintLayoutViewModel : ObservableObject
         StatusMessage = "Saving print layout…";
         try
         {
-            var layout = new PrintLayoutSettings(
-                LeftMarginCm, RightMarginCm, TopMarginCm, BottomMarginCm,
-                LogoAssetId is null
-                    ? null
-                    : new PrintLayoutAssetPlacement(LogoAssetId, LogoOffsetXCm, LogoOffsetYCm, LogoWidthCm, LogoHeightCm),
-                SignatureAssetId is null
-                    ? null
-                    : new PrintLayoutAssetPlacement(SignatureAssetId, SignatureOffsetXCm, SignatureOffsetYCm, SignatureWidthCm, SignatureHeightCm),
-                WatermarkAssetId is null
-                    ? null
-                    : new PrintLayoutWatermarkPlacement(
-                        WatermarkAssetId.Value,
-                        WatermarkOffsetXCm,
-                        WatermarkOffsetYCm,
-                        WatermarkWidthCm,
-                        WatermarkHeightCm,
-                        WatermarkOpacityPercent),
-                BuildPageLayout());
-
+            var layout = BuildLayout(preview: false);
             var response = await _settingsApi.UpdatePrintLayoutAsync(new UpdatePrintLayoutRequest(layout), cancellationToken);
             UpdatedAtUtc = response.UpdatedAtUtc;
             StatusMessage = "Saved.";
@@ -240,8 +167,9 @@ public partial class PrintLayoutViewModel : ObservableObject
         }
     }
 
-    private async Task UploadAsync(string kind)
+    private async Task UploadAsync(PrintLayoutAssetViewModel slot)
     {
+        var kind = slot.Kind;
         PrintLayoutImageSelection? selection;
         try
         {
@@ -264,13 +192,8 @@ public partial class PrintLayoutViewModel : ObservableObject
 
         // Stash bytes locally first so the live preview reflects the browse result
         // before the API upload completes.
-        if (kind == PrintAssetKinds.Logo) PendingLogoBytes = bytes;
-        else if (kind == PrintAssetKinds.Signature) PendingSignatureBytes = bytes;
-        else
-        {
-            PendingWatermarkBytes = bytes;
-            WatermarkFileName = Path.GetFileName(selection.FileName);
-        }
+        slot.PendingBytes = bytes;
+        if (slot.IsWatermark) slot.FileName = Path.GetFileName(selection.FileName);
 
         IsBusy = true;
         StatusMessage = $"Uploading {kind}…";
@@ -283,24 +206,11 @@ public partial class PrintLayoutViewModel : ObservableObject
 
             var asset = await _printAssetApi.UploadAsync(request);
 
-            if (kind == PrintAssetKinds.Logo)
+            slot.AssetId = asset.Id;
+            slot.FileName = asset.FileName;
+            if (slot.IsWatermark && (slot.WidthCm <= 0 || slot.HeightCm <= 0))
             {
-                LogoAssetId = asset.Id;
-                LogoFileName = asset.FileName;
-            }
-            else if (kind == PrintAssetKinds.Signature)
-            {
-                SignatureAssetId = asset.Id;
-                SignatureFileName = asset.FileName;
-            }
-            else
-            {
-                WatermarkAssetId = asset.Id;
-                WatermarkFileName = asset.FileName;
-                if (WatermarkWidthCm <= 0 || WatermarkHeightCm <= 0)
-                {
-                    ApplyWatermark(PrintLayoutDefaults.CreateWatermark(asset.Id));
-                }
+                slot.LoadWatermark(PrintLayoutDefaults.CreateWatermark(asset.Id));
             }
 
             await RefreshAssetsAsync();
@@ -308,7 +218,7 @@ public partial class PrintLayoutViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            HandleUploadFailure(kind, ApiResponseReader.FormatError(ex), (ex as HttpRequestException)?.StatusCode);
+            HandleUploadFailure(slot, ApiResponseReader.FormatError(ex), (ex as HttpRequestException)?.StatusCode);
         }
         finally
         {
@@ -316,18 +226,11 @@ public partial class PrintLayoutViewModel : ObservableObject
         }
     }
 
-    private void ClearPendingBytesFor(string kind)
+    private void HandleUploadFailure(PrintLayoutAssetViewModel slot, string error, HttpStatusCode? statusCode = null)
     {
-        if (kind == PrintAssetKinds.Logo) PendingLogoBytes = null;
-        else if (kind == PrintAssetKinds.Signature) PendingSignatureBytes = null;
-        else PendingWatermarkBytes = null;
-    }
-
-    private void HandleUploadFailure(string kind, string error, HttpStatusCode? statusCode = null)
-    {
-        if (kind != PrintAssetKinds.Watermark)
+        if (!slot.IsWatermark)
         {
-            ClearPendingBytesFor(kind);
+            slot.PendingBytes = null;
             StatusMessage = $"Upload failed: {error}";
             return;
         }
@@ -337,20 +240,16 @@ public partial class PrintLayoutViewModel : ObservableObject
             : $"Watermark upload failed: {error}. Showing a local preview only; it is not saved.";
     }
 
-    private async Task DeleteByKindAsync(string kind)
+    private async Task DeleteAsync(PrintLayoutAssetViewModel slot)
     {
-        var id = kind switch
-        {
-            PrintAssetKinds.Logo => LogoAssetId,
-            PrintAssetKinds.Signature => SignatureAssetId,
-            _ => WatermarkAssetId,
-        };
+        var kind = slot.Kind;
+        var id = slot.AssetId;
         if (id is null)
         {
-            if (kind == PrintAssetKinds.Watermark && PendingWatermarkBytes is not null)
+            if (slot.IsWatermark && slot.PendingBytes is not null)
             {
-                PendingWatermarkBytes = null;
-                WatermarkFileName = "—";
+                slot.PendingBytes = null;
+                slot.FileName = "—";
                 StatusMessage = "Cleared local watermark preview.";
             }
             return;
@@ -362,24 +261,9 @@ public partial class PrintLayoutViewModel : ObservableObject
         {
             await _printAssetApi.DeleteAsync(id.Value);
 
-            if (kind == PrintAssetKinds.Logo)
-            {
-                LogoAssetId = null;
-                LogoFileName = "—";
-                PendingLogoBytes = null;
-            }
-            else if (kind == PrintAssetKinds.Signature)
-            {
-                SignatureAssetId = null;
-                SignatureFileName = "—";
-                PendingSignatureBytes = null;
-            }
-            else
-            {
-                WatermarkAssetId = null;
-                WatermarkFileName = "—";
-                PendingWatermarkBytes = null;
-            }
+            slot.AssetId = null;
+            slot.FileName = "—";
+            slot.PendingBytes = null;
 
             await RefreshAssetsAsync();
             StatusMessage = $"Deleted {kind}.";
@@ -401,36 +285,6 @@ public partial class PrintLayoutViewModel : ObservableObject
         foreach (var asset in assets.Assets)
             Assets.Add(asset);
         UpdateAssetFileNames();
-    }
-
-    private void ApplyPlacement(PrintLayoutAssetPlacement? placement, bool isLogo)
-    {
-        if (isLogo)
-        {
-            LogoAssetId = placement?.AssetId;
-            LogoOffsetXCm = placement?.OffsetXCm ?? 0;
-            LogoOffsetYCm = placement?.OffsetYCm ?? 0;
-            LogoWidthCm = placement?.WidthCm ?? 0;
-            LogoHeightCm = placement?.HeightCm ?? 0;
-        }
-        else
-        {
-            SignatureAssetId = placement?.AssetId;
-            SignatureOffsetXCm = placement?.OffsetXCm ?? 0;
-            SignatureOffsetYCm = placement?.OffsetYCm ?? 0;
-            SignatureWidthCm = placement?.WidthCm ?? 0;
-            SignatureHeightCm = placement?.HeightCm ?? 0;
-        }
-    }
-
-    private void ApplyWatermark(PrintLayoutWatermarkPlacement? watermark)
-    {
-        WatermarkAssetId = watermark?.AssetId;
-        WatermarkOffsetXCm = watermark?.OffsetXCm ?? PrintLayoutDefaults.WatermarkOffsetXCm;
-        WatermarkOffsetYCm = watermark?.OffsetYCm ?? PrintLayoutDefaults.WatermarkOffsetYCm;
-        WatermarkWidthCm = watermark?.WidthCm ?? PrintLayoutDefaults.WatermarkWidthCm;
-        WatermarkHeightCm = watermark?.HeightCm ?? PrintLayoutDefaults.WatermarkHeightCm;
-        WatermarkOpacityPercent = watermark?.OpacityPercent ?? PrintLayoutDefaults.WatermarkOpacityPercent;
     }
 
     private void ApplyPageLayout(PrintPageLayoutSettings? pageLayout)
@@ -464,6 +318,10 @@ public partial class PrintLayoutViewModel : ObservableObject
         UpdatePinnedStates();
         OnPropertyChanged(nameof(SectionLayouts));
     }
+
+    internal PrintLayoutSettings BuildLayout(bool preview) => new(
+        LeftMarginCm, RightMarginCm, TopMarginCm, BottomMarginCm,
+        Logo.Placement, Signature.Placement, Watermark.WatermarkPlacement(preview), BuildPageLayout());
 
     private PrintPageLayoutSettings BuildPageLayout() =>
         new(
@@ -569,12 +427,8 @@ public partial class PrintLayoutViewModel : ObservableObject
 
     private void UpdateAssetFileNames()
     {
-        var logo = Assets.FirstOrDefault(a => a.Id == LogoAssetId);
-        LogoFileName = logo?.FileName ?? "—";
-        var signature = Assets.FirstOrDefault(a => a.Id == SignatureAssetId);
-        SignatureFileName = signature?.FileName ?? "—";
-        var watermark = Assets.FirstOrDefault(a => a.Id == WatermarkAssetId);
-        WatermarkFileName = watermark?.FileName ?? "—";
+        foreach (var slot in ImageSlots)
+            slot.FileName = Assets.FirstOrDefault(asset => asset.Id == slot.AssetId)?.FileName ?? "—";
     }
 
 }

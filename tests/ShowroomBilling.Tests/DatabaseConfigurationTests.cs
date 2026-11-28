@@ -34,12 +34,14 @@ public sealed class PoolDefaultsTests
         Assert.Equal(30, result.KeepAlive);
     }
 
-    [Fact]
-    public void ApplyPoolDefaults_KeepsExplicitValues()
+    [Theory]
+    [InlineData("Minimum Pool Size")]
+    [InlineData("MinPoolSize")]
+    public void ApplyPoolDefaults_KeepsExplicitValues(string poolSizeKey)
     {
         var result = new Npgsql.NpgsqlConnectionStringBuilder(
             ShowroomBilling.Infrastructure.DependencyInjection.ApplyPoolDefaults(
-                "Host=db;Database=x;Username=u;Minimum Pool Size=0;Keepalive=0"));
+                $"Host=db;Database=x;Username=u;{poolSizeKey}=0;Keepalive=0"));
 
         Assert.Equal(0, result.MinPoolSize);
         Assert.Equal(0, result.KeepAlive);
@@ -81,6 +83,23 @@ public sealed class DatabaseConfigurationTests
     }
 
     [Fact]
+    public async Task Cancelled_save_preserves_the_previous_connection()
+    {
+        await WithIsolatedConfigurationStoreAsync(async () =>
+        {
+            const string previous = "Host=first;Database=showroom";
+            await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(previous, "Production");
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                DatabaseConfigurationStore.SavePostgresConnectionStringAsync("Host=second;Database=showroom", "Production",
+                    new CancellationToken(canceled: true)));
+
+            Assert.Equal(previous, DatabaseConfigurationStore.LoadPostgresConnectionString("Production", out var loadError));
+            Assert.Null(loadError);
+            Assert.Empty(Directory.EnumerateFiles(DatabaseConfigurationStore.DirectoryPath, "*.tmp"));
+        });
+    }
+
+    [Fact]
     public void Store_UsesAppDataOverrideAsExactRoot()
     {
         WithIsolatedConfigurationStore(() =>
@@ -102,21 +121,23 @@ public sealed class DatabaseConfigurationTests
         await WithIsolatedConfigurationStoreAsync(async () =>
         {
             var verifier = new FakeDatabaseConnectionVerifier(
-                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD"));
+                new DatabaseConfigurationTestResponse(true, "Connection succeeded. Database identity: PROD."));
             var controller = await BuildMaintenanceControllerAsync(verifier);
 
+            const string connection = "Host=db;Database=showroom;Username=user;Password=secret;SSL Password=ssl-secret;Timeout=19";
             var result = await controller.UpdateDatabaseConfigurationForMaintenance(
-                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
-                CancellationToken.None);
+                new DatabaseConfigurationRequest(connection), CancellationToken.None);
 
-            var ok = Assert.IsType<OkObjectResult>(result.Result);
-            var response = Assert.IsType<DatabaseConfigurationResponse>(ok.Value);
-            // Nothing in the answer carries the password, whatever field it might hide in.
+            var response = Assert.IsType<DatabaseConfigurationResponse>(Assert.IsType<OkObjectResult>(result).Value);
             Assert.DoesNotContain("secret", System.Text.Json.JsonSerializer.Serialize(response));
             Assert.Contains("Password=***", response.MaskedConnectionString);
-            Assert.True(response.IsLocalOverridePresent);
             Assert.True(response.RequiresApiRestart);
-            Assert.True(File.Exists(response.ConfigPath));
+            var saved = DatabaseConfigurationStore.LoadPostgresConnectionString("Production", out var loadError);
+            Assert.Null(loadError);
+            var stored = new Npgsql.NpgsqlConnectionStringBuilder(saved);
+            Assert.Equal("secret", stored.Password);
+            Assert.Equal("ssl-secret", stored.SslPassword);
+            Assert.Equal(19, stored.Timeout);
             Assert.Equal("PROD", verifier.LastExpectedDatabaseIdentity);
         });
     }
@@ -127,14 +148,14 @@ public sealed class DatabaseConfigurationTests
         await WithIsolatedConfigurationStoreAsync(async () =>
         {
             var verifier = new FakeDatabaseConnectionVerifier(
-                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD"));
+                new DatabaseConfigurationTestResponse(true, "Connection succeeded. Database identity: PROD."));
             var controller = await BuildMaintenanceControllerAsync(verifier);
 
             var result = await controller.UpdateDatabaseConfigurationForMaintenance(
-                new UpdateDatabaseConfigurationRequest("postgresql://db_user:db_secret@db.example.test/showroom"),
+                new DatabaseConfigurationRequest("postgresql://db_user:db_secret@db.example.test/showroom"),
                 CancellationToken.None);
 
-            var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+            var badRequest = Assert.IsType<BadRequestObjectResult>(result);
             var problem = Assert.IsType<ProblemDetails>(badRequest.Value);
             Assert.Contains("Host=", problem.Detail);
             Assert.DoesNotContain("db_secret", problem.Detail);
@@ -150,10 +171,10 @@ public sealed class DatabaseConfigurationTests
             var controller = await BuildMaintenanceControllerAsync();
 
             var result = await controller.UpdateDatabaseConfigurationForMaintenance(
-                new UpdateDatabaseConfigurationRequest("Not A Connection String"),
+                new DatabaseConfigurationRequest("Not A Connection String"),
                 CancellationToken.None);
 
-            Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.IsType<BadRequestObjectResult>(result);
         });
     }
 
@@ -164,16 +185,14 @@ public sealed class DatabaseConfigurationTests
         {
             var controller = await BuildMaintenanceControllerAsync(
                 new FakeDatabaseConnectionVerifier(
-                    DatabaseConnectionVerificationResult.Failed(
-                        "Connection succeeded, but database identity is DEV; expected PROD.",
-                        "DEV")));
+                    new DatabaseConfigurationTestResponse(false, "Connection succeeded, but database identity is DEV; expected PROD.")));
 
             var result = await controller.UpdateDatabaseConfigurationForMaintenance(
-                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                new DatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
                 CancellationToken.None);
 
-            Assert.IsType<BadRequestObjectResult>(result.Result);
-            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.False(File.Exists(DatabaseConfigurationStore.ConfigPathForEnvironment("Production")));
         });
     }
 
@@ -185,13 +204,13 @@ public sealed class DatabaseConfigurationTests
             var controller = await BuildMaintenanceControllerAsync();
 
             var result = await controller.TestDatabaseConfigurationForMaintenance(
-                new TestDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                new DatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
                 CancellationToken.None);
 
-            var ok = Assert.IsType<OkObjectResult>(result.Result);
+            var ok = Assert.IsType<OkObjectResult>(result);
             var response = Assert.IsType<DatabaseConfigurationTestResponse>(ok.Value);
             Assert.True(response.Success);
-            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+            Assert.False(File.Exists(DatabaseConfigurationStore.ConfigPathForEnvironment("Production")));
         });
     }
 
@@ -204,13 +223,13 @@ public sealed class DatabaseConfigurationTests
             var connection = "Host=db;Database=showroom;Username=user;Password=secret";
 
             var test = await controller.TestDatabaseConfigurationForMaintenance(
-                new TestDatabaseConfigurationRequest(connection), CancellationToken.None);
+                new DatabaseConfigurationRequest(connection), CancellationToken.None);
             var save = await controller.UpdateDatabaseConfigurationForMaintenance(
-                new UpdateDatabaseConfigurationRequest(connection), CancellationToken.None);
+                new DatabaseConfigurationRequest(connection), CancellationToken.None);
 
-            Assert.Equal(StatusCodes.Status401Unauthorized, Assert.IsType<ObjectResult>(test.Result).StatusCode);
-            Assert.Equal(StatusCodes.Status401Unauthorized, Assert.IsType<ObjectResult>(save.Result).StatusCode);
-            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+            Assert.Equal(StatusCodes.Status401Unauthorized, Assert.IsType<ObjectResult>(test).StatusCode);
+            Assert.Equal(StatusCodes.Status401Unauthorized, Assert.IsType<ObjectResult>(save).StatusCode);
+            Assert.False(File.Exists(DatabaseConfigurationStore.ConfigPathForEnvironment("Production")));
         });
     }
 
@@ -222,11 +241,11 @@ public sealed class DatabaseConfigurationTests
             var controller = await BuildMaintenanceControllerAsync(remoteAddress: System.Net.IPAddress.Parse("192.168.1.25"));
 
             var result = await controller.UpdateDatabaseConfigurationForMaintenance(
-                new UpdateDatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
+                new DatabaseConfigurationRequest("Host=db;Database=showroom;Username=user;Password=secret"),
                 CancellationToken.None);
 
-            Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsType<ObjectResult>(result.Result).StatusCode);
-            Assert.False(DatabaseConfigurationStore.ExistsForEnvironment("Production"));
+            Assert.Equal(StatusCodes.Status403Forbidden, Assert.IsType<ObjectResult>(result).StatusCode);
+            Assert.False(File.Exists(DatabaseConfigurationStore.ConfigPathForEnvironment("Production")));
         });
     }
 
@@ -246,7 +265,7 @@ public sealed class DatabaseConfigurationTests
 
         var controller = new RuntimeController(
             verifier ?? new FakeDatabaseConnectionVerifier(
-                DatabaseConnectionVerificationResult.Succeeded("Connection succeeded. Database identity: PROD.", "PROD")),
+                new DatabaseConfigurationTestResponse(true, "Connection succeeded. Database identity: PROD.")),
             new FakeHostEnvironment("Production"),
             new MaintenanceTokenStore());
         controller.ControllerContext = new ControllerContext
@@ -311,13 +330,13 @@ public sealed class DatabaseConfigurationTests
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
-    private sealed class FakeDatabaseConnectionVerifier(DatabaseConnectionVerificationResult result)
+    private sealed class FakeDatabaseConnectionVerifier(DatabaseConfigurationTestResponse result)
         : IDatabaseConnectionVerifier
     {
         public string? LastExpectedDatabaseIdentity { get; private set; }
         public string? LastConnectionString { get; private set; }
 
-        public Task<DatabaseConnectionVerificationResult> VerifyAsync(
+        public Task<DatabaseConfigurationTestResponse> VerifyAsync(
             string connectionString,
             string expectedDatabaseIdentity,
             CancellationToken cancellationToken = default)

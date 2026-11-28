@@ -47,6 +47,52 @@
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="Margin" Value="4,0,0,0" />
             </Style>
+            <DataTemplate x:Key="AssetCard" DataType="{x:Type vm:PrintLayoutAssetViewModel}">
+                <Border Style="{StaticResource SettingsCard}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="{Binding Title}" />
+                                <TextBlock Visibility="{Binding IsWatermark, Converter={StaticResource BoolToVis}}" Style="{StaticResource CardHint}" Text="Repeats behind the invoice on every page. Position and size use full-page A4 coordinates." />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Top" Orientation="Horizontal">
+                                <Button Command="{Binding UploadCommand}" Content="Browse…" />
+                                <Button Margin="10,0,0,0" Command="{Binding DeleteCommand}" Content="Delete" Visibility="{Binding HasAsset, Converter={StaticResource BoolToVis}}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Current file" />
+                        <Border Margin="0,0,0,16" Style="{StaticResource ReadOnlyBox}">
+                            <TextBlock VerticalAlignment="Center" Style="{StaticResource TxtMono}" Text="{Binding FileName}" />
+                        </Border>
+                        <UniformGrid Rows="1" Margin="0,0,-12,0">
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="X, cm" />
+                                <TextBox Style="{StaticResource LayoutField}" Text="{Binding OffsetXCm, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Y, cm" />
+                                <TextBox Style="{StaticResource LayoutField}" Text="{Binding OffsetYCm, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Width, cm" />
+                                <TextBox Style="{StaticResource LayoutField}" Text="{Binding WidthCm, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Height, cm" />
+                                <TextBox Style="{StaticResource LayoutField}" Text="{Binding HeightCm, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,12,0" Visibility="{Binding IsWatermark, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Opacity, %" />
+                                <TextBox Style="{StaticResource LayoutField}" Text="{Binding OpacityPercent, UpdateSourceTrigger=LostFocus}" />
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -244,160 +290,10 @@
             </StackPanel>
         </Border>
 
-        <!--  Logo  -->
-        <Border Style="{StaticResource SettingsCard}">
-            <StackPanel>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource CardTitle}" Text="Logo" />
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Command="{Binding UploadLogoCommand}" Content="Browse…" />
-                        <Button Margin="10,0,0,0" Command="{Binding DeleteLogoCommand}" Content="Delete" Visibility="{Binding HasLogo, Converter={StaticResource BoolToVis}}" />
-                    </StackPanel>
-                </Grid>
-                <TextBlock Style="{StaticResource FieldLabel}" Text="Current file" />
-                <Border Margin="0,0,0,16" Style="{StaticResource ReadOnlyBox}">
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource TxtMono}" Text="{Binding LogoFileName}" />
-                </Border>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Offset X, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding LogoOffsetXCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Offset Y, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding LogoOffsetYCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="4">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Width, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding LogoWidthCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="6">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Height, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding LogoHeightCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                </Grid>
-            </StackPanel>
-        </Border>
+        <ContentControl Content="{Binding Logo}" ContentTemplate="{StaticResource AssetCard}" HorizontalContentAlignment="Stretch" />
+        <ContentControl Content="{Binding Watermark}" ContentTemplate="{StaticResource AssetCard}" HorizontalContentAlignment="Stretch" />
+        <ContentControl Content="{Binding Signature}" ContentTemplate="{StaticResource AssetCard}" HorizontalContentAlignment="Stretch" />
 
-        <!--  Watermark  -->
-        <Border Style="{StaticResource SettingsCard}">
-            <StackPanel>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="Watermark" />
-                        <TextBlock Style="{StaticResource CardHint}" Text="Repeats behind the invoice on every page. Position and size use full-page A4 coordinates." />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Top" Orientation="Horizontal">
-                        <Button Command="{Binding UploadWatermarkCommand}" Content="Browse…" />
-                        <Button Margin="10,0,0,0" Command="{Binding DeleteWatermarkCommand}" Content="Delete" Visibility="{Binding HasWatermark, Converter={StaticResource BoolToVis}}" />
-                    </StackPanel>
-                </Grid>
-                <TextBlock Style="{StaticResource FieldLabel}" Text="Current file" />
-                <Border Margin="0,0,0,16" Style="{StaticResource ReadOnlyBox}">
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource TxtMono}" Text="{Binding WatermarkFileName}" />
-                </Border>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="X, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding WatermarkOffsetXCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Y, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding WatermarkOffsetYCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="4">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Width, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding WatermarkWidthCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="6">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Height, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding WatermarkHeightCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="8">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Opacity, %" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding WatermarkOpacityPercent, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                </Grid>
-            </StackPanel>
-        </Border>
-
-        <!--  Signature  -->
-        <Border Style="{StaticResource SettingsCard}">
-            <StackPanel>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource CardTitle}" Text="Signature" />
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Button Command="{Binding UploadSignatureCommand}" Content="Browse…" />
-                        <Button Margin="10,0,0,0" Command="{Binding DeleteSignatureCommand}" Content="Delete" Visibility="{Binding HasSignature, Converter={StaticResource BoolToVis}}" />
-                    </StackPanel>
-                </Grid>
-                <TextBlock Style="{StaticResource FieldLabel}" Text="Current file" />
-                <Border Margin="0,0,0,16" Style="{StaticResource ReadOnlyBox}">
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource TxtMono}" Text="{Binding SignatureFileName}" />
-                </Border>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Offset X, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding SignatureOffsetXCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Offset Y, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding SignatureOffsetYCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="4">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Width, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding SignatureWidthCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="6">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="Height, cm" />
-                        <TextBox Style="{StaticResource LayoutField}" Text="{Binding SignatureHeightCm, UpdateSourceTrigger=LostFocus}" />
-                    </StackPanel>
-                </Grid>
-            </StackPanel>
-        </Border>
-
-        <TextBlock Margin="2,0,0,0" Style="{StaticResource CardHint}" Text="{Binding StatusMessage}" />
         <TextBlock Margin="2,6,0,0" Style="{StaticResource CardHint}" Text="Images are capped at 2 MB. Uploading replaces the old file. Layout changes are shared across the showroom and apply to the live preview, printing and PDF export." />
     </StackPanel>
     </shell:ReadingColumn>

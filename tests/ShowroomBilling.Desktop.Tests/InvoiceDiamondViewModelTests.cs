@@ -246,10 +246,12 @@ public sealed class InvoiceDiamondViewModelTests
         line.ItemMaster = DiamondMaster();
         line.GrossWeight = 2m;
         line.DiamondRate = 3500m;
+        InvoicePrintSnapshot? saved = null;
+        vm.SaveCompletedReadyForPrint += (_, snapshot) => saved = snapshot;
         await vm.SaveDraftCommand.ExecuteAsync(null);
 
         vm.PartyName = "Typed After Save";
-        var content = vm.BuildSavedPrintContent(new ShowroomBilling.Printing.CompanyProfile("Acme", null, null, "", null, null, null, null, null));
+        var content = saved!.ToPrintContent(new ShowroomBilling.Printing.CompanyProfile("Acme", null, null, "", null, null, null, null, null));
 
         Assert.Equal("Saved Customer", content!.PartyName);
     }

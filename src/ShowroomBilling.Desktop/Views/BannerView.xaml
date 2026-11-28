@@ -78,7 +78,7 @@
                         Content="Retry now"
                         Style="{StaticResource BtnSm}">
                     <Button.Visibility>
-                        <Binding Path="BannerTone" Converter="{StaticResource StringEqualsVis}" ConverterParameter="err" />
+                        <Binding Path="BannerTone" Converter="{StaticResource EqualsVis}" ConverterParameter="err" />
                     </Button.Visibility>
                 </Button>
             </Grid>

@@ -22,7 +22,6 @@ internal static class BillStateDisplay
         BillStates.Posted => ToneOk,
         BillStates.Pending or BillStates.Posting => ToneWarn,
         BillStates.Failed or BillStates.ReconciliationRequired => ToneErr,
-        BillStates.Draft => ToneInfo,
         _ => ToneNeutral
     };
 
@@ -33,7 +32,6 @@ internal static class BillStateDisplay
     /// </summary>
     public static string Kind(string? state) => state switch
     {
-        BillStates.Draft => "ring",
         BillStates.Pending or BillStates.Posting => "half",
         BillStates.Posted => "dot",
         BillStates.Failed => "x",
@@ -49,7 +47,6 @@ internal static class BillStateDisplay
         var basic = state switch
         {
             BillStates.Pending => "Pending",
-            BillStates.Draft => "Draft",
             BillStates.Posting => "Posting",
             BillStates.Posted => "Posted",
             BillStates.Failed => "Failed",

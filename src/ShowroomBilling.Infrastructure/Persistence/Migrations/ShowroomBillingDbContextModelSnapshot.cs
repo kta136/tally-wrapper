@@ -216,7 +216,7 @@ namespace ShowroomBilling.Infrastructure.Persistence.Migrations
 
                     b.ToTable("bills", "public", t =>
                         {
-                            t.HasCheckConstraint("CK_bills_state", "\"State\" IN ('draft', 'pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')");
+                            t.HasCheckConstraint("CK_bills_state", "\"State\" IN ('pending', 'posting', 'posted', 'failed', 'reconciliation_required', 'revised', 'voided')");
                         });
                 });
 

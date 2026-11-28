@@ -50,6 +50,42 @@ public sealed class ViewSmokeTests
         });
     }
 
+    [Fact]
+    public void Settings_sidebar_shows_its_section_and_preview_and_returns_to_Server_on_lock()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var tokens = DesignSample.UnlockedTokens();
+            var shell = DesignSample.CreateShell(tokenStore: tokens);
+            var settings = shell.Settings;
+            var view = new SettingsView { DataContext = settings };
+            WpfTestHost.Layout(view, ViewSize);
+            var sidebar = Descendants(view).OfType<ListBox>().Single(list => list.ItemsSource == settings.SectionGroups);
+            var panels = (Panel)Descendants(view).OfType<ServerSettingsSectionView>().Single().Parent;
+            var preview = Descendants(view).OfType<SettingsPreviewPaneView>().Single();
+
+            foreach (var section in Enum.GetValues<SettingsSectionKey>())
+            {
+                sidebar.SelectedItem = section;
+                WpfTestHost.Layout(view, ViewSize);
+                Assert.Equal(section, settings.SelectedSection);
+                var shown = Assert.Single(panels.Children.OfType<UserControl>(), panel => panel.Visibility == Visibility.Visible);
+                Assert.Equal($"{section}SettingsSectionView", shown.GetType().Name);
+                var showsPreview = section is SettingsSectionKey.Invoice or SettingsSectionKey.PrintLayout;
+                Assert.Equal(showsPreview, preview.Visibility == Visibility.Visible);
+                Assert.Equal(showsPreview, settings.Preview.IsActive);
+            }
+
+            sidebar.SelectedItem = SettingsSectionKey.Admin;
+            tokens.Clear();
+            WpfTestHost.DrainDispatcher();
+            Assert.DoesNotContain(SettingsSectionKey.Admin, settings.Sections);
+            Assert.Equal(SettingsSectionKey.Server, sidebar.SelectedItem);
+            Assert.Equal(Visibility.Visible, panels.Children.OfType<ServerSettingsSectionView>().Single().Visibility);
+            return true;
+        });
+    }
+
     private static readonly Size ViewSize = new(1280, 800);
 
     private static List<string> LoadEveryView()

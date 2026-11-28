@@ -22,9 +22,9 @@ public sealed class BillsViewModelCountsTests
     }
 
     [Fact]
-    public void Pending_and_draft_bills_are_the_ones_waiting_for_Tally()
+    public void Pending_bills_are_the_ones_waiting_for_Tally()
     {
-        var vm = WithBills(BillStates.Pending, BillStates.Draft, BillStates.Posted, BillStates.Posting);
+        var vm = WithBills(BillStates.Pending, BillStates.Pending, BillStates.Posted, BillStates.Posting);
 
         Assert.Equal(2, vm.WaitingForTallyCount);
         Assert.Equal("2 waiting for Tally", vm.WaitingForTallyText);

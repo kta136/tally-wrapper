@@ -140,7 +140,7 @@ public sealed class HandoverKeyAndSettingsTests
             [SettingsSectionKey.Server, SettingsSectionKey.Handover, SettingsSectionKey.Advanced],
             settings.Sections.Where(section => SettingsSections.ScopeOf(section) == SettingsSectionScope.ThisPc));
         settings.SelectedSection = SettingsSectionKey.Handover;
-        Assert.True(settings.IsHandoverVisible);
+        Assert.Equal("Hand-over", settings.SelectedSectionTitle);
         Assert.Equal("This PC only", settings.SelectedSectionChipText);
     }
 
