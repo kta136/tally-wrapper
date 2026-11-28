@@ -28,6 +28,42 @@ public sealed class MasterDataSettingsViewModelTests
     }
 
     [Fact]
+    public async Task The_lists_read_when_settings_opens_leave_the_status_line_alone()
+    {
+        // Nobody asked for them, and the line is shared by every section: their summary used to
+        // sit under Print layout.
+        var shell = new FakeShell { StatusMessage = "Changes discarded." };
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), new FakeMastersApiClient(), shell);
+
+        await vm.LoadMissingSnapshotsAsync(CancellationToken.None);
+
+        Assert.Equal(2, vm.LedgerOptions.Count);
+        Assert.Equal("Changes discarded.", shell.StatusMessage);
+    }
+
+    [Fact]
+    public async Task A_list_that_cannot_be_read_when_settings_opens_is_still_reported()
+    {
+        var shell = new FakeShell();
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), new OfflineMastersApi(), shell);
+
+        await vm.LoadMissingSnapshotsAsync(CancellationToken.None);
+
+        Assert.Contains("failed", shell.StatusMessage);
+    }
+
+    [Fact]
+    public async Task A_refresh_says_what_was_loaded()
+    {
+        var shell = new FakeShell();
+        var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), new FakeMastersApiClient(), shell);
+
+        await vm.RequestLedgerRefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal("2 ledger(s) · 1 voucher type(s) · fresh", shell.StatusMessage);
+    }
+
+    [Fact]
     public void RowCommands_FollowEditingState_AndMutateDraft()
     {
         var shell = new FakeShell { IsEditingValue = false };

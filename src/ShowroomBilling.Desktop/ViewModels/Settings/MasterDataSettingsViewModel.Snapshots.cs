@@ -8,7 +8,8 @@ namespace ShowroomBilling.Desktop.ViewModels.Settings;
 
 public partial class MasterDataSettingsViewModel
 {
-    private Task FetchCompaniesAsync(CancellationToken cancellationToken) => FetchAsync(
+    private Task FetchCompaniesAsync(bool announce, CancellationToken cancellationToken) => FetchAsync(
+        announce,
         busy => IsFetchingCompanies = busy,
         "companies",
         async () =>
@@ -27,7 +28,8 @@ public partial class MasterDataSettingsViewModel
                 : $"{Companies.Count} compan{(Companies.Count == 1 ? "y" : "ies")} loaded · {response.Metadata.Freshness}";
         });
 
-    private Task FetchLedgersAndVoucherTypesAsync(CancellationToken cancellationToken) => FetchAsync(
+    private Task FetchLedgersAndVoucherTypesAsync(bool announce, CancellationToken cancellationToken) => FetchAsync(
+        announce,
         busy => IsFetchingLedgers = busy,
         "ledgers & voucher types",
         async () =>
@@ -49,7 +51,8 @@ public partial class MasterDataSettingsViewModel
             return $"{LedgerOptions.Count} ledger(s) · {VoucherTypeOptions.Count} voucher type(s) · {ledgers.Metadata.Freshness}";
         });
 
-    private Task FetchStockItemsAsync(CancellationToken cancellationToken) => FetchAsync(
+    private Task FetchStockItemsAsync(bool announce, CancellationToken cancellationToken) => FetchAsync(
+        announce,
         busy => IsFetchingStockItems = busy,
         "stock items",
         async () =>
@@ -70,7 +73,7 @@ public partial class MasterDataSettingsViewModel
         busy => IsFetchingCompanies = busy,
         "companies",
         [MasterTypes.Companies],
-        FetchCompaniesAsync,
+        token => FetchCompaniesAsync(announce: true, token),
         cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanRequestLedgerRefresh))]
@@ -78,7 +81,7 @@ public partial class MasterDataSettingsViewModel
         busy => IsFetchingLedgers = busy,
         "ledgers + voucher types",
         [MasterTypes.Ledgers, MasterTypes.VoucherTypes],
-        FetchLedgersAndVoucherTypesAsync,
+        token => FetchLedgersAndVoucherTypesAsync(announce: true, token),
         cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanRequestStockItemRefresh))]
@@ -86,7 +89,7 @@ public partial class MasterDataSettingsViewModel
         busy => IsFetchingStockItems = busy,
         "stock items",
         [MasterTypes.StockItems],
-        FetchStockItemsAsync,
+        token => FetchStockItemsAsync(announce: true, token),
         cancellationToken);
 
     [RelayCommand(CanExecute = nameof(CanSetActiveCompany))]
@@ -117,14 +120,20 @@ public partial class MasterDataSettingsViewModel
         }
     }
 
-    /// <summary>Reads a cached snapshot; <paramref name="load"/> returns the status text to show.</summary>
-    private async Task FetchAsync(Action<bool> setBusy, string what, Func<Task<string>> load)
+    /// <summary>
+    /// Reads a cached snapshot; <paramref name="load"/> returns the status text to show.
+    /// <paramref name="announce"/> is off for the lists Settings reads by itself when it opens:
+    /// nobody asked for those, and their summary used to sit under whichever section was open,
+    /// Print layout included. A read that fails is said either way.
+    /// </summary>
+    private async Task FetchAsync(bool announce, Action<bool> setBusy, string what, Func<Task<string>> load)
     {
         setBusy(true);
-        _shell.StatusMessage = $"Fetching {what}…";
+        if (announce) _shell.StatusMessage = $"Fetching {what}…";
         try
         {
-            _shell.StatusMessage = await load();
+            var summary = await load();
+            if (announce) _shell.StatusMessage = summary;
         }
         catch (Exception ex)
         {

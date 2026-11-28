@@ -105,11 +105,11 @@ public partial class MasterDataSettingsViewModel : ObservableObject
     {
         var snapshotLoads = new List<Task>(capacity: 3);
         if (Companies.Count == 0)
-            snapshotLoads.Add(FetchCompaniesAsync(cancellationToken));
+            snapshotLoads.Add(FetchCompaniesAsync(announce: false, cancellationToken));
         if (LedgerOptions.Count == 0)
-            snapshotLoads.Add(FetchLedgersAndVoucherTypesAsync(cancellationToken));
+            snapshotLoads.Add(FetchLedgersAndVoucherTypesAsync(announce: false, cancellationToken));
         if (StockItems.Count == 0)
-            snapshotLoads.Add(FetchStockItemsAsync(cancellationToken));
+            snapshotLoads.Add(FetchStockItemsAsync(announce: false, cancellationToken));
 
         if (snapshotLoads.Count > 0)
             await Task.WhenAll(snapshotLoads);

@@ -181,7 +181,8 @@
                             <ColumnDefinition Width="64" />
                             <ColumnDefinition Width="64" />
                             <ColumnDefinition Width="104" />
-                            <ColumnDefinition Width="100" />
+                            <!--  Three row buttons of 30 with 4 between them.  -->
+                            <ColumnDefinition Width="102" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderText}" Text="Section" />
                         <TextBlock Grid.Column="2" Margin="0,0,10,0" HorizontalAlignment="Right" Style="{StaticResource TableHeaderText}" Text="Before" />
@@ -200,7 +201,8 @@
                          ItemsSource="{Binding SectionLayouts}"
                          Padding="0"
                          PreviewMouseLeftButtonDown="SectionList_OnPreviewMouseLeftButtonDown"
-                         PreviewMouseMove="SectionList_OnPreviewMouseMove">
+                         PreviewMouseMove="SectionList_OnPreviewMouseMove"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:PrintLayoutSectionRowViewModel}">
                             <Grid Height="46" Margin="20,0">
@@ -210,7 +212,7 @@
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="64" />
                                     <ColumnDefinition Width="104" />
-                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="102" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0"
                                            HorizontalAlignment="Left"
@@ -219,21 +221,30 @@
                                            Foreground="{StaticResource InkDisabledBrush}"
                                            Text="⠿"
                                            ToolTip="Drag to move" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
-                                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                    <Border Height="20"
-                                            Margin="8,0,0,0"
-                                            Padding="7,0"
-                                            Background="{StaticResource AccentSoftBrush}"
-                                            CornerRadius="4"
-                                            Visibility="{Binding IsBottomPinned, Converter={StaticResource BoolToVis}}">
+                                <!--  The name gives way, not the row: a long name with its Pinned chip once made every
+                                      row wider than the card and pushed the last button out of sight.  -->
+                                <shell:FillCell Grid.Column="1">
+                                    <DockPanel HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <Border Height="20"
+                                                Margin="8,0,0,0"
+                                                Padding="7,0"
+                                                Background="{StaticResource AccentSoftBrush}"
+                                                CornerRadius="4"
+                                                DockPanel.Dock="Right"
+                                                Visibility="{Binding IsBottomPinned, Converter={StaticResource BoolToVis}}">
+                                            <TextBlock VerticalAlignment="Center"
+                                                       FontSize="{DynamicResource FontSizeXs}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{StaticResource AccentInkBrush}"
+                                                       Text="Pinned" />
+                                        </Border>
                                         <TextBlock VerticalAlignment="Center"
-                                                   FontSize="{DynamicResource FontSizeXs}"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{StaticResource AccentInkBrush}"
-                                                   Text="Pinned" />
-                                    </Border>
-                                </StackPanel>
+                                                   Text="{Binding DisplayName}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding DisplayName}" />
+                                    </DockPanel>
+                                </shell:FillCell>
                                 <TextBox Grid.Column="2"
                                          Margin="0,0,8,0"
                                          HorizontalContentAlignment="Right"
