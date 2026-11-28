@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Xml.Linq;
 using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Masters;
@@ -100,12 +99,20 @@ public sealed class TallyXmlMasterSource(
 
     private static IReadOnlyList<T> ParseCollection<T>(XElement response, string elementName, Func<XElement, T?> map)
     {
-        var items = new List<T>();
-        foreach (var element in response.DescendantsAndSelf()
-            .Where(x => string.Equals(x.Name.LocalName, elementName, StringComparison.OrdinalIgnoreCase)))
+        var collection = TallyXmlClient.ReadCollection(response);
+        if (collection.Nodes().OfType<XText>().Any(text => !string.IsNullOrWhiteSpace(text.Value)))
         {
-            var item = map(element);
-            if (item is not null) items.Add(item);
+            throw new InvalidOperationException($"Tally returned text in the {elementName} list.");
+        }
+
+        var items = new List<T>();
+        foreach (var element in collection.Elements())
+        {
+            if (!string.Equals(element.Name.LocalName, elementName, StringComparison.OrdinalIgnoreCase) || map(element) is not { } item)
+            {
+                throw new InvalidOperationException($"Tally returned an invalid {elementName} list entry.");
+            }
+            items.Add(item);
         }
         return items;
     }

@@ -1,7 +1,11 @@
 using System.Text.Json;
+using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
+using ShowroomBilling.Infrastructure.Tally;
 using ShowroomBilling.Tests.Postgres;
 
 namespace ShowroomBilling.Tests;
@@ -55,6 +59,60 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
 
         // Each ingest leaves its line in the audit trail.
         Assert.Equal(2, await second.AuditEvents.CountAsync(e => e.EventType == "masters.companies.ingested"));
+    }
+
+    [Theory]
+    [InlineData("<RESPONSE>Unknown Request</RESPONSE>")]
+    [InlineData("<ENVELOPE><HEADER><STATUS>0</STATUS></HEADER><BODY><DATA><COLLECTION/></DATA></BODY></ENVELOPE>")]
+    [InlineData("<ENVELOPE><BODY><DATA><LINEERROR>Company is unavailable</LINEERROR><COLLECTION/></DATA></BODY></ENVELOPE>")]
+    [InlineData("<COLLECTION><LEDGER NAME='Cash'/></COLLECTION>")]
+    [InlineData("<COLLECTION>Unknown Request</COLLECTION>")]
+    [InlineData("<COLLECTION><COMPANY NAME='Partial result'/><COMPANY/></COLLECTION>")]
+    public async Task Failed_master_export_preserves_the_company_snapshot(string refusedReply)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = CreateDbContext();
+        var snapshots = new MasterSnapshotService(db);
+        await snapshots.IngestCompaniesAsync([new CompanySnapshotItem("Previous company", true)], ct);
+        var before = await snapshots.GetCompaniesAsync(ct);
+
+        var failed = await RefreshCompaniesAsync(snapshots, refusedReply, ct);
+        Assert.False(failed.Succeeded);
+        Assert.False(string.IsNullOrWhiteSpace(failed.ErrorMessage));
+        var after = await snapshots.GetCompaniesAsync(ct);
+        Assert.Equal(before.Companies, after.Companies);
+        Assert.Equal(before.Metadata, after.Metadata);
+    }
+
+    [Fact]
+    public async Task An_empty_company_collection_clears_the_previous_snapshot()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = CreateDbContext();
+        var snapshots = new MasterSnapshotService(db);
+        await snapshots.IngestCompaniesAsync([new CompanySnapshotItem("Previous company", true)], ct);
+
+        var empty = await RefreshCompaniesAsync(snapshots, """
+            <ENVELOPE><HEADER><STATUS>1</STATUS></HEADER><BODY>
+              <DESC><CMPINFO><COMPANY>0</COMPANY></CMPINFO></DESC>
+              <DATA><COLLECTION/></DATA>
+            </BODY></ENVELOPE>
+            """, ct);
+
+        Assert.True(empty.Succeeded);
+        Assert.Equal(0, empty.ItemCount);
+        Assert.Empty((await snapshots.GetCompaniesAsync(ct)).Companies);
+    }
+
+    private static async Task<TallyMasterRefreshResult> RefreshCompaniesAsync(
+        MasterSnapshotService snapshots, string xml, CancellationToken cancellationToken)
+    {
+        var source = new TallyXmlMasterSource(
+            new TallyPosterTests.FakeXmlClient(XElement.Parse(xml)), new TallyPosterTests.FakeCloudSettingsService());
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var refresher = new TallyMasterRefresher(source, snapshots, services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<TallyMasterRefresher>.Instance);
+        return await refresher.RefreshCompaniesAsync(cancellationToken);
     }
 
     /// <summary>The first refresh of a master on two counters at once must not fail one of them.</summary>

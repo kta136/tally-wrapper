@@ -114,6 +114,29 @@ public sealed partial class TallyXmlClient(
         return XElement.Load(reader);
     }
 
+    /// <summary>A refused export can return HTTP 200. A successful empty export still contains a collection.</summary>
+    internal static XElement ReadCollection(XElement response)
+    {
+        static bool Named(XElement element, string name) =>
+            string.Equals(element.Name.LocalName, name, StringComparison.OrdinalIgnoreCase);
+
+        var header = response.Elements().FirstOrDefault(e => Named(e, "HEADER"));
+        var status = header?.Elements().FirstOrDefault(e => Named(e, "STATUS"))?.Value.Trim();
+        var body = response.Elements().FirstOrDefault(e => Named(e, "BODY"));
+        var data = body?.Elements().FirstOrDefault(e => Named(e, "DATA"));
+        var collection = Named(response, "COLLECTION")
+            ? response
+            : data?.Elements().FirstOrDefault(e => Named(e, "COLLECTION"));
+        var error = data?.Elements().FirstOrDefault(e => Named(e, "LINEERROR"));
+        if (status == "0" || collection is null || error is not null)
+        {
+            var detail = (error ?? response).Value.Trim();
+            throw new InvalidOperationException(
+                $"Tally did not return a successful collection. Reply: '{(detail.Length > 200 ? detail[..200] : detail)}'.");
+        }
+        return collection;
+    }
+
     public static string StripInvalidXmlControlChars(string input)
     {
         var stripped = ControlChars().Replace(input, string.Empty);

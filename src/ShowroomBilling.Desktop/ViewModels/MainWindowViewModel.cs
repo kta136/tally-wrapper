@@ -86,7 +86,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
 
         TitleBar = new TitleBarViewModel
         {
-            Company = "—",
             OperatorName = Environment.UserName,
         };
         Health = new HealthClusterViewModel();
@@ -331,6 +330,7 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
         OnPropertyChanged(nameof(IsInvoiceVisible));
         OnPropertyChanged(nameof(IsBillsVisible));
         OnPropertyChanged(nameof(IsSettingsVisible));
+        OnPropertyChanged(nameof(IsLimitedVisible));
         if (value == NavTab.Bills) _ = Bills.LoadAsync();
         if (value == NavTab.Invoice) _ = Invoice.RefreshNextNumberAsync();
         if (value == NavTab.Settings) _ = Settings.RefreshOnShownAsync();
@@ -581,7 +581,6 @@ public partial class MainWindowViewModel : ObservableObject, IShellHealthHost, I
                 _suppressSettingsRefresh = false;
             }
 
-            TitleBar.Company = response.Settings.Connection.ActiveCompanyName;
             _printCoordinator.ApplyPrintSettings(response.Settings.Print, response.Settings.Masters);
 
             await _printCoordinator.RefreshPrintLayoutAsync();

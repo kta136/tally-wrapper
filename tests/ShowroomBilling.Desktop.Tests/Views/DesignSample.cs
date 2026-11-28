@@ -227,15 +227,15 @@ internal static class DesignSample
         bills.Total = bills.Items.Count;
         bills.Items[1].IsSelected = true;
 
-        // The shell's own clients are only stored; no method that would call one is invoked here.
+        // Settings can be reapplied in a view test. The print layout stays offline.
         var shell = new MainWindowViewModel(
             settingsApiClient: null!,
             healthApiClient: null!,
             mastersApiClient: null!,
             billsApiClient: null!,
             bootstrapOptions: Options.Create(new DesktopBootstrapOptions()),
-            companyProfileProvider: null!,
-            printLayoutOptionsProvider: null!,
+            companyProfileProvider: new CompanyProfileProvider(),
+            printLayoutOptionsProvider: new PrintLayoutOptionsProvider(new OfflineSettingsApi(), new OfflinePrintAssetApi()),
             printDispatcher: null!,
             printPreferences: null!,
             adminTokenStore: tokenStore,
@@ -286,7 +286,6 @@ internal static class DesignSample
         shell.Health.DatabaseDot = "ok";
         shell.Health.DatabaseLabel = "DB PROD";
         shell.Health.TallyDot = "neutral";
-        shell.TitleBar.Company = "Sample Jewellers";
         shell.StatusBar.Time = "17:57";
         shell.StatusBar.Workstation = "Workstation KK";
     }

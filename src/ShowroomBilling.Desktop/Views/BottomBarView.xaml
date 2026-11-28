@@ -54,7 +54,7 @@
             </ItemsControl>
 
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
-                <TextBlock Style="{StaticResource BarText}" Text="{Binding TitleBar.Company}" />
+                <TextBlock Style="{StaticResource BarText}" Text="{Binding Settings.Settings.Connection.ActiveCompanyName, TargetNullValue='—', FallbackValue='—'}" />
                 <TextBlock Margin="14,0,0,0" Style="{StaticResource BarText}" Text="{Binding StatusBar.FiscalYear}" />
                 <TextBlock Margin="14,0,0,0" Style="{StaticResource BarText}" Text="{Binding StatusBar.Workstation}" />
                 <TextBlock Margin="14,0,0,0" Style="{StaticResource BarText}" Text="{Binding StatusBar.Time}" />

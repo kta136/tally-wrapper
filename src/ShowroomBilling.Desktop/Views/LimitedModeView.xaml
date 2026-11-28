@@ -46,13 +46,13 @@
                                        Text="&#xE711;" />
                         </Border>
                         <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-                            <TextBlock FontSize="{StaticResource FontSizeDialogTitle}" FontWeight="SemiBold" Text="Working without the server" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource TxtHint}" Foreground="{StaticResource InkMutedBrush}" Text="Last successful sync: —" />
+                            <TextBlock FontSize="{StaticResource FontSizeDialogTitle}" FontWeight="SemiBold" Text="Billing is paused" />
+                            <TextBlock Margin="0,2,0,0" Style="{StaticResource TxtHint}" Foreground="{StaticResource InkMutedBrush}" Text="{Binding LastHealthCheckedDisplay, StringFormat='Last health check {0}'}" />
                         </StackPanel>
                         <Button Grid.Column="2"
                                 VerticalAlignment="Center"
-                                Command="{Binding RefreshHealthCommand}"
-                                Content="Retry now" />
+                                Command="{Binding OpenHealthCommand}"
+                                Content="System health" />
                     </Grid>
                     <Rectangle Grid.Row="0" Height="1" VerticalAlignment="Bottom" Fill="{StaticResource DividerBrush}" />
 
@@ -82,7 +82,7 @@
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Fill="{StaticResource OkBrush}" Style="{StaticResource BulletDot}" />
-                                <TextBlock Margin="10,0,0,0" Text="Viewing the recovery checklist and the reason it failed" />
+                                <TextBlock Margin="10,0,0,0" Text="Checking the latest results in System health" />
                             </StackPanel>
                         </StackPanel>
 
@@ -93,7 +93,7 @@
                                            FontSize="15"
                                            Foreground="{StaticResource ErrInkBrush}"
                                            Text="&#xEA39;" />
-                                <TextBlock Margin="8,0,0,0" FontWeight="SemiBold" Foreground="{StaticResource ErrInkBrush}" Text="Blocked until the server is back" />
+                                <TextBlock Margin="8,0,0,0" FontWeight="SemiBold" Foreground="{StaticResource ErrInkBrush}" Text="Unavailable while billing is paused" />
                             </StackPanel>
                             <StackPanel Style="{StaticResource BulletRow}">
                                 <Ellipse Fill="{StaticResource ErrBrush}" Style="{StaticResource BulletDot}" />
@@ -122,84 +122,12 @@
                             CornerRadius="0,0,8,8">
                         <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
                             <Button Margin="0,0,10,0" Command="{Binding OpenServerSettingsCommand}" Content="Server settings" />
-                            <Button Command="{Binding RefreshHealthCommand}" Content="Retry both" Style="{StaticResource BtnPrimary}" />
+                            <Button Command="{Binding RefreshHealthCommand}" Content="Check again" Style="{StaticResource BtnPrimary}" />
                         </StackPanel>
                     </Border>
                 </Grid>
             </Border>
 
-            <!--  What to check, in order  -->
-            <TextBlock Margin="0,0,0,10" FontSize="15" FontWeight="SemiBold" Text="Recovery checklist" />
-            <Border Style="{StaticResource Panel}">
-                <StackPanel>
-                    <Grid Margin="20,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="24"
-                                Height="24"
-                                VerticalAlignment="Top"
-                                Background="{StaticResource ErrBrush}"
-                                CornerRadius="12">
-                            <TextBlock HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       FontFamily="{StaticResource IconFontFamily}"
-                                       FontSize="10"
-                                       Foreground="{StaticResource OnFilledInkBrush}"
-                                       Text="&#xE711;" />
-                        </Border>
-                        <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                            <TextBlock FontWeight="SemiBold" Text="Cloud API unreachable" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource TxtHint}" Foreground="{StaticResource InkMutedBrush}" Text="DNS resolves · TCP connect fails · verify firewall / VPN" />
-                        </StackPanel>
-                        <TextBlock Grid.Column="2" Foreground="{StaticResource InkSoftBrush}" Text="—" />
-                    </Grid>
-                    <Rectangle Height="1" Fill="{StaticResource DividerBrush}" />
-                    <Grid Margin="20,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Border Width="24"
-                                Height="24"
-                                VerticalAlignment="Top"
-                                Background="{StaticResource ErrBrush}"
-                                CornerRadius="12">
-                            <TextBlock HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       FontFamily="{StaticResource IconFontFamily}"
-                                       FontSize="10"
-                                       Foreground="{StaticResource OnFilledInkBrush}"
-                                       Text="&#xE711;" />
-                        </Border>
-                        <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                            <TextBlock FontWeight="SemiBold" Text="Tally — no response" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource TxtHint}" Foreground="{StaticResource InkMutedBrush}" Text="Check that TallyPrime is running and the XML endpoint is reachable" />
-                        </StackPanel>
-                        <TextBlock Grid.Column="2" Foreground="{StaticResource InkSoftBrush}" Text="—" />
-                    </Grid>
-                    <Rectangle Height="1" Fill="{StaticResource DividerBrush}" />
-                    <Grid Margin="20,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Ellipse Width="24"
-                                 Height="24"
-                                 VerticalAlignment="Top"
-                                 Fill="{StaticResource BgPanelBrush}"
-                                 Stroke="{StaticResource InkSoftBrush}"
-                                 StrokeThickness="2" />
-                        <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                            <TextBlock FontWeight="SemiBold" Text="Unsaved bills held in memory" />
-                            <TextBlock Margin="0,2,0,0" Style="{StaticResource TxtHint}" Foreground="{StaticResource InkMutedBrush}" Text="Retry Save once the cloud is back to persist them" />
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

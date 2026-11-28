@@ -28,7 +28,7 @@ internal sealed class ShellHealthCoordinator(
     private static readonly TimeSpan SlowCheckInterval = TimeSpan.FromMinutes(30);
 
     private const string CloudUnavailableBanner =
-        "Cloud unavailable — the desktop can prepare bills but cannot save. Retrying…";
+        "The billing server did not answer. Check the server address and that the API service is running on the server PC.";
 
     /// <summary>
     /// The server is up and the database answers, but it has not had the

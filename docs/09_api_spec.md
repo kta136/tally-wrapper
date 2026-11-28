@@ -130,7 +130,7 @@ There is no endpoint that reserves a number by itself. A number is taken by `Cre
 
 The four reads take no query parameters. A ledger and a voucher type are `{ name }`; a company adds `isActive`, a stock item `baseUnit` and `hsnCode`. Each returns the whole current list of that master type, in name order, with `{ masterType, fetchedAtUtc, itemCount, freshness }` as metadata.
 
-A refresh stores the new snapshot and deletes the previous one of that master type in the same transaction, so a failed refresh leaves the old snapshot in place and no earlier snapshot is kept.
+A successful collection export replaces the snapshot for that master type. An empty collection stores zero items. A refused request or invalid export returns a failed result and preserves the previous items and fetch time.
 
 `POST /api/masters/refresh` body: `{ masterType? }`. `masterType` accepts `companies`, `ledgers`, `stock-items`, `voucher-types`, or null (all four). Any other value is rejected with `400`; the names are the constants in `Contracts.Masters.MasterTypes`. The API calls `ITallyMasterRefresher` synchronously — which uses `ITallyXmlClient` to query Tally, parses the response via `TallyXmlMasterSource`, and writes the snapshot via `IMasterSnapshotService`. The call blocks until Tally answers. There is no background polling, no timer, no scheduled refresh. **The only way master data updates is via this endpoint triggered by a UI click.**
 

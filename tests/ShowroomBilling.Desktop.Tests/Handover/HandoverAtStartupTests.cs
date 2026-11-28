@@ -41,7 +41,7 @@ public sealed class HandoverAtStartupTests
 
         // What the hand-over uses was there when it was let in.
         Assert.NotNull(shell.Settings.Settings);
-        Assert.Equal("Sample Company", shell.TitleBar.Company);
+        Assert.Equal("Sample Company", shell.Settings.ActiveCompanyName);
 
         // The health check coming back changes nothing about it.
         server.AnswerHealth();

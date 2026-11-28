@@ -282,7 +282,7 @@ The quality gates CI runs, how to run only one half, and where the test database
 |---|---|---|
 | Build fails copying Desktop DLLs | Desktop EXE is still running | Close `TallyWrapper.exe` / the Desktop process and rebuild |
 | API starts but DB is not ready | Missing or invalid Postgres connection string | Set the connection from the server tray, then restart the API service |
-| Desktop opens in limited mode ("Working without the server") | The server is off or unreachable, or the saved server address is wrong | Click **Server Settings**, use **Test server** or **Find server**, then **Save and restart Billing**; check that the API service is running on the server |
+| Desktop shows “Billing is paused” | The billing server is unreachable, its database is down, or a database upgrade is pending | Read the banner for the cause. For an unreachable server, check its API service and the address in **Server settings**. For a database problem, check the connection or pending migrations on the server PC. |
 | Tally push is blocked, fails, or needs reconciliation | TallyPrime closed, wrong company open, business XML rejection, or the write response was lost | Preflight blocks leave state unchanged; definite rejections can be retried after correction. For `reconciliation_required`, verify the voucher in Tally and use admin Mark as Pushed or Mark as Pending before another push. |
 | Workstation cannot reach server | Firewall/CIDR/API URL mismatch | Re-run server installer and verify `http://<server>:5107/api/health/live` |
 | Admin action returns 401 | Admin token expired or not unlocked | Press `~` in Desktop and unlock again |

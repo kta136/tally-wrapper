@@ -16,9 +16,6 @@ public partial class TitleBarViewModel : ObservableObject
         : string.Empty;
 
     [ObservableProperty]
-    private string company = "—";
-
-    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OperatorInitials))]
     private string operatorName = "—";
 

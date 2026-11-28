@@ -240,12 +240,12 @@ public sealed class TallyVoucherLookup(
         Func<XElement, bool> isTheOneAskedFor,
         string askedFor)
     {
-        EnsureCollectionAnswer(response);
+        var collection = TallyXmlClient.ReadCollection(response);
 
         var found = new List<TallyVoucherRef>();
         // By id as well, so a year's list is not searched once per voucher.
         var byId = new Dictionary<string, TallyVoucherRef>(StringComparer.Ordinal);
-        foreach (var voucher in response.DescendantsAndSelf()
+        foreach (var voucher in collection.Elements()
             .Where(x => string.Equals(x.Name.LocalName, "VOUCHER", StringComparison.OrdinalIgnoreCase)))
         {
             if (!voucher.HasElements || !isTheOneAskedFor(voucher))
@@ -318,31 +318,6 @@ public sealed class TallyVoucherLookup(
         }
 
         return found;
-    }
-
-    /// <summary>
-    /// Tally answers a request it refused or did not understand with HTTP 200
-    /// all the same (<c>STATUS</c> 0, or a bare <c>RESPONSE</c> such as
-    /// "Unknown Request"). Such an answer has no voucher in it, and reading it
-    /// as "no such voucher" would fail a push for a voucher Tally may well
-    /// hold. TallyPrime's answer to a collection request carries the
-    /// <c>COLLECTION</c> element even when nothing matched.
-    /// </summary>
-    private static void EnsureCollectionAnswer(XElement response)
-    {
-        var status = response.Elements()
-            .FirstOrDefault(x => string.Equals(x.Name.LocalName, "HEADER", StringComparison.OrdinalIgnoreCase))
-            ?.Elements()
-            .FirstOrDefault(x => string.Equals(x.Name.LocalName, "STATUS", StringComparison.OrdinalIgnoreCase))
-            ?.Value.Trim();
-        var isCollection = response.DescendantsAndSelf()
-            .Any(x => string.Equals(x.Name.LocalName, "COLLECTION", StringComparison.OrdinalIgnoreCase));
-        if (status == "0" || !isCollection)
-        {
-            var text = response.Value.Trim();
-            throw new InvalidOperationException(
-                $"Tally did not answer the voucher read with a list of vouchers: '{(text.Length > 200 ? text[..200] : text)}'.");
-        }
     }
 
     /// <summary>1 April to 31 March of an Indian fiscal-year label such as <c>2026-27</c>.</summary>

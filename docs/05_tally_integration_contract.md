@@ -199,7 +199,7 @@ From the first run against a live company (26 November 2026):
 - Simplest possible topology: a click is a single HTTP request end-to-end.
 - No queue to drain, no poll interval to tune, no bridge to monitor.
 - If Tally is down, the click fails loudly; the operator sees the error immediately and tries again later. No silent queueing.
-- If the API is down, the desktop surfaces "Cloud unavailable"; no work is lost — bills stay in `pending`.
+- If the API is down, the Desktop reports that the billing server did not answer and pauses billing.
 
 ### Crash recovery and uncertain writes
 
@@ -245,7 +245,7 @@ There is no automatic reconciliation path; the operator is the reconciler.
 | Scenario | Expected behavior |
 |---|---|
 | Tally down or wrong active company, API up | Push is blocked by preflight with `503 Tally unavailable`; the bill remains `pending`/`failed`/`posted` as it was. Operator opens Tally or the correct company, then retries. |
-| API down | Desktop shows "Cloud unavailable"; bills stay in `pending` on whatever was last persisted; clicking Push is disabled. |
+| API down | The Desktop reports that the billing server did not answer. Push is unavailable and saved bills retain their last persisted state. |
 | API crashes mid-post, or loses the database before it can record the outcome | Bill is left in `posting`. `StuckPostingRecoveryHostedService`, which sweeps at API start and every 5 minutes after, moves it to `reconciliation_required` with an audit breadcrumb once the claim is older than 10 minutes (longer than any push can run, so a push still running in another API process on the same database is never touched). No restart is needed. Operator verifies Tally before resolving it. |
 | Caller disconnects mid-post | The push keeps its own 30 s settle budget and records the known or unknown outcome; it is never left in `posting`. A cancellation noticed before anything is sent restores the prior state. |
 | Desktop down during a push | That push fails; no correctness lost (the API either completed the post or crashed; either way recovery is deterministic). |

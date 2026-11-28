@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Tests.TestSupport;
@@ -141,16 +142,32 @@ public sealed class InvoiceAmountBoxViewTests
         Assert.Equal("149.99", text);
     }
 
-    /// <summary>A key at a time, each one inserted where the caret is, as typing does.</summary>
+    [Fact]
+    public void Typing_a_five_digit_final_amount_keeps_the_digits_in_order()
+    {
+        var (text, final, grandTotal) = WpfTestHost.Run(() =>
+        {
+            var (invoice, view) = HostedInvoice();
+            invoice.Lines[0].DiamondRate = 10000m;
+            WpfTestHost.DrainDispatcher();
+            var box = BoxBoundTo(view, nameof(InvoiceViewModel.FinalAmount));
+            TypeKeys(box, "12345");
+            Commit(box);
+            return (box.Text, invoice.FinalAmount, invoice.GrandTotal);
+        });
+
+        Assert.Equal("12,345", text);
+        Assert.Equal(12345m, final);
+        Assert.Equal(final, grandTotal);
+    }
+
+    /// <summary>WPF handles each input event, including caret movement after formatting.</summary>
     private static void TypeKeys(TextBox box, string keys)
     {
         box.SelectAll();
-        box.SelectedText = string.Empty;
         foreach (var key in keys)
         {
-            box.Select(box.CaretIndex, 0);
-            box.SelectedText = key.ToString();
-            box.CaretIndex += 1;
+            TextCompositionManager.StartComposition(new TextComposition(InputManager.Current, box, key.ToString()));
             WpfTestHost.DrainDispatcher();
         }
     }

@@ -31,6 +31,25 @@ public sealed class ViewSmokeTests
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
+    [Fact]
+    public void Bottom_bar_follows_the_active_company_when_settings_reload()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var shell = DesignSample.CreateShell();
+            var settings = shell.Settings;
+            var view = new BottomBarView { DataContext = shell };
+            Layout(view);
+            var label = Assert.Single(Descendants(view).OfType<TextBlock>(), block => block.Text == settings.ActiveCompanyName);
+            var current = settings.Settings!;
+            var changed = current with { Connection = current.Connection with { ActiveCompanyName = "Second company" } };
+            settings.ApplyEffectiveSettings(new("cloud", "Updated", changed, [], [], DateTimeOffset.UtcNow));
+            WpfTestHost.DrainDispatcher();
+            Assert.Equal("Second company", label.Text);
+            return true;
+        });
+    }
+
     private static readonly Size ViewSize = new(1280, 800);
 
     private static List<string> LoadEveryView()

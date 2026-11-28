@@ -135,7 +135,7 @@ Global (registered in the app shell):
 - `Ctrl+Shift+N` new bill (Invoice screen active; in the shortcuts list and on its button, not in the bottom bar)
 - `Ctrl+S` saves the active screen: Save Bill on Invoice, Save in Settings. While a bill is being saved or loaded the Invoice form takes no keys or clicks (`shell:InputLock`): what is on the form at Save is what is saved, and the form then empties.
 
-The bottom bar lists the keys of the open screen:
+The bottom bar shows the active Tally company from the last applied Settings response, including a company selected while Billing is open. It lists the keys of the open screen:
 
 - Invoice: `Tab Next field · Shift+Enter Back · F3 Quick add · Ctrl+N New row · Ctrl+Del Remove row · F9 Print estimate · Ctrl+S Save`
 - Bills: `Enter Open details · Ctrl+R Retry push · Ctrl+Shift+R Repost · Ctrl+Shift+E Edit · Ctrl+P Print · PgUp / PgDn Page` (`F5` refreshes and is in the shortcuts list)
@@ -164,9 +164,9 @@ Two operating states, driven by whether the API is reachable. Tally itself is on
 | State | Banner | Health cluster |
 |---|---|---|
 | healthy | none | green dot on Cloud and Database; neutral dot on Tally |
-| limited | error banner | red dots |
+| limited | error banner with the cause | Cloud, Database and Tally each show the result of their own check |
 
-In `limited`, Invoice and Bills are hidden and the main region shows the Limited-mode card, whose **Server settings** button opens Settings → Server. WPF enters `limited` in three cases, each with its own banner: the server does not answer, the server cannot reach its database, and the database has not had this build's migrations ("Database upgrade needed", with the database pill saying "Database behind").
+In `limited`, Invoice and Bills are hidden and the main region shows the Limited-mode card, whose **Server settings** button opens Settings → Server. WPF enters `limited` in three cases, each with its own banner: the server does not answer, the server cannot reach its database, and the database has not had this build's migrations ("Database upgrade needed", with the database pill saying "Database behind"). The card shows the time of the last health check. **System health** opens its results and **Check again** retries.
 
 The one banner under the top bar is `BannerView`: a note (information, can be dismissed) or a problem (cannot).
 
