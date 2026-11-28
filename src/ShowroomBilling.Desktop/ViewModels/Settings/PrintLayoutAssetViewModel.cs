@@ -19,6 +19,10 @@ public partial class PrintLayoutAssetViewModel : ObservableObject
     internal string Kind { get; }
     public string Title { get; }
     public bool IsWatermark => Kind == PrintAssetKinds.Watermark;
+
+    // A logo or signature is moved within its own place on the bill; the watermark is placed on the page.
+    public string OffsetXLabel => IsWatermark ? "X, cm" : "Offset X, cm";
+    public string OffsetYLabel => IsWatermark ? "Y, cm" : "Offset Y, cm";
     public bool HasAsset => AssetId.HasValue || (IsWatermark && PendingBytes is not null);
     public IAsyncRelayCommand UploadCommand { get; }
     public IAsyncRelayCommand DeleteCommand { get; }

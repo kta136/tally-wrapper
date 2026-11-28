@@ -248,7 +248,16 @@ public sealed class InvoiceDiamondViewModelTests
         line.DiamondRate = 3500m;
         InvoicePrintSnapshot? saved = null;
         vm.SaveCompletedReadyForPrint += (_, snapshot) => saved = snapshot;
-        await vm.SaveDraftCommand.ExecuteAsync(null);
+        var serverAnswers = new TaskCompletionSource();
+        api.CreateWaitsFor = serverAnswers.Task;
+
+        var save = vm.SaveDraftCommand.ExecuteAsync(null);
+        // The bill is on its way and the server has not answered: what is typed
+        // now is on the form when the print is put together, but not in the bill.
+        Assert.Single(api.Creates);
+        vm.PartyName = "Typed During Save";
+        serverAnswers.SetResult();
+        await save;
 
         vm.PartyName = "Typed After Save";
         var content = saved!.ToPrintContent(new ShowroomBilling.Printing.CompanyProfile("Acme", null, null, "", null, null, null, null, null));

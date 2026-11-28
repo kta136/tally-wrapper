@@ -32,6 +32,9 @@ internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
     public List<CreateBillDraftRequest> Creates { get; } = [];
     public CreateBillDraftRequest? LastCreate => Creates.LastOrDefault();
     public int FailNextCreates { get; set; }
+
+    /// <summary>When set, a create answers only once this completes, so a test can act while the save is in flight.</summary>
+    public Task? CreateWaitsFor { get; set; }
     public List<(Guid BillId, UpdateBillDraftRequest Request, string? AdminToken)> Updates { get; } = [];
 
     // Admin actions
@@ -136,7 +139,14 @@ internal sealed class FakeBillsApi : IBillsApiClient, ISyntheticBatchApiClient
                 rawBody: null);
         }
 
-        return Task.FromResult(Bill(Guid.NewGuid(), BillStates.Pending, request.Payload));
+        var created = Bill(Guid.NewGuid(), BillStates.Pending, request.Payload);
+        return CreateWaitsFor is { } gate ? AnswerAfter(gate, created) : Task.FromResult(created);
+
+        static async Task<BillResponse> AnswerAfter(Task gate, BillResponse bill)
+        {
+            await gate;
+            return bill;
+        }
     }
 
     public Task<BillResponse> UpdateDraftAsync(Guid billId, UpdateBillDraftRequest request, string? adminToken = null, CancellationToken cancellationToken = default)
