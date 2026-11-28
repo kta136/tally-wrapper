@@ -1,5 +1,6 @@
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Setup;
 
 namespace ShowroomBilling.Desktop.Tests;
@@ -110,52 +111,27 @@ public sealed class SetupWizardViewModelTests
     }
 
     private static EffectiveSettingsResponse Settings(bool requiresInitialSetup) =>
-        new(
-            "cloud",
-            "settings",
-            new EffectiveCloudSettingsDto(
-                new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Development Company"),
-                new NumberingSettingsDto("DEV-", string.Empty, 4),
-                new PrintSettingsDto("Tally Wrapper", null, null, null, null, "India", null, null, null, null, null, true, false, false, 11, 9),
-                new LedgerMappingsDto("Sales", "Cash", "Card / UPI", "CGST", "SGST", "Round Off", "Discount", "Sales"),
-                new MasterDataSettingsDto("[]", "[]")),
-            [],
-            [],
-            DateTimeOffset.UtcNow,
-            requiresInitialSetup);
+        TestSettings.Create("Tally Wrapper", requiresInitialSetup: requiresInitialSetup);
 
-    private sealed class FakeSettingsApiClient(EffectiveSettingsResponse response) : ISettingsApiClient
+    private sealed class FakeSettingsApiClient(EffectiveSettingsResponse response) : SettingsApiStub
     {
         public EffectiveCloudSettingsDto? LastSaved { get; private set; }
 
         public int GetCount { get; private set; }
 
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
+        public override Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
         {
             GetCount++;
             return Task.FromResult(response);
         }
 
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
+        public override Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
             UpdateEffectiveSettingsRequest request,
             CancellationToken cancellationToken = default)
         {
             LastSaved = request.Settings;
             return Task.FromResult(new SettingsUpdateResponse("cloud", "saved", ["connection"], DateTimeOffset.UtcNow));
         }
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
-            SelectActiveCompanyRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
-            UpdatePrintLayoutRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     private sealed class FakeSetupWizardCompletionStore : ISetupWizardCompletionStore

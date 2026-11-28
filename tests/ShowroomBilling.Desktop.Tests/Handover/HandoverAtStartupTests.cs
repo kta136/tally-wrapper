@@ -1,4 +1,3 @@
-using System.IO;
 using Microsoft.Extensions.Options;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Desktop.Configuration;
@@ -119,10 +118,7 @@ public sealed class HandoverAtStartupTests
         var tokens = new AdminTokenStore();
         var admin = new AdminUnlockViewModel(adminApi: null!, tokens);
         var dialogs = new DialogService(tokens, admin);
-        var settings = OfflineApi.Settings(
-            server,
-            handoverKeys: new HandoverKeyStore(Path.Combine(TestAppData.Root, "keys", Guid.NewGuid().ToString("N"), HandoverKeyStore.FileName)),
-            dialogs: dialogs);
+        var settings = OfflineApi.Settings(server, dialogs: dialogs);
         var billsApi = new FakeBillsApi();
 
         return new MainWindowViewModel(
@@ -133,8 +129,8 @@ public sealed class HandoverAtStartupTests
             bootstrapOptions: Options.Create(new DesktopBootstrapOptions()),
             companyProfileProvider: new CompanyProfileProvider(),
             printLayoutOptionsProvider: new PrintLayoutOptionsProvider(server, new OfflinePrintAssetApi()),
-            printDispatcher: new NoPrinters(),
-            printPreferences: new NoPreferences(),
+            printDispatcher: new StubPrintDispatcher(),
+            printPreferences: new FakePrintPreferencesStore(),
             adminTokenStore: tokens,
             dialogs: dialogs,
             invoice: new InvoiceViewModel(billsApi, FakeNumberingApi.Offline(), dialogs, settings),
@@ -151,18 +147,15 @@ public sealed class HandoverAtStartupTests
     /// The server as the shell's start-up meets it: settings at once (or not at all), and a
     /// health check that stays out until the test answers it, as one that waits for Tally does.
     /// </summary>
-    private sealed class Server(EffectiveSettingsResponse? settings) : ISettingsApiClient, IHealthApiClient
+    private sealed class Server(EffectiveSettingsResponse? settings) : OfflineSettingsApi(settings), IHealthApiClient
     {
+        private readonly bool isOnline = settings is not null;
         private readonly TaskCompletionSource _health = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly OfflineSettingsApi _offline = new();
         private int _healthChecksOut;
 
         public int HealthChecksOut => Volatile.Read(ref _healthChecksOut);
 
         public void AnswerHealth() => _health.TrySetResult();
-
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
-            => settings is null ? _offline.GetEffectiveSettingsAsync(cancellationToken) : Task.FromResult(settings);
 
         public async Task<SystemHealthSnapshot> GetSnapshotAsync(
             bool includeTallyCompany,
@@ -171,21 +164,8 @@ public sealed class HandoverAtStartupTests
         {
             Interlocked.Increment(ref _healthChecksOut);
             await _health.Task;
-            return settings is null ? SystemHealthSnapshot.Unreachable() : new SystemHealthSnapshot(true, null, null);
+            return isOnline ? new SystemHealthSnapshot(true, null, null) : SystemHealthSnapshot.Unreachable();
         }
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(UpdateEffectiveSettingsRequest request, CancellationToken cancellationToken = default)
-            => _offline.SaveEffectiveSettingsAsync(request, cancellationToken);
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(SelectActiveCompanyRequest request, CancellationToken cancellationToken = default)
-            => _offline.SelectActiveCompanyAsync(request, cancellationToken);
-
-        // The layout does not come; the shell prints with the one it has, as on a server without one.
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default)
-            => _offline.GetPrintLayoutAsync(cancellationToken);
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(UpdatePrintLayoutRequest request, CancellationToken cancellationToken = default)
-            => _offline.UpdatePrintLayoutAsync(request, cancellationToken);
     }
 
     private sealed class SetupMarker(bool complete) : ISetupWizardCompletionStore
@@ -193,39 +173,5 @@ public sealed class HandoverAtStartupTests
         public bool IsComplete() => complete;
 
         public Task MarkCompleteAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
-
-    private sealed class NoPrinters : IPrintDispatcher
-    {
-        public IReadOnlyList<string> AvailablePrinters() => [];
-        public string? DefaultPrinter() => null;
-        public void RefreshPrinters() { }
-        public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
-        public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null) => false;
-        public byte[] GeneratePdf(PrintDocumentOptions options) => [];
-        public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => [];
-        public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null) => false;
-        public bool PrintToPrinter(IReadOnlyList<PrintDocumentOptions> options, string printerName, PrintJobSettings? settings = null) => false;
-    }
-
-    private sealed class NoPreferences : IPrintPreferencesStore
-    {
-        public event EventHandler<double>? PrintPreviewZoomPercentChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public string? LastPrinterName => null;
-        public string? LastPdfDirectory => null;
-        public bool DirectPrintAfterSave => false;
-        public double PrintPreviewZoomPercent => 100;
-        public PrintJobSettings PrintJobSettings => PrintJobSettings.Default;
-
-        public void SaveLastPrinter(string printerName) { }
-        public void SaveLastPdfDirectory(string directory) { }
-        public void SaveDirectPrintAfterSave(bool value) { }
-        public void SavePrintPreviewZoomPercent(double value) { }
-        public void SavePrintJobSettings(PrintJobSettings settings) { }
     }
 }

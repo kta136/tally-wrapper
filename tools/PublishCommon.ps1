@@ -14,8 +14,6 @@ function Get-PublishArguments {
     param(
         [Parameter(Mandatory)][string]$Configuration,
         [Parameter(Mandatory)][string]$Runtime,
-        # One compressed .exe. Without it the output is a folder of files.
-        [switch]$SingleFile,
         # Leave appsettings*.json out of the package (the server API is configured by its installer).
         [switch]$ExcludeAppSettings
     )
@@ -25,18 +23,11 @@ function Get-PublishArguments {
         '-r', $Runtime,
         '--self-contained', 'true',
         '-p:PublishReadyToRun=true',
-        '-p:DebugType=embedded'
+        '-p:DebugType=embedded',
+        '-p:PublishSingleFile=true',
+        '-p:IncludeNativeLibrariesForSelfExtract=true',
+        '-p:EnableCompressionInSingleFile=true'
     )
-    if ($SingleFile) {
-        $arguments += @(
-            '-p:PublishSingleFile=true',
-            '-p:IncludeNativeLibrariesForSelfExtract=true',
-            '-p:EnableCompressionInSingleFile=true'
-        )
-    }
-    else {
-        $arguments += '-p:PublishSingleFile=false'
-    }
     if ($ExcludeAppSettings) {
         $arguments += '-p:ShowroomBillingExcludeAppSettings=true'
     }

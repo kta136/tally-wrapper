@@ -227,50 +227,26 @@ public sealed class SettingsReloadTests
         DefaultStockMappingLabel: string.Empty);
 
     private static EffectiveSettingsResponse Response(string itemsJson, string karatsJson = "[]") =>
-        new(
-            "cloud",
-            "settings",
-            new EffectiveCloudSettingsDto(
-                new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Development Company"),
-                new NumberingSettingsDto("DEV-", string.Empty, 4),
-                new PrintSettingsDto("Shop", null, null, null, null, "India", null, null, null, null, null, true, false, false, 11, 9),
-                new LedgerMappingsDto("Sales", "Cash", "Card / UPI", "CGST", "SGST", "Round Off", "Discount", "Sales"),
-                new MasterDataSettingsDto(itemsJson, karatsJson)),
-            [],
-            [],
-            DateTimeOffset.UtcNow);
+        TestSettings.Create("Shop", itemsJson, karatsJson);
 
-    private sealed class FakeSettingsApi(EffectiveSettingsResponse response) : ISettingsApiClient
+    private sealed class FakeSettingsApi(EffectiveSettingsResponse response) : SettingsApiStub
     {
         public EffectiveSettingsResponse Response { get; set; } = response;
         public int GetCount { get; private set; }
         public int SaveCount { get; private set; }
 
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
+        public override Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
         {
             GetCount++;
             return Task.FromResult(Response);
         }
 
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
+        public override Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
             UpdateEffectiveSettingsRequest request,
             CancellationToken cancellationToken = default)
         {
             SaveCount++;
             return Task.FromResult(new SettingsUpdateResponse("cloud", "settings", ["masters"], DateTimeOffset.UtcNow));
         }
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
-            SelectActiveCompanyRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
-            UpdatePrintLayoutRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

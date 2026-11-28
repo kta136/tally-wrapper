@@ -16,7 +16,6 @@
             </ResourceDictionary.MergedDictionaries>
 
             <Style x:Key="Head" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
-                <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="Margin" Value="12,0" />
             </Style>
             <Style x:Key="Cell" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
@@ -29,10 +28,9 @@
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="LineHeight" Value="20" />
             </Style>
-            <Style x:Key="BannerGlyph" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+            <Style x:Key="TallyCheckBannerGlyph" BasedOn="{StaticResource BannerGlyph}" TargetType="TextBlock">
                 <Setter Property="Margin" Value="0,2,12,0" />
                 <Setter Property="VerticalAlignment" Value="Top" />
-                <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
                 <Setter Property="FontSize" Value="16" />
             </Style>
             <!--  The table's columns, shared by the heading and every row.  -->
@@ -68,17 +66,14 @@
 
         <!--  Tally could not be asked  -->
         <StackPanel Margin="0,0,0,16" Visibility="{Binding IsFailed, Converter={StaticResource BoolToVis}}">
-            <Border Margin="0" Style="{StaticResource AdminBannerErr}">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Left"
-                               Foreground="{StaticResource ErrInkBrush}"
-                               Style="{StaticResource BannerGlyph}"
-                               Text="&#xEA39;" />
-                    <TextBlock Foreground="{StaticResource ErrInkBrush}"
-                               Style="{StaticResource BannerText}"
-                               shell:RichText.Markup="{Binding FailureMarkup}" />
-                </DockPanel>
-            </Border>
+            <shell:InlineBanner Margin="0"
+                               Style="{StaticResource AdminBannerErr}"
+                               GlyphStyle="{StaticResource TallyCheckBannerGlyph}"
+                               Glyph="&#xEA39;">
+                <TextBlock Foreground="{StaticResource ErrInkBrush}"
+                           Style="{StaticResource BannerText}"
+                           shell:RichText.Markup="{Binding FailureMarkup}" />
+            </shell:InlineBanner>
             <Button Margin="0,12,0,0"
                     HorizontalAlignment="Left"
                     Command="{Binding CompareCommand}"
@@ -86,48 +81,34 @@
         </StackPanel>
 
         <!--  Everything matches  -->
-        <Border Margin="0,0,0,16"
-                Style="{StaticResource AdminBannerOk}"
-                Visibility="{Binding ShowsAllMatch, Converter={StaticResource BoolToVis}}">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Left"
-                           Foreground="{StaticResource OkInkBrush}"
-                           Style="{StaticResource BannerGlyph}"
-                           Text="&#xE73E;" />
-                <TextBlock Foreground="{StaticResource OkInkBrush}"
-                           Style="{StaticResource BannerText}"
-                           shell:RichText.Markup="{Binding AllMatchMarkup}" />
-            </DockPanel>
-        </Border>
+        <shell:InlineBanner Margin="0,0,0,16"
+                           Style="{StaticResource AdminBannerOk}"
+                           Visibility="{Binding ShowsAllMatch, Converter={StaticResource BoolToVis}}"
+                           GlyphStyle="{StaticResource TallyCheckBannerGlyph}">
+            <TextBlock Foreground="{StaticResource OkInkBrush}"
+                       Style="{StaticResource BannerText}"
+                       shell:RichText.Markup="{Binding AllMatchMarkup}" />
+        </shell:InlineBanner>
 
         <!--  Bills of another company, a push made while comparing  -->
-        <Border Margin="0,0,0,16"
-                Style="{StaticResource AdminBannerInfo}"
-                Visibility="{Binding HasResultNote, Converter={StaticResource BoolToVis}}">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Left"
-                           Foreground="{StaticResource InfoInkBrush}"
-                           Style="{StaticResource BannerGlyph}"
-                           Text="&#xE946;" />
-                <TextBlock Foreground="{StaticResource InfoInkBrush}"
-                           Style="{StaticResource BannerText}"
-                           Text="{Binding ResultNote}" />
-            </DockPanel>
-        </Border>
+        <shell:InlineBanner Margin="0,0,0,16"
+                           Style="{StaticResource AdminBannerInfo}"
+                           Visibility="{Binding HasResultNote, Converter={StaticResource BoolToVis}}"
+                           GlyphStyle="{StaticResource TallyCheckBannerGlyph}">
+            <TextBlock Foreground="{StaticResource InfoInkBrush}"
+                       Style="{StaticResource BannerText}"
+                       Text="{Binding ResultNote}" />
+        </shell:InlineBanner>
 
         <!--  What differs  -->
         <StackPanel Visibility="{Binding ShowsDifferences, Converter={StaticResource BoolToVis}}">
-            <Border Margin="0,0,0,16" Style="{StaticResource AdminBannerWarn}">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Left"
-                               Foreground="{StaticResource WarnInkBrush}"
-                               Style="{StaticResource BannerGlyph}"
-                               Text="&#xE7BA;" />
-                    <TextBlock Foreground="{StaticResource WarnInkBrush}"
-                               Style="{StaticResource BannerText}"
-                               shell:RichText.Markup="{Binding SummaryMarkup}" />
-                </DockPanel>
-            </Border>
+            <shell:InlineBanner Margin="0,0,0,16"
+                               Style="{StaticResource AdminBannerWarn}"
+                               GlyphStyle="{StaticResource TallyCheckBannerGlyph}">
+                <TextBlock Foreground="{StaticResource WarnInkBrush}"
+                           Style="{StaticResource BannerText}"
+                           shell:RichText.Markup="{Binding SummaryMarkup}" />
+            </shell:InlineBanner>
 
             <ItemsControl Margin="0,0,0,8" ItemsSource="{Binding Filters}">
                 <ItemsControl.ItemsPanel>

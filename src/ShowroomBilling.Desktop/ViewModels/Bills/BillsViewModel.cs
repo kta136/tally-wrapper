@@ -191,8 +191,6 @@ public partial class BillsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(FooterNotice), nameof(FooterNoticeTone), nameof(HasFooterNotice))]
     private string tallyPushBlockReason = "Tally connection has not been checked yet.";
 
-    [ObservableProperty] private string statusMessage = string.Empty;
-
     /// <summary>What the last action said, with its tone; see <see cref="Say"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FooterNotice), nameof(FooterNoticeTone), nameof(HasFooterNotice))]
@@ -433,7 +431,6 @@ public partial class BillsViewModel : ObservableObject
         // (previous page or filter) must not overwrite a newer one.
         var generation = ++_loadGeneration;
         IsLoading = true;
-        StatusMessage = "Loading bills…";
         try
         {
             var state = StateFilter == "All" ? null : StateFilter;
@@ -467,16 +464,9 @@ public partial class BillsViewModel : ObservableObject
             }
 
             RefreshSelectionState();
-
-            StatusMessage = list.Total == 0
-                ? "No bills found."
-                : list.HasMore == true
-                    ? $"Showing {Skip + 1}–{Skip + Items.Count}"
-                    : $"Showing {Skip + 1}–{Skip + Items.Count} of {list.Total}";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Load failed: {ApiResponseReader.FormatError(ex)}";
             if (generation == _loadGeneration)
             {
                 LoadError = ApiResponseReader.FormatError(ex);
@@ -669,14 +659,9 @@ public partial class BillsViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Says something on the status line at the foot of the tab, where it stays until the next
-    /// thing is said. <see cref="StatusMessage"/> is not that line: a load writes its own
-    /// summary there straight after an action, and nothing on screen shows it.
-    /// </summary>
+    /// <summary>Keeps the last action and its tone visible in the Bills footer across list reloads.</summary>
     private void Say(string message, string tone = BillStateDisplay.ToneNeutral)
     {
-        StatusMessage = message;
         Notice = message;
         NoticeTone = tone;
     }

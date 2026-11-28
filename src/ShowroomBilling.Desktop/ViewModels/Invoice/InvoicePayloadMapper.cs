@@ -83,7 +83,6 @@ internal static class InvoicePayloadMapper
         string invoiceNumber,
         BillPayloadDto payload,
         string payment,
-        decimal? rate24Kt,
         CompanyProfile company,
         IReadOnlyList<KaratMasterEntry>? karatMappings = null) => new(
             InvoiceNumber: invoiceNumber,
@@ -93,7 +92,6 @@ internal static class InvoicePayloadMapper
             PartyPhone: payload.PartyPhone,
             PartyAddress: payload.PartyAddress,
             Payment: payment,
-            Rate24Kt: rate24Kt,
             Lines: PrintLineSubstitution.WithTallyMappedItemNames(payload.Lines, karatMappings),
             Totals: payload.Totals,
             Notes: payload.Notes,

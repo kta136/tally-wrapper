@@ -7,6 +7,7 @@ using ShowroomBilling.Application.Settings;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Infrastructure;
 using ShowroomBilling.Infrastructure.Tally;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests;
 
@@ -65,42 +66,5 @@ public sealed class TallyXmlRetryPolicyTests
                 };
             return Task.FromResult(response);
         }
-    }
-
-    private sealed class FakeCloudSettingsService : ICloudSettingsService
-    {
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new EffectiveSettingsResponse(
-                "cloud",
-                "test",
-                new EffectiveCloudSettingsDto(
-                    new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Acme Jewellers"),
-                    new NumberingSettingsDto("DEV-", "", 4),
-                    new PrintSettingsDto("Acme", null, null, null, null, null, null, null, null, null, null, true, false, false, 11, 9),
-                    new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales"),
-                    new MasterDataSettingsDto("[]", "[]")),
-                [],
-                [],
-                DateTimeOffset.UtcNow));
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(UpdateEffectiveSettingsRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(string companyName, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(UpdatePrintLayoutRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<ShowroomBilling.Contracts.Bills.BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<ShowroomBilling.Contracts.Bills.BatchHoursResponse> UpdateBatchHoursAsync(
-            ShowroomBilling.Contracts.Bills.UpdateBatchHoursRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

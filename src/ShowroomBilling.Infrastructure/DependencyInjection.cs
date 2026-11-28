@@ -28,8 +28,8 @@ public static class DependencyInjection
 
     /// <summary>
     /// Applies the WAN-friendly defaults (keep 2 warm connections, 30 s TCP
-    /// keepalive) only where the connection string does not set them, so an
-    /// explicit value from OpenBao / PgBouncer configuration is honoured.
+    /// keepalive) only where the connection string does not set them, preserving
+    /// explicit pool and keepalive settings supplied by the operator.
     /// </summary>
     public static string ApplyPoolDefaults(string connectionString)
     {

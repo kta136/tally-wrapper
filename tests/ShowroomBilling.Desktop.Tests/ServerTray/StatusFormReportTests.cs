@@ -48,11 +48,11 @@ public sealed class StatusFormReportTests
     {
         var report = Report(
             HttpStatusCode.OK,
-            """{"provider":"PostgreSQL","maskedConnectionString":"Host=db;Database=tally_wrapper_prod;Password=***","requiresApiRestart":true}""");
+            """{"provider":"PostgreSQL","maskedConnectionString":"Host=db;Database=sample_billing;Password=***","requiresApiRestart":true}""");
 
         Assert.Equal(MessageBoxIcon.Information, report.Icon);
         Assert.Equal(
-            "Test database succeeded.\r\n\r\nStored: Host=db;Database=tally_wrapper_prod;Password=***"
+            "Test database succeeded.\r\n\r\nStored: Host=db;Database=sample_billing;Password=***"
             + "\r\n\r\nThe server starts using it when the Windows service restarts.",
             report.Message);
     }

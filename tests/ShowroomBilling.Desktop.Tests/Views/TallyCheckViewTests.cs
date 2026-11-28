@@ -110,7 +110,7 @@ public sealed class TallyCheckViewTests
         Size? size = null)
     {
         var canvasSize = size ?? Canvas;
-        try
+        ViewSnapshot.Capture(problems, bindingErrors, name, canvasSize, () =>
         {
             var shell = DesignSample.CreateShell(settings: DesignSample.CreateSettings(tallyCheckApi: api));
             DesignSample.MakeHealthy(shell);
@@ -120,23 +120,7 @@ public sealed class TallyCheckViewTests
             var view = new SettingsView { DataContext = shell.Settings };
             var root = new Grid { DataContext = shell, Width = canvasSize.Width, Height = canvasSize.Height };
             root.Children.Add(view);
-            var window = new Window { Content = root, DataContext = shell };
-            for (var pass = 0; pass < 3; pass++)
-            {
-                root.Measure(canvasSize);
-                root.Arrange(new Rect(canvasSize));
-                root.UpdateLayout();
-                WpfTestHost.DrainDispatcher();
-            }
-
-            ViewSnapshot.Save(root, name);
-            window.Content = null;
-        }
-        catch (Exception ex)
-        {
-            problems.Add($"{name}: {ex.GetBaseException().Message}");
-        }
-
-        problems.AddRange(bindingErrors.Take().Select(error => $"{name}: {error}"));
+            return root;
+        });
     }
 }

@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Desktop.ViewModels.Settings;
 
@@ -81,27 +82,5 @@ public sealed class PrintPreviewZoomPreferenceTests
 
         Assert.Equal(50, vm.PreviewZoomPercent);
         Assert.Equal(80, preferences.PrintPreviewZoomPercent);
-    }
-
-    private sealed class FakePrintPreferencesStore : IPrintPreferencesStore
-    {
-        public event EventHandler<double>? PrintPreviewZoomPercentChanged;
-
-        public string? LastPrinterName { get; private set; }
-        public string? LastPdfDirectory { get; private set; }
-        public bool DirectPrintAfterSave { get; private set; }
-        public double PrintPreviewZoomPercent { get; set; } = 100;
-        public PrintJobSettings PrintJobSettings { get; private set; } = PrintJobSettings.Default;
-
-        public void SaveLastPrinter(string printerName) => LastPrinterName = printerName;
-        public void SaveLastPdfDirectory(string directory) => LastPdfDirectory = directory;
-        public void SaveDirectPrintAfterSave(bool value) => DirectPrintAfterSave = value;
-        public void SavePrintJobSettings(PrintJobSettings settings) => PrintJobSettings = settings;
-
-        public void SavePrintPreviewZoomPercent(double value)
-        {
-            PrintPreviewZoomPercent = value;
-            PrintPreviewZoomPercentChanged?.Invoke(this, value);
-        }
     }
 }

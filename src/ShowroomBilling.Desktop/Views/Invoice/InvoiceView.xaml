@@ -32,11 +32,7 @@
         <GridLength x:Key="ColRemove">32</GridLength>
 
         <!--  Column heading text: 12.5 px semibold on the grey band.  -->
-        <Style x:Key="HeadText" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="10,0" />
-        </Style>
-        <Style x:Key="HeadTextRight" BasedOn="{StaticResource HeadText}" TargetType="TextBlock">
+        <Style x:Key="HeadTextRight" BasedOn="{StaticResource TableHeaderCell}" TargetType="TextBlock">
             <Setter Property="TextAlignment" Value="Right" />
             <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="Margin" Value="4,0,10,0" />
@@ -346,17 +342,8 @@
                                VerticalAlignment="Center"
                                FontSize="{DynamicResource FontSizeLabel}"
                                Foreground="{StaticResource InkMutedBrush}"
-                               TextTrimming="CharacterEllipsis">
-                        <TextBlock.Style>
-                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Rates, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="False">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
+                               TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding Rates, Converter={StaticResource WhenPresent}, FallbackValue=Collapsed}">
                         <Run Text="Rates today" />
                         <Run Foreground="{StaticResource InkDisabledBrush}" Text=" · " />
                         <Run Text="24K " /><Run FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" Text="{Binding Rates.Rate24Kt, Mode=OneWay}" />
@@ -372,18 +359,8 @@
                                FontSize="{DynamicResource FontSizeLabel}"
                                Foreground="{StaticResource InkMutedBrush}"
                                Text="Rates today appear once the 24K rate is entered"
-                               TextTrimming="CharacterEllipsis">
-                        <TextBlock.Style>
-                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Visible" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Rates, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="False">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                               TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding Rates, Converter={StaticResource WhenNull}, FallbackValue=Visible}" />
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <Button Command="{Binding AddRowCommand}" Style="{StaticResource BtnSm}" shell:Kbd.Hint="Ctrl+N">
                             <StackPanel Orientation="Horizontal">
@@ -438,15 +415,15 @@
                                     <ColumnDefinition Width="{StaticResource ColRemove}" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Margin="0,0,8,0" Style="{StaticResource HeadTextRight}" Text="#" />
-                                <TextBlock Grid.Column="1" Style="{StaticResource HeadText}" Text="Item / stock name" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderCell}" Text="Item / stock name" />
                                 <Border Grid.Column="3" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
                                     <TextBlock Style="{StaticResource HeadTextRight}" Text="Gross" ToolTip="Gross weight" />
                                 </Border>
                                 <TextBlock Grid.Column="4" Style="{StaticResource HeadTextRight}" Text="Less" ToolTip="Deduction. Net = Gross − Less; editing Net recalculates this value." />
                                 <TextBlock Grid.Column="5" Style="{StaticResource HeadTextRight}" Text="Net" ToolTip="Billed weight. Editing it recalculates Less as Gross − Net." />
-                                <TextBlock Grid.Column="6" Style="{StaticResource HeadText}" Text="Unit" />
+                                <TextBlock Grid.Column="6" Style="{StaticResource TableHeaderCell}" Text="Unit" />
                                 <Border Grid.Column="2" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
-                                    <TextBlock Style="{StaticResource HeadText}" Text="Karat" />
+                                    <TextBlock Style="{StaticResource TableHeaderCell}" Text="Karat" />
                                 </Border>
                                 <Border Grid.Column="7" BorderBrush="{StaticResource BorderBrushTok}" BorderThickness="1,0,0,0">
                                     <TextBlock Style="{StaticResource HeadTextRight}"><Run Text="Wastage" /><Run Style="{StaticResource HeadUnit}" Text=" %" /></TextBlock>
@@ -633,17 +610,8 @@
                                             </Border>
 
                                             <!--  2 · karat, a gold line, next to the item. The cell turns red when the weights are in and the karat is not.  -->
-                                            <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
+                                            <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0"
+                                                    Visibility="{Binding IsDiamond, Converter={StaticResource InverseBoolToVis}, FallbackValue=Visible}">
                                                 <Grid>
                                                     <shell:SuggestBox x:Name="KaratBox"
                                                                       ItemsSource="{Binding DataContext.KaratMasters, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -746,18 +714,8 @@
                                                                Foreground="{StaticResource InkDisabledBrush}"
                                                                IsHitTestVisible="False"
                                                                Text="—"
-                                                               ToolTip="Not used for diamond lines">
-                                                        <TextBlock.Style>
-                                                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsDiamond}" Value="True">
-                                                                        <Setter Property="Visibility" Value="Visible" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
+                                                               ToolTip="Not used for diamond lines"
+                                                               Visibility="{Binding IsDiamond, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
                                                 </Grid>
                                             </Border>
 
@@ -823,17 +781,8 @@
                                             <Border Grid.Column="7"
                                                     Grid.ColumnSpan="2"
                                                     BorderBrush="{StaticResource DividerBrush}"
-                                                    BorderThickness="1,0,0,0">
-                                                <Border.Style>
-                                                    <Style TargetType="Border">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsDiamond}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Border.Style>
+                                                    BorderThickness="1,0,0,0"
+                                                    Visibility="{Binding IsDiamond, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />
@@ -936,45 +885,17 @@
                             <Grid>
                                 <TextBlock VerticalAlignment="Center"
                                            Foreground="{StaticResource InkSoftBrush}"
-                                           Text="Fill in a line to see how its rate and total are worked out.">
-                                    <TextBlock.Style>
-                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding FocusExplanation, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <WrapPanel VerticalAlignment="Center">
-                                    <WrapPanel.Style>
-                                        <Style TargetType="WrapPanel">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding FocusExplanation, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </WrapPanel.Style>
+                                           Text="Fill in a line to see how its rate and total are worked out."
+                                           Visibility="{Binding FocusExplanation, Converter={StaticResource WhenNull}, FallbackValue=Collapsed}" />
+                                <WrapPanel VerticalAlignment="Center"
+                                           Visibility="{Binding FocusExplanation, Converter={StaticResource WhenPresent}, FallbackValue=Visible}">
                                     <TextBlock Margin="0,2,22,2" FontWeight="SemiBold">
                                         <Run Foreground="{StaticResource AccentInkBrush}" Text="{Binding FocusExplanation.RowLabel, Mode=OneWay}" />
                                         <Run Text="  " /><Run Text="{Binding FocusExplanation.ItemName, Mode=OneWay}" />
                                     </TextBlock>
                                     <Rectangle Width="1" Height="20" Margin="0,0,22,0" Fill="{StaticResource BorderBrushTok}" />
-                                    <TextBlock Margin="0,2,22,2" Foreground="{StaticResource ErrTextBrush}" FontWeight="Medium">
-                                        <TextBlock.Style>
-                                            <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding FocusExplanation.Problem, Converter={x:Static conv:NullToBoolConverter.Instance}}" Value="False">
-                                                        <Setter Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
+                                    <TextBlock Margin="0,2,22,2" Foreground="{StaticResource ErrTextBrush}" FontWeight="Medium"
+                                               Visibility="{Binding FocusExplanation.Problem, Converter={StaticResource WhenPresent}, FallbackValue=Collapsed}">
                                         <Run Text="{Binding FocusExplanation.Problem, Mode=OneWay}" />
                                     </TextBlock>
                                     <TextBlock Margin="0,2,22,2" Foreground="{StaticResource InkMutedBrush}">

@@ -10,6 +10,8 @@ using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Tally;
 using ShowroomBilling.Tests.Postgres;
+using ShowroomBilling.Tests.TestSupport;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests;
 
@@ -223,7 +225,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_bill_waiting_for_reconciliation_is_compared_by_its_number()
     {
         await using var db = CreateDbContext();
-        var poster = new BillServiceTests.FakeTallyPoster([TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer.")]);
+        var poster = new FakeTallyPoster([TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer.")]);
         var service = Service(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
@@ -281,7 +283,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_bill_pushed_to_another_company_is_counted_apart_and_its_id_not_looked_up()
     {
         await using var db = CreateDbContext();
-        var poster = new BillServiceTests.FakeTallyPoster(tallyMasterId: "101") { Company = "Company A" };
+        var poster = new FakeTallyPoster(tallyMasterId: "101") { Company = "Company A" };
         var service = Service(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
         await service.PushAsync(bill.Id, new PushBillRequest("first"));
@@ -300,7 +302,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_bill_waiting_for_reconciliation_is_compared_with_what_its_unsettled_push_sent()
     {
         await using var db = CreateDbContext();
-        var poster = new BillServiceTests.FakeTallyPoster(
+        var poster = new FakeTallyPoster(
         [
             TallyPostResponse.Posted("k1", tallyMasterId: "101"),
             TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer."),
@@ -325,7 +327,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_lost_repost_is_looked_for_by_number_not_by_the_voucher_an_earlier_push_made()
     {
         await using var db = CreateDbContext();
-        var poster = new BillServiceTests.FakeTallyPoster(
+        var poster = new FakeTallyPoster(
         [
             TallyPostResponse.Posted("k1", tallyMasterId: "101"),
             TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer."),
@@ -363,7 +365,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_push_whose_outcome_became_unknown_while_comparing_is_said_so()
     {
         await using var db = CreateDbContext();
-        var poster = new BillServiceTests.FakeTallyPoster([TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer.")]);
+        var poster = new FakeTallyPoster([TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer.")]);
         var service = Service(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
         var lookup = new ListedVouchers();
@@ -448,7 +450,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
 
     private static async Task<BillResponse> PushedAsync(ShowroomBillingDbContext db, string masterId, decimal total)
     {
-        var poster = new BillServiceTests.FakeTallyPoster(tallyMasterId: masterId);
+        var poster = new FakeTallyPoster(tallyMasterId: masterId);
         var service = Service(db, poster);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(total)));
         var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
@@ -468,22 +470,8 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
 
     // No voucher lookup: a create needs none, and the read-back after a push
     // is not what these tests are about.
-    private static BillService Service(ShowroomBillingDbContext db, ITallyPoster? poster = null) =>
-        new(db, new NumberingService(db), poster ?? new BillServiceTests.FakeTallyPoster());
-
     private static BillPayloadDto Payload(decimal grandTotal) =>
-        new(
-            PartyName: "Customer",
-            PartyGstin: null,
-            PartyPhone: null,
-            PartyAddress: null,
-            BillDate: Today,
-            Lines:
-            [
-                new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", grandTotal / 10m, grandTotal, "22K", null)
-            ],
-            Totals: new BillTotalsDto(grandTotal, 0m, 0m, 0m, grandTotal),
-            Notes: null);
+        SamplePayload("Customer", grandTotal, Today);
 
     /// <summary>The year's sales vouchers as Tally lists them.</summary>
     private sealed class ListedVouchers(params TallyVoucherRef[] vouchers) : ITallyVoucherLookup

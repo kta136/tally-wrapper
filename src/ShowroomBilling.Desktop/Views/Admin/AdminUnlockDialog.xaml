@@ -46,54 +46,21 @@
 
         <StackPanel>
             <!--  A hand-over asks to update a bill already in Tally: which bill, and why the passcode  -->
-            <Border Style="{StaticResource AdminBannerInfo}" Visibility="{Binding HasHandoverContext, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource InfoBrush}"
-                               Text="&#xE946;" />
-                    <TextBlock VerticalAlignment="Center"
+            <shell:InlineBanner Style="{StaticResource AdminBannerInfo}"
+                               Visibility="{Binding HasHandoverContext, Converter={StaticResource BoolToVis}}"
                                FontWeight="SemiBold"
-                               Foreground="{StaticResource InfoInkBrush}"
-                               Text="{Binding HandoverContext}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                               Message="{Binding HandoverContext}" />
 
             <!--  A wrong passcode, or a failed call  -->
-            <Border Style="{StaticResource AdminBannerErr}" Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource ErrTextBrush}"
-                               Text="&#xE783;" />
-                    <TextBlock VerticalAlignment="Center"
+            <shell:InlineBanner Style="{StaticResource AdminBannerErr}"
+                               Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}"
                                FontWeight="SemiBold"
-                               Foreground="{StaticResource ErrInkBrush}"
-                               Text="{Binding ErrorMessage}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                               Message="{Binding ErrorMessage}" />
 
-            <Border Style="{StaticResource AdminBannerInfo}" Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource InfoBrush}"
-                               Text="&#xE946;" />
-                    <TextBlock VerticalAlignment="Center"
+            <shell:InlineBanner Style="{StaticResource AdminBannerInfo}"
+                               Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}"
                                FontWeight="SemiBold"
-                               Foreground="{StaticResource InfoInkBrush}"
-                               Text="{Binding StatusMessage}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                               Message="{Binding StatusMessage}" />
 
             <!--  Locked, and a passcode exists  -->
             <StackPanel Visibility="{Binding ShowUnlockForm, Converter={StaticResource BoolToVis}}">
@@ -122,20 +89,9 @@
                            Foreground="{StaticResource InkMutedBrush}"
                            Text="No admin passcode has been set yet. Set one to turn on admin unlock for every counter. Saving also starts an admin session."
                            TextWrapping="Wrap" />
-                <Border Style="{StaticResource AdminBannerInfo}">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,10,0"
-                                   VerticalAlignment="Center"
-                                   FontFamily="{StaticResource IconFontFamily}"
-                                   FontSize="14"
-                                   Foreground="{StaticResource InfoBrush}"
-                                   Text="&#xE946;" />
-                        <TextBlock VerticalAlignment="Center"
+                <shell:InlineBanner Style="{StaticResource AdminBannerInfo}"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource InfoInkBrush}"
-                                   Text="The first passcode can only be set on the server PC." />
-                    </StackPanel>
-                </Border>
+                                   Message="The first passcode can only be set on the server PC." />
                 <Grid Margin="0,4,0,5">
                     <TextBlock Style="{StaticResource FieldLabel}" Margin="0" Text="New passcode" />
                     <TextBlock HorizontalAlignment="Right"
@@ -160,22 +116,11 @@
             </StackPanel>
 
             <!--  Unlocked: the session that is open  -->
-            <Border Margin="0"
-                    Style="{StaticResource AdminBannerOk}"
-                    Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource OkInkBrush}"
-                               Text="&#xE73E;" />
-                    <TextBlock VerticalAlignment="Center"
+            <shell:InlineBanner Margin="0"
+                               Style="{StaticResource AdminBannerOk}"
+                               Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}"
                                FontWeight="SemiBold"
-                               Foreground="{StaticResource OkInkBrush}"
-                               Text="{Binding SessionSummary}" />
-                </StackPanel>
-            </Border>
+                               Message="{Binding SessionSummary}" />
         </StackPanel>
     </shell:DialogFrame>
 </UserControl>

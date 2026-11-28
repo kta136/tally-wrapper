@@ -194,8 +194,8 @@
                                 <ColumnDefinition Width="90" />
                                 <ColumnDefinition Width="110" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center" Style="{StaticResource TableHeaderText}" Text="Master" />
-                            <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TableHeaderText}" Text="Status" />
+                            <TextBlock Style="{StaticResource TableHeaderText}" Text="Master" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderText}" Text="Status" />
                             <TextBlock Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource TableHeaderText}" Text="Items" />
                             <TextBlock Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right" Style="{StaticResource TableHeaderText}" Text="Fetched" />
                         </Grid>

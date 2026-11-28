@@ -12,12 +12,6 @@ public partial class StatusBarViewModel : ObservableObject
     private readonly DispatcherTimer _clock;
 
     [ObservableProperty]
-    private string statusText = "READY";
-
-    [ObservableProperty]
-    private string databaseEnvironment = "DB ?";
-
-    [ObservableProperty]
     private string fiscalYear;
 
     [ObservableProperty]
@@ -43,27 +37,4 @@ public partial class StatusBarViewModel : ObservableObject
 
     private static string CurrentFiscalYear()
         => $"FY {InvoiceNumberFormatter.ComputeFiscalYear(DateTimeOffset.UtcNow)}";
-
-    public void ApplyDatabaseIdentity(string? databaseIdentity)
-    {
-        var identity = NormalizeDatabaseEnvironment(databaseIdentity);
-        if (identity.Equals("UNSET", StringComparison.OrdinalIgnoreCase))
-        {
-            DatabaseEnvironment = "DB UNSET";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(identity))
-        {
-            DatabaseEnvironment = $"DB {identity.ToUpperInvariant()}";
-            return;
-        }
-
-        DatabaseEnvironment = "DB ?";
-    }
-
-    private static string NormalizeDatabaseEnvironment(string? environmentName) =>
-        string.IsNullOrWhiteSpace(environmentName)
-            ? string.Empty
-            : environmentName.Trim();
 }

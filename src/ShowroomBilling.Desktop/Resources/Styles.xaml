@@ -417,10 +417,15 @@
 
     <!--  Column heading of a table: 12.5 px semibold on the grey band.  -->
     <Style x:Key="TableHeaderText" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="{x:Type TextBlock}">
+        <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="TableHeaderCell" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
+        <Setter Property="Margin" Value="10,0" />
     </Style>
 
     <!--  Hints, captions and the text of an empty state: 12.5 px, 5.4:1 on white.  -->
@@ -753,31 +758,89 @@
     <!--  ─── Inline banners (a bordered box inside a form or dialog) ───
           14 px side padding, 9 px above and below, radius 6, soft fill and its own edge colour;
           the text inside is the matching Ink brush, medium weight.  -->
-    <Style x:Key="InlineBanner" TargetType="Border">
+    <Style x:Key="BannerGlyph" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource IconFontFamily}" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Margin" Value="0,0,10,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=shell:InlineBanner}}" />
+    </Style>
+
+    <Style x:Key="InlineBanner" TargetType="shell:InlineBanner">
+        <Setter Property="AutomationProperties.Name" Value="{Binding Message, RelativeSource={RelativeSource Self}, TargetNullValue=''}" />
+        <Setter Property="Focusable" Value="False" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="14,9" />
         <Setter Property="Margin" Value="0,0,0,12" />
+        <Setter Property="GlyphStyle" Value="{StaticResource BannerGlyph}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="shell:InlineBanner">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="6">
+                        <DockPanel>
+                            <TextBlock x:Name="Icon" DockPanel.Dock="Left" Style="{TemplateBinding GlyphStyle}" Text="{TemplateBinding Glyph}" />
+                            <Grid VerticalAlignment="Center">
+                                <TextBlock x:Name="Label" Foreground="{TemplateBinding Foreground}" FontWeight="{TemplateBinding FontWeight}"
+                                           Text="{TemplateBinding Message}" TextWrapping="Wrap" Visibility="Collapsed" />
+                                <ContentPresenter />
+                            </Grid>
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Content" Value="{x:Null}">
+                            <Setter TargetName="Label" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="Glyph" Value="{x:Null}">
+                            <Setter TargetName="Icon" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <Style x:Key="AdminBannerWarn" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
+    <Style x:Key="AdminBannerWarn" BasedOn="{StaticResource InlineBanner}" TargetType="shell:InlineBanner">
         <Setter Property="Background" Value="{StaticResource WarnSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource WarnBorderBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource WarnInkBrush}" />
+        <Setter Property="Glyph" Value="&#xE7BA;" />
     </Style>
 
-    <Style x:Key="AdminBannerErr" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
+    <Style x:Key="AdminBannerErr" BasedOn="{StaticResource InlineBanner}" TargetType="shell:InlineBanner">
         <Setter Property="Background" Value="{StaticResource ErrSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource ErrBorderBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource ErrInkBrush}" />
+        <Setter Property="Glyph" Value="&#xE783;" />
+        <Setter Property="GlyphStyle">
+            <Setter.Value>
+                <Style BasedOn="{StaticResource BannerGlyph}" TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{StaticResource ErrTextBrush}" />
+                </Style>
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <Style x:Key="AdminBannerInfo" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
+    <Style x:Key="AdminBannerInfo" BasedOn="{StaticResource InlineBanner}" TargetType="shell:InlineBanner">
         <Setter Property="Background" Value="{StaticResource InfoSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource InfoBorderBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource InfoInkBrush}" />
+        <Setter Property="Glyph" Value="&#xE946;" />
+        <Setter Property="GlyphStyle">
+            <Setter.Value>
+                <Style BasedOn="{StaticResource BannerGlyph}" TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="{StaticResource InfoBrush}" />
+                </Style>
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <Style x:Key="AdminBannerOk" BasedOn="{StaticResource InlineBanner}" TargetType="Border">
+    <Style x:Key="AdminBannerOk" BasedOn="{StaticResource InlineBanner}" TargetType="shell:InlineBanner">
         <Setter Property="Background" Value="{StaticResource OkSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource OkBorderBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource OkInkBrush}" />
+        <Setter Property="Glyph" Value="&#xE73E;" />
     </Style>
 
 </ResourceDictionary>

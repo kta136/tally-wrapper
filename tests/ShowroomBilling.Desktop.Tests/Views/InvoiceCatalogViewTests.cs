@@ -51,7 +51,7 @@ public sealed class InvoiceCatalogViewTests
                 Rate24Kt = 10_000m,
             };
             var view = Hosted(invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var ring = invoice.Lines[0];
             ring.ItemMaster = settings.Catalog.Items[0];
@@ -63,14 +63,14 @@ public sealed class InvoiceCatalogViewTests
             chain.KaratMaster = settings.Catalog.Karats[0];
             chain.GrossWeight = 4m;
             chain.WastagePercent = 4m;
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var itemBefore = CellOf(Cells(view, "ItemBox")[0]);
 
             // Settings saved: the ring's default wastage and the karat's purity changed, the chain is gone.
             settings.Publish(
                 items: [TestMasters.Item("Gold Ring", wastage: 10m)],
                 karats: [TestMasters.Karat("22K", 92m)]);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var items = Cells(view, "ItemBox");
             var karats = Cells(view, "KaratBox");
@@ -136,13 +136,13 @@ public sealed class InvoiceCatalogViewTests
                 Rate24Kt = 10_000m,
             };
             var view = Hosted(invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var ring = invoice.Lines[0];
             ring.ItemMaster = settings.Catalog.Items[0];
             ring.KaratMaster = settings.Catalog.Karats[0];
             ring.GrossWeight = 3m;
             ring.WastagePercent = 4m;   // typed over the item's 8 %
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             // "Gold Ri" typed over the item, then Ctrl+S, which settles the cell at once.
             var cell = Cells(view, "ItemBox")[0];
@@ -180,7 +180,7 @@ public sealed class InvoiceCatalogViewTests
             line.GrossWeight = 10m;
 
             var view = Hosted(invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var item = Cells(view, "ItemBox")[0];
             var karat = Cells(view, "KaratBox")[0];
             var shown = (Item: CellOf(item), ItemBox: BoxOf(item).Text, Karat: CellOf(karat), KaratBox: BoxOf(karat).Text);
@@ -207,7 +207,7 @@ public sealed class InvoiceCatalogViewTests
         {
             var shell = DesignSample.CreateShell();
             var view = Hosted(shell.Invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var lines = shell.Invoice.Lines.Where(line => !line.IsEmpty).ToList();
             var items = Cells(view, "ItemBox");
             var karats = Cells(view, "KaratBox");
@@ -228,7 +228,7 @@ public sealed class InvoiceCatalogViewTests
         {
             var shell = DesignSample.CreateShell();
             var view = Hosted(shell.Invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var itemList = (ListBox)Cells(view, "ItemBox")[0].Template.FindName("PART_List", Cells(view, "ItemBox")[0]);
             var karatList = (ListBox)Cells(view, "KaratBox")[0].Template.FindName("PART_List", Cells(view, "KaratBox")[0]);
             return (
@@ -260,14 +260,14 @@ public sealed class InvoiceCatalogViewTests
                 Rate24Kt = 10_000m,
             };
             var view = Hosted(invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var ring = invoice.Lines[0];
             ring.ItemMaster = settings.Catalog.Items[0];
             ring.GrossWeight = 10m;
             var chain = invoice.Lines[1];
             chain.ItemMaster = settings.Catalog.Items[1];
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var unitCells = Descendants(view).OfType<ComboBox>().ToList();
             var ofRing = unitCells.Single(cell => ReferenceEquals(cell.ItemsSource, ring.UnitChoices));
@@ -276,10 +276,10 @@ public sealed class InvoiceCatalogViewTests
 
             // The operator can still pick grams as the app writes them, and go back.
             ofRing.SelectedItem = "gm";
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var picked = ring.Unit;
             ofRing.SelectedItem = "g";
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             return (shown, picked, back: ring.Unit, choices: string.Join(",", ring.UnitChoices), others: string.Join(",", chain.UnitChoices));
         });
@@ -315,7 +315,7 @@ public sealed class InvoiceCatalogViewTests
             invoice.Lines[0].ItemName = "Repair of an old chain with a new clasp, a new hook and a length of new links";
             invoice.Lines[1].ItemName = "Ring";
             var view = Hosted(invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var cells = Cells(view, "ItemBox");
             var border = (FrameworkElement)VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(VisualTreeHelper.GetParent(cells[0])));
@@ -337,7 +337,7 @@ public sealed class InvoiceCatalogViewTests
             var settings = OfflineApi.Settings();
             var invoice = new InvoiceViewModel(new FakeBillsApi(), FakeNumberingApi.Offline(), new FakeDialogs(), settings);
             var view = Hosted(invoice);
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var inOrder = Descendants(view).ToList();
             var itemAt = inOrder.FindIndex(element => element is SuggestBox { Name: "ItemBox" });
@@ -391,17 +391,6 @@ public sealed class InvoiceCatalogViewTests
             {
                 yield return descendant;
             }
-        }
-    }
-
-    private static void Layout(FrameworkElement view)
-    {
-        for (var pass = 0; pass < 2; pass++)
-        {
-            view.Measure(ViewSize);
-            view.Arrange(new Rect(ViewSize));
-            view.UpdateLayout();
-            WpfTestHost.DrainDispatcher();
         }
     }
 }

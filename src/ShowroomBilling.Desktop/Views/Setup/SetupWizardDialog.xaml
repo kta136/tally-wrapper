@@ -154,20 +154,16 @@
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="28,22,28,24">
-                    <Border Margin="0,0,0,16"
-                            Style="{StaticResource AdminBannerErr}"
-                            Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Foreground="{StaticResource ErrInkBrush}"
-                                   Text="{Binding ErrorMessage}"
-                                   TextWrapping="Wrap" />
-                    </Border>
-                    <Border Margin="0,0,0,16"
-                            Style="{StaticResource AdminBannerInfo}"
-                            Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Foreground="{StaticResource InfoInkBrush}"
-                                   Text="{Binding StatusMessage}"
-                                   TextWrapping="Wrap" />
-                    </Border>
+                    <shell:InlineBanner Margin="0,0,0,16"
+                                       Style="{StaticResource AdminBannerErr}"
+                                       Visibility="{Binding HasErrorMessage, Converter={StaticResource BoolToVis}}"
+                                       Glyph="{x:Null}"
+                                       Message="{Binding ErrorMessage}" />
+                    <shell:InlineBanner Margin="0,0,0,16"
+                                       Style="{StaticResource AdminBannerInfo}"
+                                       Visibility="{Binding HasStatusMessage, Converter={StaticResource BoolToVis}}"
+                                       Glyph="{x:Null}"
+                                       Message="{Binding StatusMessage}" />
 
                     <!--  1. Tally  -->
                     <StackPanel Margin="0,0,0,18" Orientation="Horizontal">

@@ -35,16 +35,9 @@ public sealed class BillsActionTests
     {
         var (vm, api, _) = await LoadedAsync(answer: true, Summary("SR/25-26/0001", BillStates.Failed));
         api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Bill is already posted.", null);
-        var statuses = new List<string>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(BillsViewModel.StatusMessage)) statuses.Add(vm.StatusMessage);
-        };
-
         await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
 
-        // The reload that follows every action then writes its own summary.
-        Assert.Contains("Retry failed: Bill is already posted.", statuses);
+        Assert.Equal("Retry failed: Bill is already posted.", vm.FooterNotice);
         Assert.False(vm.IsActing);
     }
 
@@ -277,7 +270,7 @@ public sealed class BillsActionTests
 
         Assert.Equal(1, prompts);
         Assert.Empty(opened);
-        Assert.Equal("SR/25-26/0001 is posted; editing it needs admin unlock.", vm.StatusMessage);
+        Assert.Equal("SR/25-26/0001 is posted; editing it needs admin unlock.", vm.FooterNotice);
 
         dialogs.AdminUnlock = _ =>
         {
@@ -419,8 +412,7 @@ public sealed class BillsActionTests
 
         await vm.RetryRowCommand.ExecuteAsync(vm.Items[0]);
 
-        // The reload wrote its own summary to StatusMessage; the line the operator sees keeps the result.
-        Assert.StartsWith("Showing", vm.StatusMessage);
+        Assert.Equal(2, api.SearchCount);
         Assert.Equal(("Retried SR/25-26/0001.", "ok"), (vm.FooterNotice, vm.FooterNoticeTone));
 
         api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Bill is already posted.", null);
@@ -525,7 +517,7 @@ public sealed class BillsActionTests
         vm.ToggleVisibleSelection(true);
         await vm.MarkPostedSelectedCommand.ExecuteAsync(null);
 
-        Assert.Equal("Mark pushed blocked: every selected bill must be pending, draft, or failed.", vm.StatusMessage);
+        Assert.Equal("Mark pushed blocked: every selected bill must be pending, draft, or failed.", vm.FooterNotice);
         Assert.Empty(api.Calls);
 
         // The dry run before a delete could not be made.
@@ -533,7 +525,7 @@ public sealed class BillsActionTests
         vm.ClearSelection();
         await vm.DeleteRowCommand.ExecuteAsync(vm.Items[0]);
 
-        Assert.Equal("Delete check failed: The server is not answering.", vm.StatusMessage);
+        Assert.Equal("Delete check failed: The server is not answering.", vm.FooterNotice);
         Assert.Equal(loads, api.SearchCount);
         Assert.False(vm.IsActing);
     }
@@ -871,7 +863,7 @@ public sealed class BillsActionTests
         var statuses = new List<string>();
         vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(BillsViewModel.StatusMessage)) statuses.Add(vm.StatusMessage);
+            if (e.PropertyName == nameof(BillsViewModel.FooterNotice)) statuses.Add(vm.FooterNotice);
         };
         return statuses;
     }

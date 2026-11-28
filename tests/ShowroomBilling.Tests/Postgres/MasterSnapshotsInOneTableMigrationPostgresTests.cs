@@ -1,9 +1,7 @@
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Persistence.Migrations;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -146,44 +144,6 @@ public sealed class MasterSnapshotsInOneTableMigrationPostgresTests(PostgresFixt
                                 'tally_stock_item_snapshots', 'tally_voucher_type_snapshots')
             """);
 
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
-    private static async Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database)
-    {
-        var names = new List<string>();
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = """SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261114\_%\_rows'""";
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            names.Add(reader.GetString(0));
-        }
-
-        return names;
-    }
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<T> ScalarAsync<T>(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return (T)(await command.ExecuteScalarAsync())!;
-    }
+    private static Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database) =>
+        ReadNamesAsync(database, """SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261114\_%\_rows'""");
 }

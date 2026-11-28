@@ -14,6 +14,8 @@ using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Tally;
 using ShowroomBilling.Tests.Postgres;
+using ShowroomBilling.Tests.TestSupport;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests;
 
@@ -1543,9 +1545,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             row.InvoiceCore = null;
         }
 
-        rows.Single(x => x.Id == bill9.Id).InvoiceNumber = "DDAJR/26-27/9";
-        rows.Single(x => x.Id == bill48.Id).InvoiceNumber = "DDAJR/26-27/48";
-        rows.Single(x => x.Id == bill10.Id).InvoiceNumber = "DDAJR/26-27/10";
+        rows.Single(x => x.Id == bill9.Id).InvoiceNumber = "DEMO/26-27/9";
+        rows.Single(x => x.Id == bill48.Id).InvoiceNumber = "DEMO/26-27/48";
+        rows.Single(x => x.Id == bill10.Id).InvoiceNumber = "DEMO/26-27/10";
         await db.SaveChangesAsync();
 
         var response = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null));
@@ -2251,21 +2253,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     private static System.Text.Json.JsonElement AuditDetails(ShowroomBilling.Infrastructure.Persistence.Entities.AuditEventEntity row) =>
         System.Text.Json.JsonDocument.Parse(row.PayloadJson).RootElement.GetProperty("details").Clone();
 
-    private const string TestCompany = "Test Company";
-
-    private static BillPayloadDto SamplePayload(string party, decimal grandTotal) =>
-        new(
-            PartyName: party,
-            PartyGstin: null,
-            PartyPhone: null,
-            PartyAddress: null,
-            BillDate: SampleBillDate,
-            Lines:
-            [
-                new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", grandTotal / 10m, grandTotal, "22K", null)
-            ],
-            Totals: new BillTotalsDto(grandTotal, 0m, 0m, 0m, grandTotal),
-            Notes: null);
+    private const string TestCompany = FakeTallyPoster.DefaultCompany;
 
     private static BillService BuildService(
         ShowroomBillingDbContext db,
@@ -2359,64 +2347,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     private static TallyPostResponse UnknownResponse(string errorCode, string errorMessage) =>
         TallyPostResponse.Unknown(errorCode, errorMessage);
 
-    internal sealed class FakeTallyPoster : ITallyPoster
-    {
-        private readonly TallyPostOutcome outcome;
-        private readonly string? remoteId;
-        private readonly string? tallyMasterId;
-        private readonly Queue<TallyPostResponse> responses = new();
-        private readonly List<TallyPostRequest> requests = [];
-
-        public FakeTallyPoster(
-            TallyPostOutcome outcome = TallyPostOutcome.Posted,
-            string? remoteId = "FAKE-VCH-1",
-            string? tallyMasterId = null)
-        {
-            this.outcome = outcome;
-            this.remoteId = remoteId;
-            this.tallyMasterId = tallyMasterId;
-        }
-
-        public FakeTallyPoster(IEnumerable<TallyPostResponse> responses)
-            : this()
-        {
-            foreach (var response in responses)
-            {
-                this.responses.Enqueue(response);
-            }
-        }
-
-        public int CallCount { get; private set; }
-        public TallyPostRequest? LastRequest { get; private set; }
-        public IReadOnlyList<TallyPostRequest> Requests => requests;
-        /// <summary>
-        /// The company an accepted voucher went to, as the real poster reports
-        /// it; the one <see cref="FakeVoucherLookup"/> asks in by default.
-        /// Null is a push recorded before pushes named their company.
-        /// </summary>
-        public string? Company { get; init; } = TestCompany;
-
-        public Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default)
-        {
-            CallCount++;
-            LastRequest = request;
-            requests.Add(request);
-            var response = responses.Count > 0
-                ? responses.Dequeue()
-                : outcome switch
-                {
-                    // Tally answers an Alter with the id of the voucher it altered.
-                    TallyPostOutcome.Posted => PostedResponse(
-                        remoteId,
-                        request.Operation == TallyPostOperation.Alter ? request.TargetTagValue : tallyMasterId),
-                    TallyPostOutcome.Unknown => UnknownResponse("FAKE_UNKNOWN", "fake outcome unknown"),
-                    _ => FailedResponse("FAKE_ERROR", "fake failure")
-                };
-            return Task.FromResult(response.Outcome == TallyPostOutcome.Posted && Company is not null
-                ? response with { Company = Company }
-                : response);
-        }
-    }
 
     private sealed class FakeTallyHealth(TallyCompanyHealthResponse response) : ITallyCompanyHealthService
     {

@@ -16,11 +16,8 @@
         <GridLength x:Key="ColTotal">100</GridLength>
         <GridLength x:Key="ColResult">190</GridLength>
 
-        <Style x:Key="HeadText" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeLabel}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
+        <Style x:Key="ResultHeader" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="None" />
         </Style>
 
         <Style x:Key="WhyText" BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
@@ -78,23 +75,11 @@
 
         <StackPanel>
             <!--  Why nothing in the hand-over was used, or that the server cannot be reached  -->
-            <Border Margin="0"
-                    Style="{StaticResource AdminBannerErr}"
-                    Visibility="{Binding HasBanner, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource ErrTextBrush}"
-                               Text="&#xE783;" />
-                    <TextBlock VerticalAlignment="Center"
+            <shell:InlineBanner Margin="0"
+                               Style="{StaticResource AdminBannerErr}"
+                               Visibility="{Binding HasBanner, Converter={StaticResource BoolToVis}}"
                                FontWeight="Medium"
-                               Foreground="{StaticResource ErrInkBrush}"
-                               Text="{Binding Banner}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                               Message="{Binding Banner}" />
 
             <Border BorderBrush="{StaticResource BorderBrushTok}"
                     BorderThickness="1"
@@ -123,15 +108,15 @@
                                 <ColumnDefinition Width="{StaticResource ColTotal}" />
                                 <ColumnDefinition Width="{StaticResource ColResult}" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource HeadText}" Text="Invoice" />
-                            <TextBlock Grid.Column="1" Style="{StaticResource HeadText}" Text="Party" />
+                            <TextBlock Style="{StaticResource ResultHeader}" Text="Invoice" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource ResultHeader}" Text="Party" />
                             <TextBlock Grid.Column="2"
                                        HorizontalAlignment="Right"
-                                       Style="{StaticResource HeadText}"
+                                       Style="{StaticResource ResultHeader}"
                                        Text="Total" />
                             <TextBlock Grid.Column="3"
                                        HorizontalAlignment="Right"
-                                       Style="{StaticResource HeadText}"
+                                       Style="{StaticResource ResultHeader}"
                                        Text="Result" />
                         </Grid>
                     </Border>

@@ -5,6 +5,7 @@ using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
 using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Tally;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests;
 
@@ -241,7 +242,7 @@ public sealed class TallyPosterTests
         return (
             new TallyPoster(
                 client,
-                new FakeCloudSettingsService(companyState, companyCountry),
+                new FakeCloudSettingsService { CompanyState = companyState, CompanyCountry = companyCountry },
                 NullLogger<TallyPoster>.Instance),
             client);
     }
@@ -289,21 +290,6 @@ public sealed class TallyPosterTests
             Notes: null,
             Payment: PaymentMode.Cash);
 
-    internal sealed class FakeXmlClient(XElement response) : ITallyXmlClient
-    {
-
-        public XElement? LastRequest { get; private set; }
-
-        public Task<XElement> SendAsync(XElement request, CancellationToken cancellationToken = default)
-        {
-            LastRequest = request;
-            return Task.FromResult(response);
-        }
-
-        public Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default) =>
-            SendAsync(request, cancellationToken);
-    }
-
     private sealed class ThrowingXmlClient(Exception exception) : ITallyXmlClient
     {
 
@@ -312,51 +298,5 @@ public sealed class TallyPosterTests
 
         public Task<XElement> SendWriteAsync(XElement request, CancellationToken cancellationToken = default) =>
             Task.FromException<XElement>(exception);
-    }
-
-    internal sealed class FakeCloudSettingsService(
-        string? companyState = null,
-        string? companyCountry = null,
-        string salesVoucherType = "Sales") : ICloudSettingsService
-    {
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new EffectiveSettingsResponse(
-                SettingsSource: "cloud",
-                Summary: "test",
-                Settings: new EffectiveCloudSettingsDto(
-                    new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Acme Jewellers"),
-                    new NumberingSettingsDto("DEV-", "", 4),
-                    new PrintSettingsDto("Acme", null, null, null, companyState, companyCountry, null, null, null, null, null, true, false, false, 11, 9),
-                    new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", salesVoucherType),
-                    new MasterDataSettingsDto("[]", "[]")),
-                CloudOwnedCategories: [],
-                LocalOnlyCategories: [],
-                UpdatedAtUtc: DateTimeOffset.UtcNow));
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
-            UpdateEffectiveSettingsRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
-            string companyName,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
-            UpdatePrintLayoutRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<BatchHoursResponse> UpdateBatchHoursAsync(
-            UpdateBatchHoursRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

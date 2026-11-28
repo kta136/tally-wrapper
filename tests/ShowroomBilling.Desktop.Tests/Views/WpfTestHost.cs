@@ -24,6 +24,18 @@ internal static class WpfTestHost
 
     public static T Run<T>(Func<T> action) => AppDispatcher.Value.Invoke(action);
 
+    /// <summary>Lay out the view again after the dispatcher has resolved its bindings.</summary>
+    public static void Layout(FrameworkElement view, Size canvas, int passes = 2)
+    {
+        for (var pass = 0; pass < passes; pass++)
+        {
+            view.Measure(canvas);
+            view.Arrange(new Rect(canvas));
+            view.UpdateLayout();
+            DrainDispatcher();
+        }
+    }
+
     /// <summary>Lets queued binding and layout work finish.</summary>
     public static void DrainDispatcher()
         => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);

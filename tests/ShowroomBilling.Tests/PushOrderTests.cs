@@ -6,6 +6,8 @@ using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Tests.Postgres;
+using ShowroomBilling.Tests.TestSupport;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests;
 
@@ -66,7 +68,7 @@ public sealed class PushOrderTests(PostgresFixture postgres) : DatabaseTest(post
     public async Task Bills_already_in_Tally_or_edited_after_a_push_are_not_named()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new BillServiceTests.FakeTallyPoster(tallyMasterId: "101"));
+        var service = Service(db, new FakeTallyPoster(tallyMasterId: "101"));
         var posted = await Create(service, Today);
         await service.PushAsync(posted.Id, new PushBillRequest("first"));
         var marked = await Create(service, Today);
@@ -85,7 +87,7 @@ public sealed class PushOrderTests(PostgresFixture postgres) : DatabaseTest(post
     public async Task A_failed_bill_is_not_in_Tally_and_is_named()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new BillServiceTests.FakeTallyPoster([TallyPostResponse.Failed("LINEERROR", "Ledger missing.")]));
+        var service = Service(db, new FakeTallyPoster([TallyPostResponse.Failed("LINEERROR", "Ledger missing.")]));
         var failed = await Create(service, Today);
         await service.PushAsync(failed.Id, new PushBillRequest("first"));
         var next = await Create(service, Today);
@@ -114,7 +116,7 @@ public sealed class PushOrderTests(PostgresFixture postgres) : DatabaseTest(post
     public async Task A_bill_whose_push_alters_its_voucher_asks_for_nothing()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new BillServiceTests.FakeTallyPoster(tallyMasterId: "101"));
+        var service = Service(db, new FakeTallyPoster(tallyMasterId: "101"));
         await Create(service, Today);
         var edited = await Create(service, Today);
         await service.MarkPostedAsync(edited.Id, new MarkBillStateRequest("in Tally"));
@@ -172,20 +174,6 @@ public sealed class PushOrderTests(PostgresFixture postgres) : DatabaseTest(post
     private static Task<BillResponse> Create(BillService service, DateOnly date) =>
         service.CreateDraftAsync(new CreateBillDraftRequest(Payload(date, 100m)));
 
-    private static BillService Service(ShowroomBillingDbContext db, BillServiceTests.FakeTallyPoster? poster = null) =>
-        new(db, new NumberingService(db), poster ?? new BillServiceTests.FakeTallyPoster());
-
     private static BillPayloadDto Payload(DateOnly date, decimal grandTotal) =>
-        new(
-            PartyName: "Customer",
-            PartyGstin: null,
-            PartyPhone: null,
-            PartyAddress: null,
-            BillDate: date,
-            Lines:
-            [
-                new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", grandTotal / 10m, grandTotal, "22K", null)
-            ],
-            Totals: new BillTotalsDto(grandTotal, 0m, 0m, 0m, grandTotal),
-            Notes: null);
+        SamplePayload("Customer", grandTotal, date);
 }

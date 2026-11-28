@@ -1,11 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Persistence.Migrations;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -125,8 +124,8 @@ public sealed class DropUnreadColumnsMigrationPostgresTests(PostgresFixture fixt
     {
         await using var db = database.CreateContext();
         var service = PostgresBillTestSupport.BuildService(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var untouched = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var untouched = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         var masters = new MasterSnapshotService(db);
         await masters.IngestLedgersAsync([new LedgerSnapshotItem("Sales A/c"), new LedgerSnapshotItem("Cash")]);
         await masters.IngestVoucherTypesAsync([new VoucherTypeSnapshotItem("Sales")]);
@@ -143,48 +142,10 @@ public sealed class DropUnreadColumnsMigrationPostgresTests(PostgresFixture fixt
                 OR (table_name = 'tally_voucher_type_snapshots' AND column_name IN ('ParentType', 'IsDeemedPositive')))
             """);
 
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
-    private static async Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database)
-    {
-        var names = new List<string>();
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
+    private static Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database) =>
         // The copies of the migration under test; MasterSnapshotsInOneTable's own end in _rows.
-        command.CommandText = """
+        ReadNamesAsync(database, """
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261114\_%' AND tablename NOT LIKE '%\_rows'
-            """;
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            names.Add(reader.GetString(0));
-        }
-
-        return names;
-    }
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<T> ScalarAsync<T>(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return (T)(await command.ExecuteScalarAsync())!;
-    }
+            """);
 }

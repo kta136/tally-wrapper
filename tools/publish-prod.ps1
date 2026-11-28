@@ -34,7 +34,7 @@ Write-Host "`n=== Publishing Desktop → $desktopOut ===" -ForegroundColor Cyan
 # entry (in `%APPDATA%\ShowroomBilling\logs\desktop-*.log`): expect
 # `hostBuild` and `resolveWindow` to drop noticeably vs a non-R2R prod build.
 # R2R is compatible with PublishSingleFile + EnableCompressionInSingleFile.
-$desktopPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile
+$desktopPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime
 & dotnet publish $desktopProj @desktopPublishArgs -o $desktopOut
 if ($LASTEXITCODE -ne 0) { throw "Desktop publish failed." }
 

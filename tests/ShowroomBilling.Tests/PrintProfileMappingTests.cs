@@ -32,8 +32,6 @@ public class PrintProfileMappingTests
         Assert.Equal("29ABCDE1234F1Z5", profile.Gstin);
         Assert.Null(profile.Phone);
         Assert.Equal("Shop 12", profile.Address);
-        Assert.Null(profile.State);
-        Assert.Equal("India", profile.Country);
         Assert.Equal("HDFC", profile.BankName);
         Assert.Null(profile.BankAccount);
         Assert.Equal("HDFC0000123", profile.BankIfsc);
@@ -73,8 +71,8 @@ public class PrintProfileMappingTests
     public void HasAnyBankField_is_true_when_any_field_set()
     {
         var profile = new CompanyProfile(
-            Name: "X", Address: null, Phone: null, State: null, Country: null,
-            Gstin: "", Huid: null,
+            Name: "X", Address: null, Phone: null,
+            Gstin: "",
             BankName: null, BankAccount: null, BankIfsc: "HDFC0", BankUpi: null,
             TermsAndConditions: null);
         Assert.True(profile.HasAnyBankField);

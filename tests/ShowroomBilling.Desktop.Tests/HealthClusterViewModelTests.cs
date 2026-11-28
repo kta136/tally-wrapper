@@ -74,6 +74,20 @@ public sealed class HealthClusterViewModelTests
         Assert.Equal("DB ?", vm.DatabaseLabel);
     }
 
+    [Theory]
+    [InlineData("DEV", "DB DEV")]
+    [InlineData("PROD", "DB PROD")]
+    [InlineData("UNSET", "DB UNSET")]
+    [InlineData(null, "DB ?")]
+    public void Apply_ShowsTheReportedDatabaseIdentity(string? identity, string expected)
+    {
+        var vm = new HealthClusterViewModel();
+        vm.Apply(Snapshot(new RuntimeHealthResponse(
+            "Healthy", DatabaseReachable: true, Message: "Online", DatabaseIdentity: identity)));
+
+        Assert.Equal(expected, vm.DatabaseLabel);
+    }
+
     [Fact]
     public void Apply_MapsMatchingDatabaseIdentityToOk()
     {

@@ -22,7 +22,7 @@ if (Test-Path $embeddedApi) { Remove-Item -Force $embeddedApi }
 
 New-Item -ItemType Directory -Force -Path $embeddedDir | Out-Null
 
-$apiPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile -ExcludeAppSettings
+$apiPublishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -ExcludeAppSettings
 
 dotnet publish $apiProj @apiPublishArgs -o $apiStaging
 if ($LASTEXITCODE -ne 0) { throw 'Embedded API publish failed.' }
@@ -31,7 +31,7 @@ $stagedApi = Join-Path $apiStaging 'ShowroomBilling.Api.exe'
 if (-not (Test-Path $stagedApi)) { throw "Expected $stagedApi but it was not produced." }
 Copy-Item -Force $stagedApi $embeddedApi
 
-$publishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime -SingleFile
+$publishArgs = Get-PublishArguments -Configuration $Configuration -Runtime $Runtime
 
 dotnet publish $trayProj @publishArgs -o $resolvedOutput
 if ($LASTEXITCODE -ne 0) { throw 'Server tray publish failed.' }

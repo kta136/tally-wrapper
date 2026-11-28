@@ -34,15 +34,15 @@ internal static class OfflineApi
             tallyCheckApi ?? new OfflineTallyCheckApi(),
             dialogs ?? new FakeDialogs(),
             bootstrapOptions: bootstrapOptions,
-            handoverKeys: handoverKeys);
+            handoverKeys: handoverKeys ?? new HandoverKeyStore(TestAppData.NewHandoverKeyPath()));
 
     internal static Task<T> Fail<T>() => Task.FromException<T>(new HttpRequestException(Message));
 }
 
-internal sealed class OfflineSettingsApi : ISettingsApiClient
+internal class OfflineSettingsApi(EffectiveSettingsResponse? settings = null) : ISettingsApiClient
 {
     public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
-        => OfflineApi.Fail<EffectiveSettingsResponse>();
+        => settings is null ? OfflineApi.Fail<EffectiveSettingsResponse>() : Task.FromResult(settings);
 
     public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
         UpdateEffectiveSettingsRequest request,

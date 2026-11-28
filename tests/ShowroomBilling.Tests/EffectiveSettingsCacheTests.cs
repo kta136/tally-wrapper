@@ -58,9 +58,9 @@ public sealed class EffectiveSettingsCacheTests(PostgresFixture postgres) : Data
         // their seeded names because that is what they are called in Tally.
         await service.SaveEffectiveSettingsAsync(new UpdateEffectiveSettingsRequest(seeded.Settings with
         {
-            Connection = seeded.Settings.Connection with { ActiveCompanyName = "DDA Jewels" },
+            Connection = seeded.Settings.Connection with { ActiveCompanyName = "Example Jewellers" },
             Numbering = seeded.Settings.Numbering with { InvoicePrefix = "SR/" },
-            Print = seeded.Settings.Print with { CompanyName = "DDA Jewels" },
+            Print = seeded.Settings.Print with { CompanyName = "Example Jewellers" },
             Masters = new MasterDataSettingsDto("""[{"name":"Gold"}]""", """[{"label":"22K"}]"""),
         }));
 
@@ -68,10 +68,10 @@ public sealed class EffectiveSettingsCacheTests(PostgresFixture postgres) : Data
     }
 
     [Theory]
-    [InlineData("Development Company", "DDA Jewels", "SR/")]
-    [InlineData("DDA Jewels", "Tally Wrapper", "SR/")]
-    [InlineData("DDA Jewels", "Showroom Billing V2", "SR/")]
-    [InlineData("DDA Jewels", "DDA Jewels", "DEV-")]
+    [InlineData("Development Company", "Example Jewellers", "SR/")]
+    [InlineData("Example Jewellers", "Tally Wrapper", "SR/")]
+    [InlineData("Example Jewellers", "Showroom Billing V2", "SR/")]
+    [InlineData("Example Jewellers", "Example Jewellers", "DEV-")]
     public async Task A_placeholder_left_in_place_still_asks_for_setup(string activeCompany, string printCompany, string prefix)
     {
         await using var db = CreateDbContext();

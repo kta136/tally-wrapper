@@ -55,56 +55,6 @@ public sealed class RuntimeController(
             return denied;
         }
 
-        return await VerifyAndSaveAsync(request, cancellationToken);
-    }
-
-    private DatabaseConfigurationResponse BuildDatabaseConfigurationResponse(
-        string connectionString,
-        bool requiresRestart)
-    {
-        return new DatabaseConfigurationResponse(
-            Provider: "PostgreSQL",
-            MaskedConnectionString: MaskConnectionString(connectionString),
-            ConfigPath: DatabaseConfigurationStore.ConfigPathForEnvironment(hostEnvironment.EnvironmentName),
-            IsLocalOverridePresent: DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName),
-            RequiresApiRestart: requiresRestart,
-            EnvironmentName: hostEnvironment.EnvironmentName);
-    }
-
-    /// <summary>
-    /// The one way a connection string is accepted: it must parse, reach the
-    /// database, and be the right database for this environment before it is
-    /// written to the protected override file.
-    /// </summary>
-    private async Task<ActionResult<DatabaseConfigurationResponse>> VerifyAndSaveAsync(
-        UpdateDatabaseConfigurationRequest request,
-        CancellationToken cancellationToken)
-    {
-        var connectionString = ParseConnectionStringOrProblem(request);
-        if (connectionString.Result is not null)
-        {
-            return connectionString.Result;
-        }
-
-        var verification = await databaseConnectionVerifier.VerifyAsync(
-            connectionString.Value!,
-            DatabaseConnectionVerifier.ExpectedIdentityFor(hostEnvironment.EnvironmentName),
-            cancellationToken);
-        if (!verification.Success)
-        {
-            return ControllerProblemDetails.BadRequest(verification.Message);
-        }
-
-        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
-            connectionString.Value!,
-            hostEnvironment.EnvironmentName,
-            cancellationToken);
-
-        return Ok(BuildDatabaseConfigurationResponse(connectionString.Value!, requiresRestart: true));
-    }
-
-    private ActionResult<string> ParseConnectionStringOrProblem(UpdateDatabaseConfigurationRequest? request)
-    {
         if (request is null || string.IsNullOrWhiteSpace(request.ConnectionString))
         {
             return ControllerProblemDetails.BadRequest("PostgreSQL connection string is required.");
@@ -118,7 +68,27 @@ public sealed class RuntimeController(
             return ControllerProblemDetails.BadRequest(error);
         }
 
-        return connectionString;
+        var verification = await databaseConnectionVerifier.VerifyAsync(
+            connectionString,
+            DatabaseConnectionVerifier.ExpectedIdentityFor(hostEnvironment.EnvironmentName),
+            cancellationToken);
+        if (!verification.Success)
+        {
+            return ControllerProblemDetails.BadRequest(verification.Message);
+        }
+
+        await DatabaseConfigurationStore.SavePostgresConnectionStringAsync(
+            connectionString,
+            hostEnvironment.EnvironmentName,
+            cancellationToken);
+
+        return Ok(new DatabaseConfigurationResponse(
+            Provider: "PostgreSQL",
+            MaskedConnectionString: MaskConnectionString(connectionString),
+            ConfigPath: DatabaseConfigurationStore.ConfigPathForEnvironment(hostEnvironment.EnvironmentName),
+            IsLocalOverridePresent: DatabaseConfigurationStore.ExistsForEnvironment(hostEnvironment.EnvironmentName),
+            RequiresApiRestart: true,
+            EnvironmentName: hostEnvironment.EnvironmentName));
     }
 
     private ActionResult? AuthorizeMaintenance()

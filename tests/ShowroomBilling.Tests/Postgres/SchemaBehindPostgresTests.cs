@@ -8,6 +8,7 @@ using ShowroomBilling.Application.Health;
 using ShowroomBilling.Infrastructure.Configuration;
 using ShowroomBilling.Infrastructure.Health;
 using ShowroomBilling.Infrastructure.Persistence;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -35,7 +36,7 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
         }
         Assert.True(missing >= 2);
         var role = $"tw_app_{Guid.NewGuid():N}";
-        await ExecuteAsync(database.ConnectionString, $"""
+        await ExecuteAsync(database, $"""
             CREATE ROLE "{role}" LOGIN PASSWORD 'app';
             GRANT USAGE ON SCHEMA public TO "{role}";
             GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "{role}";
@@ -74,7 +75,7 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
             await using var scope = provider.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<ShowroomBillingDbContext>();
             Assert.Equal(missing, (await db.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken)).Count());
-            Assert.NotNull(await ScalarAsync(database.ConnectionString, "SELECT to_regclass('public.draft_edit_leases')::text"));
+            Assert.True(await TableExistsAsync(database, "draft_edit_leases"));
 
             // A health check, which asks in its own words, finds the same shortfall...
             var asked = await new DatabaseHealth(dataSource, NullLogger<DatabaseHealth>.Instance).CheckAsync();
@@ -93,7 +94,7 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
         finally
         {
             NpgsqlConnection.ClearAllPools();
-            await ExecuteAsync(database.ConnectionString, $"""DROP OWNED BY "{role}"; DROP ROLE "{role}";""");
+            await ExecuteAsync(database, $"""DROP OWNED BY "{role}"; DROP ROLE "{role}";""");
         }
     }
 
@@ -107,24 +108,5 @@ public sealed class SchemaBehindPostgresTests(PostgresFixture fixture)
 
         Assert.Equal(0, (await health.CheckAsync()).PendingMigrationCount);
         Assert.Equal(0, health.PendingMigrationCount);
-    }
-
-    private static async Task ExecuteAsync(string connectionString, string sql)
-    {
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<object?> ScalarAsync(string connectionString, string sql)
-    {
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        var value = await command.ExecuteScalarAsync();
-        return value is DBNull ? null : value;
     }
 }

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Runtime.CompilerServices;
 using ShowroomBilling.Contracts;
+using ShowroomBilling.Desktop.Services;
 
 namespace ShowroomBilling.Desktop.Tests.TestSupport;
 
@@ -14,6 +15,10 @@ internal static class TestAppData
 {
     public static string Root { get; } = Path.Combine(
         Path.GetTempPath(), "ShowroomBilling.Desktop.Tests", Guid.NewGuid().ToString("N"));
+
+    // Only the default-location test uses the process-wide key. Each settings fixture gets its own.
+    public static string NewHandoverKeyPath() =>
+        Path.Combine(Root, "keys", Guid.NewGuid().ToString("N"), HandoverKeyStore.FileName);
 
     [ModuleInitializer]
     internal static void Redirect()

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -17,7 +18,7 @@ public sealed class SaveRoundTripPostgresTests(PostgresFixture fixture)
         await using (var warm = database.CreateContext())
         {
             await PostgresBillTestSupport.BuildService(warm)
-                .CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("warm", 100m), Guid.NewGuid()));
+                .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("warm", 100m), Guid.NewGuid()));
         }
 
         var counter = new CommandCounter();
@@ -26,7 +27,7 @@ public sealed class SaveRoundTripPostgresTests(PostgresFixture fixture)
             .Options;
         await using var db = new ShowroomBillingDbContext(options);
         await PostgresBillTestSupport.BuildService(db)
-            .CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m), Guid.NewGuid()));
+            .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m), Guid.NewGuid()));
 
         // op-id lookup, reservation-key lookup, sequence FOR UPDATE, numbering
         // settings, occupancy window, one batched INSERT. The commit is extra.

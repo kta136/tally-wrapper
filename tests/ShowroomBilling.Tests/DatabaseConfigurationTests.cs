@@ -67,7 +67,8 @@ public sealed class DatabaseConfigurationTests
             Assert.DoesNotContain("Password=secret", json);
             Assert.Equal(
                 "Host=db;Database=showroom;Username=user;Password=secret",
-                DatabaseConfigurationStore.LoadPostgresConnectionString("Development"));
+                DatabaseConfigurationStore.LoadPostgresConnectionString("Development", out var loadError));
+            Assert.Null(loadError);
         }
         finally
         {

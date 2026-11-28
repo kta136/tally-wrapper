@@ -176,33 +176,12 @@ public sealed class DesignSnapshotTests
         Func<MainWindowViewModel, FrameworkElement> screen,
         bool adminUnlocked = false)
     {
-        try
+        ViewSnapshot.Capture(problems, bindingErrors, name, DesignSample.WindowSize, () =>
         {
             var shell = DesignSample.CreateShell(tokenStore: adminUnlocked ? DesignSample.UnlockedTokens() : null);
             DesignSample.MakeHealthy(shell);
             var view = screen(shell);
-            var root = DesignSample.ComposeShell(shell, view);
-            var window = new Window { Content = root, DataContext = shell };
-            Layout(root);
-            ViewSnapshot.Save(root, name);
-            window.Content = null;
-        }
-        catch (Exception ex)
-        {
-            problems.Add($"{name}: {ex.GetBaseException().Message}");
-        }
-
-        problems.AddRange(bindingErrors.Take().Select(error => $"{name}: {error}"));
-    }
-
-    private static void Layout(FrameworkElement view)
-    {
-        for (var pass = 0; pass < 3; pass++)
-        {
-            view.Measure(DesignSample.WindowSize);
-            view.Arrange(new Rect(DesignSample.WindowSize));
-            view.UpdateLayout();
-            WpfTestHost.DrainDispatcher();
-        }
+            return DesignSample.ComposeShell(shell, view);
+        });
     }
 }

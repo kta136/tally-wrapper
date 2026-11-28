@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence.Migrations;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -63,7 +63,7 @@ public sealed class DropInvoiceNumberReservationsMigrationPostgresTests(Postgres
         await using (var db = database.CreateContext())
         {
             var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
-                new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("After the drop", 100m)));
+                new CreateBillDraftRequest(SamplePayload("After the drop", 100m)));
             Assert.EndsWith("/0001", bill.InvoiceNumber);
         }
 
@@ -89,33 +89,5 @@ public sealed class DropInvoiceNumberReservationsMigrationPostgresTests(Postgres
 
         await MigrateAsync(database, target: null);
         Assert.Equal(2L, await ScalarAsync<long>(database, $"""SELECT count(*) FROM public."{Backup}" """));
-    }
-
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
-    private static async Task<bool> TableExistsAsync(PostgresFixture.PostgresTestDatabase database, string table) =>
-        await ScalarAsync<bool>(database, $"""SELECT to_regclass('public."{table}"') IS NOT NULL""");
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql, int expectedRows)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        Assert.Equal(expectedRows, await command.ExecuteNonQueryAsync());
-    }
-
-    private static async Task<T> ScalarAsync<T>(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return (T)(await command.ExecuteScalarAsync())!;
     }
 }

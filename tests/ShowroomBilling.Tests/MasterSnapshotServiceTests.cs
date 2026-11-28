@@ -7,6 +7,7 @@ using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Tally;
 using ShowroomBilling.Tests.Postgres;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests;
 
@@ -108,7 +109,7 @@ public sealed class MasterSnapshotServiceTests(PostgresFixture postgres) : Datab
         MasterSnapshotService snapshots, string xml, CancellationToken cancellationToken)
     {
         var source = new TallyXmlMasterSource(
-            new TallyPosterTests.FakeXmlClient(XElement.Parse(xml)), new TallyPosterTests.FakeCloudSettingsService());
+            new FakeXmlClient(XElement.Parse(xml)), new FakeCloudSettingsService());
         using var services = new ServiceCollection().BuildServiceProvider();
         var refresher = new TallyMasterRefresher(source, snapshots, services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<TallyMasterRefresher>.Instance);

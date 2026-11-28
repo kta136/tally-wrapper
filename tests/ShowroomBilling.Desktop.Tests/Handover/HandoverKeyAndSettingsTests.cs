@@ -11,8 +11,6 @@ namespace ShowroomBilling.Desktop.Tests.Handover;
 
 public sealed class HandoverKeyAndSettingsTests
 {
-    private static string ScratchKeyPath() => Path.Combine(TestAppData.Root, "keys", Guid.NewGuid().ToString("N"), HandoverKeyStore.FileName);
-
     [Theory]
     [InlineData("")]
     [InlineData("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh")]
@@ -33,7 +31,7 @@ public sealed class HandoverKeyAndSettingsTests
     [Fact]
     public void The_key_is_kept_protected_for_this_Windows_user_and_can_be_removed()
     {
-        var path = ScratchKeyPath();
+        var path = TestAppData.NewHandoverKeyPath();
         var store = new HandoverKeyStore(path);
         Assert.False(store.HasKey);
         Assert.Null(store.Load());
@@ -53,7 +51,7 @@ public sealed class HandoverKeyAndSettingsTests
     [Fact]
     public void A_damaged_key_file_counts_as_no_key()
     {
-        var path = ScratchKeyPath();
+        var path = TestAppData.NewHandoverKeyPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, [1, 2, 3]);
 
@@ -79,7 +77,7 @@ public sealed class HandoverKeyAndSettingsTests
     [Fact]
     public void The_section_shows_the_key_masked_and_changes_it_through_the_dialog()
     {
-        var store = new HandoverKeyStore(ScratchKeyPath());
+        var store = new HandoverKeyStore(TestAppData.NewHandoverKeyPath());
         var dialogs = new FakeDialogs();
         var section = new HandoverSettingsViewModel(store, dialogs);
         Assert.False(section.HasKey);
@@ -109,7 +107,7 @@ public sealed class HandoverKeyAndSettingsTests
     [Fact]
     public async Task Remove_asks_first_and_removes_only_on_yes()
     {
-        var store = new HandoverKeyStore(ScratchKeyPath());
+        var store = new HandoverKeyStore(TestAppData.NewHandoverKeyPath());
         Assert.Null(store.Save(HandoverTestLinks.VectorKey));
         ConfirmRequest? asked = null;
         var answer = false;

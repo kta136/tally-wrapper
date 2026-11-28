@@ -137,10 +137,10 @@
                             <ColumnDefinition Width="104" />
                             <ColumnDefinition Width="100" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TableHeaderText}" Text="Section" />
-                        <TextBlock Grid.Column="2" Margin="0,0,10,0" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource TableHeaderText}" Text="Before" />
-                        <TextBlock Grid.Column="3" Margin="0,0,10,0" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource TableHeaderText}" Text="After" />
-                        <TextBlock Grid.Column="4" VerticalAlignment="Center" Style="{StaticResource TableHeaderText}" Text="Show" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderText}" Text="Section" />
+                        <TextBlock Grid.Column="2" Margin="0,0,10,0" HorizontalAlignment="Right" Style="{StaticResource TableHeaderText}" Text="Before" />
+                        <TextBlock Grid.Column="3" Margin="0,0,10,0" HorizontalAlignment="Right" Style="{StaticResource TableHeaderText}" Text="After" />
+                        <TextBlock Grid.Column="4" Style="{StaticResource TableHeaderText}" Text="Show" />
                     </Grid>
                 </Border>
 

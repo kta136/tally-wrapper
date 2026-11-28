@@ -26,7 +26,6 @@ internal static class BillDetailsPrintMapper
             PartyPhone: payload.PartyPhone,
             PartyAddress: payload.PartyAddress,
             Payment: payload.Payment,
-            Rate24Kt: payload.Rate24Kt,
             Lines: PrintLineSubstitution.WithTallyMappedItemNames(payload.Lines, karatMappings),
             Totals: totals,
             Notes: payload.Notes,

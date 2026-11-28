@@ -153,45 +153,32 @@ public sealed class InvoiceBankChargesTests
         return vm;
     }
 
-    private static BillResponse BillWith(Guid id, BillTotalsDto totals) => new(
-        Id: id,
-        State: "pending",
-        InvoiceNumber: "SR/25-26/0001",
-        FiscalYear: "2025-2026",
-        SupersededByBillId: null,
-        CurrentRevisionId: Guid.NewGuid(),
-        CreatedAtUtc: DateTimeOffset.UtcNow,
-        UpdatedAtUtc: DateTimeOffset.UtcNow,
-        CurrentRevision: new BillRevisionResponse(
-            Id: Guid.NewGuid(),
-            RevisionNo: 1,
-            CreatedAtUtc: DateTimeOffset.UtcNow,
-            SupersedesRevisionId: null,
-            Payload: new BillPayloadDto(
-                PartyName: "Customer",
-                PartyGstin: null,
-                PartyPhone: null,
-                PartyAddress: null,
-                BillDate: new DateOnly(2026, 4, 24),
-                Lines:
-                [
-                    new BillLineItemDto(
-                        ItemName: "Diamond Ring",
-                        HsnCode: "7113",
-                        Quantity: 10m,
-                        Unit: ItemUnits.Carat,
-                        Rate: 100m,
-                        LineTotal: 1000m,
-                        Karat: null,
-                        RawJson: null,
-                        GrossWeight: 10m,
-                        LessWeight: 0m,
-                        DiamondRate: 100m,
-                        ItemCategory: ItemCategories.Diamond,
-                        PricingMode: PricingModes.Wastage),
-                ],
-                Totals: totals,
-                Notes: null,
-                Payment: "Cash",
-                Rate24Kt: null)));
+    private static BillResponse BillWith(Guid id, BillTotalsDto totals) =>
+        FakeBillsApi.Bill(id, payload: new BillPayloadDto(
+            PartyName: "Customer",
+            PartyGstin: null,
+            PartyPhone: null,
+            PartyAddress: null,
+            BillDate: new DateOnly(2026, 4, 24),
+            Lines:
+            [
+                new BillLineItemDto(
+                    ItemName: "Diamond Ring",
+                    HsnCode: "7113",
+                    Quantity: 10m,
+                    Unit: ItemUnits.Carat,
+                    Rate: 100m,
+                    LineTotal: 1000m,
+                    Karat: null,
+                    RawJson: null,
+                    GrossWeight: 10m,
+                    LessWeight: 0m,
+                    DiamondRate: 100m,
+                    ItemCategory: ItemCategories.Diamond,
+                    PricingMode: PricingModes.Wastage),
+            ],
+            Totals: totals,
+            Notes: null,
+            Payment: "Cash",
+            Rate24Kt: null));
 }

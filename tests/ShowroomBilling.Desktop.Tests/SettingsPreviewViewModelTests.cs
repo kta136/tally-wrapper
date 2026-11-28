@@ -241,13 +241,14 @@ public class SettingsPreviewViewModelTests
             printAssetApi: assets,
             tallyCheckApi: new OfflineTallyCheckApi(),
             dialogs: new FakeDialogs(),
+            handoverKeys: new HandoverKeyStore(TestAppData.NewHandoverKeyPath()),
             previewFactory: (draft, layout, host) =>
                 new SettingsPreviewViewModel(draft, layout, host, dispatcher, assets, null, FastDebounce));
 
         return (settings.Preview, dispatcher, assets, settings);
     }
 
-    private sealed class FakePrintDispatcher : IPrintDispatcher
+    private sealed class FakePrintDispatcher : StubPrintDispatcher
     {
         private int _renderCount;
         private int _completedCount;
@@ -259,7 +260,7 @@ public class SettingsPreviewViewModelTests
         /// <summary>If set, each render awaits the returned task before returning.</summary>
         public Func<int, Task<bool>>? Gate { get; set; }
 
-        public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)
+        public override IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)
         {
             var n = Interlocked.Increment(ref _renderCount);
             LastOptions = options;
@@ -277,18 +278,6 @@ public class SettingsPreviewViewModelTests
                 _completed.Release();
             }
         }
-
-        public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
-        public IReadOnlyList<string> AvailablePrinters() => Array.Empty<string>();
-        public string? DefaultPrinter() => null;
-        public void RefreshPrinters() { }
-        public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
-        public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null) => false;
-        public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null) => false;
-        public bool PrintToPrinter(
-            IReadOnlyList<PrintDocumentOptions> options,
-            string printerName,
-            PrintJobSettings? settings = null) => false;
 
         public async Task WaitForRenderCountAsync(int target, int timeoutMs = 3000)
         {

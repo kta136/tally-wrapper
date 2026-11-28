@@ -1,9 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Settings;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -94,35 +92,10 @@ public sealed class AddBatchHoursMigrationPostgresTests(PostgresFixture fixture)
         }
     }
 
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
     private static async Task<bool> ColumnExistsAsync(PostgresFixture.PostgresTestDatabase database) =>
         await ScalarAsync<bool>(database, $"""
             SELECT EXISTS (
                 SELECT 1 FROM information_schema.columns
                  WHERE table_schema = 'public' AND table_name = 'cloud_settings' AND column_name = '{Column}')
             """);
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<T> ScalarAsync<T>(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return (T)(await command.ExecuteScalarAsync())!;
-    }
 }

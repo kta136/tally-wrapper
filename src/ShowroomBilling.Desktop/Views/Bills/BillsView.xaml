@@ -35,10 +35,6 @@
         <GridLength x:Key="ColBillDate">130</GridLength>
         <GridLength x:Key="ColUpdated">150</GridLength>
 
-        <Style x:Key="HeadCell" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
-            <Setter Property="Margin" Value="10,0" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
 
         <!--  A count of bills that wait on the operator, in the colour of what it counts.  -->
         <Style x:Key="SummaryPill" TargetType="Border">
@@ -231,18 +227,9 @@
                                    Text="{Binding SelectionSummaryText}" />
                     </Border>
                     <TextBlock VerticalAlignment="Center"
-                               Text="Select bills to act on them">
-                        <TextBlock.Style>
-                            <Style BasedOn="{StaticResource TxtHint}" TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelection}" Value="False">
-                                        <Setter Property="Visibility" Value="Visible" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                               Text="Select bills to act on them"
+                               Style="{StaticResource TxtHint}"
+                               Visibility="{Binding HasSelection, Converter={StaticResource InverseBoolToVis}, FallbackValue=Collapsed}" />
                     <Button Margin="8,0,0,0"
                             Command="{Binding ClearSelectionCommand}"
                             Content="Clear"
@@ -358,13 +345,13 @@
                               HorizontalAlignment="Center"
                               VerticalAlignment="Center"
                               IsChecked="{Binding AreAllVisibleSelected, Mode=TwoWay}" />
-                    <TextBlock Grid.Column="1" Style="{StaticResource HeadCell}" Text="Invoice no." />
-                    <TextBlock Grid.Column="2" Style="{StaticResource HeadCell}" Text="Status" />
-                    <TextBlock Grid.Column="3" Style="{StaticResource HeadCell}" Text="Party" />
-                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource HeadCell}" Text="Amount" />
-                    <TextBlock Grid.Column="5" Style="{StaticResource HeadCell}" Text="Bill date" />
-                    <TextBlock Grid.Column="6" Style="{StaticResource HeadCell}" Text="Updated" />
-                    <TextBlock Grid.Column="7" Style="{StaticResource HeadCell}" Text="Last error or note" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderCell}" Text="Invoice no." />
+                    <TextBlock Grid.Column="2" Style="{StaticResource TableHeaderCell}" Text="Status" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource TableHeaderCell}" Text="Party" />
+                    <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource TableHeaderCell}" Text="Amount" />
+                    <TextBlock Grid.Column="5" Style="{StaticResource TableHeaderCell}" Text="Bill date" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource TableHeaderCell}" Text="Updated" />
+                    <TextBlock Grid.Column="7" Style="{StaticResource TableHeaderCell}" Text="Last error or note" />
                 </Grid>
             </Border>
 

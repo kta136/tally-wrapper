@@ -6,6 +6,7 @@ using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Tests.Postgres;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests;
 
@@ -15,7 +16,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateBackdatedDraftAsync_UsesOverrideForBillAndAudit()
     {
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = Service(db, new FakePoster());
 
         var backdate = new DateTimeOffset(2026, 1, 15, 10, 30, 0, TimeSpan.Zero);
         var response = await service.CreateBackdatedDraftAsync(
@@ -39,7 +40,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
         // A counter saved a bill while a batch was being saved: a batch bill dated before it would
         // take the next number and so be numbered after it.
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = Service(db, new FakePoster());
         var counterBill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Counter Party", 100m)));
 
         var refused = await Assert.ThrowsAsync<BillStateConflictException>(() => service.CreateBackdatedDraftAsync(
@@ -62,7 +63,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateBackdatedDraftAsync_GoesAfterTheNewestBill()
     {
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = Service(db, new FakePoster());
         var earlier = DateTimeOffset.UtcNow.AddHours(-2);
         await service.CreateBackdatedDraftAsync(new CreateBillDraftRequest(SamplePayload("First Party", 60_000m)), earlier);
 
@@ -78,7 +79,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
         // A bill saved today but dated yesterday counts as the end of yesterday: a bill dated today
         // may go before the time it was saved, and is numbered after it.
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = Service(db, new FakePoster());
         var day = ADayBack();
         var dayStart = ShowroomBilling.Contracts.IndiaTime.StartOf(day);
         var dayBefore = await service.CreateBackdatedDraftAsync(
@@ -96,7 +97,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateBackdatedDraftAsync_IsRefusedByABillOfALaterDate_OrOfItsDateInItsMinute()
     {
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = Service(db, new FakePoster());
         var day = ADayBack();
         var at = ShowroomBilling.Contracts.IndiaTime.StartOf(day).AddHours(10).ToUniversalTime();
         await service.CreateBackdatedDraftAsync(
@@ -120,7 +121,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateDraftAsync_DefaultPathStillUsesUtcNow()
     {
         await using var db = CreateDbContext();
-        var service = BuildService(db);
+        var service = Service(db, new FakePoster());
         var before = DateTimeOffset.UtcNow;
 
         var response = await service.CreateDraftAsync(
@@ -138,26 +139,6 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     {
         var day = ShowroomBilling.Contracts.IndiaTime.Today().AddDays(-10);
         return day is { Month: 4, Day: 1 } ? day.AddDays(-1) : day;
-    }
-
-    private static BillPayloadDto SamplePayload(string party, decimal grandTotal, DateOnly? billDate = null) =>
-        new(
-            PartyName: party,
-            PartyGstin: null,
-            PartyPhone: null,
-            PartyAddress: null,
-            BillDate: billDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date),
-            Lines:
-            [
-                new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", grandTotal / 10m, grandTotal, "22K", null)
-            ],
-            Totals: new BillTotalsDto(grandTotal, 0m, 0m, 0m, grandTotal),
-            Notes: null);
-
-    private static BillService BuildService(ShowroomBillingDbContext db)
-    {
-        var numbering = new NumberingService(db);
-        return new BillService(db, numbering, new FakePoster());
     }
 
     private sealed class FakePoster : ITallyPoster

@@ -14,6 +14,7 @@ using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Settings;
 using ShowroomBilling.Tests.Postgres;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests;
 
@@ -371,7 +372,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
         Notes: null);
 
     /// <summary>The masters a batch bills, and no shop hours.</summary>
-    private sealed class MastersOnlySettings : ICloudSettingsService
+    private sealed class MastersOnlySettings : FakeCloudSettingsService
     {
         public static readonly string Items = JsonSerializer.Serialize(new[]
         {
@@ -390,45 +391,13 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
             new KaratMasterEntry("22K", 92.0m, "Hallmarked Gold Jewellery 22KT"),
         });
 
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new EffectiveSettingsResponse(
-                SettingsSource: "cloud",
-                Summary: "test",
-                Settings: new EffectiveCloudSettingsDto(
-                    new ConnectionSettingsDto("127.0.0.1", 9000, 30, "Acme Jewellers"),
-                    new NumberingSettingsDto("DEV-", "", 4),
-                    new PrintSettingsDto("Acme", null, null, null, null, null, null, null, null, null, null, true, false, false, 11, 9),
-                    new LedgerMappingsDto("Sales", "Cash", "Card", "CGST", "SGST", "Round Off", "Discount", "Sales"),
-                    new MasterDataSettingsDto(Items, Karats)),
-                CloudOwnedCategories: [],
-                LocalOnlyCategories: [],
-                UpdatedAtUtc: DateTimeOffset.UtcNow));
+        public MastersOnlySettings()
+        {
+            Masters = new MasterDataSettingsDto(Items, Karats);
+        }
 
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
-            UpdateEffectiveSettingsRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
-            string companyName,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
-            UpdatePrintLayoutRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
+        public override Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new BatchHoursResponse(new BatchHoursSettings(), DateTimeOffset.UtcNow));
-
-        public Task<BatchHoursResponse> UpdateBatchHoursAsync(
-            UpdateBatchHoursRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 
     /// <summary>A batch only saves bills; nothing is sent to Tally.</summary>

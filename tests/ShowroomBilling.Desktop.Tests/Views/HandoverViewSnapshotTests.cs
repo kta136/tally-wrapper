@@ -80,7 +80,7 @@ public sealed class HandoverViewSnapshotTests
         Size canvas,
         Func<MainWindowViewModel, FrameworkElement> view)
     {
-        try
+        ViewSnapshot.Capture(problems, bindingErrors, name, canvas, () =>
         {
             var shell = DesignSample.CreateShell();
             DesignSample.MakeHealthy(shell);
@@ -101,23 +101,7 @@ public sealed class HandoverViewSnapshotTests
             }
 
             root.Children.Add(content);
-            var window = new Window { Content = root, DataContext = shell };
-            for (var pass = 0; pass < 3; pass++)
-            {
-                root.Measure(canvas);
-                root.Arrange(new Rect(canvas));
-                root.UpdateLayout();
-                WpfTestHost.DrainDispatcher();
-            }
-
-            ViewSnapshot.Save(root, name);
-            window.Content = null;
-        }
-        catch (Exception ex)
-        {
-            problems.Add($"{name}: {ex.GetBaseException().Message}");
-        }
-
-        problems.AddRange(bindingErrors.Take().Select(error => $"{name}: {error}"));
+            return root;
+        });
     }
 }

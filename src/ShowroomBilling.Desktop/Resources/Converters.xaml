@@ -5,6 +5,8 @@
     <!--  Shared value converters. Kept in their own dictionary so the view
           smoke test can merge exactly what App.xaml merges.  -->
     <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    <conv:NullToVisibilityConverter x:Key="WhenPresent" />
+    <conv:NullToVisibilityConverter x:Key="WhenNull" ShowWhenNull="True" />
     <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
     <conv:NavTabToBoolConverter x:Key="NavTabToBoolConverter" />
     <conv:DotToBrushConverter x:Key="DotToBrushConverter" />

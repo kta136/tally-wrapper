@@ -97,7 +97,6 @@ public partial class InvoiceViewModel : ObservableObject
     partial void OnQuickAddQueryChanged(string value) => RefreshQuickAddResults();
 
     [ObservableProperty] private string saveStatus = string.Empty;
-    [ObservableProperty] private DateTimeOffset? lastSavedAtUtc;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveDraftCommand), nameof(NewBillCommand))]
@@ -852,7 +851,6 @@ public partial class InvoiceViewModel : ObservableObject
                 InvoiceNumber = bill.InvoiceNumber!;
             _hasUnsavedChanges = false;
             SaveStatus = $"Saved · {bill.State} · {InvoiceNumber}";
-            LastSavedAtUtc = DateTimeOffset.UtcNow;
             savedBillId = bill.Id;
             _lastSavedBill = bill;
         }
@@ -999,7 +997,6 @@ public partial class InvoiceViewModel : ObservableObject
         BankCharges = 0m;
         BankChargesEnabled = false;
         SaveStatus = string.Empty;
-        LastSavedAtUtc = null;
         RateMissing = false;
         IsEditingPosted = false;
         ReplaceLines([]);
@@ -1090,7 +1087,6 @@ public partial class InvoiceViewModel : ObservableObject
             string.IsNullOrWhiteSpace(InvoiceNumber) ? InvoiceNumberPlaceholder : InvoiceNumber,
             payload,
             Payment,
-            Rate24Kt,
             company,
             BuildKaratMappings());
     }
@@ -1111,7 +1107,6 @@ public partial class InvoiceViewModel : ObservableObject
             _lastSavedBill.InvoiceNumber ?? InvoiceNumberPlaceholder,
             payload,
             payload.Payment ?? Payment,
-            payload.Rate24Kt,
             company,
             BuildKaratMappings());
     }

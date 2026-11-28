@@ -39,7 +39,7 @@ public sealed class ViewSmokeTests
             var shell = DesignSample.CreateShell();
             var settings = shell.Settings;
             var view = new BottomBarView { DataContext = shell };
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var label = Assert.Single(Descendants(view).OfType<TextBlock>(), block => block.Text == settings.ActiveCompanyName);
             var current = settings.Settings!;
             var changed = current with { Connection = current.Connection with { ActiveCompanyName = "Second company" } };
@@ -80,13 +80,13 @@ public sealed class ViewSmokeTests
                     foreach (var section in Enum.GetValues<SettingsSectionKey>())
                     {
                         shell.Settings.SelectedSection = section;
-                        Layout(view);
+                        WpfTestHost.Layout(view, ViewSize);
                         ViewSnapshot.Save(view, $"{viewType.Name}-{section}");
                     }
                 }
                 else
                 {
-                    Layout(view);
+                    WpfTestHost.Layout(view, ViewSize);
                     ViewSnapshot.Save(view, viewType.Name);
                 }
 
@@ -108,7 +108,7 @@ public sealed class ViewSmokeTests
         {
             var mainWindow = new MainWindow(shell);
             var root = (FrameworkElement)mainWindow.Content;
-            Layout(root);
+            WpfTestHost.Layout(root, ViewSize);
             ViewSnapshot.Save(root, nameof(MainWindow));
         }
         catch (Exception ex)
@@ -161,19 +161,6 @@ public sealed class ViewSmokeTests
         }
     }
 
-    private static void Layout(FrameworkElement view)
-    {
-        // Bindings resolve at a lower dispatcher priority than layout, so the
-        // first pass sizes the view and the second lays out what the bindings
-        // then filled in.
-        for (var pass = 0; pass < 2; pass++)
-        {
-            view.Measure(ViewSize);
-            view.Arrange(new Rect(ViewSize));
-            view.UpdateLayout();
-            WpfTestHost.DrainDispatcher();
-        }
-    }
 
     /// <summary>
     /// Every UserControl in the Desktop's Views namespace. The settings

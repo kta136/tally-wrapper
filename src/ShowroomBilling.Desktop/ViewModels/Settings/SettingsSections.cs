@@ -79,3 +79,37 @@ public sealed class SettingsSectionGroupConverter : IValueConverter
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+public sealed class SettingsSidebarItemConverter : IValueConverter
+{
+    public static SettingsSidebarItemConverter Instance { get; } = new();
+
+    private sealed record SidebarItem(string Title, string Glyph);
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not SettingsSectionKey section)
+        {
+            return null;
+        }
+
+        var glyph = section switch
+        {
+            SettingsSectionKey.Server => "\uEDA2",
+            SettingsSectionKey.Connection => "\uE71B",
+            SettingsSectionKey.Invoice => "\uE8A5",
+            SettingsSectionKey.PrintLayout => "\uE749",
+            SettingsSectionKey.Ledgers => "\uE736",
+            SettingsSectionKey.Masters => "\uE71D",
+            SettingsSectionKey.Handover => "\uE8D7",
+            SettingsSectionKey.Advanced => "\uE713",
+            SettingsSectionKey.TallyCheck => "\uE73E",
+            SettingsSectionKey.Admin => "\uE7EF",
+            _ => string.Empty,
+        };
+        return new SidebarItem(SettingsSections.TitleOf(section), glyph);
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

@@ -20,20 +20,6 @@ internal static class PostgresBillTestSupport
         return new BillService(db, numbering, poster ?? new RecordingTallyPoster(), tallyHealth ?? HealthyTallyHealth.Instance);
     }
 
-    internal static BillPayloadDto SamplePayload(string party, decimal grandTotal) =>
-        new(
-            PartyName: party,
-            PartyGstin: null,
-            PartyPhone: null,
-            PartyAddress: null,
-            BillDate: DateOnly.FromDateTime(DateTime.UtcNow.Date),
-            Lines:
-            [
-                new BillLineItemDto("22K Gold Ring", "7113", 10m, "grams", grandTotal / 10m, grandTotal, "22K", null)
-            ],
-            Totals: new BillTotalsDto(grandTotal, 0m, 0m, 0m, grandTotal),
-            Notes: null);
-
     internal static TallyPostResponse PostedResponse(string? remoteId = "FAKE-VCH-1", string? tallyMasterId = null) =>
         TallyPostResponse.Posted(remoteId, tallyMasterId: tallyMasterId);
 }

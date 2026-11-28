@@ -116,7 +116,7 @@ public sealed class InvoiceDiamondViewModelTests
         var billId = Guid.NewGuid();
         var oldBill = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null))
             with { BillDate = new DateOnly(2026, 4, 24), Payment = PaymentMode.CreditDebit };
-        var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, oldBill) };
+        var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, payload: oldBill) };
         var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), null);
         await vm.LoadBillForEditAsync(billId);
         Assert.Equal(PaymentMode.CreditDebit, vm.Payment);
@@ -132,7 +132,7 @@ public sealed class InvoiceDiamondViewModelTests
     {
         var billId = Guid.NewGuid();
         var payload = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null));
-        var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, payload) };
+        var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, payload: payload) };
         var numbering = new GatedNumberingApi();
         var vm = new InvoiceViewModel(api, numbering, new FakeDialogs(), null);
 
@@ -186,7 +186,7 @@ public sealed class InvoiceDiamondViewModelTests
     {
         var billId = Guid.NewGuid();
         var payload = PayloadWithLine(new BillLineItemDto("Diamond Ring", "7113", 2m, ItemUnits.Carat, 3500m, 7000m, null, null));
-        var api = new FakeBillsApi { GetResponse = BillResponseFor(billId, payload) with { State = state } };
+        var api = new FakeBillsApi { GetResponse = FakeBillsApi.Bill(billId, state, payload) };
         var tokens = new AdminTokenStore();
         if (unlocked)
         {
@@ -249,7 +249,7 @@ public sealed class InvoiceDiamondViewModelTests
         await vm.SaveDraftCommand.ExecuteAsync(null);
 
         vm.PartyName = "Typed After Save";
-        var content = vm.BuildSavedPrintContent(new ShowroomBilling.Printing.CompanyProfile("Acme", null, null, null, null, "", null, null, null, null, null, null));
+        var content = vm.BuildSavedPrintContent(new ShowroomBilling.Printing.CompanyProfile("Acme", null, null, "", null, null, null, null, null));
 
         Assert.Equal("Saved Customer", content!.PartyName);
     }
@@ -352,7 +352,7 @@ public sealed class InvoiceDiamondViewModelTests
             PricingMode: PricingModes.Wastage));
         var api = new FakeBillsApi
         {
-            GetResponse = BillResponseFor(billId, payload)
+            GetResponse = FakeBillsApi.Bill(billId, payload: payload)
         };
         var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), null);
 
@@ -406,7 +406,7 @@ public sealed class InvoiceDiamondViewModelTests
             Rate24Kt: 6000m);
         var api = new FakeBillsApi
         {
-            GetResponse = BillResponseFor(billId, payload)
+            GetResponse = FakeBillsApi.Bill(billId, payload: payload)
         };
         var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), settings);
 
@@ -459,7 +459,7 @@ public sealed class InvoiceDiamondViewModelTests
             Rate24Kt: 6000m);
         var api = new FakeBillsApi
         {
-            GetResponse = BillResponseFor(billId, payload)
+            GetResponse = FakeBillsApi.Bill(billId, payload: payload)
         };
         var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), settings);
 
@@ -523,7 +523,7 @@ public sealed class InvoiceDiamondViewModelTests
             Rate24Kt: 6000m);
         var api = new FakeBillsApi
         {
-            GetResponse = BillResponseFor(billId, payload)
+            GetResponse = FakeBillsApi.Bill(billId, payload: payload)
         };
         var vm = new InvoiceViewModel(api, FakeNumberingApi.Offline(), new FakeDialogs(), settings);
 
@@ -633,20 +633,4 @@ public sealed class InvoiceDiamondViewModelTests
         Notes: null,
         Payment: "Cash",
         Rate24Kt: null);
-
-    private static BillResponse BillResponseFor(Guid id, BillPayloadDto payload) => new(
-        Id: id,
-        State: "pending",
-        InvoiceNumber: "SR/25-26/0001",
-        FiscalYear: "2025-2026",
-        SupersededByBillId: null,
-        CurrentRevisionId: Guid.NewGuid(),
-        CreatedAtUtc: DateTimeOffset.UtcNow,
-        UpdatedAtUtc: DateTimeOffset.UtcNow,
-        CurrentRevision: new BillRevisionResponse(
-            Id: Guid.NewGuid(),
-            RevisionNo: 1,
-            CreatedAtUtc: DateTimeOffset.UtcNow,
-            SupersedesRevisionId: null,
-            Payload: payload));
 }

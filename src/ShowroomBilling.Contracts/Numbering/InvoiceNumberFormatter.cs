@@ -27,7 +27,7 @@ public static class InvoiceNumberFormatter
     /// Parses the trailing run of decimal digits from <paramref name="invoiceNumber"/>
     /// into the bill's sequence core. Returns <c>null</c> for inputs with no trailing
     /// digits (legacy custom strings like <c>LEGACY-X</c>). Format-tolerant: both
-    /// <c>DDAJR/26-27/49</c> and <c>DDAJR/26-27/0049</c> parse to <c>49</c>, so a
+    /// <c>DEMO/26-27/49</c> and <c>DEMO/26-27/0049</c> parse to <c>49</c>, so a
     /// scope with mixed historical formatting still has a single canonical core
     /// per bill. Used by the reservation forward-skip and the post-delete sequence
     /// rollback to test occupancy without round-tripping through <see cref="Format"/>.

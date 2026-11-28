@@ -1,5 +1,6 @@
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Desktop.Services;
+using ShowroomBilling.Desktop.Tests.TestSupport;
 using ShowroomBilling.Desktop.ViewModels.Printing;
 using ShowroomBilling.Printing;
 
@@ -276,7 +277,6 @@ public sealed class PrintPreviewViewModelPrintTests
         PartyPhone: null,
         PartyAddress: null,
         Payment: "Cash",
-        Rate24Kt: null,
         Lines: new[]
         {
             new BillLineItemDto(
@@ -300,17 +300,14 @@ public sealed class PrintPreviewViewModelPrintTests
             Name: "Acme Jewellers",
             Address: "Main Road",
             Phone: null,
-            State: null,
-            Country: "India",
             Gstin: "29AAAA0000A1Z5",
-            Huid: null,
             BankName: null,
             BankAccount: null,
             BankIfsc: null,
             BankUpi: null,
             TermsAndConditions: null));
 
-    private sealed class FakePrintDispatcher(string printerName) : IPrintDispatcher
+    private sealed class FakePrintDispatcher(string printerName) : StubPrintDispatcher
     {
         private readonly SemaphoreSlim _previewRendered = new(0);
 
@@ -343,20 +340,18 @@ public sealed class PrintPreviewViewModelPrintTests
         public List<string> Installed { get; } = [printerName];
         private string[] _lastRead = [printerName];
 
-        public IReadOnlyList<string> AvailablePrinters() => _lastRead;
-        public string? DefaultPrinter() => printerName;
-        public void RefreshPrinters() => _lastRead = [.. Installed];
-        public PrintJobCapabilities GetPrinterCapabilities(string selectedPrinterName) => Capabilities;
-        public bool PrintsOnBothSides(string selectedPrinterName, PrintJobSettings? settings = null) => false;
-        public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
+        public override IReadOnlyList<string> AvailablePrinters() => _lastRead;
+        public override string? DefaultPrinter() => printerName;
+        public override void RefreshPrinters() => _lastRead = [.. Installed];
+        public override PrintJobCapabilities GetPrinterCapabilities(string selectedPrinterName) => Capabilities;
 
-        public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)
+        public override IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150)
         {
             _previewRendered.Release();
             return Array.Empty<byte[]>();
         }
 
-        public bool PrintToPrinter(
+        public override bool PrintToPrinter(
             PrintDocumentOptions options,
             string selectedPrinterName,
             PrintJobSettings? settings = null)
@@ -367,7 +362,7 @@ public sealed class PrintPreviewViewModelPrintTests
             return true;
         }
 
-        public bool PrintToPrinter(
+        public override bool PrintToPrinter(
             IReadOnlyList<PrintDocumentOptions> options,
             string selectedPrinterName,
             PrintJobSettings? settings = null)
@@ -390,28 +385,6 @@ public sealed class PrintPreviewViewModelPrintTests
             {
                 throw new TimeoutException("Preview render did not start before the timeout.");
             }
-        }
-    }
-
-    private sealed class FakePrintPreferencesStore : IPrintPreferencesStore
-    {
-        public event EventHandler<double>? PrintPreviewZoomPercentChanged;
-
-        public string? LastPrinterName { get; set; }
-        public string? LastPdfDirectory { get; private set; }
-        public bool DirectPrintAfterSave { get; private set; }
-        public double PrintPreviewZoomPercent { get; set; } = 100;
-        public PrintJobSettings PrintJobSettings { get; set; } = PrintJobSettings.Default;
-
-        public void SaveLastPrinter(string printerName) => LastPrinterName = printerName;
-        public void SaveLastPdfDirectory(string directory) => LastPdfDirectory = directory;
-        public void SaveDirectPrintAfterSave(bool value) => DirectPrintAfterSave = value;
-        public void SavePrintJobSettings(PrintJobSettings settings) => PrintJobSettings = settings;
-
-        public void SavePrintPreviewZoomPercent(double value)
-        {
-            PrintPreviewZoomPercent = value;
-            PrintPreviewZoomPercentChanged?.Invoke(this, value);
         }
     }
 }

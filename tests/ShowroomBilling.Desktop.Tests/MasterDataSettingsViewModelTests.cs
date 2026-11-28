@@ -11,14 +11,14 @@ public sealed class MasterDataSettingsViewModelTests
     [Fact]
     public async Task LoadMissingSnapshotsAsync_PopulatesSnapshots_AndSelectsActiveCompany()
     {
-        var shell = new FakeShell { ActiveCompanyNameValue = "DDA Jewels" };
+        var shell = new FakeShell { ActiveCompanyNameValue = "Example Jewellers" };
         var mastersApi = new FakeMastersApiClient();
         var vm = new MasterDataSettingsViewModel(new OfflineSettingsApi(), mastersApi, shell);
 
         await vm.LoadMissingSnapshotsAsync(CancellationToken.None);
 
         Assert.Equal(2, vm.Companies.Count);
-        Assert.Equal("DDA Jewels", vm.SelectedCompany?.Name);
+        Assert.Equal("Example Jewellers", vm.SelectedCompany?.Name);
         Assert.Equal(2, vm.LedgerOptions.Count);
         Assert.Single(vm.VoucherTypeOptions);
         Assert.Equal(2, vm.StockItems.Count);
@@ -58,7 +58,7 @@ public sealed class MasterDataSettingsViewModelTests
     [Fact]
     public async Task SetActiveCompany_DelegatesToSettingsApi_AndReloadsShell()
     {
-        var shell = new FakeShell { ActiveCompanyNameValue = "DDA Jewels" };
+        var shell = new FakeShell { ActiveCompanyNameValue = "Example Jewellers" };
         var settingsApi = new FakeSettingsApiClient();
         var mastersApi = new FakeMastersApiClient();
         var vm = new MasterDataSettingsViewModel(settingsApi, mastersApi, shell);
@@ -148,7 +148,7 @@ public sealed class MasterDataSettingsViewModelTests
                 new[]
                 {
                     new CompanySnapshotItem("Backup Jewels", false),
-                    new CompanySnapshotItem("DDA Jewels", true),
+                    new CompanySnapshotItem("Example Jewellers", true),
                 }));
 
         public Task<LedgerSnapshotResponse> GetLedgersAsync(CancellationToken cancellationToken = default)
@@ -193,32 +193,16 @@ public sealed class MasterDataSettingsViewModelTests
             => new(masterType, _fetchedAt, count, "fresh");
     }
 
-    private sealed class FakeSettingsApiClient : ISettingsApiClient
+    private sealed class FakeSettingsApiClient : SettingsApiStub
     {
         public string? SelectedCompanyName { get; private set; }
 
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
-            UpdateEffectiveSettingsRequest request,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
+        public override Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
             SelectActiveCompanyRequest request,
             CancellationToken cancellationToken = default)
         {
             SelectedCompanyName = request.CompanyName;
             return Task.FromResult(new SettingsUpdateResponse("cloud", "saved", ["connection"], DateTimeOffset.UtcNow));
         }
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
-            UpdatePrintLayoutRequest request,
-            CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
     }
 }

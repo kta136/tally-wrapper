@@ -216,7 +216,7 @@ public sealed class DesignDialogTests
                     => new(item, null, net, unit, rate, total, karat, null);
 
                 var content = new BillPrintContent(
-                    "SR/2026-27/0009", new DateOnly(2026, 10, 11), "Meera Subramaniam", null, null, null, "Cash", 7780m,
+                    "SR/2026-27/0009", new DateOnly(2026, 10, 11), "Meera Subramaniam", null, null, null, "Cash",
                     [
                         Line("22kt Gold Chain (Rope, 18″)", 12.450m, "g", 8068.88m, 100457.56m, "22kt"),
                         Line("22kt Lakshmi Pendant", 3.770m, "g", 8086.68m, 30486.78m, "22kt"),
@@ -225,7 +225,7 @@ public sealed class DesignDialogTests
                     ],
                     new BillTotalsDto(286122.02m, 5000m, 8583.66m, 0.32m, 289706m),
                     null,
-                    new CompanyProfile("Sample Jewellers", null, null, "Tamil Nadu", "India", string.Empty, null, null, null, null, null, null));
+                    new CompanyProfile("Sample Jewellers", null, null, string.Empty, null, null, null, null, null));
                 shell.PrintPreview.Initialize(content);
                 foreach (var bytes in new BillPrintRenderer().GeneratePageImages(PrintDocumentOptions.ForInvoice(content, [CopyLabel.Original]), 110))
                 {
@@ -333,30 +333,14 @@ public sealed class DesignDialogTests
         string name,
         Func<MainWindowViewModel, FrameworkElement> dialog)
     {
-        try
+        ViewSnapshot.Capture(problems, bindingErrors, name, CanvasSize, () =>
         {
             var shell = DesignSample.CreateShell();
             DesignSample.MakeHealthy(shell);
             var view = dialog(shell);
             var root = new Grid { DataContext = shell, Width = CanvasSize.Width, Height = CanvasSize.Height };
             root.Children.Add(view);
-            var window = new Window { Content = root, DataContext = shell };
-            for (var pass = 0; pass < 3; pass++)
-            {
-                root.Measure(CanvasSize);
-                root.Arrange(new Rect(CanvasSize));
-                root.UpdateLayout();
-                WpfTestHost.DrainDispatcher();
-            }
-
-            ViewSnapshot.Save(root, name);
-            window.Content = null;
-        }
-        catch (Exception ex)
-        {
-            problems.Add($"{name}: {ex.GetBaseException().Message}");
-        }
-
-        problems.AddRange(bindingErrors.Take().Select(error => $"{name}: {error}"));
+            return root;
+        });
     }
 }

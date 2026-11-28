@@ -1,13 +1,12 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Logging.Abstractions;
-using Npgsql;
 using ShowroomBilling.Contracts.Admin;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Admin;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Migrations;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -67,7 +66,7 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
         // The application carries on where it was: the next number, and the passcode set before.
         await using var db = database.CreateContext();
         var third = await PostgresBillTestSupport.BuildService(db)
-            .CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("C", 100m)));
+            .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
         Assert.EndsWith("0003", third.InvoiceNumber);
         Assert.NotNull((await Admin(db).UnlockAsync(new AdminUnlockRequest(Passcode, null))).Token);
     }
@@ -112,7 +111,7 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
         {
             Assert.Equal(2, await db.Bills.AsNoTracking().CountAsync());
             var third = await PostgresBillTestSupport.BuildService(db)
-                .CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("C", 100m)));
+                .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
             thirdId = third.Id;
             Assert.EndsWith("0040", third.InvoiceNumber);
         }
@@ -201,8 +200,8 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
     {
         await using var db = database.CreateContext();
         var service = PostgresBillTestSupport.BuildService(db);
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await Admin(db).SetPasscodeAsync(new AdminSetPasscodeRequest(null, Passcode));
         await Admin(db).UnlockAsync(new AdminUnlockRequest(Passcode, null));
         return (first.Id, second.Id);
@@ -237,47 +236,9 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
             WHERE c.relname = '{index}'
             """);
 
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
-    private static async Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database)
-    {
-        var names = new List<string>();
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = """
+    private static Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database) =>
+        ReadNamesAsync(database, """
             SELECT tablename FROM pg_tables
             WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261115\_%'
-            """;
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            names.Add(reader.GetString(0));
-        }
-
-        return names;
-    }
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task<T> ScalarAsync<T>(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return (T)(await command.ExecuteScalarAsync())!;
-    }
+            """);
 }

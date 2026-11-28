@@ -82,7 +82,7 @@ public sealed class ServerDashboardViewTests
                 ("Dialog-Saved", TrayDialog.Message(
                     Tone.Ok,
                     "Save succeeded.",
-                    "Stored: Host=db.example.net;Port=5432;Database=tally_wrapper_prod;Username=billing_api;Password=***\n\n"
+                    "Stored: Host=db.example.net;Port=5432;Database=sample_billing;Username=billing_api;Password=***\n\n"
                     + "The server starts using it when the Windows service restarts.")),
                 ("Dialog-Failed", TrayDialog.Message(
                     Tone.Err,

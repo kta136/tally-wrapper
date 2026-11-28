@@ -5,6 +5,7 @@ using Npgsql;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Persistence.Entities;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -33,7 +34,7 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
                 VALUES
                   ('{reserved}', '{Guid.Empty}', 'sales', 'pending', '2026-27/0007-A2', '2026-27', now(), now(), false),
                   ('{renamed}',  '{Guid.Empty}', 'sales', 'pending', '2026-27/0012',    '2026-27', now(), now(), false),
-                  ('{legacy}',   '{Guid.Empty}', 'sales', 'pending', 'DDAJR/26-27/49',  '2026-27', now(), now(), false),
+                  ('{legacy}',   '{Guid.Empty}', 'sales', 'pending', 'DEMO/26-27/49',  '2026-27', now(), now(), false),
                   ('{custom}',   '{Guid.Empty}', 'sales', 'pending', 'LEGACY-X',        '2026-27', now(), now(), false);
                 INSERT INTO public.invoice_number_reservations ("Id", "IdempotencyKey", "ShowroomId", "FiscalYear", "DocumentType", "ReservedValue", "FormattedNumber", "ReservedAtUtc")
                 VALUES
@@ -64,10 +65,10 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         await AddSettingsAsync(db, suffix: "-A");
         var service = PostgresBillTestSupport.BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await service.DeleteAsync(second.Id, new DeleteBillRequest("test", DryRun: false));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("C", 100m)));
+        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
 
         Assert.EndsWith("/0001-A", first.InvoiceNumber);
         Assert.EndsWith("/0002-A", third.InvoiceNumber);
@@ -81,8 +82,8 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         await AddSettingsAsync(db, suffix: "-A2");
         var service = PostgresBillTestSupport.BuildService(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
 
         Assert.EndsWith("/0001-A2", first.InvoiceNumber);
         Assert.EndsWith("/0002-A2", second.InvoiceNumber);

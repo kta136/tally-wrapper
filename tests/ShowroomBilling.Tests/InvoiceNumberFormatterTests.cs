@@ -33,8 +33,8 @@ public sealed class InvoiceNumberFormatterTests
     }
 
     [Theory]
-    [InlineData("DDAJR/26-27/0049", 49L)]
-    [InlineData("DDAJR/26-27/49", 49L)]
+    [InlineData("DEMO/26-27/0049", 49L)]
+    [InlineData("DEMO/26-27/49", 49L)]
     [InlineData("INV-A2", 2L)]
     [InlineData("LEGACY-X", null)]
     [InlineData("", null)]

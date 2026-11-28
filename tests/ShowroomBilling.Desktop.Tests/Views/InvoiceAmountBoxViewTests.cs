@@ -189,13 +189,7 @@ public sealed class InvoiceAmountBoxViewTests
 
         var view = new InvoiceView { DataContext = invoice };
         _ = new Window { Content = view };
-        for (var pass = 0; pass < 2; pass++)
-        {
-            view.Measure(ViewSize);
-            view.Arrange(new Rect(ViewSize));
-            view.UpdateLayout();
-            WpfTestHost.DrainDispatcher();
-        }
+        WpfTestHost.Layout(view, ViewSize);
 
         return (invoice, view);
     }

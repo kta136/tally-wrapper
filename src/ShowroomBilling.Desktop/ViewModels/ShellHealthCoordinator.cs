@@ -8,7 +8,6 @@ namespace ShowroomBilling.Desktop.ViewModels;
 internal interface IShellHealthHost
 {
     HealthClusterViewModel Health { get; }
-    StatusBarViewModel StatusBar { get; }
     SystemState SystemState { get; set; }
     string BannerText { get; set; }
     SystemHealthSnapshot? LastHealthSnapshot { get; set; }
@@ -166,7 +165,7 @@ internal sealed class ShellHealthCoordinator(
         host.Health.Apply(snapshot);
     }
 
-    /// <summary>The system state, the banner and the status word that a health answer comes to.</summary>
+    /// <summary>Updates the system state and banner from the latest health check.</summary>
     private void ApplyStateOf(SystemHealthSnapshot snapshot, bool operatorAsked)
     {
         // The database is across the internet from the server, so one poll it
@@ -181,7 +180,6 @@ internal sealed class ShellHealthCoordinator(
         {
             host.SystemState = SystemState.Limited;
             host.BannerText = CloudUnavailableBanner;
-            host.StatusBar.StatusText = "CLOUD DOWN";
             return;
         }
 
@@ -190,16 +188,10 @@ internal sealed class ShellHealthCoordinator(
             return;
         }
 
-        if (snapshot.Runtime is { } runtime)
-        {
-            host.StatusBar.ApplyDatabaseIdentity(runtime.DatabaseIdentity);
-        }
-
         if (snapshot.Runtime?.PendingMigrationCount > 0)
         {
             host.SystemState = SystemState.Limited;
             host.BannerText = SchemaBehindBanner(snapshot.Runtime.PendingMigrationCount.Value);
-            host.StatusBar.StatusText = "DB BEHIND";
             return;
         }
 
@@ -207,7 +199,6 @@ internal sealed class ShellHealthCoordinator(
         {
             host.SystemState = SystemState.Degraded;
             host.BannerText = snapshot.Runtime.Message;
-            host.StatusBar.StatusText = "DB MISMATCH";
             return;
         }
 
@@ -215,13 +206,11 @@ internal sealed class ShellHealthCoordinator(
         {
             host.SystemState = SystemState.Limited;
             host.BannerText = "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.";
-            host.StatusBar.StatusText = "DB DOWN";
             return;
         }
 
         host.SystemState = SystemState.Healthy;
         host.BannerText = string.Empty;
-        host.StatusBar.StatusText = "READY";
     }
 
     private static bool IsDue(DateTimeOffset? lastCheckedAtUtc)

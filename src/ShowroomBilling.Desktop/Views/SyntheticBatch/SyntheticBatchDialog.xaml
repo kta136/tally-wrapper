@@ -153,23 +153,11 @@
 
         <StackPanel>
             <!--  What stops Start, across the top of the form  -->
-            <Border Margin="0,0,0,10"
-                    Style="{StaticResource AdminBannerWarn}"
-                    Visibility="{Binding ShowValidation, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               FontFamily="{StaticResource IconFontFamily}"
-                               FontSize="14"
-                               Foreground="{StaticResource WarnInkBrush}"
-                               Text="&#xE7BA;" />
-                    <TextBlock VerticalAlignment="Center"
+            <shell:InlineBanner Margin="0,0,0,10"
+                               Style="{StaticResource AdminBannerWarn}"
+                               Visibility="{Binding ShowValidation, Converter={StaticResource BoolToVis}}"
                                FontWeight="SemiBold"
-                               Foreground="{StaticResource WarnInkBrush}"
-                               Text="{Binding ValidationMessage}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                               Message="{Binding ValidationMessage}" />
 
             <Grid>
                 <Grid.ColumnDefinitions>

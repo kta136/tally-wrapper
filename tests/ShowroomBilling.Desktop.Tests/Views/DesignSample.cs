@@ -26,26 +26,6 @@ namespace ShowroomBilling.Desktop.Tests.Views;
 internal static class DesignSample
 {
     /// <summary>The sample's server, for settings: it answers a load with the sample and is otherwise unreachable.</summary>
-    private sealed class SampleSettingsApi(EffectiveSettingsResponse settings) : ISettingsApiClient
-    {
-        private readonly OfflineSettingsApi _offline = new();
-
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(settings);
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(UpdateEffectiveSettingsRequest request, CancellationToken cancellationToken = default)
-            => _offline.SaveEffectiveSettingsAsync(request, cancellationToken);
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(SelectActiveCompanyRequest request, CancellationToken cancellationToken = default)
-            => _offline.SelectActiveCompanyAsync(request, cancellationToken);
-
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default)
-            => _offline.GetPrintLayoutAsync(cancellationToken);
-
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(UpdatePrintLayoutRequest request, CancellationToken cancellationToken = default)
-            => _offline.UpdatePrintLayoutAsync(request, cancellationToken);
-    }
-
     public static readonly Size WindowSize = new(1280, 800);
 
     private static DateTimeOffset LocalAt(int day, int hour, int minute)
@@ -101,7 +81,7 @@ internal static class DesignSample
 
         // Showing the Settings tab loads them again, so the sample's server gives the same answer.
         var settings = OfflineApi.Settings(
-            new SampleSettingsApi(fromServer),
+            new OfflineSettingsApi(fromServer),
             new DesktopBootstrapOptions { ApiBaseUrl = "http://192.168.1.20:5108" },
             dialogs: dialogs,
             tallyCheckApi: tallyCheckApi);

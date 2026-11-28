@@ -319,7 +319,6 @@ public class BillDocumentRenderTests
         PartyPhone: null,
         PartyAddress: null,
         Payment: "Cash",
-        Rate24Kt: null,
         Lines: new[]
         {
             new BillLineItemDto(
@@ -349,7 +348,6 @@ public class BillDocumentRenderTests
         PartyPhone: "+91 98765 43210",
         PartyAddress: "12, MG Road, Bengaluru",
         Payment: "Credit and debit",
-        Rate24Kt: 72500m,
         Lines: new[]
         {
             new BillLineItemDto(
@@ -416,7 +414,6 @@ public class BillDocumentRenderTests
             PartyPhone: "+91 98765 43210",
             PartyAddress: "12, MG Road, Bengaluru",
             Payment: "Cash",
-            Rate24Kt: 72500m,
             Lines: lines,
             Totals: new BillTotalsDto(
                 Subtotal: subtotal,
@@ -432,10 +429,7 @@ public class BillDocumentRenderTests
         Name: "Acme Jewellers Pvt Ltd",
         Address: "Main Road, Kanpur",
         Phone: "+91 99999 12345",
-        State: "Uttar Pradesh",
-        Country: "India",
         Gstin: "09ACME0000A1Z9",
-        Huid: "HU1234",
         BankName: withBank ? "HDFC Bank" : null,
         BankAccount: withBank ? "501001234567" : null,
         BankIfsc: withBank ? "HDFC0000123" : null,

@@ -22,10 +22,6 @@
                 <TextBlock Text="{Binding Converter={StaticResource MasterLabel}, ConverterParameter=pricing}" />
             </DataTemplate>
 
-            <Style x:Key="MasterHeadText" BasedOn="{StaticResource TableHeaderText}" TargetType="TextBlock">
-                <Setter Property="Margin" Value="10,0" />
-                <Setter Property="VerticalAlignment" Value="Center" />
-            </Style>
 
             <!--  A row of a master table: a hairline under it and the grey wash while the pointer is over it.  -->
             <Style x:Key="MasterRowContainer" TargetType="ListBoxItem">
@@ -91,13 +87,13 @@
                             <ColumnDefinition Width="1.4*" MinWidth="130" />
                             <ColumnDefinition Width="40" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource MasterHeadText}" Text="Name" />
-                        <TextBlock Grid.Column="1" Style="{StaticResource MasterHeadText}" Text="Unit" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource MasterHeadText}" Text="Category" />
-                        <TextBlock Grid.Column="3" Style="{StaticResource MasterHeadText}" Text="Pricing" />
-                        <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource MasterHeadText}" Text="Wastage %" />
-                        <TextBlock Grid.Column="5" HorizontalAlignment="Right" Style="{StaticResource MasterHeadText}" Text="Labour ₹/g" />
-                        <TextBlock Grid.Column="6" Style="{StaticResource MasterHeadText}" Text="Tally stock mapping" />
+                        <TextBlock Grid.Column="0" Style="{StaticResource TableHeaderCell}" Text="Name" />
+                        <TextBlock Grid.Column="1" Style="{StaticResource TableHeaderCell}" Text="Unit" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource TableHeaderCell}" Text="Category" />
+                        <TextBlock Grid.Column="3" Style="{StaticResource TableHeaderCell}" Text="Pricing" />
+                        <TextBlock Grid.Column="4" HorizontalAlignment="Right" Style="{StaticResource TableHeaderCell}" Text="Wastage %" />
+                        <TextBlock Grid.Column="5" HorizontalAlignment="Right" Style="{StaticResource TableHeaderCell}" Text="Labour ₹/g" />
+                        <TextBlock Grid.Column="6" Style="{StaticResource TableHeaderCell}" Text="Tally stock mapping" />
                     </Grid>
                 </Border>
 
@@ -160,29 +156,10 @@
                                            VerticalAlignment="Center"
                                            Foreground="{StaticResource InkSoftBrush}"
                                            IsHitTestVisible="False"
-                                           Text="Flat rate per ct">
-                                    <TextBlock.Style>
-                                        <Style BasedOn="{StaticResource {x:Type TextBlock}}" TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemCategory}" Value="{x:Static contracts:ItemCategories.Diamond}">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <Border Grid.Column="4" Grid.ColumnSpan="2" Background="{StaticResource BgSunkenBrush}" IsHitTestVisible="False">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemCategory}" Value="{x:Static contracts:ItemCategories.Diamond}">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
+                                           Text="Flat rate per ct"
+                                           Visibility="{Binding ItemCategory, Converter={StaticResource StringEqualsVis}, ConverterParameter={x:Static contracts:ItemCategories.Diamond}, FallbackValue=Collapsed}" />
+                                <Border Grid.Column="4" Grid.ColumnSpan="2" Background="{StaticResource BgSunkenBrush}" IsHitTestVisible="False"
+                                        Visibility="{Binding ItemCategory, Converter={StaticResource StringEqualsVis}, ConverterParameter={x:Static contracts:ItemCategories.Diamond}, FallbackValue=Collapsed}">
                                     <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource InkDisabledBrush}" Text="—" />
                                 </Border>
                                 <TextBox Grid.Column="4"
@@ -266,9 +243,9 @@
                             <ColumnDefinition Width="2.5*" MinWidth="180" />
                             <ColumnDefinition Width="40" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource MasterHeadText}" Text="Label" />
-                        <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource MasterHeadText}" Text="Purity %" />
-                        <TextBlock Grid.Column="2" Style="{StaticResource MasterHeadText}" Text="Tally stock item" />
+                        <TextBlock Grid.Column="0" Style="{StaticResource TableHeaderCell}" Text="Label" />
+                        <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource TableHeaderCell}" Text="Purity %" />
+                        <TextBlock Grid.Column="2" Style="{StaticResource TableHeaderCell}" Text="Tally stock item" />
                     </Grid>
                 </Border>
 

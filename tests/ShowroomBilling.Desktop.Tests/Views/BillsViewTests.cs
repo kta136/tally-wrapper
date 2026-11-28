@@ -59,23 +59,23 @@ public sealed class BillsViewTests
                 Runtime: null));
             vm.LoadAsync().GetAwaiter().GetResult();
             var view = new BillsView { DataContext = vm };
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var edit = Buttons(view).Single(button => button.Content as string == "Edit");
             var editBefore = edit.IsEnabled;
             var hintBefore = IsShown(Hint(view));
 
             vm.Items[0].IsSelected = true;
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var editAfter = edit.IsEnabled;
 
             vm.RetryRowCommand.ExecuteAsync(vm.Items[0]).GetAwaiter().GetResult();
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
             var afterRetry = FooterNotice(view);
 
             api.FailWith = new ApiException(HttpStatusCode.Conflict, "Conflict", "Bill is already posted.", null);
             vm.RetryRowCommand.ExecuteAsync(vm.Items[0]).GetAwaiter().GetResult();
-            Layout(view);
+            WpfTestHost.Layout(view, ViewSize);
 
             var filter = Descendants(view).OfType<ComboBox>().First(combo => ReferenceEquals(combo.ItemsSource, vm.StateFilterOptions));
             // The drop-down is a popup, which a view in no window cannot open: word each option
@@ -147,17 +147,6 @@ public sealed class BillsViewTests
             {
                 yield return descendant;
             }
-        }
-    }
-
-    private static void Layout(FrameworkElement view)
-    {
-        for (var pass = 0; pass < 2; pass++)
-        {
-            view.Measure(ViewSize);
-            view.Arrange(new Rect(ViewSize));
-            view.UpdateLayout();
-            WpfTestHost.DrainDispatcher();
         }
     }
 }

@@ -24,6 +24,36 @@ internal static class ViewSnapshot
 
     public static bool IsEnabled => !string.IsNullOrWhiteSpace(Folder);
 
+    public static void Capture(
+        List<string> problems,
+        BindingErrors bindingErrors,
+        string name,
+        Size canvas,
+        Func<FrameworkElement> createRoot)
+    {
+        try
+        {
+            var root = createRoot();
+            var window = new Window { Content = root, DataContext = root.DataContext };
+            try
+            {
+                WpfTestHost.Layout(root, canvas, passes: 3);
+
+                Save(root, name);
+            }
+            finally
+            {
+                window.Content = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            problems.Add($"{name}: {ex.GetBaseException().Message}");
+        }
+
+        problems.AddRange(bindingErrors.Take().Select(error => $"{name}: {error}"));
+    }
+
     /// <summary>Renders <paramref name="view"/> at its arranged size over the app background.</summary>
     public static void Save(FrameworkElement view, string name)
     {

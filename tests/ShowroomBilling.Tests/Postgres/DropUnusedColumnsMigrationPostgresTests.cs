@@ -1,11 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Masters;
 using ShowroomBilling.Infrastructure.Masters;
 using ShowroomBilling.Infrastructure.Persistence.Migrations;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -30,7 +29,7 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
         await using (var db = database.CreateContext())
         {
             var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
-                new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 1234.5m)));
+                new CreateBillDraftRequest(SamplePayload("A", 1234.5m)));
             billId = bill.Id;
             revisionId = bill.CurrentRevisionId!.Value;
             await new MasterSnapshotService(db).IngestCompaniesAsync(
@@ -41,9 +40,9 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
         // the way the previous build did.
         await MigrateAsync(database, Previous);
         Assert.Empty(await ExistingBackupsAsync(database));
-        await ExecuteAsync(database, $"""UPDATE public.bills SET "CreatedBy" = '{createdBy}' WHERE "Id" = '{billId}'""");
-        await ExecuteAsync(database, $"""UPDATE public.bill_revisions SET "TotalsJson" = '{Totals}' WHERE "Id" = '{revisionId}'""");
-        await ExecuteAsync(database, $"""UPDATE public.tally_company_snapshots SET "RawJson" = '{RawXml}' WHERE "Name" = 'ACME'""");
+        await ExecuteAsync(database, $"""UPDATE public.bills SET "CreatedBy" = '{createdBy}' WHERE "Id" = '{billId}'""", expectedRows: 1);
+        await ExecuteAsync(database, $"""UPDATE public.bill_revisions SET "TotalsJson" = '{Totals}' WHERE "Id" = '{revisionId}'""", expectedRows: 1);
+        await ExecuteAsync(database, $"""UPDATE public.tally_company_snapshots SET "RawJson" = '{RawXml}' WHERE "Name" = 'ACME'""", expectedRows: 1);
 
         await MigrateAsync(database, target: null);
 
@@ -97,44 +96,6 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
         await MigrateAsync(database, target: null);
     }
 
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
-    private static async Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database)
-    {
-        var names = new List<string>();
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = """SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261010\_%'""";
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            names.Add(reader.GetString(0));
-        }
-
-        return names;
-    }
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        Assert.Equal(1, await command.ExecuteNonQueryAsync());
-    }
-
-    private static async Task<T> ScalarAsync<T>(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        return (T)(await command.ExecuteScalarAsync())!;
-    }
+    private static Task<List<string>> ExistingBackupsAsync(PostgresFixture.PostgresTestDatabase database) =>
+        ReadNamesAsync(database, """SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'dropped\_20261010\_%'""");
 }

@@ -234,17 +234,17 @@ public sealed class PrintLayoutViewModelTests
         }
     }
 
-    private sealed class FakeSettingsApi : ISettingsApiClient
+    private sealed class FakeSettingsApi : SettingsApiStub
     {
         public PrintLayoutSettings Layout { get; set; } =
             new(1, 1, 1, 1, null, null, null, PrintLayoutDefaults.CreatePageLayout());
 
         public UpdatePrintLayoutRequest? LastUpdate { get; private set; }
 
-        public Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
+        public override Task<PrintLayoutResponse> GetPrintLayoutAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new PrintLayoutResponse(Layout, DateTimeOffset.UtcNow));
 
-        public Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
+        public override Task<PrintLayoutResponse> UpdatePrintLayoutAsync(
             UpdatePrintLayoutRequest request,
             CancellationToken cancellationToken = default)
         {
@@ -252,18 +252,5 @@ public sealed class PrintLayoutViewModelTests
             Layout = request.Layout;
             return Task.FromResult(new PrintLayoutResponse(request.Layout, DateTimeOffset.UtcNow));
         }
-
-        public Task<EffectiveSettingsResponse> GetEffectiveSettingsAsync(CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SaveEffectiveSettingsAsync(
-            UpdateEffectiveSettingsRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<SettingsUpdateResponse> SelectActiveCompanyAsync(
-            SelectActiveCompanyRequest request,
-            CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

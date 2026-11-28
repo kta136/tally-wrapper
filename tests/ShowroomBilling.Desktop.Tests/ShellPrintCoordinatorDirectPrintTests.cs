@@ -231,10 +231,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
             Name: "Acme Jewellers",
             Address: "Main Road",
             Phone: null,
-            State: null,
-            Country: "India",
             Gstin: "29AAAA0000A1Z5",
-            Huid: null,
             BankName: null,
             BankAccount: null,
             BankIfsc: null,
@@ -256,7 +253,7 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         }
     }
 
-    private sealed class FakePrintDispatcher : IPrintDispatcher, IDisposable
+    private sealed class FakePrintDispatcher : StubPrintDispatcher, IDisposable
     {
         private readonly ManualResetEventSlim _released = new(initialState: false);
         private readonly List<string> _printed = [];
@@ -284,15 +281,10 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
         public void ReleasePrints() => _released.Set();
         public void Dispose() => _released.Dispose();
 
-        public IReadOnlyList<string> AvailablePrinters() => ["Counter Printer"];
-        public string? DefaultPrinter() => "Counter Printer";
-        public void RefreshPrinters() { }
-        public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
-        public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null) => false;
-        public byte[] GeneratePdf(PrintDocumentOptions options) => Array.Empty<byte>();
-        public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => Array.Empty<byte[]>();
+        public override IReadOnlyList<string> AvailablePrinters() => ["Counter Printer"];
+        public override string? DefaultPrinter() => "Counter Printer";
 
-        public bool PrintToPrinter(
+        public override bool PrintToPrinter(
             PrintDocumentOptions options,
             string printerName,
             PrintJobSettings? settings = null)
@@ -315,31 +307,5 @@ public sealed class ShellPrintCoordinatorDirectPrintTests
 
             return PrintSucceeds;
         }
-
-        public bool PrintToPrinter(
-            IReadOnlyList<PrintDocumentOptions> options,
-            string printerName,
-            PrintJobSettings? settings = null) => false;
-    }
-
-    private sealed class FakePrintPreferencesStore : IPrintPreferencesStore
-    {
-        public event EventHandler<double>? PrintPreviewZoomPercentChanged;
-
-        public string? LastPrinterName { get; init; }
-        public string? LastPdfDirectory { get; private set; }
-        public bool DirectPrintAfterSave { get; init; }
-        public double PrintPreviewZoomPercent { get; set; } = 100;
-        public PrintJobSettings PrintJobSettings { get; init; } = PrintJobSettings.Default;
-
-        public void SaveLastPrinter(string printerName) { }
-        public void SaveLastPdfDirectory(string directory) => LastPdfDirectory = directory;
-        public void SaveDirectPrintAfterSave(bool value) { }
-        public void SavePrintPreviewZoomPercent(double value)
-        {
-            PrintPreviewZoomPercent = value;
-            PrintPreviewZoomPercentChanged?.Invoke(this, value);
-        }
-        public void SavePrintJobSettings(PrintJobSettings settings) { }
     }
 }

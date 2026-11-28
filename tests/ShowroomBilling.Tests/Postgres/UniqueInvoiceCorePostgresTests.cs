@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using ShowroomBilling.Contracts.Bills;
+using static ShowroomBilling.Tests.Postgres.MigrationSql;
+using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
 namespace ShowroomBilling.Tests.Postgres;
 
@@ -27,8 +27,8 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         Assert.True(await IndexIsUniqueAsync(database));
         await using var db = database.CreateContext();
         var service = PostgresBillTestSupport.BuildService(db);
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)));
+        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
 
         // As after a change of prefix: the same core, formatted to another text.
         await using var other = database.CreateContext();
@@ -48,8 +48,8 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         await using (var db = database.CreateContext())
         {
             var service = PostgresBillTestSupport.BuildService(db);
-            await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("A", 100m)));
-            secondId = (await service.CreateDraftAsync(new CreateBillDraftRequest(PostgresBillTestSupport.SamplePayload("B", 100m)))).Id;
+            await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+            secondId = (await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)))).Id;
         }
 
         // The bills are made first: today's build cannot save one on the older schema.
@@ -84,33 +84,11 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         Assert.True(await IndexIsUniqueAsync(database));
     }
 
-    private static async Task MigrateAsync(PostgresFixture.PostgresTestDatabase database, string? target)
-    {
-        await using var db = database.CreateContext();
-        await db.GetService<IMigrator>().MigrateAsync(target);
-        NpgsqlConnection.ClearAllPools();
-    }
-
-    private static async Task<bool> IndexIsUniqueAsync(PostgresFixture.PostgresTestDatabase database, string index = Index)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"""
+    private static Task<bool> IndexIsUniqueAsync(PostgresFixture.PostgresTestDatabase database, string index = Index) =>
+        ScalarAsync<bool>(database, $"""
             SELECT i.indisunique
             FROM pg_index i
             JOIN pg_class c ON c.oid = i.indexrelid
             WHERE c.relname = '{index}'
-            """;
-        return (bool)(await command.ExecuteScalarAsync())!;
-    }
-
-    private static async Task ExecuteAsync(PostgresFixture.PostgresTestDatabase database, string sql)
-    {
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync();
-    }
+            """);
 }

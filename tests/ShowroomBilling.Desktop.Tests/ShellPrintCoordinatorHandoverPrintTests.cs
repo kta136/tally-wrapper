@@ -14,7 +14,7 @@ namespace ShowroomBilling.Desktop.Tests;
 public sealed class ShellPrintCoordinatorHandoverPrintTests
 {
     private readonly Printer _printer = new();
-    private readonly Preferences _preferences = new() { LastPrinterName = "Counter Printer" };
+    private readonly FakePrintPreferencesStore _preferences = new() { DirectPrintAfterSave = true, LastPrinterName = "Counter Printer" };
 
     [Fact]
     public async Task Several_bills_go_to_the_printer_as_one_job_in_order_each_with_its_copies()
@@ -154,7 +154,7 @@ public sealed class ShellPrintCoordinatorHandoverPrintTests
 
     private sealed record Job(IReadOnlyList<PrintDocumentOptions> Bills, string PrinterName, PrintJobSettings? Settings, bool SentAsOneBill);
 
-    private sealed class Printer : IPrintDispatcher
+    private sealed class Printer : StubPrintDispatcher
     {
         private readonly List<Job> _jobs = [];
 
@@ -179,25 +179,20 @@ public sealed class ShellPrintCoordinatorHandoverPrintTests
         public Func<PrintDocumentOptions, bool> Refuses { get; set; } = _ => false;
         public bool RefusesByThrowing { get; set; }
 
-        public IReadOnlyList<string> AvailablePrinters() => ["Counter Printer", "Default Printer"];
-        public string? DefaultPrinter() => Default;
-        public void RefreshPrinters() { }
-        public PrintJobCapabilities GetPrinterCapabilities(string printerName) => PrintJobCapabilities.Unknown;
+        public override IReadOnlyList<string> AvailablePrinters() => ["Counter Printer", "Default Printer"];
+        public override string? DefaultPrinter() => Default;
 
-        public bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null)
+        public override bool PrintsOnBothSides(string printerName, PrintJobSettings? settings = null)
         {
             AskedAboutSides++;
             LastSidesQuestion = (printerName, settings);
             return AskingAboutSidesFails ? throw new InvalidOperationException("The printer did not answer.") : TwoSided;
         }
 
-        public byte[] GeneratePdf(PrintDocumentOptions options) => [];
-        public IReadOnlyList<byte[]> GeneratePageImages(PrintDocumentOptions options, int dpi = 150) => [];
-
-        public bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null)
+        public override bool PrintToPrinter(PrintDocumentOptions options, string printerName, PrintJobSettings? settings = null)
             => Send(new Job([options], printerName, settings, SentAsOneBill: true));
 
-        public bool PrintToPrinter(IReadOnlyList<PrintDocumentOptions> options, string printerName, PrintJobSettings? settings = null)
+        public override bool PrintToPrinter(IReadOnlyList<PrintDocumentOptions> options, string printerName, PrintJobSettings? settings = null)
             => Send(new Job(options.ToList(), printerName, settings, SentAsOneBill: false));
 
         private bool Send(Job job)
@@ -214,27 +209,6 @@ public sealed class ShellPrintCoordinatorHandoverPrintTests
 
             return RefusesByThrowing ? throw new InvalidOperationException("The printer is offline.") : false;
         }
-    }
-
-    private sealed class Preferences : IPrintPreferencesStore
-    {
-        public event EventHandler<double>? PrintPreviewZoomPercentChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public string? LastPrinterName { get; set; }
-        public string? LastPdfDirectory => null;
-        public bool DirectPrintAfterSave => true;
-        public double PrintPreviewZoomPercent => 100;
-        public PrintJobSettings PrintJobSettings { get; set; } = PrintJobSettings.Default;
-
-        public void SaveLastPrinter(string printerName) { }
-        public void SaveLastPdfDirectory(string directory) { }
-        public void SaveDirectPrintAfterSave(bool value) { }
-        public void SavePrintPreviewZoomPercent(double value) { }
-        public void SavePrintJobSettings(PrintJobSettings settings) { }
     }
 }
 

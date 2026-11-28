@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using ShowroomBilling.Infrastructure.Tally;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests;
 
@@ -19,7 +20,7 @@ public sealed class TallyVoucherLookupTests
     [Fact]
     public async Task It_asks_for_sales_vouchers_with_that_number_in_that_fiscal_year()
     {
-        var client = new TallyPosterTests.FakeXmlClient(Collection());
+        var client = new FakeXmlClient(Collection());
 
         await Lookup(client).FindByNumberAsync(Number, FiscalYear, TestContext.Current.CancellationToken);
 
@@ -54,7 +55,7 @@ public sealed class TallyVoucherLookupTests
     [Fact]
     public async Task The_years_sales_vouchers_are_asked_for_by_type_and_read_with_their_numbers()
     {
-        var client = new TallyPosterTests.FakeXmlClient(Collection(
+        var client = new FakeXmlClient(Collection(
             Voucher("4521", "DEV-26/0001", "Sales"),
             Voucher("4522", "DEV-26/0002", "Sales", date: "20260416"),
             Voucher("4600", "R/1", "Receipt"),
@@ -126,8 +127,8 @@ public sealed class TallyVoucherLookupTests
     public async Task The_destination_is_the_company_and_voucher_type_in_settings()
     {
         var lookup = new TallyVoucherLookup(
-            new TallyPosterTests.FakeXmlClient(Collection()),
-            new TallyPosterTests.FakeCloudSettingsService(salesVoucherType: " Retail Sale "));
+            new FakeXmlClient(Collection()),
+            new FakeCloudSettingsService { SalesVoucherType = " Retail Sale " });
 
         var destination = await lookup.DestinationAsync(TestContext.Current.CancellationToken);
 
@@ -241,7 +242,7 @@ public sealed class TallyVoucherLookupTests
     [InlineData("DEV-26/0001", "next year")]  // no period to search
     public async Task What_cannot_be_asked_is_refused_before_tally_is_called(string number, string fiscalYear)
     {
-        var client = new TallyPosterTests.FakeXmlClient(Collection());
+        var client = new FakeXmlClient(Collection());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Lookup(client).FindByNumberAsync(number, fiscalYear, TestContext.Current.CancellationToken));
@@ -251,7 +252,7 @@ public sealed class TallyVoucherLookupTests
     [Fact]
     public async Task By_master_id_it_asks_for_the_sales_voucher_with_that_id_in_that_fiscal_year()
     {
-        var client = new TallyPosterTests.FakeXmlClient(Collection());
+        var client = new FakeXmlClient(Collection());
 
         await Lookup(client).FindByMasterIdAsync(" 4521 ", FiscalYear, TestContext.Current.CancellationToken);
 
@@ -284,8 +285,8 @@ public sealed class TallyVoucherLookupTests
     public async Task By_master_id_a_voucher_type_a_formula_cannot_carry_is_still_looked_up()
     {
         const string type = "Sale \"Retail\"";
-        var client = new TallyPosterTests.FakeXmlClient(Collection(Voucher("4521", Number, type)));
-        var lookup = new TallyVoucherLookup(client, new TallyPosterTests.FakeCloudSettingsService(salesVoucherType: type));
+        var client = new FakeXmlClient(Collection(Voucher("4521", Number, type)));
+        var lookup = new TallyVoucherLookup(client, new FakeCloudSettingsService { SalesVoucherType = type });
 
         var found = await lookup.FindByMasterIdAsync("4521", FiscalYear, TestContext.Current.CancellationToken);
 
@@ -309,7 +310,7 @@ public sealed class TallyVoucherLookupTests
     [InlineData("4521 OR 1")]
     public async Task By_master_id_what_is_not_an_id_is_refused_before_tally_is_called(string masterId)
     {
-        var client = new TallyPosterTests.FakeXmlClient(Collection());
+        var client = new FakeXmlClient(Collection());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Lookup(client).FindByMasterIdAsync(masterId, FiscalYear, TestContext.Current.CancellationToken));
@@ -317,10 +318,10 @@ public sealed class TallyVoucherLookupTests
     }
 
     private static TallyVoucherLookup Lookup(XElement response) =>
-        Lookup(new TallyPosterTests.FakeXmlClient(response));
+        Lookup(new FakeXmlClient(response));
 
     private static TallyVoucherLookup Lookup(ITallyXmlClient client) =>
-        new(client, new TallyPosterTests.FakeCloudSettingsService());
+        new(client, new FakeCloudSettingsService());
 
     private static XElement Collection(params XElement[] vouchers) =>
         new("ENVELOPE",

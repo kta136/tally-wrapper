@@ -26,9 +26,6 @@ public static class DatabaseConfigurationStore
     public static string? GetEnvironmentConnectionString() =>
         Normalize(Environment.GetEnvironmentVariable(PostgresConnectionStringEnvironmentVariable));
 
-    public static string? LoadPostgresConnectionString(string? environmentName) =>
-        LoadPostgresConnectionString(environmentName, out _);
-
     /// <param name="loadError">
     /// Why an override file that exists could not be used (for example it was
     /// encrypted by a different Windows user), or null when there was no file

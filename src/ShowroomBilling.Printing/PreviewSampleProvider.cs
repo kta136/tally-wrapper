@@ -26,7 +26,6 @@ public static class PreviewSampleProvider
             PartyPhone: "+91 98765 43210",
             PartyAddress: "12, MG Road, Bengaluru",
             Payment: PaymentMode.CreditDebit,
-            Rate24Kt: 72500m,
             Lines: new[]
             {
                 new BillLineItemDto(
