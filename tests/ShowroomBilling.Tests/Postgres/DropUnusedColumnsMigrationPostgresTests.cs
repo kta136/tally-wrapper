@@ -28,7 +28,7 @@ public sealed class DropUnusedColumnsMigrationPostgresTests(PostgresFixture fixt
         var createdBy = Guid.NewGuid();
         await using (var db = database.CreateContext())
         {
-            var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
+            var bill = await Lifecycle(db).CreateDraftAsync(
                 new CreateBillDraftRequest(SamplePayload("A", 1234.5m)));
             billId = bill.Id;
             revisionId = bill.CurrentRevisionId!.Value;

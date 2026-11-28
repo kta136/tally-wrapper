@@ -123,7 +123,7 @@ public sealed class DropUnreadColumnsMigrationPostgresTests(PostgresFixture fixt
     private static async Task<(Guid BillId, Guid RevisionId, Guid UntouchedBillId)> SeedAsync(PostgresFixture.PostgresTestDatabase database)
     {
         await using var db = database.CreateContext();
-        var service = PostgresBillTestSupport.BuildService(db);
+        var service = Lifecycle(db);
         var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var untouched = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         var masters = new MasterSnapshotService(db);

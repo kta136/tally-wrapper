@@ -193,7 +193,7 @@ all in India's time whatever time zone the server or a counter is set to:
    when it is within about two steps of ₹50,000) the bill is priced again with
    other items, up to 20 times, before the batch is refused.
 6. `SyntheticBatchExecutor` — loops planned bills, calls
-   [`BillService.CreateBackdatedDraftAsync`](../src/ShowroomBilling.Infrastructure/Bills/BillService.cs)
+   [`BillLifecycleWorkflow.CreateBackdatedDraftAsync`](../src/ShowroomBilling.Infrastructure/Bills/BillLifecycleWorkflow.cs)
    with the planned `ScheduledAtUtc`. Each bill takes the next invoice number
    from `NumberingService` exactly as a saved bill does (numbers follow the
    order the bills are created in, within the fiscal year of the bill date),

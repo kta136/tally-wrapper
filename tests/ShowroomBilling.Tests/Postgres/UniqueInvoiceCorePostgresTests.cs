@@ -26,7 +26,7 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
         Assert.True(await IndexIsUniqueAsync(database));
         await using var db = database.CreateContext();
-        var service = PostgresBillTestSupport.BuildService(db);
+        var service = Lifecycle(db);
         var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
 
@@ -47,7 +47,7 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
         Guid secondId;
         await using (var db = database.CreateContext())
         {
-            var service = PostgresBillTestSupport.BuildService(db);
+            var service = Lifecycle(db);
             await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
             secondId = (await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)))).Id;
         }

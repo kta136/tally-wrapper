@@ -71,7 +71,11 @@ public static class DependencyInjection
             }));
         services.AddScoped<IMasterSnapshotService, MasterSnapshotService>();
         services.AddScoped<NumberingService>();
-        services.AddScoped<BillService>();
+        services.AddScoped<BillReadWorkflow>();
+        services.AddScoped<BillLifecycleWorkflow>();
+        services.AddScoped<BillPostingWorkflow>();
+        services.AddScoped<BillAdminWorkflow>();
+        services.AddScoped<BillAuditStore>();
         services.AddScoped<TallyComparison>();
         services.AddSingleton<SyntheticBatchOutcomes>();
         services.AddScoped<SyntheticBatchExecutor>();

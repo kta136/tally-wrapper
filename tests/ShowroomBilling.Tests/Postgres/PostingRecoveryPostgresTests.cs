@@ -22,7 +22,7 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
         Guid abandoned, live;
         await using (var db = database.CreateContext())
         {
-            var service = PostgresBillTestSupport.BuildService(db);
+            var service = Lifecycle(db);
             abandoned = (await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)))).Id;
             live = (await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)))).Id;
             await db.Bills.Where(b => b.Id == abandoned).ExecuteUpdateAsync(s => s
@@ -132,7 +132,7 @@ public sealed class PostingRecoveryPostgresTests(PostgresFixture fixture)
     private static async Task<Guid> StrandAsync(PostgresFixture.PostgresTestDatabase database, DateTimeOffset claimedAt)
     {
         await using var db = database.CreateContext();
-        var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
+        var bill = await Lifecycle(db).CreateDraftAsync(
             new CreateBillDraftRequest(SamplePayload("Stranded", 100m)));
         await db.Bills.Where(b => b.Id == bill.Id).ExecuteUpdateAsync(s => s
             .SetProperty(b => b.State, BillStates.Posting)

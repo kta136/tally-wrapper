@@ -1,24 +1,19 @@
 using ShowroomBilling.Application.Health;
 using ShowroomBilling.Application.Tally;
-using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Health;
 using ShowroomBilling.Contracts.Tally;
-using ShowroomBilling.Infrastructure.Bills;
-using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
+using ShowroomBilling.Tests.TestSupport;
 
 namespace ShowroomBilling.Tests.Postgres;
 
 internal static class PostgresBillTestSupport
 {
-    internal static BillService BuildService(
+    internal static BillWorkflows BuildWorkflows(
         ShowroomBillingDbContext db,
         ITallyPoster? poster = null,
-        ITallyCompanyHealthService? tallyHealth = null)
-    {
-        var numbering = new NumberingService(db);
-        return new BillService(db, numbering, poster ?? new RecordingTallyPoster(), tallyHealth ?? HealthyTallyHealth.Instance);
-    }
+        ITallyCompanyHealthService? tallyHealth = null) =>
+        new(db, poster ?? new RecordingTallyPoster(), tallyHealth ?? HealthyTallyHealth.Instance);
 
     internal static TallyPostResponse PostedResponse(string? remoteId = "FAKE-VCH-1", string? tallyMasterId = null) =>
         TallyPostResponse.Posted(remoteId, tallyMasterId: tallyMasterId);

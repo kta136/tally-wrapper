@@ -2,11 +2,9 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
-using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Bills;
-using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Infrastructure.Tally;
 using ShowroomBilling.Tests.Postgres;
@@ -17,7 +15,7 @@ namespace ShowroomBilling.Tests;
 
 /// <summary>
 /// Settings → Tally check: the year's bills set against the sales vouchers
-/// Tally lists. Bills are made and pushed through <see cref="BillService"/>, so
+/// Tally lists. Bills are made and pushed through the bill workflows, so
 /// what is compared is what a push really records.
 /// </summary>
 public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTest(postgres)
@@ -115,9 +113,9 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_bill_marked_as_pushed_by_hand_is_found_by_its_number_even_with_zeros_in_front()
     {
         await using var db = CreateDbContext();
-        var service = Service(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        var bills = new BillWorkflows(db);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        await bills.Admin.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         // Tally's voucher type fills numbers with one more zero than the bill's.
         var padded = Regex.Replace(bill.InvoiceNumber!, @"(\d+)(\D*)$", "0$1$2");
 
@@ -184,7 +182,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var bill = await PushedAsync(db, "101", 100m);
-        await Service(db).UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(Payload(150m)), callerIsAdmin: true);
+        await new BillWorkflows(db).Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(Payload(150m)), callerIsAdmin: true);
         await db.BillRevisions.Where(r => r.BillId == bill.Id)
             .ExecuteUpdateAsync(r => r.SetProperty(x => x.CreatedAtUtc, x => x.CreatedAtUtc.AddHours(1)));
 
@@ -199,7 +197,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_bill_never_pushed_is_not_compared()
     {
         await using var db = CreateDbContext();
-        var bill = await Service(db).CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        var bill = await new BillWorkflows(db).Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
 
         var result = await CompareAsync(bill.FiscalYear);
 
@@ -212,7 +210,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var bill = await PushedAsync(db, "101", 100m);
-        await Service(db).UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(Payload(150m)), callerIsAdmin: true);
+        await new BillWorkflows(db).Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(Payload(150m)), callerIsAdmin: true);
 
         var result = await CompareAsync(bill.FiscalYear, Voucher("101", bill.InvoiceNumber, 100m));
 
@@ -226,9 +224,9 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster([TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer.")]);
-        var service = Service(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        var bills = new BillWorkflows(db, poster);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        var pushed = await bills.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
         Assert.Equal(BillStates.ReconciliationRequired, pushed.State);
 
         var result = await CompareAsync(bill.FiscalYear, Voucher("4521", bill.InvoiceNumber, 100m));
@@ -242,7 +240,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var bill = await PushedAsync(db, "101", 100m);
-        await Service(db).MarkPendingAsync(bill.Id, new MarkBillStateRequest("not in Tally"));
+        await new BillWorkflows(db).Admin.MarkPendingAsync(bill.Id, new MarkBillStateRequest("not in Tally"));
 
         var result = await CompareAsync(bill.FiscalYear, Voucher("101", bill.InvoiceNumber, 100m));
 
@@ -284,9 +282,9 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster(tallyMasterId: "101") { Company = "Company A" };
-        var service = Service(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        var bills = new BillWorkflows(db, poster);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        await bills.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
 
         // Settings now name Company B, where id 101 is somebody else's sale.
         await using var check = CreateDbContext();
@@ -307,11 +305,11 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
             TallyPostResponse.Posted("k1", tallyMasterId: "101"),
             TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer."),
         ]);
-        var service = new BillService(db, new NumberingService(db), poster, tallyVoucherLookup: new ListedVouchers(Voucher("101", null, 100m)));
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        await service.PushAsync(bill.Id, new PushBillRequest("first"));
-        await service.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(Payload(150m)), callerIsAdmin: true);
-        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("alter"));
+        var bills = new BillWorkflows(db, poster, tallyVoucherLookup: new ListedVouchers(Voucher("101", null, 100m)));
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        await bills.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
+        await bills.Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(Payload(150m)), callerIsAdmin: true);
+        var pushed = await bills.Posting.PushAsync(bill.Id, new PushBillRequest("alter"));
         Assert.Equal(BillStates.ReconciliationRequired, pushed.State);
 
         // The alter landed: Tally shows the edited total, which is no difference.
@@ -332,11 +330,11 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
             TallyPostResponse.Posted("k1", tallyMasterId: "101"),
             TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer."),
         ]);
-        var service = Service(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        var bills = new BillWorkflows(db, poster);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        await bills.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
         // 101 was deleted in Tally and the bill reposted; Tally made 202 but the answer was lost.
-        await service.RepostAsync(bill.Id, new RepostBillRequest("again", "voucher deleted in Tally"));
+        await bills.Posting.RepostAsync(bill.Id, new RepostBillRequest("again", "voucher deleted in Tally"));
 
         var result = await CompareAsync(bill.FiscalYear, Voucher("202", bill.InvoiceNumber, 100m));
 
@@ -348,9 +346,9 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_number_written_exactly_wins_over_a_padded_one_when_date_and_total_agree()
     {
         await using var db = CreateDbContext();
-        var service = Service(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        var bills = new BillWorkflows(db);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        await bills.Admin.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         var padded = Regex.Replace(bill.InvoiceNumber!, @"(\d+)(\D*)$", "0$1$2");
 
         // The padded one first: which is taken must not depend on Tally's order.
@@ -366,13 +364,13 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var poster = new FakeTallyPoster([TallyPostResponse.Unknown("TIMEOUT", "Tally did not answer.")]);
-        var service = Service(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        var bills = new BillWorkflows(db, poster);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
         var lookup = new ListedVouchers();
         var comparison = new TallyComparison(db, lookup);
 
         // The push settles between the read of Tally and the read of the bills.
-        lookup.WhenListed = () => service.PushAsync(bill.Id, new PushBillRequest("during")).GetAwaiter().GetResult();
+        lookup.WhenListed = () => bills.Posting.PushAsync(bill.Id, new PushBillRequest("during")).GetAwaiter().GetResult();
         var result = await comparison.CompareAsync(bill.FiscalYear);
 
         Assert.True(result.PushedWhileComparing);
@@ -412,7 +410,7 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     {
         await using var db = CreateDbContext();
         var bill = await PushedAsync(db, "101", 100m);
-        var other = await Service(db).CreateDraftAsync(new CreateBillDraftRequest(Payload(50m)));
+        var other = await new BillWorkflows(db).Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(50m)));
         await db.Bills.Where(b => b.Id == other.Id).ExecuteUpdateAsync(b => b.SetProperty(x => x.State, BillStates.Posting));
 
         var result = await CompareAsync(bill.FiscalYear, Voucher("101", bill.InvoiceNumber, 100m));
@@ -424,9 +422,9 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     public async Task A_number_with_its_year_after_the_core_is_still_found_with_zeros_in_front()
     {
         await using var db = CreateDbContext();
-        var service = Service(db);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
-        await service.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
+        var bills = new BillWorkflows(db);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(100m)));
+        await bills.Admin.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
         await db.Bills.Where(b => b.Id == bill.Id).ExecuteUpdateAsync(b => b.SetProperty(x => x.InvoiceNumber, "SR/51/26-27"));
 
         var result = await CompareAsync(bill.FiscalYear, Voucher("4521", "SR/051/26-27", 100m));
@@ -451,9 +449,9 @@ public sealed class TallyComparisonTests(PostgresFixture postgres) : DatabaseTes
     private static async Task<BillResponse> PushedAsync(ShowroomBillingDbContext db, string masterId, decimal total)
     {
         var poster = new FakeTallyPoster(tallyMasterId: masterId);
-        var service = Service(db, poster);
-        var bill = await service.CreateDraftAsync(new CreateBillDraftRequest(Payload(total)));
-        var pushed = await service.PushAsync(bill.Id, new PushBillRequest("first"));
+        var bills = new BillWorkflows(db, poster);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(Payload(total)));
+        var pushed = await bills.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
         Assert.Equal(BillStates.Posted, pushed.State);
         return pushed;
     }

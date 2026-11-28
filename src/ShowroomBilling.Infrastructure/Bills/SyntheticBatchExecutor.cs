@@ -14,7 +14,7 @@ namespace ShowroomBilling.Infrastructure.Bills;
 /// <summary>
 /// Runs a synthetic batch: loads the masters, builds a plan with
 /// <see cref="SyntheticBillPlanner"/>, and saves each planned bill through
-/// <see cref="BillService.CreateBackdatedDraftAsync"/>, one at a time.
+/// <see cref="BillLifecycleWorkflow.CreateBackdatedDraftAsync"/>, one at a time.
 ///
 /// A number is reserved under a <c>FOR UPDATE</c> row lock, so the bills are
 /// saved one after another, each in its own transaction. A batch that stops
@@ -22,7 +22,7 @@ namespace ShowroomBilling.Infrastructure.Bills;
 /// holds how many that was, for a Desktop that got no answer.
 /// </summary>
 public sealed class SyntheticBatchExecutor(
-    BillService billService,
+    BillLifecycleWorkflow bills,
     ICloudSettingsService settings,
     ShowroomBillingDbContext dbContext,
     ILogger<SyntheticBatchExecutor> logger,
@@ -91,7 +91,7 @@ public sealed class SyntheticBatchExecutor(
                 BillResponse bill;
                 try
                 {
-                    bill = await billService.CreateBackdatedDraftAsync(
+                    bill = await bills.CreateBackdatedDraftAsync(
                         new CreateBillDraftRequest(Payload: planned.Payload),
                         planned.ScheduledAtUtc,
                         CancellationToken.None);

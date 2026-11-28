@@ -63,12 +63,12 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
         await using var db = database.CreateContext();
         await AddSettingsAsync(db, suffix: "-A");
-        var service = PostgresBillTestSupport.BuildService(db);
+        var bills = PostgresBillTestSupport.BuildWorkflows(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
-        await service.DeleteAsync(second.Id, new DeleteBillRequest("test", DryRun: false));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
+        var first = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
+        await bills.Admin.DeleteAsync(second.Id, new DeleteBillRequest("test", DryRun: false));
+        var third = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
 
         Assert.EndsWith("/0001-A", first.InvoiceNumber);
         Assert.EndsWith("/0002-A", third.InvoiceNumber);
@@ -80,10 +80,10 @@ public sealed class InvoiceCorePostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
         await using var db = database.CreateContext();
         await AddSettingsAsync(db, suffix: "-A2");
-        var service = PostgresBillTestSupport.BuildService(db);
+        var bills = PostgresBillTestSupport.BuildWorkflows(db);
 
-        var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
-        var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
+        var first = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var second = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
 
         Assert.EndsWith("/0001-A2", first.InvoiceNumber);
         Assert.EndsWith("/0002-A2", second.InvoiceNumber);

@@ -1,10 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShowroomBilling.Application.Bills;
-using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
-using ShowroomBilling.Infrastructure.Bills;
-using ShowroomBilling.Infrastructure.Numbering;
-using ShowroomBilling.Infrastructure.Persistence;
 using ShowroomBilling.Tests.Postgres;
 using static ShowroomBilling.Tests.TestSupport.BillTestData;
 
@@ -16,7 +12,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateBackdatedDraftAsync_UsesOverrideForBillAndAudit()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new FakePoster());
+        var service = Lifecycle(db);
 
         var backdate = new DateTimeOffset(2026, 1, 15, 10, 30, 0, TimeSpan.Zero);
         var response = await service.CreateBackdatedDraftAsync(
@@ -40,7 +36,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
         // A counter saved a bill while a batch was being saved: a batch bill dated before it would
         // take the next number and so be numbered after it.
         await using var db = CreateDbContext();
-        var service = Service(db, new FakePoster());
+        var service = Lifecycle(db);
         var counterBill = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Counter Party", 100m)));
 
         var refused = await Assert.ThrowsAsync<BillStateConflictException>(() => service.CreateBackdatedDraftAsync(
@@ -63,7 +59,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateBackdatedDraftAsync_GoesAfterTheNewestBill()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new FakePoster());
+        var service = Lifecycle(db);
         var earlier = DateTimeOffset.UtcNow.AddHours(-2);
         await service.CreateBackdatedDraftAsync(new CreateBillDraftRequest(SamplePayload("First Party", 60_000m)), earlier);
 
@@ -79,7 +75,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
         // A bill saved today but dated yesterday counts as the end of yesterday: a bill dated today
         // may go before the time it was saved, and is numbered after it.
         await using var db = CreateDbContext();
-        var service = Service(db, new FakePoster());
+        var service = Lifecycle(db);
         var day = ADayBack();
         var dayStart = ShowroomBilling.Contracts.IndiaTime.StartOf(day);
         var dayBefore = await service.CreateBackdatedDraftAsync(
@@ -97,7 +93,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateBackdatedDraftAsync_IsRefusedByABillOfALaterDate_OrOfItsDateInItsMinute()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new FakePoster());
+        var service = Lifecycle(db);
         var day = ADayBack();
         var at = ShowroomBilling.Contracts.IndiaTime.StartOf(day).AddHours(10).ToUniversalTime();
         await service.CreateBackdatedDraftAsync(
@@ -121,7 +117,7 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     public async Task CreateDraftAsync_DefaultPathStillUsesUtcNow()
     {
         await using var db = CreateDbContext();
-        var service = Service(db, new FakePoster());
+        var service = Lifecycle(db);
         var before = DateTimeOffset.UtcNow;
 
         var response = await service.CreateDraftAsync(
@@ -139,16 +135,5 @@ public sealed class BillServiceBackdatedDraftTests(PostgresFixture postgres) : D
     {
         var day = ShowroomBilling.Contracts.IndiaTime.Today().AddDays(-10);
         return day is { Month: 4, Day: 1 } ? day.AddDays(-1) : day;
-    }
-
-    private sealed class FakePoster : ITallyPoster
-    {
-        public Task<ShowroomBilling.Contracts.Tally.TallyPostResponse> PostAsync(
-            ShowroomBilling.Contracts.Tally.TallyPostRequest request,
-            CancellationToken cancellationToken = default)
-            => Task.FromResult(new ShowroomBilling.Contracts.Tally.TallyPostResponse(
-                ShowroomBilling.Contracts.Tally.TallyPostOutcome.Posted,
-                "VCH",
-                null, null, "v1", null, null));
     }
 }

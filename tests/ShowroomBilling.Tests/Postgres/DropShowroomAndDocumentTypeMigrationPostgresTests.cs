@@ -65,7 +65,7 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
 
         // The application carries on where it was: the next number, and the passcode set before.
         await using var db = database.CreateContext();
-        var third = await PostgresBillTestSupport.BuildService(db)
+        var third = await Lifecycle(db)
             .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
         Assert.EndsWith("0003", third.InvoiceNumber);
         Assert.NotNull((await Admin(db).UnlockAsync(new AdminUnlockRequest(Passcode, null))).Token);
@@ -110,7 +110,7 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
         await using (var db = database.CreateContext())
         {
             Assert.Equal(2, await db.Bills.AsNoTracking().CountAsync());
-            var third = await PostgresBillTestSupport.BuildService(db)
+            var third = await Lifecycle(db)
                 .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 100m)));
             thirdId = third.Id;
             Assert.EndsWith("0040", third.InvoiceNumber);
@@ -199,7 +199,7 @@ public sealed class DropShowroomAndDocumentTypeMigrationPostgresTests(PostgresFi
     private static async Task<(Guid FirstId, Guid SecondId)> SeedAsync(PostgresFixture.PostgresTestDatabase database)
     {
         await using var db = database.CreateContext();
-        var service = PostgresBillTestSupport.BuildService(db);
+        var service = Lifecycle(db);
         var first = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         var second = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 100m)));
         await Admin(db).SetPasscodeAsync(new AdminSetPasscodeRequest(null, Passcode));

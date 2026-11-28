@@ -1,4 +1,3 @@
-using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Infrastructure.Bills;
 using ShowroomBilling.Infrastructure.Numbering;
@@ -8,8 +7,8 @@ namespace ShowroomBilling.Tests.TestSupport;
 
 internal static class BillTestData
 {
-    internal static BillService Service(ShowroomBillingDbContext db, ITallyPoster? poster = null) =>
-        new(db, new NumberingService(db), poster ?? new FakeTallyPoster());
+    internal static BillLifecycleWorkflow Lifecycle(ShowroomBillingDbContext db) =>
+        new(db, new NumberingService(db), new BillAuditStore(db));
 
     internal static BillPayloadDto SamplePayload(string party, decimal grandTotal, DateOnly? billDate = null) =>
         new(

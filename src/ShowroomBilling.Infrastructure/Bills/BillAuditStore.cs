@@ -7,7 +7,7 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-internal sealed class BillAuditStore(
+public sealed class BillAuditStore(
     ShowroomBillingDbContext dbContext,
     IAuditActorContext? actorContext = null)
 {
@@ -31,7 +31,9 @@ internal sealed class BillAuditStore(
             ? JsonSerializer.Serialize(new { state }, BillSerialization.JsonOptions)
             : JsonSerializer.Serialize(new { state, details }, BillSerialization.JsonOptions);
 
-    internal async Task<BillAuditResponse?> GetAuditAsync(Guid billId, CancellationToken cancellationToken = default)
+    public async Task<BillAuditResponse?> GetAuditAsync(
+        Guid billId,
+        CancellationToken cancellationToken = default)
     {
         var billIdText = billId.ToString();
         var raw = await dbContext.AuditEvents.AsNoTracking()
@@ -54,7 +56,7 @@ internal sealed class BillAuditStore(
         return new BillAuditResponse(billId, events);
     }
 
-    internal async Task<BillPostingStatusResponse?> GetPostingStatusAsync(
+    public async Task<BillPostingStatusResponse?> GetPostingStatusAsync(
         Guid billId,
         CancellationToken cancellationToken = default)
     {

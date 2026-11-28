@@ -14,7 +14,7 @@ using ShowroomBilling.Infrastructure.Tally;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-internal sealed class BillPostingWorkflow(
+public sealed class BillPostingWorkflow(
     ShowroomBillingDbContext dbContext,
     ITallyPoster tallyPoster,
     BillAuditStore auditStore,
@@ -39,7 +39,7 @@ internal sealed class BillPostingWorkflow(
     // holding up the answer to the operator.
     private static readonly TimeSpan ReadBackBudget = TimeSpan.FromSeconds(10);
 
-    internal Task<BillResponse> PushAsync(
+    public Task<BillResponse> PushAsync(
         Guid billId,
         PushBillRequest request,
         CancellationToken cancellationToken = default)
@@ -54,7 +54,7 @@ internal sealed class BillPostingWorkflow(
             cancellationToken);
     }
 
-    internal Task<BillBatchPushResponse> PushSelectedAsync(
+    public Task<BillBatchPushResponse> PushSelectedAsync(
         PushSelectedBillsRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -63,7 +63,7 @@ internal sealed class BillPostingWorkflow(
         return PushBatchAsync(orderedIds, request.Reason, cancellationToken);
     }
 
-    internal async Task<BillBatchPushResponse> PushPendingAsync(
+    public async Task<BillBatchPushResponse> PushPendingAsync(
         PushPendingBillsRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -94,7 +94,7 @@ internal sealed class BillPostingWorkflow(
         return await PushBatchAsync(targetIds, request.Reason, cancellationToken);
     }
 
-    internal async Task<BillPostingStatusResponse> RetryAsync(
+    public async Task<BillPostingStatusResponse> RetryAsync(
         Guid billId,
         RetryBillPostingRequest request,
         CancellationToken cancellationToken = default)
@@ -117,7 +117,7 @@ internal sealed class BillPostingWorkflow(
         return (await auditStore.GetPostingStatusAsync(billId, cancellationToken))!;
     }
 
-    internal async Task<BillPostingStatusResponse> RepostAsync(
+    public async Task<BillPostingStatusResponse> RepostAsync(
         Guid billId,
         RepostBillRequest request,
         CancellationToken cancellationToken = default)

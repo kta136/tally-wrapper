@@ -15,15 +15,15 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
     {
         await using var database = await fixture.CreateDatabaseAsync();
         await using var db = database.CreateContext();
-        var service = PostgresBillTestSupport.BuildService(db);
+        var bills = PostgresBillTestSupport.BuildWorkflows(db);
 
-        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
-        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 200m)));
-        var third = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 300m)));
+        await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("B", 200m)));
+        var third = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("C", 300m)));
 
-        await service.DeleteAsync(third.Id, new DeleteBillRequest("test cleanup", DryRun: false));
+        await bills.Admin.DeleteAsync(third.Id, new DeleteBillRequest("test cleanup", DryRun: false));
 
-        var next = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("D", 400m)));
+        var next = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("D", 400m)));
 
         Assert.Contains("/0003", next.InvoiceNumber);
         Assert.Equal(4L, await db.InvoiceSequences.Select(static x => x.NextValue).SingleAsync());
@@ -34,19 +34,19 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
     {
         await using var database = await fixture.CreateDatabaseAsync();
         await using var setupDb = database.CreateContext();
-        var bill = await PostgresBillTestSupport.BuildService(setupDb)
-            .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var bill = await PostgresBillTestSupport.BuildWorkflows(setupDb)
+            .Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         await using var pushDb = database.CreateContext();
         await using var editDb = database.CreateContext();
         var poster = new RecordingTallyPoster();
         var health = new BlockingTallyHealth();
-        var pushService = PostgresBillTestSupport.BuildService(pushDb, poster, health);
-        var editService = PostgresBillTestSupport.BuildService(editDb);
+        var pushService = PostgresBillTestSupport.BuildWorkflows(pushDb, poster, health);
+        var editService = PostgresBillTestSupport.BuildWorkflows(editDb);
 
-        var push = pushService.PushAsync(bill.Id, new PushBillRequest("push"));
+        var push = pushService.Posting.PushAsync(bill.Id, new PushBillRequest("push"));
         await health.Entered.WaitAsync(TimeSpan.FromSeconds(10));
-        await editService.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A", 200m)));
+        await editService.Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A", 200m)));
         health.Release();
 
         await Assert.ThrowsAsync<BillStateConflictException>(() => push.WaitAsync(TimeSpan.FromSeconds(10)));
@@ -60,15 +60,15 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
     {
         await using var database = await fixture.CreateDatabaseAsync();
         await using var setupDb = database.CreateContext();
-        var bill = await PostgresBillTestSupport.BuildService(setupDb)
-            .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        var bill = await PostgresBillTestSupport.BuildWorkflows(setupDb)
+            .Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
         await using var staleDb = database.CreateContext();
         var stale = await staleDb.Bills.SingleAsync(x => x.Id == bill.Id);
 
         await using var otherDb = database.CreateContext();
-        await PostgresBillTestSupport.BuildService(otherDb, new RecordingTallyPoster())
-            .PushAsync(bill.Id, new PushBillRequest("push"));
+        await PostgresBillTestSupport.BuildWorkflows(otherDb, new RecordingTallyPoster())
+            .Posting.PushAsync(bill.Id, new PushBillRequest("push"));
 
         stale.State = BillStates.Voided;
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => staleDb.SaveChangesAsync());
@@ -88,7 +88,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
             {
                 await start.Task;
                 await using var db = database.CreateContext();
-                return await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(request);
+                return await PostgresBillTestSupport.BuildWorkflows(db).Lifecycle.CreateDraftAsync(request);
             }))
             .ToArray();
         start.SetResult();
@@ -113,7 +113,7 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
             {
                 await start.Task;
                 await using var db = database.CreateContext();
-                return await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
+                return await PostgresBillTestSupport.BuildWorkflows(db).Lifecycle.CreateDraftAsync(
                     new CreateBillDraftRequest(SamplePayload($"Party {n}", 100m), Guid.NewGuid()));
             }))
             .ToArray();
@@ -131,12 +131,12 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
     {
         await using var database = await fixture.CreateDatabaseAsync();
         await using var db = database.CreateContext();
-        var service = PostgresBillTestSupport.BuildService(db);
-        var alpha = await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Alpha Jewels", 100m)));
-        await service.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Beta 100% Gold", 100m)));
+        var bills = PostgresBillTestSupport.BuildWorkflows(db);
+        var alpha = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Alpha Jewels", 100m)));
+        await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("Beta 100% Gold", 100m)));
 
-        var found = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "alpha jew"));
-        var literalPercent = await service.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "%"));
+        var found = await bills.Read.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "alpha jew"));
+        var literalPercent = await bills.Read.SearchAsync(new BillSearchFilter(null, null, null, 0, 10, null, Search: "%"));
 
         Assert.Equal(alpha.Id, Assert.Single(found.Items).Id);
         Assert.Equal("Beta 100% Gold", Assert.Single(literalPercent.Items).PartyName);
@@ -148,20 +148,20 @@ public sealed class BillWorkflowPostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
         await using (var setupDb = database.CreateContext())
         {
-            var setupService = PostgresBillTestSupport.BuildService(setupDb);
-            var bill = await setupService.CreateDraftAsync(
+            var setupService = PostgresBillTestSupport.BuildWorkflows(setupDb);
+            var bill = await setupService.Lifecycle.CreateDraftAsync(
                 new CreateBillDraftRequest(SamplePayload("A", 100m)));
 
             await using var firstDb = database.CreateContext();
             await using var secondDb = database.CreateContext();
             var poster = new BlockingTallyPoster();
-            var firstService = PostgresBillTestSupport.BuildService(firstDb, poster);
-            var secondService = PostgresBillTestSupport.BuildService(secondDb, poster);
+            var firstService = PostgresBillTestSupport.BuildWorkflows(firstDb, poster);
+            var secondService = PostgresBillTestSupport.BuildWorkflows(secondDb, poster);
 
-            var firstPush = firstService.PushAsync(bill.Id, new PushBillRequest("first"));
+            var firstPush = firstService.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
             await poster.FirstRequest.WaitAsync(TimeSpan.FromSeconds(10));
 
-            var secondPush = await secondService.PushAsync(bill.Id, new PushBillRequest("second"));
+            var secondPush = await secondService.Posting.PushAsync(bill.Id, new PushBillRequest("second"));
             Assert.Equal(BillStates.Posting, secondPush.State);
             Assert.Equal(1, poster.CallCount);
 

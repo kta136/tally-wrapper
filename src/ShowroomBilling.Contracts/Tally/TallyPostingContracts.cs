@@ -3,7 +3,7 @@ using ShowroomBilling.Contracts.Bills;
 namespace ShowroomBilling.Contracts.Tally;
 
 /// <summary>
-/// Synchronous "post this bill to Tally now" request used by BillService.PushAsync.
+/// Synchronous "post this bill to Tally now" request used by BillPostingWorkflow.PushAsync.
 /// There is no queue — the request is fulfilled inside the push HTTP call.
 /// An Alter names its voucher by <paramref name="TargetTagName"/> / <paramref name="TargetTagValue"/>
 /// and <paramref name="TargetVoucherDate"/>, the date that voucher has in Tally now

@@ -9,27 +9,37 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-internal sealed class BillLifecycleWorkflow(
+public sealed class BillLifecycleWorkflow(
     ShowroomBillingDbContext dbContext,
     NumberingService numberingService,
     BillAuditStore auditStore)
 {
 
-    internal Task<BillResponse> CreateDraftAsync(
+    public Task<BillResponse> CreateDraftAsync(
         CreateBillDraftRequest request,
         CancellationToken cancellationToken = default)
         => CreateDraftCoreAsync(request, DateTimeOffset.UtcNow, backdated: false, cancellationToken);
 
-    internal Task<BillResponse> CreateBackdatedDraftAsync(
+    /// <summary>
+    /// Creates a draft whose created and updated times, first revision and
+    /// audit event all carry <paramref name="createdAtUtc"/> instead of now.
+    /// The synthetic batch uses it to spread bills over a past window. The
+    /// invoice number is still the next one in the series.
+    /// </summary>
+    public Task<BillResponse> CreateBackdatedDraftAsync(
         CreateBillDraftRequest request,
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken = default)
         => CreateDraftCoreAsync(request, createdAtUtc, backdated: true, cancellationToken);
 
-    internal async Task<BillResponse> UpdateDraftAsync(
+    /// <param name="callerIsAdmin">
+    /// True when the request came from an unlocked admin session. Saving an
+    /// edit to a posted bill reopens it for another push, which only admin may do.
+    /// </param>
+    public async Task<BillResponse> UpdateDraftAsync(
         Guid billId,
         UpdateBillDraftRequest request,
-        bool callerIsAdmin,
+        bool callerIsAdmin = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -129,7 +139,7 @@ internal sealed class BillLifecycleWorkflow(
         return BillSerialization.MapResponse(bill, revision);
     }
 
-    internal async Task<BillResponse> ReviseAsync(
+    public async Task<BillResponse> ReviseAsync(
         Guid billId,
         ReviseBillRequest request,
         CancellationToken cancellationToken = default)
@@ -206,7 +216,7 @@ internal sealed class BillLifecycleWorkflow(
         return BillSerialization.MapResponse(newBill, newRevision);
     }
 
-    internal async Task<BillResponse> VoidAsync(
+    public async Task<BillResponse> VoidAsync(
         Guid billId,
         VoidBillRequest request,
         CancellationToken cancellationToken = default)

@@ -17,7 +17,7 @@ public sealed class SaveRoundTripPostgresTests(PostgresFixture fixture)
         await using var database = await fixture.CreateDatabaseAsync();
         await using (var warm = database.CreateContext())
         {
-            await PostgresBillTestSupport.BuildService(warm)
+            await Lifecycle(warm)
                 .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("warm", 100m), Guid.NewGuid()));
         }
 
@@ -26,7 +26,7 @@ public sealed class SaveRoundTripPostgresTests(PostgresFixture fixture)
             .AddInterceptors(counter)
             .Options;
         await using var db = new ShowroomBillingDbContext(options);
-        await PostgresBillTestSupport.BuildService(db)
+        await Lifecycle(db)
             .CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m), Guid.NewGuid()));
 
         // op-id lookup, reservation-key lookup, sequence FOR UPDATE, numbering

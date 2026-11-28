@@ -4,14 +4,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using ShowroomBilling.Application;
 using ShowroomBilling.Application.Bills;
-using ShowroomBilling.Application.Settings;
-using ShowroomBilling.Application.Tally;
 using ShowroomBilling.Contracts;
 using ShowroomBilling.Contracts.Bills;
 using ShowroomBilling.Contracts.Settings;
-using ShowroomBilling.Contracts.Tally;
 using ShowroomBilling.Infrastructure.Bills;
-using ShowroomBilling.Infrastructure.Numbering;
 using ShowroomBilling.Infrastructure.Settings;
 using ShowroomBilling.Tests.Postgres;
 using ShowroomBilling.Tests.TestSupport;
@@ -28,7 +24,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
     public async Task A_batch_is_refused_before_the_newest_bill_and_saved_after_it()
     {
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var windowStart = DateTimeOffset.UtcNow.AddHours(-6);
         var existingAt = windowStart.AddHours(1);
         var existing = await bills.CreateBackdatedDraftAsync(
@@ -94,7 +90,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
         var day = ADayBack();
         var dayStart = IndiaTime.StartOf(day);
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var dayBefore = await bills.CreateBackdatedDraftAsync(
             new CreateBillDraftRequest(Payload(day.AddDays(-1))), dayStart.AddHours(13).AddMinutes(53).AddSeconds(26).ToUniversalTime());
         var executor = new SyntheticBatchExecutor(
@@ -138,7 +134,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
     public async Task A_batch_made_whole_gives_its_bill_numbers_and_is_kept_as_finished()
     {
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var outcomes = new SyntheticBatchOutcomes();
         var executor = new SyntheticBatchExecutor(bills, new MastersOnlySettings(), db, NullLogger<SyntheticBatchExecutor>.Instance, AfterTheWindow(), outcomes);
         var request = ThreeBillsOrMore() with { BatchId = Guid.NewGuid() };
@@ -167,7 +163,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
     public async Task A_cancelled_batch_keeps_the_bills_it_saved_and_says_how_many()
     {
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var outcomes = new SyntheticBatchOutcomes();
         var executor = new SyntheticBatchExecutor(bills, new MastersOnlySettings(), db, NullLogger<SyntheticBatchExecutor>.Instance, AfterTheWindow(), outcomes);
         var request = ThreeBillsOrMore() with { BatchId = Guid.NewGuid() };
@@ -217,7 +213,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
             seeded.Settings with { Masters = new MasterDataSettingsDto(MastersOnlySettings.Items, MastersOnlySettings.Karats) }));
         var hours = new BatchHoursSettings(new TimeOnly(11, 0), new TimeOnly(12, 0), day.AddDays(-1).DayOfWeek, GapMinutes: 5);
         await cloud.UpdateBatchHoursAsync(new UpdateBatchHoursRequest(hours));
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var executor = new SyntheticBatchExecutor(
             bills, cloud, db, NullLogger<SyntheticBatchExecutor>.Instance, new FakeTimeProvider(dayStart.AddDays(1).ToUniversalTime()));
 
@@ -265,7 +261,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
     public async Task A_batch_approved_by_other_shop_hours_than_the_saved_ones_is_refused()
     {
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         // These settings hold no shop hours: any time of day.
         var executor = new SyntheticBatchExecutor(bills, new MastersOnlySettings(), db, NullLogger<SyntheticBatchExecutor>.Instance, AfterTheWindow());
 
@@ -286,7 +282,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
     public async Task A_save_that_fails_without_saying_whether_the_bill_was_stored_leaves_the_count_in_doubt()
     {
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var outcomes = new SyntheticBatchOutcomes();
         var executor = new SyntheticBatchExecutor(bills, new MastersOnlySettings(), db, NullLogger<SyntheticBatchExecutor>.Instance, AfterTheWindow(), outcomes);
         var request = ThreeBillsOrMore() with { BatchId = Guid.NewGuid() };
@@ -335,7 +331,7 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
         var day = ADayBack();
         var dayStart = IndiaTime.StartOf(day);
         await using var db = CreateDbContext();
-        var bills = new BillService(db, new NumberingService(db), new UnusedTallyPoster());
+        var bills = BillTestData.Lifecycle(db);
         var executor = new SyntheticBatchExecutor(bills, new MastersOnlySettings(), db, NullLogger<SyntheticBatchExecutor>.Instance);
 
         // No bill: no limit but now.
@@ -398,12 +394,5 @@ public sealed class SyntheticBatchExecutorTests(PostgresFixture postgres) : Data
 
         public override Task<BatchHoursResponse> GetBatchHoursAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(new BatchHoursResponse(new BatchHoursSettings(), DateTimeOffset.UtcNow));
-    }
-
-    /// <summary>A batch only saves bills; nothing is sent to Tally.</summary>
-    private sealed class UnusedTallyPoster : ITallyPoster
-    {
-        public Task<TallyPostResponse> PostAsync(TallyPostRequest request, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

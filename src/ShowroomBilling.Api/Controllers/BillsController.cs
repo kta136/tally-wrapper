@@ -10,7 +10,11 @@ namespace ShowroomBilling.Api.Controllers;
 [ApiController]
 [Route("api/bills")]
 public sealed class BillsController(
-    BillService billService,
+    BillReadWorkflow read,
+    BillLifecycleWorkflow lifecycle,
+    BillPostingWorkflow posting,
+    BillAdminWorkflow admin,
+    BillAuditStore audit,
     SyntheticBatchExecutor syntheticBatchExecutor,
     SyntheticBatchOutcomes syntheticBatchOutcomes) : ControllerBase
 {
@@ -46,7 +50,7 @@ public sealed class BillsController(
         [FromBody] CreateBillDraftRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.CreateDraftAsync(request, cancellationToken);
+        var response = await lifecycle.CreateDraftAsync(request, cancellationToken);
         return Created($"/api/bills/{response.Id}", response);
     }
 
@@ -65,14 +69,14 @@ public sealed class BillsController(
             HttpContext.User.AddIdentities(admin.Principal.Identities);
         }
 
-        var response = await billService.UpdateDraftAsync(billId, request, admin.Succeeded, cancellationToken);
+        var response = await lifecycle.UpdateDraftAsync(billId, request, admin.Succeeded, cancellationToken);
         return Ok(response);
     }
 
     [HttpGet("{billId:guid}")]
     public async Task<ActionResult<BillResponse>> Get(Guid billId, CancellationToken cancellationToken)
     {
-        var response = await billService.GetAsync(billId, cancellationToken);
+        var response = await read.GetAsync(billId, cancellationToken);
         return response is null ? NotFound() : Ok(response);
     }
 
@@ -80,7 +84,7 @@ public sealed class BillsController(
     [HttpGet("by-operation/{operationId:guid}")]
     public async Task<ActionResult<BillResponse>> GetByOperation(Guid operationId, CancellationToken cancellationToken)
     {
-        var response = await billService.GetByOperationIdAsync(operationId, cancellationToken);
+        var response = await read.GetByOperationIdAsync(operationId, cancellationToken);
         return response is null ? NotFound() : Ok(response);
     }
 
@@ -92,14 +96,14 @@ public sealed class BillsController(
     public async Task<ActionResult<BillPushOrderResponse>> GetPushOrder(
         [FromBody] BillPushOrderRequest request,
         CancellationToken cancellationToken)
-        => Ok(await billService.FindEarlierUnpushedAsync(request, cancellationToken));
+        => Ok(await read.FindEarlierUnpushedAsync(request, cancellationToken));
 
     [HttpPost("batch")]
     public async Task<ActionResult<BillBatchGetResponse>> GetMany(
         [FromBody] BillBatchGetRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.GetManyAsync(request, cancellationToken);
+        var response = await read.GetManyAsync(request, cancellationToken);
         return Ok(response);
     }
 
@@ -115,7 +119,7 @@ public sealed class BillsController(
         [FromQuery] string? search,
         CancellationToken cancellationToken)
     {
-        var response = await billService.SearchAsync(
+        var response = await read.SearchAsync(
             new BillSearchFilter(state, fromDate, toDate, skip, take, sort, includeTotal, search), cancellationToken);
         return Ok(response);
     }
@@ -127,7 +131,7 @@ public sealed class BillsController(
         [FromBody] PushBillRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.PushAsync(
+        var response = await posting.PushAsync(
             billId,
             request ?? new PushBillRequest(null),
             cancellationToken);
@@ -140,7 +144,7 @@ public sealed class BillsController(
         [FromBody] PushSelectedBillsRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.PushSelectedAsync(request, cancellationToken);
+        var response = await posting.PushSelectedAsync(request, cancellationToken);
         return Ok(response);
     }
 
@@ -150,7 +154,7 @@ public sealed class BillsController(
         [FromBody] PushPendingBillsRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.PushPendingAsync(
+        var response = await posting.PushPendingAsync(
             request ?? new PushPendingBillsRequest(null, null),
             cancellationToken);
         return Ok(response);
@@ -163,7 +167,7 @@ public sealed class BillsController(
         [FromBody] ReviseBillRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.ReviseAsync(billId, request ?? new ReviseBillRequest(null), cancellationToken);
+        var response = await lifecycle.ReviseAsync(billId, request ?? new ReviseBillRequest(null), cancellationToken);
         return Created($"/api/bills/{response.Id}", response);
     }
 
@@ -172,7 +176,7 @@ public sealed class BillsController(
         Guid billId,
         CancellationToken cancellationToken)
     {
-        var response = await billService.GetAuditAsync(billId, cancellationToken);
+        var response = await audit.GetAuditAsync(billId, cancellationToken);
         return response is null ? NotFound() : Ok(response);
     }
 
@@ -183,7 +187,7 @@ public sealed class BillsController(
         [FromBody] RetryBillPostingRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.RetryAsync(
+        var response = await posting.RetryAsync(
             billId, request ?? new RetryBillPostingRequest(null), cancellationToken);
         return Ok(response);
     }
@@ -195,7 +199,7 @@ public sealed class BillsController(
         [FromBody] RepostBillRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.RepostAsync(billId, request, cancellationToken);
+        var response = await posting.RepostAsync(billId, request, cancellationToken);
         return Ok(response);
     }
 
@@ -206,7 +210,7 @@ public sealed class BillsController(
         [FromBody] VoidBillRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.VoidAsync(billId, request ?? new VoidBillRequest(null), cancellationToken);
+        var response = await lifecycle.VoidAsync(billId, request ?? new VoidBillRequest(null), cancellationToken);
         return Ok(response);
     }
 
@@ -217,7 +221,7 @@ public sealed class BillsController(
         [FromBody] ChangeBillNumberRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.ChangeInvoiceNumberAsync(billId, request, cancellationToken);
+        var response = await admin.ChangeInvoiceNumberAsync(billId, request, cancellationToken);
         return Ok(response);
     }
 
@@ -228,7 +232,7 @@ public sealed class BillsController(
         [FromBody] MarkBillStateRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.MarkPostedAsync(billId, request, cancellationToken);
+        var response = await admin.MarkPostedAsync(billId, request, cancellationToken);
         return Ok(response);
     }
 
@@ -239,7 +243,7 @@ public sealed class BillsController(
         [FromBody] MarkBillStateRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.MarkPendingAsync(billId, request, cancellationToken);
+        var response = await admin.MarkPendingAsync(billId, request, cancellationToken);
         return Ok(response);
     }
 
@@ -250,7 +254,7 @@ public sealed class BillsController(
         [FromBody] DeleteBillRequest? request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.DeleteAsync(billId, request ?? new DeleteBillRequest(null, false), cancellationToken);
+        var response = await admin.DeleteAsync(billId, request ?? new DeleteBillRequest(null, false), cancellationToken);
         return Ok(response);
     }
 
@@ -260,7 +264,7 @@ public sealed class BillsController(
         [FromBody] DeleteSelectedBillsRequest request,
         CancellationToken cancellationToken)
     {
-        var response = await billService.DeleteSelectedAsync(request, cancellationToken);
+        var response = await admin.DeleteSelectedAsync(request, cancellationToken);
         return Ok(response);
     }
 }

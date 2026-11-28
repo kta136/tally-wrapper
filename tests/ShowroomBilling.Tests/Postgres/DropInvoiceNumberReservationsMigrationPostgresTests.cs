@@ -62,7 +62,7 @@ public sealed class DropInvoiceNumberReservationsMigrationPostgresTests(Postgres
         // The app saves a bill on the new schema: a number no longer needs the table.
         await using (var db = database.CreateContext())
         {
-            var bill = await PostgresBillTestSupport.BuildService(db).CreateDraftAsync(
+            var bill = await Lifecycle(db).CreateDraftAsync(
                 new CreateBillDraftRequest(SamplePayload("After the drop", 100m)));
             Assert.EndsWith("/0001", bill.InvoiceNumber);
         }

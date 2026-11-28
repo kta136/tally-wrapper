@@ -7,13 +7,13 @@ using ShowroomBilling.Infrastructure.Persistence.Entities;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
+public sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
 {
     private const string SortWorkflow = BillSearchSorts.Workflow;
     private const string SortCreatedDesc = BillSearchSorts.CreatedDesc;
     private const int MaxBatchGetIds = 200;
 
-    internal async Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
+    public async Task<BillResponse?> GetAsync(Guid billId, CancellationToken cancellationToken = default)
     {
         // One round trip for the bill and its current revision; the database
         // is across the network from the showroom.
@@ -33,7 +33,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
     /// The bill whose create carried <paramref name="operationId"/> as its
     /// <c>ClientOperationId</c>, with its current revision, or null.
     /// </summary>
-    internal async Task<BillResponse?> GetByOperationIdAsync(Guid operationId, CancellationToken cancellationToken = default)
+    public async Task<BillResponse?> GetByOperationIdAsync(Guid operationId, CancellationToken cancellationToken = default)
     {
         var row = await (
             from bill in dbContext.Bills.AsNoTracking()
@@ -52,7 +52,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
     /// Only a bill whose push makes a voucher counts on either side; an edited bill's push alters the
     /// voucher it already has, which keeps its place.
     /// </summary>
-    internal async Task<BillPushOrderResponse> FindEarlierUnpushedAsync(
+    public async Task<BillPushOrderResponse> FindEarlierUnpushedAsync(
         BillPushOrderRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -133,7 +133,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         return new BillPushOrderResponse(earlier, pushOrder);
     }
 
-    internal async Task<BillBatchGetResponse> GetManyAsync(
+    public async Task<BillBatchGetResponse> GetManyAsync(
         BillBatchGetRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -187,7 +187,7 @@ internal sealed class BillReadWorkflow(ShowroomBillingDbContext dbContext)
         return new BillBatchGetResponse(responses);
     }
 
-    internal async Task<BillListResponse> SearchAsync(
+    public async Task<BillListResponse> SearchAsync(
         BillSearchFilter filter,
         CancellationToken cancellationToken = default)
     {

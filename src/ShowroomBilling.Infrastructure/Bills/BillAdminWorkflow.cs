@@ -7,12 +7,12 @@ using ShowroomBilling.Infrastructure.Persistence;
 
 namespace ShowroomBilling.Infrastructure.Bills;
 
-internal sealed class BillAdminWorkflow(
+public sealed class BillAdminWorkflow(
     ShowroomBillingDbContext dbContext,
     NumberingService numberingService,
     BillAuditStore auditStore)
 {
-    internal async Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(
+    public async Task<ChangeBillNumberResponse> ChangeInvoiceNumberAsync(
         Guid billId,
         ChangeBillNumberRequest request,
         CancellationToken cancellationToken = default)
@@ -201,7 +201,7 @@ internal sealed class BillAdminWorkflow(
             WarningSummary: BillNumberChangeRules.BuildWarning(leavesGap, tallyDiverges));
     }
 
-    internal Task<BillResponse> MarkPostedAsync(
+    public Task<BillResponse> MarkPostedAsync(
         Guid billId,
         MarkBillStateRequest request,
         CancellationToken cancellationToken = default)
@@ -214,7 +214,7 @@ internal sealed class BillAdminWorkflow(
             "mark-as-pushed",
             cancellationToken);
 
-    internal Task<BillResponse> MarkPendingAsync(
+    public Task<BillResponse> MarkPendingAsync(
         Guid billId,
         MarkBillStateRequest request,
         CancellationToken cancellationToken = default)
@@ -265,7 +265,7 @@ internal sealed class BillAdminWorkflow(
         return BillSerialization.MapResponse(bill, revision);
     }
 
-    internal async Task<DeleteBillResponse> DeleteAsync(
+    public async Task<DeleteBillResponse> DeleteAsync(
         Guid billId,
         DeleteBillRequest request,
         CancellationToken cancellationToken = default)
@@ -349,7 +349,7 @@ internal sealed class BillAdminWorkflow(
             InvoiceNumber: invoiceNumber);
     }
 
-    internal async Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(
+    public async Task<DeleteSelectedBillsResponse> DeleteSelectedAsync(
         DeleteSelectedBillsRequest request,
         CancellationToken cancellationToken = default)
     {
