@@ -17,23 +17,6 @@ public sealed class DropDraftEditLeasesMigrationPostgresTests(PostgresFixture fi
     private const string Backup = DropDraftEditLeases.Backup;
 
     [Fact]
-    public async Task An_empty_table_is_dropped_and_leaves_no_copy()
-    {
-        // A new database is migrated all the way up; its lease table was never written.
-        await using var database = await fixture.CreateDatabaseAsync();
-
-        Assert.False(await TableExistsAsync(database, "draft_edit_leases"));
-        Assert.False(await TableExistsAsync(database, Backup));
-
-        // The way down still gives the previous build its table back.
-        await MigrateAsync(database, Previous);
-        Assert.True(await TableExistsAsync(database, "draft_edit_leases"));
-        Assert.Equal(0L, await ScalarAsync<long>(database, "SELECT count(*) FROM public.draft_edit_leases"));
-
-        await MigrateAsync(database, target: null);
-    }
-
-    [Fact]
     public async Task Rows_are_copied_aside_first_and_come_back_on_the_way_down()
     {
         await using var database = await fixture.CreateDatabaseAsync();

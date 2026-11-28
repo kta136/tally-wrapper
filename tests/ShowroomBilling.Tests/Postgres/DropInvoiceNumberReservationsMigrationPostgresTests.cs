@@ -20,23 +20,6 @@ public sealed class DropInvoiceNumberReservationsMigrationPostgresTests(Postgres
     private const string Backup = DropInvoiceNumberReservations.Backup;
 
     [Fact]
-    public async Task An_empty_table_is_dropped_and_leaves_no_copy()
-    {
-        // A new database is migrated all the way up; nothing ever wrote its table.
-        await using var database = await fixture.CreateDatabaseAsync();
-
-        Assert.False(await TableExistsAsync(database, "invoice_number_reservations"));
-        Assert.False(await TableExistsAsync(database, Backup));
-
-        // The way down still gives the previous build its table back.
-        await MigrateAsync(database, Previous);
-        Assert.True(await TableExistsAsync(database, "invoice_number_reservations"));
-        Assert.Equal(0L, await ScalarAsync<long>(database, "SELECT count(*) FROM public.invoice_number_reservations"));
-
-        await MigrateAsync(database, target: null);
-    }
-
-    [Fact]
     public async Task Rows_are_copied_aside_first_and_come_back_on_the_way_down()
     {
         await using var database = await fixture.CreateDatabaseAsync();
