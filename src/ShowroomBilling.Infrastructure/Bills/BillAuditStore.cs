@@ -90,16 +90,17 @@ public sealed class BillAuditStore(
             LastErrorMessage: lastErrorMessage);
     }
 
-    /// <summary>Reads a string from the <c>details</c> object of a bill audit payload.</summary>
-    internal static string? ReadDetailsString(string? payloadJson, string propertyName)
+    /// <summary>Reads a details string. Older payloads can use a legacy property when the current property is absent.</summary>
+    internal static string? ReadDetailsString(string? payloadJson, string propertyName, string? legacyProperty = null)
     {
         if (string.IsNullOrWhiteSpace(payloadJson)) return null;
         try
         {
             using var doc = JsonDocument.Parse(payloadJson);
-            if (doc.RootElement.TryGetProperty("details", out var details)
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("details", out var details)
                 && details.ValueKind == JsonValueKind.Object
-                && details.TryGetProperty(propertyName, out var v)
+                && (details.TryGetProperty(propertyName, out var v)
+                    || legacyProperty is not null && details.TryGetProperty(legacyProperty, out v))
                 && v.ValueKind == JsonValueKind.String)
             {
                 return v.GetString();
@@ -107,27 +108,6 @@ public sealed class BillAuditStore(
         }
         catch (JsonException) { }
         return null;
-    }
-
-    /// <summary>
-    /// True when the <c>details</c> object of a bill audit payload has the
-    /// property at all, null or not; an event written before the property
-    /// existed has none.
-    /// </summary>
-    internal static bool HasDetailsProperty(string? payloadJson, string propertyName)
-    {
-        if (string.IsNullOrWhiteSpace(payloadJson)) return false;
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            return doc.RootElement.TryGetProperty("details", out var details)
-                && details.ValueKind == JsonValueKind.Object
-                && details.TryGetProperty(propertyName, out _);
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
     }
 
     private static JsonElement ParsePayload(string payloadJson)

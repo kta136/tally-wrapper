@@ -285,17 +285,7 @@ public sealed partial class TallyComparison(
         var lastPending = trail.LastOrDefault(e => e.EventType == BillAuditEvents.MarkPending);
         var push = trail.LastOrDefault(e => e.EventType == BillAuditEvents.TallyPosted
             && (lastPending is null || e.At > lastPending.At));
-        if (push is null)
-        {
-            return (null, null);
-        }
-
-        var masterId = TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(push.PayloadJson, "tallyMasterId"))
-            ?? (BillAuditStore.HasDetailsProperty(push.PayloadJson, "tallyMasterId")
-                ? null
-                : TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(push.PayloadJson, "remoteId")));
-        var company = BillAuditStore.ReadDetailsString(push.PayloadJson, "company");
-        return (masterId, string.IsNullOrWhiteSpace(company) ? null : company);
+        return BillTallyHistory.RecordedVoucher(push?.PayloadJson);
     }
 
     /// <summary>
@@ -331,8 +321,7 @@ public sealed partial class TallyComparison(
         }
 
         var firstRename = trail.FirstOrDefault(e => e.EventType == BillAuditEvents.NumberChanged && e.At > lastInTally.At);
-        var before = BillAuditStore.ReadDetailsString(firstRename?.PayloadJson, "old");
-        return string.IsNullOrWhiteSpace(before) ? current : before;
+        return BillTallyHistory.NumberBeforeRename(current, firstRename?.PayloadJson);
     }
 
     private static bool SameTotal(decimal? tally, decimal? bill) =>

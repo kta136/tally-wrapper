@@ -201,7 +201,8 @@ public sealed class BillPostingWorkflow(
         // means asking Tally, which can take as long as Tally's own timeout,
         // and nothing has been written yet, so a caller who goes away
         // meanwhile leaves the bill as it was.
-        var alterTarget = bill.EditedAfterPush
+        uint? alterVersion = bill.EditedAfterPush ? bill.RowVersion : null;
+        var alterTarget = alterVersion.HasValue
             ? await FindAlterTargetAsync(bill, cancellationToken)
             : default;
 
@@ -214,7 +215,8 @@ public sealed class BillPostingWorkflow(
         //      ensures only one caller wins.
         //      The claim is also gated on the revision loaded above, so an edit
         //      that lands during Tally preflight cannot be overtaken by a push
-        //      of the older revision.
+        //      of the older revision. An Alter also checks the row version: a
+        //      rename or admin mark can change its target without a new revision.
         //   2. Crash recovery: `posting` must be visible in the DB before the
         //      Tally round-trip, so StuckPostingRecoveryHostedService can heal
         //      a stuck row if the API crashes mid-call. Do NOT wrap this flip
@@ -223,6 +225,7 @@ public sealed class BillPostingWorkflow(
         var rowsAffected = await dbContext.Bills
             .Where(b => b.Id == billId
                 && b.CurrentRevisionId == claimedRevisionId
+                && (alterVersion == null || b.RowVersion == alterVersion)
                 && (b.State == BillStates.Pending
                     || b.State == BillStates.Draft
                     || b.State == BillStates.Failed
@@ -239,11 +242,11 @@ public sealed class BillPostingWorkflow(
             // shape as the "already posting" short-circuit above.
             dbContext.ChangeTracker.Clear();
             var refreshed = await dbContext.LoadTrackedBillAsync(billId, cancellationToken);
-            if (refreshed.CurrentRevisionId != claimedRevisionId
-                && refreshed.State is not BillStates.Posting)
+            var staleAlter = alterVersion.HasValue && refreshed.State == sourceState;
+            if ((refreshed.CurrentRevisionId != claimedRevisionId || staleAlter) && refreshed.State != BillStates.Posting)
             {
                 throw new BillStateConflictException(
-                    $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' was edited while the push was starting. Review the latest version and push again.");
+                    $"Bill '{refreshed.InvoiceNumber ?? billId.ToString()}' changed while the push was starting. Review the latest version and push again.");
             }
             var refreshedRevision = refreshed.CurrentRevisionId is Guid rid
                 ? await dbContext.BillRevisions.FirstOrDefaultAsync(x => x.Id == rid, cancellationToken)
@@ -675,96 +678,6 @@ public sealed class BillPostingWorkflow(
         return $"Tally push blocked: {message}";
     }
 
-    /// <summary>The voucher the last successful pre-edit push recorded, and the company it went to.</summary>
-    private readonly record struct RecordedTarget(string? MasterId, string? Company);
-
-    private async Task<RecordedTarget> ResolveRecordedAlterTargetAsync(Guid billId, CancellationToken cancellationToken)
-    {
-        var billIdText = billId.ToString();
-        var lastReopen = await dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && e.EventType == BillAuditEvents.EditReopened)
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .ThenByDescending(e => e.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (lastReopen is null)
-        {
-            return default;
-        }
-
-        // Mark as Pending says Tally no longer holds the bill's voucher, so a
-        // push recorded before it names a voucher that has gone. What Tally
-        // holds after it is said by a later push, or by Mark as Pushed.
-        var lastMarkPending = await dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && e.EventType == BillAuditEvents.MarkPending)
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .Select(e => (DateTimeOffset?)e.CreatedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var pushes = dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && e.EventType == BillAuditEvents.TallyPosted
-                && e.CreatedAtUtc < lastReopen.CreatedAtUtc);
-        if (lastMarkPending is { } cutoff)
-        {
-            pushes = pushes.Where(e => e.CreatedAtUtc > cutoff);
-        }
-
-        var lastPreEditSuccess = await pushes
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .ThenByDescending(e => e.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (lastPreEditSuccess is null)
-        {
-            return default;
-        }
-
-        // Every tally.posted written since tallyMasterId was added carries it,
-        // null when Tally gave no id; there remoteId can be a repost's own key
-        // rather than anything of Tally's. Only an event from before then
-        // falls back to remoteId.
-        var payloadJson = lastPreEditSuccess.PayloadJson;
-        var masterId = TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(payloadJson, "tallyMasterId"))
-            ?? (BillAuditStore.HasDetailsProperty(payloadJson, "tallyMasterId")
-                ? null
-                : TallyIds.NormalizePositiveInteger(BillAuditStore.ReadDetailsString(payloadJson, "remoteId")));
-        var company = BillAuditStore.ReadDetailsString(payloadJson, "company");
-        return new RecordedTarget(masterId, string.IsNullOrWhiteSpace(company) ? null : company.Trim());
-    }
-
-    /// <summary>
-    /// The revision Tally was last said to hold: the one current when the
-    /// bill was last pushed successfully or marked as pushed.
-    /// </summary>
-    private async Task<BillRevisionEntity?> RevisionTallyHoldsAsync(BillEntity bill, CancellationToken cancellationToken)
-    {
-        var billIdText = bill.Id.ToString();
-        var lastInTally = await dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && (e.EventType == BillAuditEvents.TallyPosted || e.EventType == BillAuditEvents.MarkPosted))
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .ThenByDescending(e => e.Id)
-            .Select(e => (DateTimeOffset?)e.CreatedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (lastInTally is not { } since)
-        {
-            return null;
-        }
-
-        return await dbContext.BillRevisions.AsNoTracking()
-            .Where(r => r.BillId == bill.Id && r.CreatedAtUtc <= since)
-            .OrderByDescending(r => r.CreatedAtUtc)
-            .ThenByDescending(r => r.RevisionNo)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
     /// <summary>
     /// Null when the voucher shows the bill as Tally was last said to hold it
     /// (that revision's date and grand total), otherwise the failure to settle
@@ -773,23 +686,21 @@ public sealed class BillPostingWorkflow(
     /// one found by an id from a push that did not record its company, which
     /// another company may have given to another sale.
     /// </summary>
-    private async Task<TallyPostResponse?> MismatchAsync(
-        BillEntity bill,
+    private static TallyPostResponse? Mismatch(
+        BillTallyHistory.AlterHistory history,
         TallyVoucherRef voucher,
-        string whichVoucher,
-        CancellationToken cancellationToken)
+        string whichVoucher)
     {
-        var asHeld = await RevisionTallyHoldsAsync(bill, cancellationToken);
-        if (asHeld?.BillDate is { } heldDate
+        if (history.BillDate is { } heldDate && history.GrandTotal is { } heldTotal
             && voucher.Date == heldDate
             && voucher.Amount is { } amount
-            && decimal.Round(amount, 2) == decimal.Round(asHeld.GrandTotal, 2))
+            && decimal.Round(amount, 2) == decimal.Round(heldTotal, 2))
         {
             return null;
         }
 
-        var billAsHeld = asHeld?.BillDate is { } d
-            ? $"dated {d:dd-MM-yyyy} for {FormatAmount(asHeld.GrandTotal)}"
+        var billAsHeld = history.BillDate is { } d
+            ? $"dated {d:dd-MM-yyyy} for {FormatAmount(history.GrandTotal)}"
             : "of a date and amount that cannot be told";
         return TallyPostResponse.Failed(
             "TALLY_VOUCHER_MISMATCH",
@@ -842,12 +753,12 @@ public sealed class BillPostingWorkflow(
         }
 
         var destination = await tallyVoucherLookup.DestinationAsync(cancellationToken);
-        var recorded = await ResolveRecordedAlterTargetAsync(bill.Id, cancellationToken);
+        var history = await BillTallyHistory.ReadForAlterAsync(dbContext, bill, cancellationToken);
 
         // A master id names a voucher only within its company: in another
         // company the same id is somebody else's sale, and a miss there says
         // nothing about the bill's voucher. So the company comes first.
-        if (recorded.Company is { } pushedTo
+        if (history.Company is { } pushedTo
             && !string.Equals(pushedTo, destination.Company, StringComparison.OrdinalIgnoreCase))
         {
             return AlterTarget.Fail(TallyPostResponse.Failed(
@@ -857,7 +768,7 @@ public sealed class BillPostingWorkflow(
         }
 
         var fiscalYear = bill.FiscalYear!;
-        if (recorded.MasterId is { } recordedId)
+        if (history.MasterId is { } recordedId)
         {
             var voucher = await AskTallyAsync(
                 () => tallyVoucherLookup.FindByMasterIdAsync(recordedId, fiscalYear, cancellationToken),
@@ -873,8 +784,8 @@ public sealed class BillPostingWorkflow(
 
             // A push recorded before 25 November 2026 does not say which
             // company it went to, so its id is held to the bill as well.
-            if (recorded.Company is null
-                && await MismatchAsync(bill, voucher, $"The voucher this bill was pushed as (master id {recordedId})", cancellationToken) is { } mismatch)
+            if (history.Company is null
+                && Mismatch(history, voucher, $"The voucher this bill was pushed as (master id {recordedId})") is { } mismatch)
             {
                 return AlterTarget.Fail(mismatch);
             }
@@ -882,7 +793,7 @@ public sealed class BillPostingWorkflow(
             return new AlterTarget(voucher.MasterId, voucher.Date, null, destination, null);
         }
 
-        var number = await NumberTallyHoldsAsync(bill, cancellationToken);
+        var number = history.VoucherNumber;
         var vouchers = await AskTallyAsync(
             () => tallyVoucherLookup.FindByNumberAsync(number, fiscalYear, cancellationToken),
             $"Tally push blocked: this bill was edited after it was marked as pushed, and Tally could not be asked for voucher {number}, which the push has to change.",
@@ -895,7 +806,7 @@ public sealed class BillPostingWorkflow(
                 // numbers vouchers itself (Automatic / Auto Renumber), an
                 // insertion moves every later number, and the one voucher now
                 // carrying this number can be another sale.
-                if (await MismatchAsync(bill, vouchers[0], $"The voucher Tally has numbered {number}", cancellationToken) is { } mismatch)
+                if (Mismatch(history, vouchers[0], $"The voucher Tally has numbered {number}") is { } mismatch)
                 {
                     return AlterTarget.Fail(mismatch, number);
                 }
@@ -941,45 +852,4 @@ public sealed class BillPostingWorkflow(
             throw new TallyPreflightUnavailableException($"{blockedMessage} {ex.Message}");
         }
     }
-
-    /// <summary>
-    /// The number the bill's voucher carries in Tally: the bill's number when
-    /// Tally last had it (a push that succeeded, or an admin's Mark as
-    /// Pushed). A rename made since then has not reached Tally, because the
-    /// Alter being prepared is what takes it there, so the first rename after
-    /// that moment holds the number to look for.
-    /// </summary>
-    private async Task<string> NumberTallyHoldsAsync(BillEntity bill, CancellationToken cancellationToken)
-    {
-        var billIdText = bill.Id.ToString();
-        var lastInTally = await dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && (e.EventType == BillAuditEvents.TallyPosted || e.EventType == BillAuditEvents.MarkPosted))
-            .OrderByDescending(e => e.CreatedAtUtc)
-            .ThenByDescending(e => e.Id)
-            .Select(e => (DateTimeOffset?)e.CreatedAtUtc)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (lastInTally is not { } since)
-        {
-            return bill.InvoiceNumber!;
-        }
-
-        var firstRenameSince = await dbContext.AuditEvents.AsNoTracking()
-            .Where(e => e.EntityType == "bill"
-                && e.EntityId == billIdText
-                && e.EventType == BillAuditEvents.NumberChanged
-                && e.CreatedAtUtc > since)
-            .OrderBy(e => e.CreatedAtUtc)
-            .ThenBy(e => e.Id)
-            .Select(e => e.PayloadJson)
-            .FirstOrDefaultAsync(cancellationToken);
-        var numberBefore = BillAuditStore.ReadDetailsString(firstRenameSince, "old");
-        return string.IsNullOrWhiteSpace(numberBefore) ? bill.InvoiceNumber! : numberBefore;
-    }
-
-
-
-
-
 }

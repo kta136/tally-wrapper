@@ -603,6 +603,27 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     }
 
     [Fact]
+    public async Task Push_EditedBill_UsesTheNumericRemoteIdFromBeforePushesRecordedMasterIds()
+    {
+        await using var db = CreateDbContext();
+        var poster = new FakeTallyPoster();
+        var lookup = new FakeVoucherLookup { VoucherAmount = 100m };
+        var bills = BuildWorkflows(db, poster, voucherLookup: lookup);
+        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        await bills.Posting.PushAsync(bill.Id, new PushBillRequest("first"));
+        var posted = await db.AuditEvents.SingleAsync(e => e.EntityId == bill.Id.ToString() && e.EventType == BillAuditEvents.TallyPosted);
+        posted.PayloadJson = """{"state":"posted","details":{"remoteId":"101"}}""";
+        await db.SaveChangesAsync();
+        await bills.Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+
+        var pushed = await bills.Posting.PushAsync(bill.Id, new PushBillRequest("repush-edited"));
+
+        Assert.Equal(BillStates.Posted, pushed.State);
+        Assert.Equal("101", poster.LastRequest!.TargetTagValue);
+        Assert.Empty(lookup.Asked);
+    }
+
+    [Fact]
     public async Task Push_EditedBill_ANumericRemoteIdThatTallyDidNotGiveIsNotTakenForAMasterId()
     {
         await using var db = CreateDbContext();
@@ -1044,13 +1065,18 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     [Fact]
     public async Task Push_BillMarkedPushedByHandThenRenumbered_LooksForTheNumberTallyStillHas()
     {
-        await using var db = CreateDbContext();
+        var counter = new CommandCounter();
+        var options = new DbContextOptionsBuilder<ShowroomBillingDbContext>(Database.Options).AddInterceptors(counter).Options;
+        await using var db = new ShowroomBillingDbContext(options);
         var poster = new FakeTallyPoster();
         var lookup = new FakeVoucherLookup("4521") { VoucherAmount = 100m };
         var bills = BuildWorkflows(db, poster, voucherLookup: lookup);
         var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
         await bills.Admin.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered in Tally by hand"));
-        var renamed = await bills.Admin.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("7", "typo", DryRun: false));
+        await bills.Admin.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("7", "typo", DryRun: false));
+        var renamed = await bills.Admin.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("8", "corrected", DryRun: false));
+        await bills.Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("A-edited", 150m)), callerIsAdmin: true);
+        counter.Commands.Clear();
 
         var pushed = await bills.Posting.PushAsync(bill.Id, new PushBillRequest("after-rename"));
 
@@ -1060,6 +1086,37 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
         Assert.Equal("4521", poster.LastRequest.TargetTagValue);
         Assert.Equal(renamed.NewInvoiceNumber, poster.LastRequest.InvoiceNumber);
+        Assert.Equal(150m, poster.LastRequest.Payload.Totals.GrandTotal);
+
+        var historyRead = Assert.Single(counter.Commands, sql => sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)
+            && sql.Contains("audit_events", StringComparison.Ordinal));
+        Assert.Contains("bill_revisions", historyRead, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Push_RenumberDuringAlterLookupLeavesTheBillPendingAndSendsNothing()
+    {
+        await using var db = CreateDbContext();
+        await using var other = CreateDbContext();
+        var setup = BuildWorkflows(db);
+        var bill = await setup.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
+        await setup.Admin.MarkPostedAsync(bill.Id, new MarkBillStateRequest("entered by hand"));
+        await setup.Lifecycle.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("B", 150m)), callerIsAdmin: true);
+        var lookup = new FakeVoucherLookup("4521")
+        {
+            VoucherAmount = 100m,
+            WhenAsked = () => BuildWorkflows(other).Admin.ChangeInvoiceNumberAsync(bill.Id, new ChangeBillNumberRequest("7", "typo", DryRun: false)),
+        };
+        var poster = new FakeTallyPoster();
+        var bills = BuildWorkflows(db, poster, voucherLookup: lookup);
+
+        await Assert.ThrowsAsync<BillStateConflictException>(() => bills.Posting.PushAsync(bill.Id, new PushBillRequest("push-edited")));
+
+        Assert.Equal(0, poster.CallCount);
+        var stored = await db.Bills.AsNoTracking().SingleAsync(b => b.Id == bill.Id);
+        Assert.True(stored.EditedAfterPush);
+        Assert.Equal(BillStates.Pending, stored.State);
+        Assert.Equal(7, stored.InvoiceCore);
     }
 
     [Fact]
@@ -1962,7 +2019,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         // The caller goes away while the bill's voucher is being looked up, before anything is claimed or sent.
         var lookup = new FakeVoucherLookup
         {
-            WhenAsked = requestCts.Cancel,
+            WhenAsked = requestCts.CancelAsync,
             Failure = new OperationCanceledException(),
         };
         var bills = BuildWorkflows(db, poster, voucherLookup: lookup);
@@ -2280,7 +2337,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
     private sealed class FakeVoucherLookup(params string[] numberedMasterIds) : ITallyVoucherLookup
     {
         public Exception? Failure { get; init; }
-        public Action? WhenAsked { get; init; }
+        public Func<Task>? WhenAsked { get; init; }
         /// <summary>The date every voucher has in Tally.</summary>
         public DateOnly VoucherDate { get; init; } = SampleBillDate;
         /// <summary>The total every voucher has in Tally, when Tally gives one.</summary>
@@ -2299,30 +2356,27 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         public List<(string Number, string FiscalYear)> Asked { get; } = [];
         public List<string> AskedById { get; } = [];
 
-        public Task<IReadOnlyList<TallyVoucherRef>> FindByNumberAsync(
+        public async Task<IReadOnlyList<TallyVoucherRef>> FindByNumberAsync(
             string voucherNumber,
             string fiscalYear,
             CancellationToken cancellationToken = default)
         {
             Asked.Add((voucherNumber, fiscalYear));
-            WhenAsked?.Invoke();
-            return Failure is null
-                ? Task.FromResult<IReadOnlyList<TallyVoucherRef>>(
-                    numberedMasterIds.Select(id => new TallyVoucherRef(id, VoucherDate, VoucherAmount, Company, VoucherNumber ?? voucherNumber)).ToList())
-                : Task.FromException<IReadOnlyList<TallyVoucherRef>>(Failure);
+            await (WhenAsked?.Invoke() ?? Task.CompletedTask);
+            if (Failure is not null) throw Failure;
+            return numberedMasterIds.Select(id => new TallyVoucherRef(id, VoucherDate, VoucherAmount, Company, VoucherNumber ?? voucherNumber)).ToList();
         }
 
-        public Task<TallyVoucherRef?> FindByMasterIdAsync(
+        public async Task<TallyVoucherRef?> FindByMasterIdAsync(
             string masterId,
             string fiscalYear,
             CancellationToken cancellationToken = default)
         {
             AskedById.Add(masterId);
-            WhenAsked?.Invoke();
+            await (WhenAsked?.Invoke() ?? Task.CompletedTask);
             var failure = Failure ?? ByIdFailure;
-            return failure is null
-                ? Task.FromResult(Gone.Contains(masterId) ? null : new TallyVoucherRef(masterId, VoucherDate, VoucherAmount, Company, VoucherNumber))
-                : Task.FromException<TallyVoucherRef?>(failure);
+            if (failure is not null) throw failure;
+            return Gone.Contains(masterId) ? null : new TallyVoucherRef(masterId, VoucherDate, VoucherAmount, Company, VoucherNumber);
         }
 
         public Task<TallyVoucherList> ListSalesVouchersAsync(
