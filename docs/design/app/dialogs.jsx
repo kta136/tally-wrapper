@@ -25,16 +25,16 @@ function Dialog({ title, width, onClose, children, footer, meta }) {
 function BillDetailsDialog({ onClose }) {
   // Timeline events matching the screenshot reference
   const events = [
-    { kind:'saved',    title:'Bill saved',       sub:'Invoice DDAJR/26-27/50',                                              date:'25 Apr', time:'17:44' },
+    { kind:'saved',    title:'Bill saved',       sub:'Invoice DEMO/26-27/50',                                              date:'25 Apr', time:'17:44' },
     { kind:'pushReq',  title:'Push requested',   sub:'Context menu push',                                                   date:'25 Apr', time:'17:44' },
     { kind:'tallyErr', title:'Tally Failed',     sub:'TALLY_LINEERROR: Stock Item "HM Gold Jewellery 18KT" does not exist!',date:'25 Apr', time:'17:44' },
     { kind:'pushReq',  title:'Push requested',   sub:'Context menu retry',                                                  date:'25 Apr', time:'17:45' },
     { kind:'tallyErr', title:'Tally Failed',     sub:'TALLY_LINEERROR: Stock Item "HM Gold Jewellery 18KT" does not exist!',date:'25 Apr', time:'17:45' },
     { kind:'pushReq',  title:'Push requested',   sub:'retry',                                                               date:'25 Apr', time:'17:45' },
     { kind:'tallyErr', title:'Tally Failed',     sub:'TALLY_LINEERROR: Stock Item "HM Gold Jewellery 18KT" does not exist!',date:'25 Apr', time:'17:45' },
-    { kind:'reopen',   title:'Bill Edit Reopened',sub:'Invoice DDAJR/26-27/50',                                              date:'25 Apr', time:'17:45' },
+    { kind:'reopen',   title:'Bill Edit Reopened',sub:'Invoice DEMO/26-27/50',                                              date:'25 Apr', time:'17:45' },
     { kind:'pushReq',  title:'Push requested',   sub:'Context menu push',                                                   date:'25 Apr', time:'17:45' },
-    { kind:'posted',   title:'Tally Posted',     sub:'Invoice DDAJR/26-27/50',                                              date:'25 Apr', time:'17:45' },
+    { kind:'posted',   title:'Tally Posted',     sub:'Invoice DEMO/26-27/50',                                              date:'25 Apr', time:'17:45' },
   ];
   const dotFor = k => ({
     saved:    { bg:'var(--accent)',  ring:'var(--accent-soft)' },
@@ -49,7 +49,7 @@ function BillDetailsDialog({ onClose }) {
       title={<><span>Bill Details</span> <span className="chip ok" style={{marginLeft:6}}>posted</span></>}
       width={880}
       onClose={onClose}
-      meta={<span className="mono">DDAJR/26-27/50</span>}
+      meta={<span className="mono">DEMO/26-27/50</span>}
       footer={<>
         <div className="spacer" />
         <button className="btn">Retry</button>
@@ -93,8 +93,8 @@ function BillDetailsDialog({ onClose }) {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td>Diamond Jewellery</td><td className="num mono">2.500</td><td>18K</td><td className="num mono">12,012</td></tr>
-                  <tr><td>Diamond</td><td className="num mono">2.500</td><td></td><td className="num mono">35,000</td></tr>
+                  <tr><td>Diamond Jewellery</td><td className="num mono">2.500</td><td>18K</td><td className="num mono">10,000</td></tr>
+                  <tr><td>Diamond</td><td className="num mono">2.500</td><td></td><td className="num mono">30,000</td></tr>
                 </tbody>
               </table>
             </div>
@@ -108,19 +108,19 @@ function BillDetailsDialog({ onClose }) {
             </div>
             <div style={{display:'grid', gridTemplateColumns:'1fr auto', rowGap:5, columnGap:14, fontSize:12, alignSelf:'start'}}>
               <div style={{color:'var(--ink-muted)'}}>Subtotal</div>
-              <div className="mono" style={{textAlign:'right'}}>₹ 1,14,592.23</div>
+              <div className="mono" style={{textAlign:'right'}}>₹ 1,00,000.00</div>
 
               <div style={{color:'var(--ink-muted)'}}>Tax</div>
-              <div className="mono" style={{textAlign:'right'}}>₹ 3,437.76</div>
+              <div className="mono" style={{textAlign:'right'}}>₹ 3,000.00</div>
 
               <div style={{color:'var(--ink-muted)'}}>Discount</div>
               <div className="mono" style={{textAlign:'right', color:'var(--err)'}}>− ₹ 0.00</div>
 
               <div style={{color:'var(--ink-muted)'}}>Round Off</div>
-              <div className="mono" style={{textAlign:'right'}}>0.01</div>
+              <div className="mono" style={{textAlign:'right'}}>0.00</div>
 
               <div style={{borderTop:'1px solid var(--border)', paddingTop:6, marginTop:2, fontWeight:700}}>Grand Total</div>
-              <div className="mono" style={{textAlign:'right', borderTop:'1px solid var(--border)', paddingTop:6, marginTop:2, fontWeight:700, fontSize:14}}>₹ 1,18,030</div>
+              <div className="mono" style={{textAlign:'right', borderTop:'1px solid var(--border)', paddingTop:6, marginTop:2, fontWeight:700, fontSize:14}}>₹ 1,03,000</div>
             </div>
           </div>
         </div>
@@ -294,7 +294,7 @@ function PostSaveDialog({ onClose }) {
   );
 }
 
-function ConfirmRepostDialog({ onClose, billNo = 'DDAJR/26-27/46' }) {
+function ConfirmRepostDialog({ onClose, billNo = 'DEMO/26-27/46' }) {
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();

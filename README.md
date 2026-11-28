@@ -8,17 +8,14 @@
 
 Tally Wrapper is a Windows billing system for jewellery showrooms. It combines a WPF counter app, one ASP.NET Core API on the showroom's Tally server, PostgreSQL, QuestPDF printing, and direct TallyPrime XML integration.
 
-The system is designed for operator-controlled billing. Bills are saved through the API, printed from the desktop app, and pushed to Tally only when an operator explicitly clicks a push action. There is no background Tally polling, queue worker, or automatic posting loop.
+Saving records the bill in PostgreSQL. Operators can print from the Desktop and explicitly push the voucher to Tally. The API also reads Tally for health checks, master refreshes and voucher lookups.
 
 ## Contents
 
 - [What It Does](#what-it-does)
 - [Architecture](#architecture)
 - [Repository Layout](#repository-layout)
-- [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Running Locally](#running-locally)
 - [Publishing EXEs](#publishing-exes)
 - [Server Deployment](#server-deployment)
 - [Security Model](#security-model)
@@ -48,7 +45,7 @@ flowchart LR
     Operator["Billing operator"] --> Desktop["Tally Wrapper Desktop<br/>WPF counter app"]
     Desktop --> Api["Tally Wrapper API<br/>ASP.NET Core API"]
     ServerTray["Tally Wrapper Server<br/>installer + tray UI"] --> Api
-    Api --> Postgres["PostgreSQL 18<br/>Oracle Cloud VPS"]
+    Api --> Postgres["PostgreSQL 18"]
     Api --> Tally["TallyPrime<br/>local XML endpoint"]
     Desktop --> Printing["QuestPDF / Windows printing"]
 ```
@@ -61,7 +58,7 @@ The API owns all durable business state. The Desktop is a rich client; it does n
 
 ### Tally Integration Contract
 
-Tally communication is synchronous and operator-initiated:
+The API handles each posting request synchronously.
 
 - Save Bill creates/updates the bill in PostgreSQL only.
 - Push / Retry / Repost sends one voucher HTTP request to Tally and returns `posted`, a definite `failed`, or `reconciliation_required` when the write outcome is uncertain.
@@ -97,118 +94,15 @@ docs/
   Architecture, API, database, deployment, printing, settings, and UI references
 ```
 
-## Prerequisites
-
-Development currently targets Windows because the desktop host is WPF.
-
-| Requirement | Notes |
-|---|---|
-| Windows 10/11 | Required for WPF, printing, DPAPI, and Windows Service/server tray behavior |
-| .NET SDK `10.0.202` | Pinned by [global.json](global.json) |
-| PostgreSQL 18 | The production database. Development and the tests use throwaway PostgreSQL 18 containers |
-| Docker | Starts those containers for `tools\run-scratch.ps1` and for the database tests (a local engine, or a remote Docker context) |
-| `dotnet-ef` | Installed globally (`dotnet tool install --global dotnet-ef`); applies migrations |
-| TallyPrime | Required for real posting and master refresh workflows |
-| PowerShell | Required for the scripts in `tools\` |
-
-Optional:
-
-- VS Code with the checked-in launch/tasks configuration.
-
 ## Quick Start
 
-Clone and build:
-
-```powershell
-git clone <repo-url>
-cd tally-wrapper
-
-dotnet restore ShowroomBilling.sln
-dotnet build ShowroomBilling.sln
-dotnet test --solution ShowroomBilling.sln
-```
-
-The tests that touch the database start their own PostgreSQL 18 container, so `dotnet test` needs Docker; see [Testing](#testing).
-
-Run the dev build on a throwaway database with a stand-in Tally:
+For a local run on Windows, install the .NET 10 SDK, PowerShell 7, Docker and the matching EF Core tools. From the repository root, run this in PowerShell 7.
 
 ```powershell
 .\tools\run-scratch.ps1
 ```
 
-It starts a `postgres:18` container, migrates it, starts the API on `127.0.0.1:5108` and then the Desktop, both with empty settings folders, so the run cannot reach the saved production connection, the real server or TallyPrime. Details and options are in [DEV_SETUP.md](DEV_SETUP.md#run-against-a-scratch-database). A plain `dotnet run` or F5 (see [Running Locally](#running-locally)) uses whatever this PC has saved: the API its database connection, the Desktop its server address.
-
-Development API defaults to:
-
-- OpenAPI document: `http://localhost:5108/openapi/v1.json`
-- Liveness: `http://localhost:5108/api/health/live`
-- Health: `http://localhost:5108/api/health`
-
-## Configuration
-
-### Database Connection
-
-Real connection strings are not committed, and only the API holds one: the Desktop artifact contains none. The committed `src/ShowroomBilling.Api/appsettings.json` holds a placeholder. A connection string is in the Npgsql keyword form; a `postgres://` URL is refused.
-
-- On the server it is set, tested and saved from the server tray, and nowhere else.
-- For development, see [DEV_SETUP.md](DEV_SETUP.md#database).
-- The production database, where its secret is kept and how it is retrieved and rotated: [Deployment and operations §4](docs/11_deployment_and_ops.md#4-postgresql-deployment).
-
-Migrations are applied with `dotnet ef database update`, always with `--connection`. On production they are applied by hand before a new build is started: [Deployment and operations §11](docs/11_deployment_and_ops.md#11-upgrade-flow).
-
-### Database Identity Marker
-
-The app uses a DB-owned identity marker to catch accidental environment mixups: `DEV` or `PROD` in `public.database_identity`. The SQL that sets it is in [DEV_SETUP.md](DEV_SETUP.md#database). The Desktop status bar displays `DB DEV`, `DB PROD`, `DB UNSET`, or a mismatch warning.
-
-### Tally Connection
-
-Tally host, port, active company, ledgers, voucher types, and stock mappings are backend-owned settings. Operators configure them through the Desktop Settings screen. Tally calls are made by the API process, so TallyPrime must be reachable from the machine the API runs on (the Tally server).
-
-## Running Locally
-
-The Desktop is a client: it needs an API that is already running and never starts one. With nothing listening at its address it opens on the limited-mode screen.
-
-### Scratch run
-
-```powershell
-.\tools\run-scratch.ps1
-```
-
-This is the way to run the dev build on any PC that also runs the real app. It starts a throwaway PostgreSQL 18 container and a stand-in Tally on port 9000, starts the API on `127.0.0.1:5108`, then the Desktop, and stops the API when the app closes. See [DEV_SETUP.md](DEV_SETUP.md#run-against-a-scratch-database).
-
-### VS Code
-
-The repository includes VS Code launch/tasks files:
-
-- [`.vscode/launch.json`](.vscode/launch.json)
-- [`.vscode/tasks.json`](.vscode/tasks.json)
-
-Recommended debug target:
-
-```text
-Desktop + API
-```
-
-This builds the solution, then starts the API in Development mode on `127.0.0.1:5108` and the Desktop. The `Desktop` configuration alone needs an API you started yourself.
-
-### By hand
-
-Start the API first:
-
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = "Development"
-$env:DOTNET_ENVIRONMENT = "Development"
-dotnet run --project src/ShowroomBilling.Api --urls http://127.0.0.1:5108
-```
-
-Then the Desktop, in a second terminal:
-
-```powershell
-$env:DOTNET_ENVIRONMENT = "Development"
-dotnet run --project src/ShowroomBilling.Desktop
-```
-
-F5 and `dotnet run` read this PC's real settings folder. The API uses whatever database connection this PC has configured (see [Database Connection](#database-connection)), and a Desktop started by `dotnet run` on a PC with a server address saved in Settings → Server uses that address in place of `http://localhost:5108`, so it talks to the real server. Set `SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl` for the session to point it at the development API; the VS Code `Desktop` launch configuration already does.
+The script prepares a throwaway PostgreSQL 18 database and starts the API, a stand-in Tally and the Desktop. For prerequisites, build commands, debugger setup and scratch reset or removal, see the [development setup guide](DEV_SETUP.md). For an installed showroom server, see [deployment and operations](docs/11_deployment_and_ops.md).
 
 ## Publishing EXEs
 
@@ -272,9 +166,7 @@ Important deployment notes:
 
 ## Testing
 
-`dotnet test --solution ShowroomBilling.sln` runs everything. The tests that touch the database run on PostgreSQL 18, the production version, each on its own freshly migrated database, and start the server themselves, so the full suite needs Docker (or a PostgreSQL 18 server named in `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`). They cover the bill state workflows, numbering, admin unlock, the API's contract, Tally XML, the tray's maintenance endpoints, the Desktop's view models and views, and printing.
-
-The quality gates CI runs, how to run only one half, and where the test database comes from are in [DEV_SETUP.md](DEV_SETUP.md#build).
+Run `dotnet test --solution ShowroomBilling.sln` for the full suite. The [test setup](DEV_SETUP.md#database-tests) describes PostgreSQL requirements, test filters and the CI checks.
 
 ## Troubleshooting
 
@@ -308,7 +200,7 @@ The detailed specs live in [docs/](docs/README.md):
 
 ## Public Repo Hygiene
 
-Before making a fork or release public:
+Keep site-specific hosts, roles, secret-store paths and recovery contacts in the deployment’s private runbook. Before making a fork or release public, check the repository.
 
 ```powershell
 gitleaks detect --source . --redact

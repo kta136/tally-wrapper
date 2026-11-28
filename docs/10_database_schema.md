@@ -1,6 +1,6 @@
 # Database Schema
 
-The schema is defined by `ShowroomBillingDbContext.OnModelCreating` and the entity classes under `src/ShowroomBilling.Infrastructure/Persistence/`, and created by the migrations in `Persistence/Migrations/`. This page lists the tables and the rules that the model does not make obvious. Production runs PostgreSQL 18, self-hosted on an Oracle Cloud Infrastructure VPS; deployment and operational responsibilities are documented in [11_deployment_and_ops.md](./11_deployment_and_ops.md#4-postgresql-deployment).
+The schema is defined by `ShowroomBillingDbContext.OnModelCreating` and the entity classes under `src/ShowroomBilling.Infrastructure/Persistence/`, and created by the migrations in `Persistence/Migrations/`. This page lists the tables and the rules that the model does not make obvious. The application uses PostgreSQL 18. For provisioning and backups, see [11_deployment_and_ops.md](./11_deployment_and_ops.md#4-postgresql-deployment).
 
 **Names.** Tables are snake_case (`bill_revisions`). Columns carry the C# property names and must be double-quoted in SQL: `SELECT "InvoiceNumber", "CreatedAtUtc" FROM public.bills`. The one exception is `database_identity`, whose columns are `key`, `value` and `updated_at_utc`. Indexes and constraints have EF's names (`IX_bills_CreateOperationId`, `CK_bills_state`). EF records the applied migrations in `"__EFMigrationsHistory"`.
 

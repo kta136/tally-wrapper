@@ -40,7 +40,7 @@ param(
     # Do not start the stand-in Tally and do not stop when something already
     # listens on the Tally port. The app will then talk to whatever is there.
     [switch]$AllowRealTally,
-    [string]$DockerContext = 'proxmox-docker',
+    [string]$DockerContext,
     [string]$Image = 'postgres:18',
     [string]$HostAddress,
     [int]$TallyPort = 9000
@@ -149,6 +149,31 @@ SELECT json_build_object(
     ($json -join '') | Set-Content -LiteralPath $mastersPath -Encoding utf8
 }
 
+$state = if (Test-Path -LiteralPath $statePath) { Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json } else { $null }
+if ($state.dockerContext) {
+    if ($DockerContext -and $state.dockerContext -cne $DockerContext) {
+        throw "The existing scratch database uses Docker context '$($state.dockerContext)'. Remove it there before switching engines."
+    }
+    $DockerContext = $state.dockerContext
+}
+elseif ([string]::IsNullOrWhiteSpace($DockerContext)) {
+    $DockerContext = & docker context show
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($DockerContext)) {
+        throw 'Could not determine the active Docker context. Select an engine with -DockerContext.'
+    }
+    $DockerContext = $DockerContext.Trim()
+}
+
+# Older state files have no context name. Confirm the engine before switching
+# any container or discarding the local copy of its connection details.
+if ($state -and -not $state.dockerContext -and -not $PSBoundParameters.ContainsKey('DockerContext')) {
+    $activeAddress = Resolve-DockerHostAddress -Context $DockerContext -HostAddress $HostAddress
+    if ($activeAddress -ne $state.host -or -not (Test-ContainerRunning) -or
+        (Get-PublishedPostgresPort -Context $DockerContext -ContainerName $containerName) -ne $state.port) {
+        throw 'This scratch database predates saved Docker contexts. Select its original engine with -DockerContext.'
+    }
+}
+
 $restoring = -not [string]::IsNullOrWhiteSpace($RestoreFrom)
 if ($restoring) {
     if (-not (Test-Path -LiteralPath $RestoreFrom -PathType Leaf)) { throw "Dump file '$RestoreFrom' was not found." }
@@ -163,6 +188,7 @@ if ($Reset -or $Remove -or $restoring) {
     if (Test-Path -LiteralPath $scratch) {
         Remove-Item -LiteralPath $scratch -Recurse -Force
     }
+    $state = $null
     if ($Remove) {
         Write-Host 'Scratch database and settings removed.'
         return
@@ -174,7 +200,6 @@ foreach ($folder in @($scratch, (Join-Path $scratch 'appdata'), (Join-Path $scra
 }
 
 # ── database ────────────────────────────────────────────────────────────────
-$state = if (Test-Path -LiteralPath $statePath) { Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json } else { $null }
 if ($null -eq $state -or -not (Test-ContainerRunning)) {
     # Either half missing means the other is useless: the container holds the
     # data and the state file holds its password.
@@ -194,11 +219,15 @@ if ($null -eq $state -or -not (Test-ContainerRunning)) {
     $port = Get-PublishedPostgresPort -Context $DockerContext -ContainerName $containerName
     Wait-ForPostgres -Context $DockerContext -ContainerName $containerName -Database $database
 
-    $state = [pscustomobject]@{ host = $resolvedHost; port = $port; database = $database; password = $password }
+    $state = [pscustomobject]@{ dockerContext = $DockerContext; host = $resolvedHost; port = $port; database = $database; password = $password }
     $state | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
     Write-Host "New scratch database at $resolvedHost`:$port." -ForegroundColor Cyan
 }
 else {
+    if (-not $state.dockerContext) {
+        $state | Add-Member -NotePropertyName dockerContext -NotePropertyValue $DockerContext
+        $state | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
+    }
     Write-Host "Reusing scratch database at $($state.host):$($state.port)." -ForegroundColor Cyan
 }
 

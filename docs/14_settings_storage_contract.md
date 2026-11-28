@@ -50,7 +50,7 @@ These files are operational bootstrap/recovery state for the Tally server. They 
 
 ## Infrastructure secret source
 
-The production PostgreSQL credential is an infrastructure secret, not a cloud business setting. Its source of truth is OpenBao KV v2 at `kv/Postgres/apps/tally_wrapper/prod`: structured connection fields are authoritative, while `connection_string` is their synchronized Npgsql representation. The API does not query OpenBao directly; an authorized operator retrieves the derived value with the native `bao` CLI and writes the runtime copy through the server tray/private configuration flow above. Rotation and migration commands live in [11_deployment_and_ops.md](./11_deployment_and_ops.md#openbao-production-secret).
+An authorized operator retrieves the PostgreSQL runtime credential from the site's private credential store and uses the server tray to test and save the connection. The API reads the local runtime copy. Keep the owner credential for migrations in the private operations runbook. See [PostgreSQL deployment](11_deployment_and_ops.md#4-postgresql-deployment).
 
 ## Explicit non-goal
 

@@ -1,59 +1,18 @@
 # Printing Specification
 
-This document freezes operator-visible printing behavior for Tally Wrapper.
+The Desktop uses QuestPDF to compose A4 documents for preview, PDF export and the Windows print queue.
 
-Implementation direction:
-
-- WPF desktop host
-- QuestPDF as canonical document composition engine
-
-Operator-visible behavior must preserve what matters from the current system.
-
----
-
-## 1. Printing modes to preserve
+## 1. Printing modes
 
 ### 1.1 Estimate print
 
-Current behavior to preserve:
-
-- estimate print is launched from the sales/invoice screen
-- it uses unsaved working form data
-- it opens a preview dialog
-- it is not the same as final stored-bill print
-
-Tally Wrapper rule:
-
-- keep estimate as a preview-first workflow from the draft screen
-- do not silently turn it into final invoice print
+Estimate opens a preview of the unsaved working form on the Invoice screen.
 
 ### 1.2 Final invoice print
 
-Current behavior to preserve:
-
-- history/bills print works on saved bills
-- single bill print opens preview
-- batch bill print opens merged preview
-
-Tally Wrapper rule:
-
-- keep final invoice print separate from estimate print
-- keep bills/history print separate from draft estimate print
+Printing from Bills uses the saved bill. A single selection opens one invoice preview. Selecting several bills opens a merged preview.
 
 ### 1.3 Preview vs direct print
-
-Current behavior to preserve:
-
-- operators can preview invoice before printing
-- after successful save/update there is a direct-print fast path
-- direct print bypasses visible preview dialog
-
-Tally Wrapper rule:
-
-- keep both preview and direct-print modes
-- direct print remains an explicit choice, not the only path
-
-Tally Wrapper implementation:
 
 - preview dialog has a "Direct print after save (skip preview)" checkbox stored in
   the local `IPrintPreferencesStore`
@@ -77,15 +36,7 @@ Tally Wrapper implementation:
 
 ### 1.4 PDF export
 
-Current behavior to preserve:
-
-- preview dialog supports PDF export
-- last PDF directory is remembered locally
-
-Tally Wrapper rule:
-
-- keep PDF export from preview
-- remember the last save directory locally per workstation/user profile
+The preview can export to PDF. The workstation remembers the last destination directory.
 
 ### 1.5 What the printer is sent
 
@@ -139,38 +90,11 @@ One call is one print job, with a page for each copy of each bill.
 
 ## 2. Copy modes
 
-Current behavior to preserve:
-
-- `Original for Recipient`
-- `Duplicate for Transporter`
-- `Triplicate for Supplier`
-
-Rules:
-
-- preview must allow toggling copy modes for saved bill print
-- if all copy toggles are unchecked, `Original` is auto-restored
-- copy defaults come from saved settings
-
-Tally Wrapper implementation note:
-
-- QuestPDF should render all selected copies from one canonical template
-- operator semantics stay the same even if the rendering engine changes
-
----
+The saved-bill preview offers **Original for Recipient**, **Duplicate for Transporter** and **Triplicate for Supplier**. Each selected copy uses the same template. The initial selection comes from the saved settings. Clearing the final checkbox restores Original.
 
 ## 3. Batch print behavior
 
-Current behavior to preserve:
-
-- selecting multiple bills and printing creates one merged preview
-- batch print is preview-based, not direct print
-
-Tally Wrapper rule:
-
-- keep merged preview behavior for batch print
-- merged output should avoid duplicate asset loading behavior where practical
-
-Tally Wrapper implementation:
+Printing a selection from Bills opens a merged preview.
 
 - several bills sent to the printer in one call are one print job, a page for each copy of
   each bill, in the order given. That is the merged preview's Print and a bill hand-over of
@@ -189,18 +113,7 @@ Tally Wrapper implementation:
 
 ## 4. Printer selection persistence
 
-Current behavior to preserve:
-
-- user can pick a printer from preview dialog
-- selected printer name is remembered locally
-- later preview/direct-print flows reuse that printer selection when appropriate
-
-Tally Wrapper rule:
-
-- preserve local remembered printer selection
-- printer persistence is local workstation preference, not cloud-shared business data
-
-The print preview dialog also exposes local printer-job settings:
+The preview lets the operator select a printer. The workstation remembers that printer for subsequent previews and direct prints. It also stores the following job settings.
 
 - Duplex: printer default / one-sided / both sides long edge / both sides short edge
 - Color: printer default / color / black and white
@@ -219,24 +132,9 @@ and are reused by direct-print-after-save.
 
 ### 5.1 Assets
 
-Current behavior to preserve:
-
-- optional logo file
-- optional authorized signature file
-- optional page watermark file
-- clear/browse actions
-- assets affect rendered invoice output
-
-Tally Wrapper rule:
-
-- preserve logo/signature usage and support a calibrated watermark
-- preserve ability to clear or replace assets
-- accept PNG/JPEG assets up to 2 MiB; a missing/deleted watermark or zero opacity
-  must never block printing
+Settings can replace or clear the optional logo, authorized signature and page watermark. The API accepts PNG and JPEG assets up to 2 MiB. A missing watermark or zero opacity leaves the page unmarked and printing continues.
 
 ### 5.2 Layout controls
-
-Current behavior to preserve:
 
 - editable margins
 - editable font sizes
@@ -248,20 +146,14 @@ Current behavior to preserve:
   bottom-pinned trailing-section boundary
 - live layout calibration editor
 
-Tally Wrapper rule:
-
-- preserve operator/admin ability to calibrate output
-- the rendering engine may change, but calibration controls must survive materially
-
-Tally Wrapper clamp ranges (ported from V1 `core/print_layout.py`; enforced by
-`PrintLayoutOptions.Clamped()` before rendering):
+`PrintLayoutOptions.Clamped()` applies these limits before rendering.
 
 - per-side page margin: `0 mm` – `25 mm`
 - invoice font size: `8` – `18`
 - terms font size: `7` – `16`
 - logo size: within `~10.6 × 6.4 mm` minimum and the `~63.5 × 22.2 mm` slot;
   offset is clamped so size + offset never exceeds the slot bounds
-- signature size: within `~15.9 × 6.4 mm` minimum and the `~58.2 × 19.6 mm` slot;
+- signature size: within `~15.9 × 6.4 mm` minimum and the `~68.8 × 27.5 mm` slot;
   offset clamped the same way; the signatory rule is the configured image width
   plus `4 mm` total overhang, capped to the slot width
 - watermark: `X 0..21 cm`, `Y 0..29.7 cm`, width `0.1..21 cm`, height
@@ -269,7 +161,7 @@ Tally Wrapper clamp ranges (ported from V1 `core/print_layout.py`; enforced by
 - section before/after spacing: `0..20 mm`
 - invoice border: `0..4 pt`
 
-Tally Wrapper default layout (operator-blank install): margins `10 / 10 / 10 / 12 mm`,
+New installations use `10 mm` margins on all four sides,
 invoice font `11`, terms font `9`, standard density, `1 pt` invoice border,
 original copy on, duplicate/triplicate off. All sections use the historical
 order and are visible; optional sections naturally omit themselves when their
@@ -308,7 +200,7 @@ The Settings screen hosts a docked live print preview pane on the right for the
   only. A header note in the pane states this.
 - Uses a tolerant `SettingsDraft.BuildPrintSettingsSnapshot()` that accepts
   half-typed state (blank company name, unparseable font size) by falling back to
-  V1 defaults, so the preview stays usable mid-edit.
+  layout defaults, so the preview stays usable mid-edit.
 - Async results are gated by a render-generation counter: stale renders that
   finish after a newer change is enqueued are discarded without touching the
   preview. Asset downloads are gated by an independent asset-generation counter
@@ -323,25 +215,6 @@ The Settings screen hosts a docked live print preview pane on the right for the
   trailing-edge refresh fires when bulk-update completes.
 - Rendered at 120 DPI; the pane starts at 420 px and participates in the
   Settings split layout.
-
-### 5.5 What can improve internally
-
-Allowed improvement:
-
-- replace HTML/WebEngine rendering with WPF + QuestPDF composition and preview plumbing
-- improve print fidelity and PDF quality
-- improve preview responsiveness
-
-Not allowed to regress:
-
-- estimate vs final distinction
-- direct-print option
-- copy toggles
-- PDF export
-- printer memory
-- layout/asset settings coverage
-
----
 
 ## 6. Visual/output requirements
 
@@ -371,34 +244,18 @@ The document must preserve the current commercial content categories:
 - optional logo/signature
 - optional watermark behind all invoice content
 
-### 6.3 Consistency
-
-Tally Wrapper should preserve operator-visible content structure, but exact pixel-for-pixel parity with the old HTML print engine is not required.
-
-The following **must remain semantically identical**:
-
-- which document type is being printed
-- which data fields appear
-- copy mode semantics
-- direct-print vs preview availability
-- whether a draft estimate can be printed before saving
-
 ### 6.4 Tally Wrapper layout blocks (QuestPDF)
 
 The `BillDocument` composer in `src/ShowroomBilling.Printing` renders A4 portrait
 pages through section dispatchers. The default order remains:
 
 1. Copy label, top-right (`Original for Recipient` / `Duplicate for Transporter` /
-   `Triplicate for Supplier`) — matches V1 wording.
+   `Triplicate for Supplier`).
 2. Centered logo slot + `TAX INVOICE` banner with rules above and below.
 3. Two-column band: company details (name bold, GSTIN / Phone / Address rows) on
    the left; Invoice No. + Date, then `Bill To` party details on the right. The
    `Bill To` headline is the operator's PartyName; if that is blank, it falls
-   back to the normalized payment-mode label (`Cash` / `Credit and debit`),
-   mirroring V1's `sales_tab` auto-default. When PartyName *is* populated, a
-   small `Payment: {mode}` line is rendered below the address/GSTIN/phone block
-   so the payment context is preserved on print — V1 dropped this signal once
-   the operator typed a real customer name; Tally Wrapper keeps it.
+   back to the normalized payment-mode label (`Cash` / `Credit and debit`). When the bill names a party, a separate `Payment: {mode}` line appears beneath the contact details.
 4. Line-item table. Columns, conditional where noted:
    `#`, `Description`, `Gross Wt` + `Less Wt` (shown when any line has a non-zero less weight),
    `Net Wt`, `Purity`, `Making` (wastage % + labour per gram),
@@ -415,8 +272,6 @@ pages through section dispatchers. The default order remains:
    figures to the total (`BillDocument.SummaryRoundOff`).
 6. GST breakup box: HSN Code (defaults to `711319` when blank) / Taxable Value /
    `CGST @ 1.5%` / `SGST @ 1.5%` / Total GST.
-   (CGST/SGST percentages are hardcoded to mirror the V1 default; making them
-   configurable is tracked separately.)
 7. Bank details box (rendered only when any of bank name / account / IFSC / UPI
    is populated on the company profile).
 8. Terms & Conditions block and signature block (`For {company}` + signature slot
@@ -444,28 +299,3 @@ Allowed local-only persistence:
 - duplex / color / collation printer-job settings
 - last PDF directory
 - local preview/UI preferences if needed
-
-This does not violate the no local durable business storage rule because it is workstation UX state, not business truth.
-
----
-
-## 8. Preserve vs improve
-
-### Must remain operator-identical
-
-- estimate print exists and is preview-first
-- final saved-bill print exists separately
-- direct print exists as explicit path after save
-- preview supports PDF export
-- copy toggles exist
-- batch print creates merged preview
-- printer selection is remembered
-- logo/signature/watermark and structured layout controls exist
-
-### Can improve in Tally Wrapper
-
-- rendering engine internals
-- preview shell UX
-- PDF quality
-- printer abstraction layer
-- internal document model and template maintainability

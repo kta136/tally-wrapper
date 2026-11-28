@@ -2,21 +2,15 @@
 
 ## Prerequisites
 
-- .NET SDK `10.0.202`
-- Windows for the WPF desktop project
-- Docker (a local engine, or a remote Docker context), for the throwaway PostgreSQL 18 containers that `tools\run-scratch.ps1` and the database tests start
-- `dotnet-ef`, installed globally: `dotnet tool install --global dotnet-ef`
-- Native OpenBao CLI (`bao`) matching the server version for shared-environment secret retrieval and rotation
+- Windows with the .NET 10 SDK selected by [global.json](global.json).
+- PowerShell 7 and Docker for the scratch app. The [database tests](#database-tests) can also use a dedicated PostgreSQL 18 server.
+- EF Core 10 CLI for migrations. Install it with `dotnet tool install --global dotnet-ef --version "10.*"`.
 
 ## Database
 
-Development uses a throwaway PostgreSQL 18 container: [`tools\run-scratch.ps1`](#run-against-a-scratch-database) starts one for the app, and the [database tests](#database-tests) start their own. Real connection strings are not committed. Only the API holds one; the Desktop has none and no screen for one. A private copy for a development API may live in an ignored environment file (`src/ShowroomBilling.Api/appsettings.Development.json`), user secrets, or the `SHOWROOM_BILLING_POSTGRES` environment variable, which wins over every saved connection. A connection string is in the Npgsql keyword form; a `postgres://` URL is refused.
+The scratch script creates, migrates and marks its own PostgreSQL 18 database. The API owns the database connection. On an installed server, test and save the runtime connection in the tray, then restart the API service. For site provisioning and backups, see [deployment and operations](docs/11_deployment_and_ops.md#4-postgresql-deployment).
 
-The production database, its secret and how that is retrieved and rotated, and the shared persistent test database are described in one place, [docs/11 §4](docs/11_deployment_and_ops.md#4-postgresql-deployment). That test database is not a connection for the test suite: the fixture creates and drops databases, which its role may not do ([Database tests](#database-tests)).
-
-Set `Database:AutoMigrateOnStartup=true` only in private local environment files.
-
-Migrations are applied with the EF tools (`dotnet-ef`, installed globally). Pass the target's connection string explicitly; never rely on EF environment-name resolution to select the database:
+For a manual migration, supply the target database explicitly using a role that owns the schema.
 
 ```powershell
 dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection "<connection-string>"
@@ -28,27 +22,16 @@ The API's committed `appsettings.json` holds only a placeholder connection strin
 
 If the database is unreachable, the API and the Desktop still start, but DB-backed settings and migrations remain unavailable until the database is reachable. The Desktop then shows the limited-mode screen and tells the operator to check the database connection in the tray on the server PC.
 
-Each database also owns an identity marker in `public.database_identity`. After the `DatabaseIdentity` migration has run once, set the marker manually in each branch:
+Each database carries its own environment marker. The scratch script sets it automatically. For a manually provisioned database, run this after migration, using `DEV` for development or `PROD` for production.
 
 ```sql
--- dev/test DB
 insert into public.database_identity (key, value, updated_at_utc)
 values ('environment', 'DEV', current_timestamp)
 on conflict (key) do update
-set value = excluded.value,
-    updated_at_utc = excluded.updated_at_utc;
-
--- prod DB
-insert into public.database_identity (key, value, updated_at_utc)
-values ('environment', 'PROD', current_timestamp)
-on conflict (key) do update
-set value = excluded.value,
-    updated_at_utc = excluded.updated_at_utc;
+set value = excluded.value, updated_at_utc = excluded.updated_at_utc;
 ```
 
-The desktop status bar displays this DB-owned marker (`DB DEV`, `DB PROD`, or `DB UNSET`). Runtime health treats a `Development` API connected to a non-`DEV` database, or a `Production` API connected to a non-`PROD` database, as a `DB MISMATCH` warning while still reporting PostgreSQL as reachable.
-
-The Desktop never opens a PostgreSQL connection and has no database settings. The server's database connection is tested and saved from the Tally Wrapper tray on the server PC, and takes effect when the API service restarts.
+The Database indicator shows the marker. Health reports a mismatch if the API environment expects a different value.
 
 ## Build
 
@@ -58,7 +41,7 @@ dotnet build ShowroomBilling.sln
 dotnet test --solution ShowroomBilling.sln
 ```
 
-`global.json` selects Microsoft Testing Platform for xUnit 4. Use the explicit
+`global.json` selects Microsoft Testing Platform for the xUnit test projects. Use the explicit
 `--solution` or `--project` form with `dotnet test`; the older positional form
 is not accepted in MTP mode.
 
@@ -75,12 +58,12 @@ dotnet build ShowroomBilling.sln --configuration Release --no-restore -warnaserr
 
 ### Database tests
 
-Every test that touches the database runs on PostgreSQL 18, the production version; there is no in-memory stand-in. A plain `dotnet test` runs them with everything else. `PostgresFixture` starts one server for the run the first time a test asks for a database, migrates a template database once, and gives each test its own copy of it, dropped afterwards. The tests never read the local or production Oracle VPS connection strings.
+Every test that touches the database runs on PostgreSQL 18, the production version; there is no in-memory stand-in. A plain `dotnet test` runs them with everything else. `PostgresFixture` starts one server for the run the first time a test asks for a database, migrates a template database once, and gives each test its own copy of it, dropped afterwards. The fixture selects its own test connection independently of the API's saved settings.
 
 The server is the first of these that applies:
 
 1. `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`, when set: an already-running PostgreSQL 18 whose role may create databases, for example `Host=<host>;Port=<port>;Database=postgres;Username=postgres;Password=<password>`.
-2. A throwaway `postgres:18` container started with the `docker` command, when the current Docker context is a remote engine (`ssh://` or `tcp://`, such as the `proxmox-docker` context). Testcontainers can only drive a local engine. The container is stopped when the run ends, and stops itself after two hours if the run was killed.
+2. A throwaway `postgres:18` container started with the `docker` command, when the current Docker context is a remote engine (`ssh://` or `tcp://`). Testcontainers can only drive a local engine. The container is stopped when the run ends, and stops itself after two hours if the run was killed.
 3. A Testcontainers container on the local Docker engine. This is what CI uses.
 
 With no Docker and no connection string the database tests fail, each saying what is missing; they are not skipped. They carry the trait `Category=Postgres`, so the two halves can be run separately:
@@ -99,21 +82,7 @@ dotnet run --project src/ShowroomBilling.Api
 
 This uses whatever database connection the PC has saved, or `SHOWROOM_BILLING_POSTGRES` when it is set. On a PC that also runs the real app, use the [scratch run](#run-against-a-scratch-database) instead.
 
-Key endpoints:
-
-- `http://localhost:5108/openapi/v1.json` (the OpenAPI document; Development only, there is no browsable Swagger page)
-- `http://localhost:5108/api/health/live`
-- `http://localhost:5108/api/health` (database reachable, its identity and pending migrations, from a check at most 5 seconds old, and per-list snapshot freshness; what the 15-second poll asks)
-- `http://localhost:5108/api/masters/companies` (desktop read of the whole current snapshot; also `ledgers`, `stock-items`, `voucher-types`)
-- `http://localhost:5108/api/masters/refresh` (synchronously fetches from Tally and writes the snapshot — the only way masters get updated; there is no background polling)
-- `http://localhost:5108/api/numbering/preview` (next visible invoice number; does not reserve)
-- `http://localhost:5108/api/bills` (bill search; POST `/drafts` to create; `PUT /drafts/{id}` to update; POST `{id}/push|revise|void`)
-- `http://localhost:5108/api/bills/push-pending` (synchronously posts every pending bill to Tally, one at a time)
-- `http://localhost:5108/api/bills/{id}/audit` (bill event trail, ordered by timestamp)
-- `http://localhost:5108/api/bills/by-operation/{operationId}` (the bill a create with that `clientOperationId` made; used by the bill hand-over)
-- `http://localhost:5108/api/bills/{id}/retry` (POST; re-run the sync push after a failure; answers with the bill's state and last-post metadata)
-- `http://localhost:5108/api/bills/{id}/repost` (POST; push again for a posted/failed bill; same answer)
-- `http://localhost:5108/api/bills/synthetic-batch` (POST; admin-gated via `X-Admin-Token`; generates N `pending` bills with backfilled timestamps — see [docs/17_synthetic_batch.md](docs/17_synthetic_batch.md))
+The development API serves its OpenAPI document at `http://localhost:5108/openapi/v1.json`. Use `GET /api/health/live` for process liveness, `GET /api/health` for database and runtime status, and `GET /api/health/tally-company` to check Tally. The [API specification](docs/09_api_spec.md) covers the business routes and their authorization requirements.
 
 ## The server (API + tray)
 
@@ -142,37 +111,7 @@ dotnet run --project src/ShowroomBilling.Desktop
 
 A Desktop started by `dotnet run` or F5 reads this PC's real settings folder. If the PC has a server address saved in Settings → Server, a Desktop started by `dotnet run` uses that address in place of `http://localhost:5108`, so on a PC that also runs the real app it talks to the real server. `run-scratch.ps1` avoids this by giving the Desktop an empty settings folder, and the VS Code `Desktop` launch configuration by setting `SHOWROOM_DESKTOP_DesktopBootstrap__ApiBaseUrl` to the development API; for `dotnet run`, set that variable for the session.
 
-**Device auth on write paths.** Every mutating API endpoint (bill create/update/push/retry/repost/void/revise, settings PUT, masters refresh, print-asset upload/delete) passes device auth. The server install runs with `DeviceAuth:Mode=TrustedLan`: a request from the server PC itself or from the trusted LAN range needs no token, and a workstation sends none. A development API runs in the default `LocalFile` mode and needs the `X-Device-Token` header, a 32-byte random secret in `%LOCALAPPDATA%\ShowroomBilling\device_token.txt`; whichever of the API and the Desktop starts first creates the file, and both read it. The Desktop attaches the header only when its API address is loopback. Admin-gated endpoints continue to use the stronger `X-Admin-Token` (operator passcode, 30 min TTL) and do **not** additionally require the device token. One call needs both: saving an edit to a `posted` bill (`PUT /api/bills/drafts/{id}`) is a device-auth endpoint that also asks for `X-Admin-Token`, and answers `403` without it. Reads are unauthenticated. If you're testing write endpoints against a development API directly (curl, Postman), read the token out of the file and attach `X-Device-Token: <value>`.
-
-**Tally integration** — the API talks to Tally XML directly (in-process). There is no bridge, posting queue, or polling. Push first checks that Tally is reachable and the configured company is open. If preflight fails, the API returns `503` and leaves the state unchanged. After the bill enters `posting`, the API makes exactly one voucher HTTP attempt: explicit Tally acceptance/rejection settles in `posted`/`failed`; a timeout, transport error, unreadable response, or API crash settles in `reconciliation_required`. First pushes create vouchers; edited-after-push bills alter the original by `MASTER ID` and the date Tally holds for it, read from Tally first ([docs/05 §4](docs/05_tally_integration_contract.md)). Safe master/health reads retain a two-retry transport pipeline, but voucher writes do not. Reconciliation requires checking Tally and using admin Mark as Pushed or Mark as Pending.
-
-### Desktop shell at a glance
-
-The Desktop loads settings and checks the server on startup. It polls health every 15 seconds. The bottom bar follows the active Tally company saved in Settings. If the server cannot reach its database, the database indicator turns red on the first missed check. After a healthy poll, billing pauses on the second consecutive miss. A failed database check at startup or on an explicit retry pauses billing immediately. The limited-mode banner also identifies an unreachable server or a pending database upgrade. See [Shell health](docs/15_ui_design_reference.md#8-system-state-visuals) for the display and recovery controls.
-
-The Desktop and server dashboard support Per-Monitor V2 DPI. The Desktop keeps its F-key and status strips inside the monitor’s work area when maximized. `Ctrl+1/2/3` switch between Invoice, Bills and Settings, `?` opens shortcuts, and `Esc` closes dialogs. See [DPI and monitor work areas](docs/15_ui_design_reference.md#37-dpi-and-monitor-work-areas).
-
-The header health-cluster (Cloud / Tally) also opens a full **System Health** dialog driven by the same `SystemHealthSnapshot`. Three cards render off real data: Cloud API (reachability), Tally (reachability + configured active company), and Master Data (overall freshness + per-type rows for companies / ledgers / stock-items / voucher-types with freshness / item count / fetched-at). Opening the dialog triggers a fresh poll; the footer shows last-checked timestamp plus **Refresh** and **Close**.
-
-**Invoice tab** — editable header (invoice# / date / payment / 24kt rate / party), auto-appending line-item table (Item / Gross Wt / Less Wt / Unit / Karat / Wastage% / Labour / Diamond Rate / Extra / Rate (incl.) / Line Total (incl.) — Qty is dropped; the posted Quantity is the computed `NetWeight = max(0, Gross − Less)`). Item and Karat columns are editable ComboBoxes backed by Settings · Masters. Picking an item pre-fills Unit / Wastage % / Labour per gm; picking a karat drives purity. Pricing matches V1 exactly (`effective_rate = (rate_24kt × purity%/100) + wastage-component + labour-component` gated by the item master's `pricing_mode`; diamond items bypass the formula with a flat per-line inclusive **Diamond Rate**). Line totals are GST-inclusive; the footer Subtotal is the ex-GST back-calc as `Σline_inclusive / 1.03`, CGST + SGST at 1.5% each of that base. The discount footer has linked **Discount** and **Final** amount inputs: typing either one updates the other and recalculates the grand total immediately. On post, each line's Tally `STOCKITEMNAME` resolves via `ResolveStockName`: first `KaratMaster.TallyItem`, else `ItemMaster.DefaultStockMappingLabel`, else the free-text name. Keyboard: `Ctrl+N` adds a row, `Ctrl+Del` removes the focused row, `Enter` / `Shift+Enter` walks line cells, `F2` focuses 24kt, `F3` the quick-add search, `F4` party, `F9` opens estimate preview, `Ctrl+S` saves (`POST/PUT /api/bills/drafts`), `Ctrl+Shift+N` (the **Clear** / **New bill** button) empties the form for a new bill, leaving a saved bill opened with Edit as it is and asking first when there are changes not saved. `CreateDraftAsync` takes the invoice serial at save time, in the fiscal year of the **bill date** and in the same transaction as the bill, so the `pending` bill carries its real number from the moment it is persisted. Save is replay-safe: the form keeps one `ClientOperationId` per unsaved bill across retries, so a save whose response was lost returns the same bill instead of numbering a second one; updates send the revision they opened (`expectedRevisionId`) and are refused if another counter saved in between. Saving an edit to a `posted` bill sends the admin token, and asks for admin unlock first if the session has expired; without it the bill is not saved. `Ctrl+S` / `F9` first commit the cell being typed in. Save asks first ("Save “…” as typed?") when a line's item is not one of the saved items, which is also what a name cut short by `Ctrl+S` looks like ([UI Design Reference](docs/15_ui_design_reference.md)); `Ctrl+N` and `Ctrl+Del` do nothing while that or any other question or dialog is open. Clearing the form resets the bill date to today and payment to Cash. After a save the form is emptied at once and the next serial preview fetched; the Print Preview dialog, or the direct print, is then made from the bill as saved. Save Bill is the only write action on the Invoice tab; Tally push lives exclusively on the **Bills** tab.
-
-**Bills tab** — filter bar (state / from / to), dense ListBox-backed table, selection action bar, paging footer. `Ctrl`/`Shift` multi-select works in the table and is mirrored by the row checkboxes. `F5` refresh, `PgDn/PgUp` paging, `Enter` / double-click opens the **Bill Details** dialog (summary, line items, totals, timeline). Dialog footer exposes state-aware actions — **Push** (pending → `/api/bills/{id}/push`, synchronous), **Retry** (failed → re-post), **Repost** (posted/failed → sends a *new* voucher; only after the original was deleted in Tally), **Revise** (pending; the new bill gets its own number), **Void** (pending/failed; asks for confirmation first, and is refused while Tally still holds the voucher). Revise and Void are in this dialog only. The dialog takes keyboard focus when it opens, and the Bills list ignores keys while any dialog is open. Filter **Apply**, **Clear** and `Enter` in the search box reload from the first page; search is case-insensitive. Push/retry/repost controls are disabled when the latest Tally health says Tally is unavailable, and they force-refresh Tally health before calling the bills API. Edited bills that were previously pushed update the old Tally voucher instead of creating a second voucher. `Ctrl+P` print preview, `Ctrl+S` push, `Ctrl+R` retry, `Ctrl+Shift+R` repost. The footer exposes **Push All Pending** (`POST /api/bills/push-pending`) when `StateFilter == "pending"`.
-
-V1-parity context menu (admin-gated for destructive actions): right-clicking a row opens a state-aware menu — Open Details, **Edit** (Ctrl+Shift+E, also on the toolbar; for `pending`, `failed` and `posted` bills; saving drops the bill back to `pending`, invoice number preserved; `EditedAfterPush=true` only when Tally holds the voucher, so the next push Alters it, while a bill whose first push was rejected is pushed again as a Create. Editing a `posted` bill needs admin: Edit opens the admin-unlock dialog first if the session is locked, and the server answers `403 Admin session required` to a save without one. A `failed` bill needs no admin), Retry Push / Push to Tally / Repost to Tally / Print / Copy Invoice Number, **Change Bill Number…** (admin; dry-run pass surfaces `LeavesGap` / `TallyDiverges` warnings; renumbering a bill Tally holds moves it to `pending` as an edit so the next push Alters the same voucher to the new number), **Mark as Pushed…** / **Mark as Pending…** (admin; reason ≥4 chars; local-only state override, no Tally traffic), **Delete Local…** (admin; hard-deletes bill + revisions). Right-clicking inside a multi-selection preserves it, so Mark as Pushed, Mark as Pending, Print, and Delete Local operate on the selected rows when all selected rows are eligible; Change Bill Number and Edit remain single-row. Admin endpoints require `X-Admin-Token`; if no unlock session is active, `BillsViewModel.AdminUnlockHandler` opens the admin dialog and awaits its close before retrying.
-
-**Settings tab** — top meta strip (source / summary / updated-at / UNSAVED CHANGES chip / Refresh|Edit or Discard|Save All), left-nav (Connection / Invoice / Print Layout / Ledgers / Masters shared by every counter; Server / Hand-over / Advanced for this PC only; Tally check under Checks; plus Admin while admin is unlocked), right detail pane rendering the current `EffectiveSettingsResponse` section-by-section. Server holds this workstation's server address, with **Test server**, **Find server** and **Save and restart Billing**; nothing in it is admin-gated, and it shows nothing about the database. Invoice expands into Company / Bank / Numbering / Print Copies / Layout / T&C. Pane defaults to read-only; **Edit** switches inputs to editable; `SettingsDraft` tracks edits. **Save All** runs client-side validation and `PUT /api/settings` with the full `EffectiveCloudSettingsDto`. **Active Company** sub-section: ComboBox fed by `GET /api/masters/companies`, one **Refresh from Tally** button (`POST /api/masters/refresh` with `MasterType=companies`, then reloads the cached snapshot into the dropdown), **Set Active** (`POST /api/settings/company/select` — reloads effective settings on success). Ledger mapping fields (Sales / Cash / Credit-Debit / CGST / SGST / Round-off / Discount) and Sales Voucher Type use ComboBoxes backed by `/api/masters/ledgers` and `/api/masters/voucher-types`. Masters pane: editable Bill Items (name / unit / category / pricing mode / wastage % / labour-per-gm / Tally stock-mapping label) and Karats (label / purity % / Tally stock item) grids; Tally stock items have one Refresh-from-Tally button that re-pulls and reloads the list. JSON matches V1's Python dataclasses 1:1 and is serialized back into `MasterDataSettingsDto.ItemMasterDataJson` / `KaratMappingDataJson` on Save All. Advanced surfaces `CloudOwnedCategories` / `LocalOnlyCategories`, the Admin-mode hint (press `~` to unlock), and a **Logs & Diagnostics** block (Log folder / App data / Install folder with Open buttons). **Tally check** has one button, **Compare with Tally** (`GET /api/tally-check/compare`), which sets this year's bills against the sales vouchers in Tally and lists what differs, with filter pills and an **Open bill** button that opens Bill details; it changes nothing, and its result is kept only while the app is open ([05 §4](docs/05_tally_integration_contract.md#settings--tally-check)). `TallyCheckViewTests` lays it out in each state; with `TALLYWRAPPER_VIEW_SNAPSHOTS` set it saves `TallyCheck-*.png`.
-
-**Print Layout** (own left-nav entry) loads via `GET /api/settings/print-layout` in parallel with `GET /api/print-assets`. Logo and Signature retain Browse/Delete plus four placement fields. Watermark adds Browse/Delete, full-page A4 X/Y/width/height (cm), and opacity; all three accept `.png`/`.jpg`/`.jpeg` up to 2 MiB through `/api/print-assets`. The structured designer supports native drag/drop and keyboard Move Up/Down, optional-section visibility, 0–20 mm before/after gaps, compact/standard/comfortable density, 0–4 pt invoice border, and a contiguous “Pin bottom from here” boundary. Reset restores the historical order with GST as the pin boundary. Save persists the shared JSON via `PUT /api/settings/print-layout`. The docked live preview renders the canned sample through QuestPDF at 120 DPI with a 300 ms debounce and reflects unsaved values and pending logo/signature/watermark bytes. See `docs/07_printing_spec.md` §§5.2–5.4.
-
-**Admin unlock** is reachable via `~` anywhere outside a text box while no dialog is open. `AdminUnlockDialog` drives `IAdminApiClient` against `/api/admin/*` — Unlock (when locked) and Set/Change passcode (min 6 chars + confirmation; changing an existing passcode needs an unlocked session and is throttled like unlock). The session token lives in `AdminTokenStore` (30-minute TTL; expiry hides admin-only UI) and is attached as `X-Admin-Token` on admin-gated endpoints. Lock / Logout revokes the server-side token.
-
-**Printing** is wired through the `ShowroomBilling.Printing` library (QuestPDF templates — header / party / lines / totals / notes+T&C / signature) and a WPF **Print Preview** dialog. Every printed document is a Tax Invoice; all printouts show `TAX INVOICE` in the header. `F9` on Invoice opens the preview against the live pending bill; BillDetails' **Print…** opens it against the loaded bill; a successful **Save Bill** auto-opens the preview of the bill exactly as saved (not the live form). The preview pane renders at 110 DPI in a background task; the sidebar holds Copies (Original/Duplicate/Triplicate) and Printer combobox. Footer: **Save as PDF** → `SaveFileDialog` defaulting to `{invoice#}.pdf`; **Print** (Enter/IsDefault) sends the pages as text and lines in a WPF `FixedDocument` via `PrintQueue.CreateXpsDocumentWriter`, or as 600 DPI pictures for a bill that cannot be drawn that way ([docs/07 §1.5](docs/07_printing_spec.md)). Last-used printer + PDF directory persist to `%APPDATA%\ShowroomBilling\print-preferences.json`. Printing does not mutate bill state.
-
-Design-system surfaces:
-
-- tokens in [src/ShowroomBilling.Desktop/Resources/DesignTokens.xaml](src/ShowroomBilling.Desktop/Resources/DesignTokens.xaml)
-- control styles in [src/ShowroomBilling.Desktop/Resources/Styles.xaml](src/ShowroomBilling.Desktop/Resources/Styles.xaml)
-- design reference: [docs/15_ui_design_reference.md](docs/15_ui_design_reference.md), mockup bundle in [docs/design/](docs/design/)
+For the operator screens and shortcuts, see the [Desktop UI reference](docs/15_ui_design_reference.md). Printing and workstation preferences are covered in the [printing specification](docs/07_printing_spec.md). The [settings catalog](docs/08_settings_catalog.md) lists each setting and where to edit it.
 
 ## Run against a scratch database
 
@@ -182,7 +121,7 @@ On a PC that also runs the real app, the dev build must not find the saved serve
 .\tools\run-scratch.ps1
 ```
 
-It needs Docker (the `proxmox-docker` context unless `-DockerContext` names another) and the globally installed `dotnet-ef`. Everything it creates is under `artifacts\scratch`, which git ignores:
+The script uses the active Docker context for a new scratch database. Pass `-DockerContext <name>` to select another engine. Later runs reuse the saved context, including for reset and removal. If a scratch database predates this setting, select its original context on the first run. Local settings and connection information are stored under the ignored `artifacts\scratch` folder. It sets up the following components.
 
 - a `postgres:18` container named `tw-scratch-postgres` with a random password, migrated to the current schema and marked `DEV`;
 - empty settings folders, handed to the app through `SHOWROOM_BILLING_APPDATA` and `SHOWROOM_BILLING_LOCALAPPDATA`, with `SHOWROOM_BILLING_POSTGRES` pointing at the container. The API gives that variable precedence over every saved connection string;
@@ -191,7 +130,7 @@ It needs Docker (the `proxmox-docker` context unless `-DockerContext` names anot
 
 The script refuses to start the app when something already listens on port 9000 (probably TallyPrime; pass `-AllowRealTally` if that is intended) or on the dev API port 5108 (the Desktop would connect to that API, whatever database it uses, in place of the one the script starts).
 
-The app starts like a fresh install: no admin passcode, placeholder company. The database keeps its data between runs until the container stops. `-NoLaunch` prepares without starting the app, `-Reset` starts over with an empty database, `-Remove` deletes the container and the folder. A plain `dotnet run` or F5 does none of this: the API uses whatever database connection this PC has saved, and the Desktop whatever server address.
+The app starts like a fresh install: no admin passcode, placeholder company. The database keeps its data between runs until the container stops. `-NoLaunch` prepares without starting the app, `-Reset` starts over with an empty database, `-Remove` deletes the container and the folder. For the debugger’s settings and address overrides, see [VS Code F5](#vs-code-f5).
 
 **Starting from a copy of real data.** `-RestoreFrom C:\path\copy.dump` loads a dump made with `pg_dump --format=custom --no-owner` (the command in [docs/11 §11](docs/11_deployment_and_ops.md)) into a new scratch database. The script never connects to the database the dump came from; taking the dump is a separate step for whoever holds that database's credentials. After the restore it:
 

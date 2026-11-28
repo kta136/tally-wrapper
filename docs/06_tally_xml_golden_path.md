@@ -5,9 +5,6 @@
 - write path (sales voucher, Tally Wrapper C# builder): April 23, 2026
 - read path (master collections): April 20, 2026
 
-**Verified against:** `192.168.1.13:9000`  
-**Verified company:** `dummy`
-
 ## Change control
 
 Do not change the accepted XML shape or the `REMOTEID` handling in this document without live revalidation against a real Tally company.
@@ -102,11 +99,11 @@ Findings from live validation:
 | Stock items | `Stock Item` | `Name, BaseUnits, GSTHSNCode` |
 | Voucher types | `Voucher Type` | `Name` |
 
-Tally may silently drop requested fields from the response (e.g. the `dummy` company returned ledgers without `<PRIMARYGROUP>` even though we asked for it, and returned companies without `<ISINACTIVE>`). Parsers must treat every field except `Name` as optional.
+Tally may omit requested fields. A master entry requires a name. Other fields are optional.
 
 ### 3.4 Response shape
 
-The response wraps payload elements inside `<BODY><DESC><CMPINFO>...</CMPINFO></DESC><DATA><COLLECTION>...</COLLECTION></DATA></BODY>`. It is not the `<TALLYMESSAGE>` wrapper that voucher imports use. Parsers must use a local-name descendant search rather than fixed path matching so they work for both shapes.
+Read master entries from `BODY/DATA/COLLECTION` or a bare `COLLECTION`, matching element names by their local part. A zero header status, a data-level `LINEERROR`, a missing collection, unexpected entries or invalid rows fail the refresh. The previous snapshot and its timestamp survive a failed read. A successful empty collection replaces the snapshot with an empty list.
 
 Example abbreviated ledger response:
 
@@ -120,12 +117,12 @@ Example abbreviated ledger response:
     <DESC><CMPINFO>...</CMPINFO></DESC>
     <DATA>
       <COLLECTION ISMSTDEPTYPE="Yes" MSTDEPTYPE="8">
-        <LEDGER NAME="AARAV JEWELS" RESERVEDNAME="">
+        <LEDGER NAME="Sample Customer" RESERVEDNAME="">
           <PARENT TYPE="String">Sundry Debtors</PARENT>
-          <PARTYGSTIN TYPE="String">09CHJPR2676H1ZR</PARTYGSTIN>
+          <PARTYGSTIN TYPE="String">EXAMPLE-GSTIN</PARTYGSTIN>
           <ISREVENUE TYPE="Logical">No</ISREVENUE>
           <LANGUAGENAME.LIST>
-            <NAME.LIST TYPE="String"><NAME>AARAV JEWELS</NAME></NAME.LIST>
+            <NAME.LIST TYPE="String"><NAME>Sample Customer</NAME></NAME.LIST>
             <LANGUAGEID TYPE="Number"> 1033</LANGUAGEID>
           </LANGUAGENAME.LIST>
         </LEDGER>
@@ -147,7 +144,7 @@ Quirks the parser must handle:
 **Tally emits invalid XML 1.0 characters in two forms.** Observed cases:
 
 - **Raw C0 bytes** in text content (seen intermittently).
-- **Numeric character references** like `&#4;` in text content. For the `dummy` company, every `<STOCKITEM>` has `<GSTHSNCODE>&#4; Not Found</GSTHSNCODE>`. `&#4;` resolves to `U+0004` (`EOT`), which is not a valid XML 1.0 character. `.NET`'s `XmlReader` rejects the reference during entity decoding with `XmlException: hexadecimal value 0x04, is an invalid character`, even though the reference itself is syntactically legal.
+- **Numeric character references** like `&#4;` in text content. For example, a `<STOCKITEM>` can contain `<GSTHSNCODE>&#4; Not Found</GSTHSNCODE>`. `&#4;` resolves to `U+0004` (`EOT`), which is not a valid XML 1.0 character. `.NET`'s `XmlReader` rejects the reference during entity decoding with `XmlException: hexadecimal value 0x04, is an invalid character`, even though the reference itself is syntactically legal.
 
 Mitigation (`TallyXmlClient.StripInvalidXmlControlChars`):
 
@@ -165,17 +162,6 @@ Tally reports "no value set" for some master fields with sentinel strings rather
 | `<GSTHSNCODE>` | `"\x04 Not Found"` → after strip: `"Not Found"` | `null` HSN; fall through to `<HSNCODE>` if present |
 
 Implemented in `TallyXmlMasterSource.SanitizeHsn`. Add new sentinels here as they are discovered from live data.
-
-### 3.7 Live counts observed (April 20, 2026)
-
-Against `http://192.168.1.13:9000`, company `dummy`:
-
-- companies: 2 (`DEEN DAYAL ANAND KUMAR SARRAF`, `dummy`)
-- ledgers: 397
-- stock items: 11 (all HSNs returned as the `\x04 Not Found` sentinel)
-- voucher types: 33 (includes legacy `Counter Sale` → parent `Sales`)
-
----
 
 ## 4. Voucher write path
 
@@ -225,7 +211,7 @@ The `{PartyLedger}` placeholder in `<PARTYLEDGERNAME>` and the offsetting Dr led
 
 ### 4.3 Envelope shape
 
-This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` produces, live-verified against the `dummy` company. Amounts are written with two decimals. `VOUCHERNUMBER`, the three state elements, the three country elements and `NARRATION` are left out when they have no value.
+This is the *Accounting Invoice* layout that `TallyXmlVoucherBuilder.Build` produces, live-verified against a test company. Amounts are written with two decimals. `VOUCHERNUMBER`, the three state elements, the three country elements and `NARRATION` are left out when they have no value.
 
 ```xml
 <ENVELOPE>
@@ -402,7 +388,7 @@ The builder uses proportional allocation so multi-line bills with rounding drift
 These are all bugs that caused real failed pushes during Tally Wrapper bring-up — each one produces the opaque response `<RESPONSE>Unknown Request, cannot be processed</RESPONSE>` (with `CREATED=0, ALTERED=0, ERRORS=0, EXCEPTIONS=0`), which `TallyPoster` classifies as `TALLY_NO_EFFECT`. None of them produce a useful LINEERROR or ERRORS count, so you *must* inspect the `requestExcerpt` and `responseExcerpt` on the `tally.failed` audit event.
 
 1. **`<VERSION>1</VERSION>` in the Import Data header.** Tally Prime's Import Data handler rejects the request outright when `VERSION` is present. The Export request shape *requires* `<VERSION>`, which tempts copy-paste; Import requests *must* omit it. This was the single biggest blocker during Tally Wrapper bring-up.
-2. **Flat `ALLINVENTORYENTRIES.LIST` + `ACCOUNTINGALLOCATIONS.LIST` layout.** This is the Item-Invoice shape — Tally accepts it *on some companies* but returned `EXCEPTIONS=1` against `dummy`. The nested `INVENTORYALLOCATIONS.LIST` layout shown above is the canonical one.
+2. **Flat `ALLINVENTORYENTRIES.LIST` + `ACCOUNTINGALLOCATIONS.LIST` layout.** This is the Item-Invoice shape — Tally accepts it *on some companies* but returned `EXCEPTIONS=1` in the verification company. The nested `INVENTORYALLOCATIONS.LIST` layout shown above is the canonical one.
 3. **Sign convention inverted** (party positive, sales negative). Looks plausible if you think of `AMOUNT` as a signed Dr/Cr value, but produces `EXCEPTIONS=1`. Use the Dr-negative / Cr-positive convention above.
 4. **Sales allocation uses gross `LineTotal` instead of net.** `lineTotal` in the bill payload is the gross (tax-inclusive) value. Posting it directly to Sales while *also* posting CGST + SGST separately double-counts tax, leaves the voucher imbalanced by exactly `TaxTotal`, and Tally rejects it silently.
 5. **Ledger name mismatch between cloud-settings and Tally company.** `CONFIG_MISSING_CASH_LEDGER` / `CONFIG_MISSING_CREDIT_DEBIT_LEDGER` / `MISSING_PAYMENT_MODE` are caught pre-send, but every *other* ledger (CGST/SGST/RoundOff/Sales/Discount) is only validated by Tally itself — and a missing ledger here surfaces as the same `Unknown Request` response, never as a LINEERROR naming the offender. Use `List of Ledgers` via a Tally collection export to verify each name exists in the target company before debugging the XML.

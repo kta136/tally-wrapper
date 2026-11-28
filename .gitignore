@@ -76,3 +76,6 @@ docs/design/redesign/html/
 # Profiler output (dotnet-trace and its speedscope conversion).
 *.nettrace
 *.speedscope.json
+
+# Claude Code MCP servers: local to each PC, not part of the repo.
+.mcp.json

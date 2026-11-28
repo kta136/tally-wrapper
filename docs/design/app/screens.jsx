@@ -25,13 +25,13 @@ function BillsScreen({ onOpenDialog }) {
   });
 
   const counts = {
-    total: 49,
-    posted: 49,
+    total: bills.length,
+    posted: bills.length,
     pending: 0,
     failed: 0,
   };
-  const totalAmt   = 2847536;
-  const postedAmt  = 2847536;
+  const totalAmt   = bills.reduce((sum, bill) => sum + bill.amount, 0);
+  const postedAmt  = totalAmt;
   const pendingAmt = 0;
   const failedAmt  = 0;
 
@@ -363,8 +363,8 @@ function SettingsDatabase() {
       <SectionTitle>Database</SectionTitle>
 
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', marginBottom:18}}>
-        <div className="field"><label>Bootstrap API Endpoint</label><input className="input mono" defaultValue="https://api.showroom.cloud/v1" /></div>
-        <div className="field"><label>Tenant Slug</label><input className="input mono" defaultValue="dda-jewels" /></div>
+        <div className="field"><label>Bootstrap API Endpoint</label><input className="input mono" defaultValue="https://api.example.invalid/v1" /></div>
+        <div className="field"><label>Tenant Slug</label><input className="input mono" defaultValue="example-jewellers" /></div>
         <div className="field"><label>Workstation Token</label><input className="input mono" defaultValue="ws_••••••••••••a17c" /></div>
         <div className="field"><label>Last Bootstrap</label><input className="input mono readonly" readOnly defaultValue="2026-04-25 12:12 IST" /></div>
       </div>
@@ -413,7 +413,7 @@ function SettingsConnection() {
       <SectionTitle>Connection</SectionTitle>
 
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', marginBottom:22}}>
-        <div className="field"><label>Tally Host</label><input className="input mono" defaultValue="192.168.1.13" /></div>
+        <div className="field"><label>Tally Host</label><input className="input mono" defaultValue="127.0.0.1" /></div>
         <div className="field"><label>Port</label><input className="input mono" defaultValue="9000" /></div>
         <div className="field"><label>Timeout (seconds)</label><input className="input mono" defaultValue="10" /></div>
         <div className="field"><label>Active Company</label><input className="input mono readonly" readOnly defaultValue="dummy" /></div>
@@ -445,25 +445,25 @@ function SettingsInvoice() {
     <div style={{maxWidth:580}}>
       <SectionTitle>Invoice · Company on Invoice</SectionTitle>
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', marginBottom:20}}>
-        <div className="field"><label>Company Name</label><input className="input" defaultValue="DDA Jewels" /></div>
-        <div className="field"><label>Address</label><input className="input" defaultValue="2/215A Swadeshi Beema Nagar, MG Road, Agra" /></div>
-        <div className="field"><label>GSTIN</label><input className="input mono" defaultValue="09AARFD2610C1ZQ" /></div>
+        <div className="field"><label>Company Name</label><input className="input" defaultValue="Example Jewellers" /></div>
+        <div className="field"><label>Address</label><input className="input" defaultValue="1 Example Lane, Example City" /></div>
+        <div className="field"><label>GSTIN</label><input className="input mono" defaultValue="EXAMPLE-GSTIN" /></div>
         <div className="field"><label>State</label><input className="input" defaultValue="Uttar Pradesh" /></div>
-        <div className="field"><label>Phone</label><input className="input mono" defaultValue="0562-4100044" /></div>
+        <div className="field"><label>Phone</label><input className="input mono" defaultValue="0000-0000000" /></div>
         <div className="field"><label>Country</label><input className="input" defaultValue="India" /></div>
       </div>
 
       <SectionTitle>Invoice · Bank Details</SectionTitle>
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', marginBottom:20}}>
-        <div className="field"><label>Bank Name</label><input className="input" defaultValue="ICICI Bank" /></div>
-        <div className="field"><label>IFSC</label><input className="input mono" defaultValue="ICIC0006287" /></div>
-        <div className="field"><label>Account</label><input className="input mono" defaultValue="628705013133" /></div>
-        <div className="field"><label>UPI</label><input className="input mono" placeholder="e.g. shop@icici" /></div>
+        <div className="field"><label>Bank Name</label><input className="input" defaultValue="Example Bank" /></div>
+        <div className="field"><label>IFSC</label><input className="input mono" defaultValue="EXAMPLE-IFSC" /></div>
+        <div className="field"><label>Account</label><input className="input mono" defaultValue="EXAMPLE-ACCOUNT" /></div>
+        <div className="field"><label>UPI</label><input className="input mono" placeholder="e.g. shop@example" /></div>
       </div>
 
       <SectionTitle>Invoice · Numbering</SectionTitle>
       <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px 16px', marginBottom:20}}>
-        <div className="field"><label>Prefix</label><input className="input mono" defaultValue="DDAJR/26-27/" /></div>
+        <div className="field"><label>Prefix</label><input className="input mono" defaultValue="DEMO/26-27/" /></div>
         <div className="field"><label>Suffix</label><input className="input mono" placeholder="optional" /></div>
       </div>
 
@@ -647,7 +647,7 @@ function LivePreviewPanel({ wide }) {
             </div>
             <div style={{textAlign:'right', fontSize:`${zoom*0.06}px`, color:'#555'}}>
               <div style={{fontWeight:700, fontSize:`${zoom*0.08}px`, color:'#111'}}>TAX INVOICE</div>
-              <div style={{marginTop:2}}>No. <span style={{fontFamily:'JetBrains Mono,monospace'}}>DDAJR/26-27/001</span></div>
+              <div style={{marginTop:2}}>No. <span style={{fontFamily:'JetBrains Mono,monospace'}}>DEMO/26-27/001</span></div>
               <div>Date <span style={{fontFamily:'JetBrains Mono,monospace'}}>24/04/2026</span></div>
             </div>
           </div>
@@ -658,11 +658,11 @@ function LivePreviewPanel({ wide }) {
           {/* Company + Party */}
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:`${zoom*0.04}px`, marginBottom:`${zoom*0.04}px`, fontSize:`${zoom*0.065}px`}}>
             <div>
-              <div style={{fontWeight:700, marginBottom:2}}>DDA Jewels</div>
-              <div style={{color:'#444'}}>2/215A Swadeshi Beema Nagar</div>
-              <div style={{color:'#444'}}>MG Road, Agra – 282002</div>
-              <div style={{color:'#444', fontFamily:'JetBrains Mono,monospace', fontSize:`${zoom*0.055}px`}}>GSTIN 09AARFD2610C1ZQ</div>
-              <div style={{color:'#444', fontFamily:'JetBrains Mono,monospace', fontSize:`${zoom*0.055}px`}}>Ph 0562-4100044</div>
+              <div style={{fontWeight:700, marginBottom:2}}>Example Jewellers</div>
+              <div style={{color:'#444'}}>1 Example Lane</div>
+              <div style={{color:'#444'}}>Example City</div>
+              <div style={{color:'#444', fontFamily:'JetBrains Mono,monospace', fontSize:`${zoom*0.055}px`}}>GSTIN EXAMPLE-GSTIN</div>
+              <div style={{color:'#444', fontFamily:'JetBrains Mono,monospace', fontSize:`${zoom*0.055}px`}}>Ph 0000-0000000</div>
             </div>
             <div>
               <div style={{fontWeight:700, marginBottom:2}}>Bill To</div>
@@ -739,8 +739,8 @@ function LivePreviewPanel({ wide }) {
             {/* Bank details */}
             <div style={{fontSize:`${zoom*0.055}px`, color:'#555'}}>
               <div style={{fontWeight:600, color:'#111', marginBottom:2}}>Bank Details</div>
-              <div>ICICI Bank · <span style={{fontFamily:'JetBrains Mono,monospace'}}>628705013133</span></div>
-              <div>IFSC <span style={{fontFamily:'JetBrains Mono,monospace'}}>ICIC0006287</span></div>
+              <div>Example Bank · <span style={{fontFamily:'JetBrains Mono,monospace'}}>EXAMPLE-ACCOUNT</span></div>
+              <div>IFSC <span style={{fontFamily:'JetBrains Mono,monospace'}}>EXAMPLE-IFSC</span></div>
             </div>
             {/* Signature placeholder */}
             <div style={{textAlign:'center'}}>

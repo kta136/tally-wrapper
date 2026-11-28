@@ -13,31 +13,32 @@ window.SAMPLE = (() => {
     { sku: 'SLV-92-201', name: '92.5 Silver Anklet',          karat: 'Silver', unit: 'gm', wt: 74.200, wastage: 4, labour: 80, rate: 95 },
   ];
 
+  // Fictional invoices for the grouped history and bill-detail examples.
   const bills = [
     // Today - Sat, 25 Apr 2026 (1)
-    { no: 'DDAJR/26-27/50', status: 'posted',  edited: true,  party: 'Walk-in Customer',     amount: 118030.00, date: '2026-04-25', updated: '2026-04-25 12:15', err: 'Edited after push' },
+    { no: 'DEMO/26-27/50', status: 'posted',  edited: true,  party: 'Walk-in Customer',     amount: 103000.00, date: '2026-04-25', updated: '2026-04-25 12:15', err: 'Edited after push' },
     // Wed, 22 Apr 2026 (1)
-    { no: 'DDAJR/26-27/49', status: 'posted',  party: 'Cash',                                amount: 131592.00, date: '2026-04-22', updated: '2026-04-24 11:30', err: null },
+    { no: 'DEMO/26-27/49', status: 'posted',  party: 'Cash',                                amount: 82400.00, date: '2026-04-22', updated: '2026-04-24 11:30', err: null },
     // Tue, 21 Apr 2026 (2)
-    { no: 'DDAJR/26-27/47', status: 'posted',  party: 'Cash',                                amount: 6464.00,   date: '2026-04-21', updated: '2026-04-21 13:18', err: null },
-    { no: 'DDAJR/26-27/46', status: 'posted',  party: 'Cash',                                amount: 27500.00,  date: '2026-04-21', updated: '2026-04-21 13:18', err: null },
+    { no: 'DEMO/26-27/47', status: 'posted',  party: 'Cash',                                amount: 51500.00,   date: '2026-04-21', updated: '2026-04-21 13:18', err: null },
+    { no: 'DEMO/26-27/46', status: 'posted',  party: 'Cash',                                amount: 30900.00,  date: '2026-04-21', updated: '2026-04-21 13:18', err: null },
     // Mon, 20 Apr 2026 (3)
-    { no: 'DDAJR/26-27/45', status: 'posted',  party: 'Cash',                                amount: 59892.00,  date: '2026-04-20', updated: '2026-04-20 13:55', err: null },
-    { no: 'DDAJR/26-27/44', status: 'posted',  party: 'Cash',                                amount: 73500.00,  date: '2026-04-20', updated: '2026-04-20 13:55', err: null },
-    { no: 'DDAJR/26-27/43', status: 'posted',  party: 'Credit and Debit',                    amount: 26176.00,  date: '2026-04-20', updated: '2026-04-20 13:55', err: null },
+    { no: 'DEMO/26-27/45', status: 'posted',  party: 'Cash',                                amount: 61800.00,  date: '2026-04-20', updated: '2026-04-20 13:55', err: null },
+    { no: 'DEMO/26-27/44', status: 'posted',  party: 'Cash',                                amount: 25750.00,  date: '2026-04-20', updated: '2026-04-20 13:55', err: null },
+    { no: 'DEMO/26-27/43', status: 'posted',  party: 'Credit and Debit',                    amount: 20600.00,  date: '2026-04-20', updated: '2026-04-20 13:55', err: null },
     // Sun, 19 Apr 2026 (9)
-    { no: 'DDAJR/26-27/42', status: 'posted',  party: 'Cash',                                amount: 49713.00,  date: '2026-04-19', updated: '2026-04-19 15:34', err: null },
-    { no: 'DDAJR/26-27/41', status: 'posted',  party: 'Cash',                                amount: 24451.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/40', status: 'posted',  party: 'Cash',                                amount: 68000.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/39', status: 'posted',  party: 'Cash',                                amount: 20939.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/38', status: 'posted',  party: 'Cash',                                amount: 14827.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/37', status: 'posted',  party: 'Cash',                                amount: 63741.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/36', status: 'posted',  party: 'Anuj',                                amount: 28416.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/35', status: 'posted',  party: 'Rama Kant',                           amount: 191875.00, date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
-    { no: 'DDAJR/26-27/34', status: 'posted',  party: 'Credit and Debit',                    amount: 47988.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/42', status: 'posted',  party: 'Cash',                                amount: 41200.00,  date: '2026-04-19', updated: '2026-04-19 15:34', err: null },
+    { no: 'DEMO/26-27/41', status: 'posted',  party: 'Cash',                                amount: 72100.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/40', status: 'posted',  party: 'Cash',                                amount: 56650.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/39', status: 'posted',  party: 'Cash',                                amount: 66950.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/38', status: 'posted',  party: 'Cash',                                amount: 15450.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/37', status: 'posted',  party: 'Cash',                                amount: 36050.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/36', status: 'posted',  party: 'Sample Customer A',                   amount: 87550.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/35', status: 'posted',  party: 'Sample Customer B',                   amount: 46350.00, date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
+    { no: 'DEMO/26-27/34', status: 'posted',  party: 'Credit and Debit',                    amount: 77250.00,  date: '2026-04-19', updated: '2026-04-19 15:23', err: null },
     // Sat, 18 Apr 2026 (2)
-    { no: 'DDAJR/26-27/33', status: 'posted',  party: 'Credit and Debit',                    amount: 128900.00, date: '2026-04-18', updated: '2026-04-19 08:41', err: null },
-    { no: 'DDAJR/26-27/32', status: 'posted',  party: 'Credit and Debit',                    amount: 144096.00, date: '2026-04-18', updated: '2026-04-19 08:41', err: null },
+    { no: 'DEMO/26-27/33', status: 'posted',  party: 'Credit and Debit',                    amount: 92700.00, date: '2026-04-18', updated: '2026-04-19 08:41', err: null },
+    { no: 'DEMO/26-27/32', status: 'posted',  party: 'Credit and Debit',                    amount: 97850.00, date: '2026-04-18', updated: '2026-04-19 08:41', err: null },
   ];
 
   // Parties

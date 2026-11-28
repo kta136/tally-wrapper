@@ -2,15 +2,15 @@
 
 This document defines the Tally Wrapper contract between the desktop client, the cloud API, and TallyPrime.
 
-**Architectural note:** There is no separate bridge process and no posting queue. The API talks to Tally XML directly, in-process, only when an operator clicks Push (or Refresh for masters). Every Tally interaction is synchronous and initiated by a human click.
+The API calls Tally XML directly. An operator initiates each voucher write. Read-only requests support master refresh, voucher lookup and periodic Desktop health checks.
 
-Direction already chosen:
+The deployment uses the following components.
 
 - Windows-first WPF desktop
 - ASP.NET Core modular monolith backend (runs on the same machine as TallyPrime)
 - the backend runs as a Windows Service on the Tally server; every counter's desktop reaches it over the LAN
 - PostgreSQL system of record
-- no separate bridge process, no job queue, no polling
+- voucher posting runs inside the originating API request
 - no local durable business storage on the desktop
 
 ---
@@ -60,7 +60,7 @@ TallyPrime remains:
 - the source for company, ledger, stock item, and voucher type lists
 - the consumer of canonical sales voucher XML
 
-The server tray is a maintenance/status companion for the API Windows Service. It may show API/DB/client status and control the Windows Service, but it must not poll Tally. Tally checks still happen only through operator-triggered Push, Refresh, and System Health flows.
+The server tray monitors the API service, its database and connected clients. The Desktop requests Tally company health at startup, on explicit refresh and periodically. The API also checks the company before posting.
 
 ---
 
@@ -73,11 +73,11 @@ The API, on operator demand only, fetches and stores normalized snapshots for:
 - stock item list
 - voucher type list
 
-**Cadence:** zero. There is no timer. The only trigger is a click on "Refresh from Tally" in Settings or the System Health dialog, which issues `POST /api/masters/refresh`. Each call blocks until Tally answers and writes the fresh snapshot, which replaces the previous one of that master type.
+An operator chooses **Refresh from Tally** in Settings or System Health to request `POST /api/masters/refresh`. A successful read replaces that master's snapshot. A failed read preserves the stored list and its freshness timestamp.
 
 Desktop reads these through the API, never from Tally directly.
 
-The canonical XML request/response shapes, `<FETCH>` field lists per master type, response quirks (C0 control characters, sentinel values like `\x04 Not Found` for unset HSN, mandatory `<SVCURRENTCOMPANY>` scoping for every master except the company list), and live counts observed against real Tally are documented in [`06_tally_xml_golden_path.md`](06_tally_xml_golden_path.md) section 3 (Masters read path).
+The [Tally XML reference](06_tally_xml_golden_path.md#3-masters-read-path) covers collection requests and responses, fetch fields, company scoping and parser handling for missing values and invalid XML characters.
 
 ---
 

@@ -11,7 +11,7 @@ This document describes how Tally Wrapper is deployed and operated.
 - WPF desktop app on each counter workstation. It is a client of the server API and never starts an API of its own
 - one ASP.NET Core API, a Windows Service **on the same machine as TallyPrime** (reaches Tally's XML endpoint over localhost)
 - `ShowroomBilling.ServerTray` on the Tally server: the installer for that service, and its companion in the logged-in user's taskbar notification area
-- PostgreSQL database (PostgreSQL 18 on an Oracle Cloud Infrastructure VPS in production; development uses a throwaway PostgreSQL 18 container, see [DEV_SETUP.md](../DEV_SETUP.md#run-against-a-scratch-database))
+- PostgreSQL 18 reachable from the API server. Local development can use a [scratch database](../DEV_SETUP.md#run-against-a-scratch-database).
 - TallyPrime running on the Tally host
 
 No separate bridge process. No SignalR hub. No job queue.
@@ -20,7 +20,7 @@ No separate bridge process. No SignalR hub. No job queue.
 
 - Desktop -> API: HTTP JSON to `http://<tally-server>:5107`, the address saved on the workstation in Settings → Server
 - API -> PostgreSQL: direct DB connection (Npgsql)
-- API -> TallyPrime: localhost HTTP/XML (synchronous, only on operator click)
+- API -> TallyPrime: localhost HTTP/XML for health, reads and operator-initiated voucher writes
 - ServerTray -> API: localhost HTTP JSON for health and DB maintenance
 
 Desktop never talks to Tally directly.
@@ -115,139 +115,19 @@ The server intentionally trusts clients inside the configured LAN CIDR for norma
 
 ## 4. PostgreSQL deployment
 
-### Production host
+Provision PostgreSQL 18 on a host reachable from the API. Give the API a runtime role with the data privileges it needs on the migrated tables and sequences. Use a separate owner credential to apply migrations. Keep the database hostname, role names, TLS trust configuration, credentials and rotation procedure in the site's private operations runbook.
 
-Production uses PostgreSQL 18 self-hosted on an Oracle Cloud Infrastructure VPS. It is not a managed database service: the team owns the operating system, PostgreSQL installation and upgrades, backups, restore testing, certificates, monitoring, and storage capacity.
-
-Configure the API or server tray with an Npgsql connection string shaped like:
+The tray expects an Npgsql keyword connection string. Fill in the site's runtime values and TLS mode in this template.
 
 ```text
-Host=<oracle-vps-host>;Port=5432;Database=tally_wrapper_prod;Username=<app-role>;Password=<secret>;SSL Mode=<vps-required-mode>;Minimum Pool Size=<min>;Maximum Pool Size=<max>
+Host=<database-host>;Port=<port>;Database=<database>;Username=<runtime-role>;Password=<password>;SSL Mode=<tls-mode>
 ```
 
-Only this keyword form is accepted. A `postgres://` or `postgresql://` URL is refused with a message that names the form above.
+1. Apply the release migrations as the owner. Set the database identity to `PROD` for production or `DEV` for development. The [database setup](../DEV_SETUP.md#database) includes the marker statement.
+2. On the API server, open the tray dashboard, enter the runtime connection string, test it, save it and restart the API service. Configure TLS and certificate trust according to the database endpoint. The tray saves the connection locally with DPAPI protection.
+3. Confirm the Database indicator reports the expected identity and no pending migrations. For credential rotation, test and save the replacement in the tray and verify the service after restart before retiring the old credential where supported.
 
-### OpenBao production secret
-
-Canonical shared-environment database secrets are stored in the OpenBao KV v2 mount `kv`:
-
-- production: `Postgres/apps/tally_wrapper/prod`; structured fields are authoritative and `connection_string` is synchronized from them
-- persistent test: `Postgres/apps/tally_wrapper_test/dev`, key `connection_string`
-
-The production connection fields are `host`, `port`, `database`, `username`, `password`, `ssl_mode`, `minimum_pool_size`, and `maximum_pool_size`. Other keys in the same secret are operational metadata and must be preserved. `connection_string` is a derived convenience value for Npgsql consumers; it is not an independent credential. When any authoritative connection field changes, regenerate the derived value during the same controlled rotation and verify both representations before deploying it.
-
-The API and server tray do not call OpenBao directly. An authorized operator retrieves the value with the native `bao` CLI, then injects it into the server tray, the DPAPI-protected server override, or the API's `SHOWROOM_BILLING_POSTGRES` environment variable. Use the native CLI for reads and rotations so version checks and field-preserving patches are explicit and reproducible; do not make the application depend on an interactive browser or Bitwarden session.
-
-Retrieve the value without printing it:
-
-```powershell
-$secretPath = 'Postgres/apps/tally_wrapper/prod'
-$connection = bao kv get -mount=kv -field=connection_string $secretPath
-```
-
-To synchronize `connection_string` from the current production fields, use a CAS-protected patch. `DbConnectionStringBuilder` quotes special characters correctly. `ProcessStartInfo.StandardInput.Write` sends the value without placing it in shell history, process arguments, or adding a trailing line ending:
-
-```powershell
-$secret = bao kv get -mount=kv -format=json $secretPath | ConvertFrom-Json
-$data = $secret.data.data
-$builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-$builder['Host'] = [string]$data.host
-$builder['Port'] = [int]$data.port
-$builder['Database'] = [string]$data.database
-$builder['Username'] = [string]$data.username
-$builder['Password'] = [string]$data.password
-$builder['SSL Mode'] = [string]$data.ssl_mode
-$builder['Minimum Pool Size'] = [int]$data.minimum_pool_size
-$builder['Maximum Pool Size'] = [int]$data.maximum_pool_size
-$connection = $builder.ConnectionString
-
-$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-$startInfo.FileName = (Get-Command bao).Source
-$startInfo.UseShellExecute = $false
-$startInfo.RedirectStandardInput = $true
-@('kv', 'patch', '-mount=kv', "-cas=$($secret.data.metadata.version)", $secretPath, 'connection_string=-') |
-    ForEach-Object { [void]$startInfo.ArgumentList.Add($_) }
-$process = [System.Diagnostics.Process]::Start($startInfo)
-$process.StandardInput.Write($connection)
-$process.StandardInput.Close()
-$process.WaitForExit()
-if ($process.ExitCode -ne 0) { throw "OpenBao patch failed with exit code $($process.ExitCode)." }
-Remove-Variable connection, builder, data, secret
-```
-
-If a password, host, port, database, username, TLS mode, or pool limit is being rotated, update that structured field and the newly built `connection_string` together as one reviewed KV v2 change. Do not use `bao kv put` for this path: it replaces the secret data and can destroy the other fields. Never echo the retrieved connection, save it in the repository, or paste it into issue/CI logs.
-
-Use the TLS mode and certificate settings configured on the VPS. Limit inbound TCP `5432` to the API host or its trusted network in both the Oracle Cloud network rules and the VPS firewall; do not expose PostgreSQL to unrestricted internet traffic. Pass the retrieved connection explicitly when applying migrations:
-
-```powershell
-dotnet ef database update --project src/ShowroomBilling.Infrastructure --startup-project src/ShowroomBilling.Api --connection $connection
-Remove-Variable connection
-```
-
-### Shared persistent test database
-
-The Coolify `shared-postgres` stack owns both PostgreSQL 18 and PgBouncer. `tally_wrapper_test` is a persistent application test database inside that existing cluster, not a separate Coolify PostgreSQL resource.
-
-| Component | Contract |
-|---|---|
-| Database | `tally_wrapper_test`, owned by `tally_wrapper_test_dev_owner` |
-| Runtime role | `tally_wrapper_test_dev_api`; `LOGIN`, `NOINHERIT`, no create-role/database privilege, connection limit `5` |
-| Migrator role | `tally_wrapper_test_dev_migrator`; member of the owner role, normally `NOLOGIN` with no verifier |
-| PgBouncer mapping | `tally_wrapper_test` -> `postgres:5432/tally_wrapper_test`, pool size `2`, reserve `0`, max backend connections `2` |
-| Runtime route | `pgbouncer:6432` on external Docker network `shared-postgres-private` |
-| Secret | `kv/Postgres/apps/tally_wrapper_test/dev`; versioned KV v2 data with `connection_string` plus structured connection fields |
-| Environment marker | `public.database_identity.environment = 'DEV'` |
-
-The PgBouncer pool runs in transaction mode. Coolify applications must join `shared-postgres-private` and use the PgBouncer hostname; PostgreSQL itself has no public host port and application roles must not bypass the pooler. Runtime access is limited to this database, and host validation checks that the test API role cannot connect to the production or development databases.
-
-For migrations, enable the managed migrator login only for the bounded migration window, pass the test connection explicitly to `dotnet ef database update`, set the database identity to `DEV`, reconcile runtime grants, and immediately return the migrator to `NOLOGIN` with its verifier removed. Store the usable runtime credential only in OpenBao; do not leave a plaintext or decryptable provisioning copy on the database host.
-
-This database supports a persistent test API deployment. It must not be used as `SHOWROOM_BILLING_POSTGRES_TEST_CONNECTION`: the relational fixture connects to the `postgres` admin database and creates/drops isolated `tw_test_<guid>` databases, which requires a separate restricted administration contract and a compatible routing path. The default Docker/CI test harness remains the supported path.
-
-### Role
-
-PostgreSQL is the system of record for:
-
-- bills
-- bill revisions
-- numbering sequences
-- audit events
-- master snapshots (companies, ledgers, stock items, voucher types)
-- admin passcodes and sessions
-- print assets
-- cloud settings
-
-### Requirements
-
-- PostgreSQL 18 in production
-- automated backups
-- point-in-time recovery if possible
-- regular restore drills
-- operating-system and PostgreSQL security patching
-- TLS certificate renewal and expiry monitoring when TLS is enabled
-- alerting on connection failures and storage pressure
-- clear migration strategy for schema changes
-
-### PostgreSQL 18 baseline verification
-
-After provisioning or a major-version upgrade, verify the active production cluster from an administrative session:
-
-```sql
-SHOW server_version;
-SHOW data_checksums;
-SHOW io_method;
-SHOW effective_io_concurrency;
-SHOW maintenance_io_concurrency;
-SHOW password_encryption;
-```
-
-Keep the server on the latest supported PostgreSQL 18 patch release. `data_checksums` should be enabled; PostgreSQL 18 enables checksums for newly initialized clusters, but an upgraded older cluster can retain its prior checksum setting. Enabling checksums later is an offline VPS maintenance operation and must be paired with a verified backup and restore plan.
-
-Use `scram-sha-256` for the application role and matching `pg_hba.conf` rules. PostgreSQL 18 asynchronous I/O should normally report `io_method = worker`; benchmark `io_uring` against the Oracle VPS storage before selecting it. Do not raise I/O concurrency values without measuring query latency and storage saturation. Run `ANALYZE` after a major upgrade and use `EXPLAIN (ANALYZE, BUFFERS)` plus PostgreSQL statistics views before adding or removing indexes.
-
-The EF provider is explicitly targeted at PostgreSQL 18. New application-created database entity IDs use UUIDv7, while stable MD5-derived identity GUIDs remain deterministic. Bill search uses concurrent GIN trigram indexes on invoice number and party name; apply their migration with the explicit production connection command shown above. The index migration runs outside a transaction and drops any same-named partial index before recreating it concurrently, so an interrupted pre-history run can be retried safely.
-
----
+The database operator owns patching, certificate renewal, disk capacity and automated backups. Check the PostgreSQL version and checksum settings after an upgrade. Test restores regularly and configure point-in-time recovery where available. Take a dump before applying migrations and rehearse restores on an isolated database. See the [upgrade procedure](#11-upgrade-flow). Development and automated tests can use throwaway containers. See [database tests](../DEV_SETUP.md#database-tests).
 
 ## 5. Server tray
 
@@ -274,7 +154,7 @@ The look is the Desktop's Ledger Clear, drawn in WinForms: see [15_ui_design_ref
 - `DatabaseInitializationHostedService` — applies pending EF migrations when auto-migrate is on, and records how many are pending. A bounded start-up task.
 - `StuckPostingRecoveryHostedService` — moves abandoned `posting` bills to `reconciliation_required`. It sweeps once the database initialiser has finished and then every 5 minutes for as long as the service runs, also when the database was not reachable at start-up. A sweep is one small read (plus one update per abandoned bill); it holds off while the database is behind its migrations, and a sweep that fails is logged and followed by the next.
 
-The recovery sweep is the only recurring work, and it touches the database only. Nothing posts to Tally, polls Tally or purges data in the background.
+The API’s recovery sweep reads the database and updates abandoned claims. Periodic Desktop health requests can query Tally. Each voucher write requires an operator action.
 
 ---
 
@@ -327,15 +207,15 @@ Location: `C:\ProgramData\ShowroomBilling\logs` on the server (`api-*.log`). An 
 - `/api/health/tally-company` — Tally reachability + active-company check
 - `/api/clients/presence` — localhost-only in-memory list of workstations seen in the last 2 minutes
 
-Every Desktop and the server tray poll `/api/health` every 15 seconds (one request; a Desktop of an earlier build made three or four), and each answer comes from a real check of the database; the API keeps one check for 5 seconds, so they share it. (Builds up to 11 October 2026 skipped the database on the routine poll, a habit from a provider that billed for the time the database was awake: a counter could show `READY` for up to 30 minutes after the database had gone, and the tray's database line always read "idle".) Tally-company health and master freshness are requested on startup, on explicit System Health refreshes, and by a slower 30-minute probe. The Oracle VPS PostgreSQL service remains an always-on infrastructure dependency, so availability, resource use, and storage pressure must be monitored at the VPS/database layer.
+The Desktop and server tray poll `/api/health` every 15 seconds. The API shares a database check for up to five seconds. The Desktop checks Tally company status on startup, on a System Health refresh and every 30 minutes. Monitor database availability, storage and resource use on the database host.
 
-When the server reports that it cannot reach its database, the Desktop's database pill turns red at once. The database is across the internet from the server, so one poll without an answer is not treated as an outage: the limited-mode screen, with the banner "The server cannot reach its database. On the server PC, open the Tally Wrapper tray and check the database connection.", appears when the next poll agrees (within about 30 seconds of the database going), and at once at start-up or when the operator presses Refresh in System Health. It goes with the first poll that gets an answer. The Desktop does not open a settings screen by itself. The tray's database line carries one of five chips: `OK`, `Not answering`, `Upgrade needed`, `Check` (it answers but is marked as another database) or `Unknown` (the server does not answer, or did not report on it).
+On the first report of an unreachable database, the Desktop turns the Database indicator red. A second consecutive routine failure pauses billing. Startup and explicit refresh act on the first result. Billing resumes after the next successful check. The tray distinguishes an unreachable database, pending migrations, an identity mismatch and an unavailable API.
 
 ### Tally reachability
 
-Tally reachability is only verified when the operator clicks Push/Retry/Repost, Push All Pending, Refresh from Tally, or Refresh in the System Health dialog. Push-family endpoints run a Tally company preflight before any bill moves to `posting`; if Tally is unreachable or the configured active company is not open, the API returns `503 Tally unavailable` and leaves bill state unchanged.
+The API checks the configured company before a push, retry or repost. If Tally is unreachable or the company is closed, preflight returns `503 Tally unavailable` and preserves the bill state. System Health also requests this check independently.
 
-If Tally becomes unavailable after preflight, a timeout/transport/unreadable-response outcome settles the bill in `reconciliation_required`; an explicit Tally business rejection settles it in `failed`. The architecture still forbids background Tally polling and voucher-write retries.
+If Tally becomes unavailable after preflight, a timeout/transport/unreadable-response outcome settles the bill in `reconciliation_required`; an explicit Tally business rejection settles it in `failed`. Each operator action makes at most one voucher write.
 
 ### Master freshness
 
@@ -403,14 +283,17 @@ The release after 27 November 2026 brings **bank charges** on a bill (a typed am
 2. **Every counter before the first bill with bank charges.** An older Desktop reads such a bill without them: Bill Details and a reprint fold them into the round-off, and an edit saved from it drops them from the bill. A newer Desktop against an older server keeps working for bills without bank charges.
 3. **Choose the ledger in Settings → Ledgers** ("Bank charges ledger") before the first bill with bank charges is pushed. Until one is chosen, such a push is refused before anything is sent (`CONFIG_MISSING_BANK_CHARGES_LEDGER`); bills without bank charges never need it. An older counter's settings save leaves the chosen ledger as it is.
 
-**Take a database dump before a release that carries migrations**, before the migrations are applied. With a PostgreSQL 18 client, and the connection values taken from OpenBao as described above:
+Take a database dump **before applying migrations**. From a private backup directory, use a PostgreSQL 18 client with `PGHOST`, `PGPORT`, `PGDATABASE` and `PGUSER` set for the intended database and a password source configured for that client.
 
 ```powershell
-$env:PGPASSWORD = '<password from OpenBao>'
-pg_dump --format=custom --no-owner --host <host> --port <port> --username <user> --dbname tally_wrapper_prod --file "tally_wrapper_prod_$(Get-Date -Format yyyyMMdd-HHmmss).dump"
-Remove-Item Env:PGPASSWORD
-pg_restore --list <the .dump file> | Select-Object -First 5   # proves the file is readable
+$dump = "billing_$(Get-Date -Format yyyyMMdd-HHmmss).dump"
+pg_dump --format=custom --no-owner --file $dump
+if ($LASTEXITCODE -ne 0) { throw 'Database backup failed.' }
+pg_restore --list $dump
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the backup contents.' }
 ```
+
+Listing the archive checks its table of contents. To verify that it restores and migrates, use an isolated [scratch run with `-RestoreFrom`](../DEV_SETUP.md#run-against-a-scratch-database).
 
 A migration that removes data must also protect itself, because that step can be forgotten: it copies what it is about to drop into a side table in the same transaction, and its `Down` restores from that copy. `DropUnusedColumnsAndIndexes` (10 October 2026) is the model, and `DropUnreadColumns` (14 November 2026) and `DropShowroomAndDocumentType` (15 November 2026) the same with one copy per table; see [10_database_schema.md §1.10](10_database_schema.md) for the tables they leave and how to remove them.
 
@@ -432,11 +315,9 @@ This architecture is intentionally online-first. If the API is unavailable, the 
 - no local durable business storage on the desktop
 - invoice numbers are reserved at save time by the API's numbering service
 
-This is not a bug — it's the direct consequence of the chosen architecture.
-
 ### Manual-only Tally consequence
 
-If Tally is down, bills still save (they stay in `pending`). Nothing is auto-retried. The operator clicks Push again once Tally is back. This is intentional: every Tally interaction requires a human click, which keeps the causal chain simple for audit/support.
+If Tally is down while the API and database are available, operators can save bills as `pending`. After a preflight failure they can push again once Tally is back. An uncertain write outcome requires checking the voucher in Tally before resolving the local bill.
 
 ### Other caveats
 
