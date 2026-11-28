@@ -29,7 +29,7 @@ public sealed class BillAuditContractTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Editing_a_posted_bill_needs_an_admin_session_and_the_audit_names_the_admin()
+    public async Task Editing_a_posted_bill_needs_an_admin_session_and_leaves_no_history_line()
     {
         await using var factory = new TestApiFactory(postgres);
         var client = factory.CreateClient();
@@ -57,9 +57,9 @@ public sealed class BillAuditContractTests(PostgresFixture postgres)
         var saved = await asAdmin.Content.ReadFromJsonAsync<BillResponse>();
         Assert.Equal(BillStates.Pending, saved!.State);
         var audit = await client.GetFromJsonAsync<BillAuditResponse>($"/api/bills/{bill.Id}/audit");
-        var reopened = Assert.Single(audit!.Events, x => x.EventType == BillAuditEvents.EditReopened);
-        Assert.Equal("admin", reopened.ActorType);
-        Assert.Equal("Owner", reopened.ActorId);
+        Assert.Equal(
+            [BillAuditEvents.PendingCreated, BillAuditEvents.MarkPosted],
+            audit!.Events.Select(x => x.EventType).ToArray());
     }
 
     private static async Task<BillResponse> CreateBillAsync(HttpClient client)

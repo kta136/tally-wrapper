@@ -49,11 +49,13 @@ internal static class BillTallyHistory
         var id = bill.Id.ToString();
         var trail = dbContext.AuditEvents.AsNoTracking().Where(e => e.EntityType == "bill" && e.EntityId == id);
 
-        // An id comes from a successful push strictly before the latest reopening.
-        // Mark as Pending invalidates every push up to and including its timestamp.
+        // The id comes from the latest successful push. This is read only for a
+        // bill edited since Tally took it, and a push clears that, so the latest
+        // push is the one before the edit; reopening writes no history line to
+        // anchor it. Mark as Pending invalidates every push up to and including
+        // its timestamp.
         var recordedPush = trail
             .Where(push => push.EventType == TallyPosted
-                && trail.Any(reopen => reopen.EventType == BillAuditEvents.EditReopened && reopen.CreatedAtUtc > push.CreatedAtUtc)
                 && !trail.Any(reset => reset.EventType == MarkPending && reset.CreatedAtUtc >= push.CreatedAtUtc))
             .OrderByDescending(push => push.CreatedAtUtc).ThenByDescending(push => push.Id)
             .Select(push => push.PayloadJson);

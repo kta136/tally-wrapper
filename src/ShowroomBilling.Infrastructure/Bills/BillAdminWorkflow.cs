@@ -108,7 +108,6 @@ public sealed class BillAdminWorkflow(
         var now = DateTimeOffset.UtcNow;
         var oldNumber = bill.InvoiceNumber;
         var oldCore = bill.InvoiceCore;
-        var fromState = bill.State;
         bill.InvoiceNumber = newNumber;
         bill.InvoiceCore = autoFormatCore;
         bill.UpdatedAtUtc = now;
@@ -134,21 +133,6 @@ public sealed class BillAdminWorkflow(
                 tallyDiverges,
                 reason = request.Reason ?? string.Empty
             });
-        if (tallyDiverges)
-        {
-            auditStore.Write(
-                bill.Id,
-                BillAuditEvents.EditReopened,
-                bill.State,
-                now,
-                new
-                {
-                    fromState,
-                    invoiceNumber = newNumber,
-                    previousInvoiceNumber = oldNumber,
-                    reason = "invoice-number-changed"
-                });
-        }
 
         // Save + sequence-rollback share the transaction opened above so a
         // moved-down number that vacates the trailing core (e.g. 94 -> 92 when

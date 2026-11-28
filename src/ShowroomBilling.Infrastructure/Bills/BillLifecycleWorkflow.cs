@@ -113,21 +113,13 @@ public sealed class BillLifecycleWorkflow(
         var inTally = reopenFrom is not null
             && await BillTallyHistory.IsInTallyAsync(dbContext, bill, cancellationToken);
 
+        // Reopening a posted or failed bill writes no history line: the new
+        // revision is kept, and the next push finds the voucher to alter from
+        // the last push (BillTallyHistory.ReadForAlterAsync).
         if (reopenFrom is not null)
         {
             bill.State = BillStates.Pending;
             bill.EditedAfterPush = inTally;
-            auditStore.Write(
-                bill.Id,
-                BillAuditEvents.EditReopened,
-                bill.State,
-                now,
-                new
-                {
-                    fromState = reopenFrom,
-                    invoiceNumber = bill.InvoiceNumber,
-                    revisionNo = revision.RevisionNo
-                });
         }
         else
         {

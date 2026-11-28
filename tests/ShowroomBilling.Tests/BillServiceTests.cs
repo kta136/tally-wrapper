@@ -1160,10 +1160,11 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(2, postedAudits.Count);
         Assert.Contains("\"tallyAction\":\"Alter\"", postedAudits[^1].PayloadJson);
         var trail = await bills.Audit.GetAuditAsync(bill.Id);
-        // The alter is read back from Tally once it is saved.
+        // The edit itself leaves no history line; the alter is read back from Tally once it is saved.
         Assert.Equal(
-            ["bill.edit.reopened", "bill.push.requested", "tally.posted", "tally.voucher.filed"],
-            trail!.Events.TakeLast(4).Select(x => x.EventType).ToArray());
+            ["bill.push.requested", "tally.posted", "tally.voucher.filed"],
+            trail!.Events.TakeLast(3).Select(x => x.EventType).ToArray());
+        Assert.DoesNotContain(trail.Events, x => x.EventType == "bill.edit.reopened");
         Assert.Contains("\"tallyMasterId\":\"101\"", postedAudits[^1].PayloadJson);
     }
 
@@ -1916,6 +1917,9 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(TallyPostOperation.Alter, poster.LastRequest!.Operation);
         Assert.Equal("101", poster.LastRequest.TargetTagValue);
         Assert.EndsWith("/0007", poster.LastRequest.InvoiceNumber);
+        // The rename is its own history line; reopening adds none.
+        Assert.DoesNotContain(await db.AuditEvents.Where(a => a.EntityId == bill.Id.ToString()).ToListAsync(),
+            a => a.EventType == "bill.edit.reopened");
     }
 
     [Fact]
