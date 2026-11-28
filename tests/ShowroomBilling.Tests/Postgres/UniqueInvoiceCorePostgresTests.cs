@@ -21,9 +21,12 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
     private const string IndexAtPrevious = "IX_bills_ShowroomId_FiscalYear_InvoiceCore";
 
     [Fact]
-    public async Task A_second_bill_cannot_take_a_core_under_other_text()
+    public async Task Rollback_restores_the_plain_index_and_upgrade_rejects_duplicate_invoice_cores()
     {
         await using var database = await fixture.CreateDatabaseAsync();
+        await MigrateAsync(database, Previous);
+        Assert.False(await IndexIsUniqueAsync(database, IndexAtPrevious));
+        await MigrateAsync(database, target: null);
         Assert.True(await IndexIsUniqueAsync(database));
         await using var db = database.CreateContext();
         var service = Lifecycle(db);
@@ -69,18 +72,6 @@ public sealed class UniqueInvoiceCorePostgresTests(PostgresFixture fixture)
             DROP INDEX IF EXISTS public."{Index}";
             CREATE UNIQUE INDEX "{Index}" ON public.bills ("FiscalYear", "InvoiceCore") WHERE "InvoiceCore" IS NOT NULL;
             """);
-        Assert.True(await IndexIsUniqueAsync(database));
-    }
-
-    [Fact]
-    public async Task The_way_down_puts_the_plain_index_back_and_the_way_up_makes_it_unique_again()
-    {
-        await using var database = await fixture.CreateDatabaseAsync();
-
-        await MigrateAsync(database, Previous);
-        Assert.False(await IndexIsUniqueAsync(database, IndexAtPrevious));
-
-        await MigrateAsync(database, target: null);
         Assert.True(await IndexIsUniqueAsync(database));
     }
 

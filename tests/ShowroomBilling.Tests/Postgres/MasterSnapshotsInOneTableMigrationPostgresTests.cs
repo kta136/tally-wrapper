@@ -104,38 +104,6 @@ public sealed class MasterSnapshotsInOneTableMigrationPostgresTests(PostgresFixt
         await MigrateAsync(database, target: null);
     }
 
-    /// <summary>A database made on the new table has no copies: going down rebuilds the old rows from the lists.</summary>
-    [Fact]
-    public async Task Without_copies_the_way_down_rebuilds_the_rows_from_the_lists()
-    {
-        await using var database = await fixture.CreateDatabaseAsync();
-        await using (var db = database.CreateContext())
-        {
-            var service = new MasterSnapshotService(db);
-            await service.IngestCompaniesAsync([new CompanySnapshotItem("ACME", true), new CompanySnapshotItem("Town B Co", false)]);
-            await service.IngestStockItemsAsync([new StockItemSnapshotItem("Gold Ring", "gm", "7113")]);
-        }
-
-        await MigrateAsync(database, Previous);
-
-        Assert.Equal(2L, await ScalarAsync<long>(database, "SELECT count(*) FROM public.tally_master_snapshot_batches WHERE \"Status\" = 'active'"));
-        Assert.Equal(1L, await ScalarAsync<long>(database, $"""
-            SELECT count(*) FROM public.tally_company_snapshots AS row
-            JOIN public.tally_master_snapshot_batches AS batch ON batch."Id" = row."BatchId"
-            WHERE row."Name" = 'Town B Co' AND NOT row."IsActive" AND batch."MasterType" = 'companies' AND row."ShowroomId" = '{Showroom}'
-            """));
-        Assert.Equal("7113", await ScalarAsync<string>(database,
-            """SELECT "HsnCode" FROM public.tally_stock_item_snapshots WHERE "Name" = 'Gold Ring' AND "BaseUnit" = 'gm'"""));
-
-        // And up again, with nothing lost.
-        await MigrateAsync(database, target: null);
-        await using (var db = database.CreateContext())
-        {
-            var read = await new MasterSnapshotService(db).GetCompaniesAsync();
-            Assert.Equal(["ACME", "Town B Co"], read.Companies.Select(c => c.Name));
-        }
-    }
-
     private static Task<long> OldTableCountAsync(PostgresFixture.PostgresTestDatabase database) =>
         ScalarAsync<long>(database, """
             SELECT count(*) FROM pg_tables

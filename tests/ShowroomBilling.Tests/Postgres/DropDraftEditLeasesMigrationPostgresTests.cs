@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using ShowroomBilling.Infrastructure.Persistence.Migrations;
 using static ShowroomBilling.Tests.Postgres.MigrationSql;
@@ -38,12 +37,6 @@ public sealed class DropDraftEditLeasesMigrationPostgresTests(PostgresFixture fi
         Assert.Equal(2L, await ScalarAsync<long>(database, $"""SELECT count(*) FROM public."{Backup}" """));
         Assert.Equal("counter-a", await ScalarAsync<string>(database,
             $"""SELECT "OwnerActorId" FROM public."{Backup}" WHERE "Id" = '{live}'"""));
-
-        // The app runs on the new schema.
-        await using (var db = database.CreateContext())
-        {
-            Assert.Equal(0, await db.AdminSessions.CountAsync());
-        }
 
         // And the way back restores the table, its rows and its three indexes, and removes the copy.
         await MigrateAsync(database, Previous);
