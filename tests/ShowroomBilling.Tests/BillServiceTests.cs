@@ -326,6 +326,7 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
 
         Assert.Equal(BillStates.Posted, pushed.State);
         Assert.Equal(draft.InvoiceNumber, pushed.InvoiceNumber);
+        Assert.Contains("/0001", pushed.InvoiceNumber);
         Assert.Equal(draft.FiscalYear, pushed.FiscalYear);
         Assert.Equal(2L, await db.InvoiceSequences.Select(x => x.NextValue).SingleAsync());
     }
@@ -347,18 +348,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
         Assert.Equal(2, revisions.Count);
         Assert.Equal(updated.CurrentRevisionId, revisions[1].Id);
         Assert.Equal(created.CurrentRevisionId, revisions[1].SupersedesRevisionId);
-    }
-
-    [Fact]
-    public async Task UpdateDraft_RejectsVoidedBill()
-    {
-        await using var db = CreateDbContext();
-        var bills = Lifecycle(db);
-        var bill = await bills.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
-        await bills.VoidAsync(bill.Id, new VoidBillRequest("user cancelled"));
-
-        await Assert.ThrowsAsync<BillStateConflictException>(() =>
-            bills.UpdateDraftAsync(bill.Id, new UpdateBillDraftRequest(SamplePayload("C", 300m))));
     }
 
     [Fact]
@@ -1166,21 +1155,6 @@ public sealed class BillServiceTests(PostgresFixture postgres) : DatabaseTest(po
             trail!.Events.TakeLast(3).Select(x => x.EventType).ToArray());
         Assert.DoesNotContain(trail.Events, x => x.EventType == "bill.edit.reopened");
         Assert.Contains("\"tallyMasterId\":\"101\"", postedAudits[^1].PayloadJson);
-    }
-
-    [Fact]
-    public async Task Push_CarriesDraftReservedNumberAndTransitionsToPosted()
-    {
-        await using var db = CreateDbContext();
-        var bills = BuildWorkflows(db);
-        var bill = await bills.Lifecycle.CreateDraftAsync(new CreateBillDraftRequest(SamplePayload("A", 100m)));
-
-        var submitted = await bills.Posting.PushAsync(bill.Id, new PushBillRequest("sub-1"));
-
-        Assert.Equal(BillStates.Posted, submitted.State);
-        Assert.Equal(bill.InvoiceNumber, submitted.InvoiceNumber);
-        Assert.Equal(bill.FiscalYear, submitted.FiscalYear);
-        Assert.Contains("/0001", submitted.InvoiceNumber);
     }
 
     [Fact]

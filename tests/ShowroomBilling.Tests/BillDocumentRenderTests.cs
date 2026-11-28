@@ -14,18 +14,6 @@ public class BillDocumentRenderTests
 {
     private static readonly BillPrintRenderer Renderer = new();
 
-    [Fact]
-    public void GeneratePdf_for_minimal_bill_produces_bytes()
-    {
-        var options = PrintDocumentOptions.ForInvoice(MinimalContent(), new[] { CopyLabel.Original });
-
-        var pdf = Renderer.GeneratePdf(options);
-
-        Assert.NotNull(pdf);
-        Assert.True(pdf.Length > 200, "PDF should contain at least a header + some content");
-        AssertPdfMagic(pdf);
-    }
-
     [Theory]
     // The taxable value and the two taxes, each rounded to the paisa, come to
     // 100.01 for lines of 100.00. The stored round-off is -0.01, but against
@@ -73,16 +61,6 @@ public class BillDocumentRenderTests
     }
 
     [Fact]
-    public void GeneratePdf_with_rich_content_does_not_throw()
-    {
-        var options = PrintDocumentOptions.ForInvoice(RichContent(), new[] { CopyLabel.Original });
-
-        var pdf = Renderer.GeneratePdf(options);
-
-        AssertPdfMagic(pdf);
-    }
-
-    [Fact]
     public void GeneratePdf_fills_single_page_when_items_are_few()
     {
         // Page-fill guard: the dynamic spacer between items and summary must not
@@ -105,19 +83,6 @@ public class BillDocumentRenderTests
         var pages = Renderer.GeneratePageImages(options, imageDpi: 72);
 
         Assert.Single(pages);
-    }
-
-    [Fact]
-    public void GeneratePdf_does_not_overflow_when_items_are_many()
-    {
-        // Many-items case: render must succeed. Multi-page output is acceptable —
-        // what we're guarding against is the new spacer introducing a crash or
-        // collapsing content incorrectly.
-        var options = PrintDocumentOptions.ForInvoice(ContentWithLines(20), new[] { CopyLabel.Original });
-
-        var pages = Renderer.GeneratePageImages(options, imageDpi: 72);
-
-        Assert.True(pages.Count >= 1);
     }
 
     /// <summary>

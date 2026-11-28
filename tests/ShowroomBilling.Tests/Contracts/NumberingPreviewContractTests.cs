@@ -8,8 +8,7 @@ namespace ShowroomBilling.Tests.Contracts;
 
 /// <summary>
 /// The two answers that lost a field when the showroom id and the document type left the
-/// database: the number preview and a print asset. A Desktop of an older build must still be
-/// answered, and neither answer may name what no longer exists.
+/// database: the number preview and a print asset. Neither answer may name what no longer exists.
 /// </summary>
 [Trait("Category", "Postgres")]
 public sealed class NumberingPreviewContractTests(TestApiFactory factory) : IClassFixture<TestApiFactory>
@@ -27,18 +26,6 @@ public sealed class NumberingPreviewContractTests(TestApiFactory factory) : ICla
         Assert.Equal("2026-27", preview.GetProperty("fiscalYear").GetString());
         Assert.Equal(1, preview.GetProperty("previewValue").GetInt64());
         Assert.EndsWith("2026-27/0001", preview.GetProperty("formattedNumber").GetString());
-    }
-
-    [Fact]
-    public async Task An_older_Desktop_that_still_sends_a_document_type_is_answered_all_the_same()
-    {
-        var client = factory.CreateClient();
-
-        var response = await client.GetAsync("/api/numbering/preview?documentType=sales_invoice");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(1, preview.GetProperty("previewValue").GetInt64());
     }
 
     [Fact]

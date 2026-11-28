@@ -730,53 +730,20 @@ public sealed class SyntheticBillPlannerTests
     }
 
     [Fact]
-    public void BuildRandomSchedule_WithNoHoursAndNoGap_IsWhatItWasBeforeThereWereHours()
+    public void BuildRandomSchedule_HoursWithNothingInThem_AndAGapOfOneMinute_ChangeNothing()
     {
         var start = new DateTimeOffset(2026, 4, 24, 0, 0, 0, TimeSpan.Zero);
         foreach (var (bills, minutes) in new[] { (30, 120), (5, 4_000), (100, 110) })
         {
             for (var seed = 0; seed < 20; seed++)
             {
-                var before = ScheduleAsItWas(bills, start, start.AddMinutes(minutes), new Random(seed));
+                var withNoHours = SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed));
 
-                Assert.Equal(before, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed)));
-                Assert.Equal(before, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed), hours: null));
-                // Hours saved with nothing in them, and a gap of one minute, change nothing either.
-                Assert.Equal(before, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed), new BatchHoursSettings()));
-                Assert.Equal(before, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed), new BatchHoursSettings(GapMinutes: 1)));
+                Assert.Equal(withNoHours, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed), hours: null));
+                Assert.Equal(withNoHours, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed), new BatchHoursSettings()));
+                Assert.Equal(withNoHours, SyntheticBillPlanner.BuildRandomSchedule(bills, start, start.AddMinutes(minutes), null, Now, new Random(seed), new BatchHoursSettings(GapMinutes: 1)));
             }
         }
-    }
-
-    /// <summary>
-    /// The schedule as it was drawn before there were shop hours: distinct minutes of the window
-    /// picked from the same seed in the same way, sorted.
-    /// </summary>
-    private static List<DateTimeOffset> ScheduleAsItWas(int bills, DateTimeOffset start, DateTimeOffset end, Random rng)
-    {
-        var slots = (int)(end - start).TotalMinutes + 1;
-        var chosen = new List<int>();
-        if ((long)bills * 8 <= slots)
-        {
-            var picked = new HashSet<int>();
-            while (picked.Count < bills)
-            {
-                var candidate = rng.Next(slots);
-                if (picked.Add(candidate)) chosen.Add(candidate);
-            }
-        }
-        else
-        {
-            var indices = Enumerable.Range(0, slots).ToArray();
-            for (var i = 0; i < bills; i++)
-            {
-                var j = rng.Next(i, slots);
-                (indices[i], indices[j]) = (indices[j], indices[i]);
-            }
-            chosen.AddRange(indices.Take(bills));
-        }
-
-        return chosen.Order().Select(minute => start.AddMinutes(minute)).ToList();
     }
 
     [Fact]

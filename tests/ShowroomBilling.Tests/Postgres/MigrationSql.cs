@@ -36,18 +36,4 @@ internal static class MigrationSql
 
     internal static Task<bool> TableExistsAsync(TestDatabase database, string table) =>
         ScalarAsync<bool>(database, $"""SELECT to_regclass('public."{table}"') IS NOT NULL""");
-
-    internal static async Task<List<string>> ReadNamesAsync(TestDatabase database, string sql)
-    {
-        var names = new List<string>();
-        await using var connection = new NpgsqlConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            names.Add(reader.GetString(0));
-        }
-        return names;
-    }
 }
